@@ -19,11 +19,13 @@ const RELEASE_MESSAGE_HEADING =
   "Age may advance, yet ambition shall not wane;\n" +
   "Hardship may deepen, yet aspiration shall remain.";
 const RELEASE_MESSAGE_BODY =
-  "macOS arm64/x64, Linux x64 and Windows x64/arm64. Unsigned builds; review and test each platform before publishing. Verify downloads with SHA256SUMS.";
+  "macOS arm64/x64, Linux x64/arm64 and Windows x64/arm64. Unsigned builds; review and test each platform before publishing. Verify downloads with SHA256SUMS.";
 // electron-builder 按发行格式改写 ${arch}，必须匹配实际产物而非统一猜测 x64。
 // macOS 同时发 arm64 与 x64（Intel），两者各自在原生 runner 上构建（macos-15 /
 // macos-15-intel）：交叉架构打包会混入错误架构的原生预编译产物
 // （node-pty prebuild、bundled 工具链）。dmg 面向人工安装，zip 面向自动化分发。
+// Linux arm64 与 x64 的产物名差异来自 builder-util 的 getArtifactArchName：
+// AppImage/deb 用 arm64，rpm 与 pacman 用 aarch64；已由本地 linux arm64 打包实测确认。
 const extensions = {
   mac: [
     { extension: "dmg", arch: "arm64" },
@@ -36,6 +38,10 @@ const extensions = {
     { extension: "deb", arch: "amd64" },
     { extension: "rpm", arch: "x86_64" },
     { extension: "pkg.tar.zst", arch: "x64" },
+    { extension: "AppImage", arch: "arm64" },
+    { extension: "deb", arch: "arm64" },
+    { extension: "rpm", arch: "aarch64" },
+    { extension: "pkg.tar.zst", arch: "arm64" },
   ],
   win: [
     // Windows 同时发 x64 与 arm64：electron-builder 可在 x64 runner 上交叉构建 arm64，

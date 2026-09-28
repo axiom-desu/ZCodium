@@ -237,9 +237,9 @@ node apps/zcode-cli/packages/cli/dist/zcode.cjs --help
 
 ### 自动构建与发布
 
-[Desktop CI](.github/workflows/desktop.yml) 在 PR、main 推送和手动运行时检查代码，并用原生 runner 构建 Linux x64 与 Windows x64。Linux 产物为 AppImage、deb、rpm、pkg.tar.zst，Windows 为 exe；可从 Actions 页面下载，保留 14 天。
+[Desktop CI](.github/workflows/desktop.yml) 在 PR、main 推送和手动运行时检查代码，并用原生 runner 构建 Linux x64/arm64、Windows x64/arm64 与 macOS arm64/x64。Linux 产物为 AppImage、deb、rpm、pkg.tar.zst，Windows 为 exe，macOS 为 dmg/zip；可从 Actions 页面下载，保留 14 天。
 
-推送 `v<package.json.version>` 标签会在全部检查和双平台构建成功后创建**草稿 Release**，附安装包和 `SHA256SUMS`。版本允许预发布标识（如 `-rc.1`），不接受 build metadata。维护者测试后手动公开发布；重新运行可补传草稿资产，不会覆盖已公开版本。手动运行工作流只生成构建产物。
+推送 `v<package.json.version>` 标签会在全部检查和全平台构建成功后创建**草稿 Release**，附安装包和 `SHA256SUMS`。版本允许预发布标识（如 `-rc.1`），不接受 build metadata。维护者测试后手动公开发布；重新运行可补传草稿资产，不会覆盖已公开版本。手动运行工作流只生成构建产物。
 
 流程使用仓库自带的 `GITHUB_TOKEN`，无需额外服务凭据或签名证书。安装包未签名；应用内更新和独立远程运行资源不由此流程发布。规则见 [CI/CD spec](.agents/specs/desktop-ci-release.md)。
 

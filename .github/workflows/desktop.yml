@@ -147,14 +147,22 @@ jobs:
           - platform: linux
             runner: ubuntu-24.04
             arch: x64
+          # Linux arm64：使用 GitHub 公共仓库免费提供的原生 arm64 runner，
+          # 这样 CUA 原生库与打包后的 Electron 运行时都能真正执行探针，
+          # 而不是像交叉打包那样只能校验文件。
+          - platform: linux
+            runner: ubuntu-24.04-arm
+            arch: arm64
           - platform: win
             runner: windows-2025
             arch: x64
           # Windows arm64：electron-builder 在 x64 runner 上交叉构建；原生库
           # @trycua/cua-driver-win32-arm64-msvc 已随 SDK optionalDependencies 分发。
+          # 这是唯一一个 crossArch 目标：原生库无法在 x64 Node/Electron 里加载。
           - platform: win
             runner: windows-2025
             arch: arm64
+            crossArch: true
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     defaults:
@@ -181,21 +189,21 @@ jobs:
         run: node scripts/bundle-remote-assets.mjs verify
       - name: Prepare desktop runtime
         run: pnpm prepare:desktop-runtime
-      # 交叉架构（如在 x64 runner 上打 Windows arm64）加载不了目标原生库，
-      # 只能校验随包资产文件；执行探针留给同架构的 x64 job。
+      # 交叉架构（Windows arm64 在 x64 runner 上打包）加载不了目标原生库，
+      # 只能校验随包资产文件；执行探针留给同架构的原生 runner（含 Linux arm64）。
       - name: Verify native CUA and shared plugin host
-        if: matrix.arch == 'x64'
+        if: matrix.crossArch != true
         run: node scripts/ci/cua-driver-smoke.mjs
       - name: Verify staged CUA assets (cross-arch)
-        if: matrix.arch != 'x64'
+        if: matrix.crossArch == true
         run: node scripts/ci/cua-driver-smoke.mjs --files-only
       - name: Build workspace and desktop
         run: pnpm build:bootstrap
       - name: Package and verify desktop
         run: pnpm bundle:desktop -- --os "$ZCODE_TARGET_OS" --arch "$ZCODE_TARGET_ARCH" --skip-prepare --skip-build
-      # 同理：arm64 的 Electron 可执行文件在 x64 runner 上跑不起来。
+      # 同理：交叉架构的 Electron 可执行文件在 x64 runner 上跑不起来。
       - name: Verify CUA with the packaged Electron runtime
-        if: matrix.arch == 'x64'
+        if: matrix.crossArch != true
         run: node scripts/ci/cua-driver-smoke.mjs --packaged
       - name: Collect installers
         run: node scripts/ci/desktop-release.mjs collect "$ZCODE_TARGET_OS" "$ZCODE_TARGET_ARCH"
@@ -278,6 +286,10 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: desktop-linux-x64
+          path: dist/release-assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-linux-arm64
           path: dist/release-assets
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
