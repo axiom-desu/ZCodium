@@ -41,7 +41,10 @@ const extensions = {
     { extension: "AppImage", arch: "arm64" },
     { extension: "deb", arch: "arm64" },
     { extension: "rpm", arch: "aarch64" },
-    { extension: "pkg.tar.zst", arch: "arm64" },
+    // pacman 的 arm64 名是 aarch64 而不是 arm64：builder-util 的 getArtifactArchName
+    // 按 target 名（pacman）而非文件扩展名判定，x64 不在其特例表里所以保持 x64，
+    // arm64 命中 pacman/rpm/flatpak 一律 aarch64。已由 linux arm64 构建实测确认。
+    { extension: "pkg.tar.zst", arch: "aarch64" },
   ],
   win: [
     // Windows 同时发 x64 与 arm64：electron-builder 可在 x64 runner 上交叉构建 arm64，

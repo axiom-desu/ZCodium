@@ -152,10 +152,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       "Desktop smoke supports Linux and Windows",
     );
     const identity = resolveDesktopProductIdentity();
-    // 修复依据：electron-builder 的解包目录名带架构后缀（builder-util 的 getArchSuffix）：
-    // 默认架构（linux/win 的 x64）是 `<platform>-unpacked`，其余是 `<platform>-<arch>-unpacked`。
-    // 原来写死 `linux-unpacked`，原生 arm64 runner 上跑 `--packaged` 探针会找不到目录。
-    const unpackedDir = `${platform}${target.arch === "x64" ? "" : `-${target.arch}`}-unpacked`;
+    // 修复依据：electron-builder 的解包目录是 `<builderPlatformName><archSuffix>-unpacked`。
+    // 平台名用打包器口径（win / linux / mac），不是 Node 的 process.platform（win32/darwin）；
+    // archSuffix 来自 builder-util 的 getArchSuffix：默认架构（linux/win 的 x64）为空，
+    // 其余为 `-<arch>`。原代码写死 `linux-unpacked` / `win-unpacked`，既漏了架构后缀，
+    // 也难以覆盖新平台。
+    const builderPlatformName =
+      platform === "win32" ? "win" : platform === "darwin" ? "mac" : "linux";
+    const unpackedDir = `${builderPlatformName}${target.arch === "x64" ? "" : `-${target.arch}`}-unpacked`;
     const appRoot = resolve(
       import.meta.dirname,
       "../../packages/desktop",

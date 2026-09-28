@@ -21,7 +21,7 @@ const allNames = [
   "ZCodium-3.14.0-linux-arm64.AppImage",
   "ZCodium-3.14.0-linux-arm64.deb",
   "ZCodium-3.14.0-linux-aarch64.rpm",
-  "ZCodium-3.14.0-linux-arm64.pkg.tar.zst",
+  "ZCodium-3.14.0-linux-aarch64.pkg.tar.zst",
   "ZCodium-3.14.0-win-x64.exe",
   "ZCodium-3.14.0-win-arm64.exe",
   "ZCodium-3.14.0-mac-arm64.dmg",
@@ -121,10 +121,10 @@ test("Linux x64 and arm64 artifacts are collected independently", async (t) => {
   const arm64 = await fixture(t, []);
   await collectArtifacts(source, arm64, "linux", version, "arm64");
   assert.deepEqual((await readdir(arm64)).sort(), [
+    "ZCodium-3.14.0-linux-aarch64.pkg.tar.zst",
     "ZCodium-3.14.0-linux-aarch64.rpm",
     "ZCodium-3.14.0-linux-arm64.AppImage",
     "ZCodium-3.14.0-linux-arm64.deb",
-    "ZCodium-3.14.0-linux-arm64.pkg.tar.zst",
   ]);
 
   const both = await fixture(t, []);

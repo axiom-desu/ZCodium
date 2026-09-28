@@ -5,11 +5,12 @@
 - 构建矩阵覆盖 Linux x64/arm64、Windows x64/arm64、macOS arm64/x64；除 Windows arm64 在 x64 runner 上交叉打包外，均使用 GitHub 托管的**原生** runner（Linux arm64 用 `ubuntu-24.04-arm`）。
 - PR、main 推送、手动运行和 `v*` 标签推送均执行检查与全平台打包。
 - Linux 沿用现有 AppImage、deb、rpm、pkg.tar.zst，Windows 沿用 NSIS exe，macOS 发 dmg 与 zip。
-- 产物文件名遵循现有打包器的架构命名（`builder-util` 的 `getArtifactArchName`）：
+- 产物文件名遵循现有打包器的架构命名（`builder-util` 的 `getArtifactArchName`，按 target 名判定）：
   - deb：x64 → `amd64`，arm64 → `arm64`；
   - AppImage：x64 → `x86_64`，arm64 → `arm64`；
   - rpm：x64 → `x86_64`，arm64 → `aarch64`；
-  - pacman（`pkg.tar.zst`）与 Windows exe：x64 → `x64`，arm64 → `arm64`。
+  - pacman（`pkg.tar.zst`）：x64 → `x64`，arm64 → `aarch64`。
+- pacman 与 rpm 的 arm64 名是 `aarch64` 而 AppImage/deb 是 `arm64`：`getArtifactArchName` 只在 `pacman`/`rpm`/`flatpak` 三个 target 上把 arm64 改写为 `aarch64`，x64 不在其特例表里所以保持 `x64`。已由 linux arm64 构建实测确认四种格式的产物名。
 - 同一架构族在不同格式里的写法不同，按 arch 筛选时必须归一（`ARCH_ALIASES`），否则 `x64` 匹配不到 deb/AppImage。
 - 只有版本标签推送允许创建 GitHub **草稿** Release，公开发布由维护者审核后操作。
 - 带预发布标识的版本同时标记为 prerelease，审核发布时不会被误当作稳定版本。
