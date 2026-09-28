@@ -61,6 +61,7 @@ v1 草案按“多平台各自配置 + 卡片交互”设计，经过对远程 A
 packages/shared/src/bots/bridge.ts        v2 协议契约（zod），无 IO
 packages/services/src/bots/
   providers/astrbotProvider.ts            官方 BotProviderAdapter：帧 ↔ 入站/出站，持传输路由与回放
+  astrbotSelectionPayload.ts              selection → bridge delivery payload + canonical 文本（传输层渲染）
   botsDeliveryLog.ts                      轮次流 seq / 有限回放（astrbotProvider 私有）
   botsService.ts                          官方唯一业务所有者：配置、状态、命令准入、任务驱动
 packages/desktop/src/host/
@@ -129,7 +130,7 @@ server→client  error      协议级错误
 | `tool`      | `toolId`, `title`, `status`, `summary?`          | 工具进度行；可作为 `break` 边界          |
 | `changes`   | `fileCount`, `files[{path,additions,deletions}]` | 变更摘要文本                             |
 | `notice`    | `level`, `message`                               | 提示/错误                                |
-| `selection` | 见下                                             | 交互（权限/提问/菜单），插件打印 `text`  |
+| `selection` | 见下                                             | 交互（权限/提问/菜单），插件打印 `text`；**由 astrbotProvider 实际产出** |
 
 `selection` 对齐官方抽象：
 
@@ -148,6 +149,49 @@ server→client  error      协议级错误
 
 - `options[].id` 是运行时口径的选中值（permission 为 `optionId`，elicitation 为 `option.value`）。
 - `text` 是纯文本平台唯一需要渲染的内容；结构化字段留给程序化客户端 / 未来的 AstrBot 卡片。
+
+#### selection 下发契约（v2.1 修正）
+
+历史缺陷：`astrbotProvider` 只把 `BotOutboundMessage.text` 包成 `{type:"text"}` 下发，
+`message.selection` 被丢弃；而 `BotsService.createSelectionReply` 对非 weixin provider 只把
+`selection.title` 写进 `text`。结果是 AstrBot 用户只能看到权限/提问/菜单的标题，看不到选项，
+既无法知道该回什么，也无法完成应答（`resolvePendingSelectionCommand` 仅对 weixin 放开隐式数字解析，
+`handlePendingElicitationValue` 对非微信通道还强校验 token）。
+
+现行契约：
+
+- **出站 selection 必须下发 `selection` payload**，不再降级成标题文本。
+  `astrbotProvider.send()` 见到 `message.selection` 时构造 payload，`text` 与结构化字段同时下发；
+  此时**不要**再额外发一条 `{type:"text"}`，避免标题重复。
+- **canonical `text` 由 provider（传输层）渲染**，业务内容（title/options/action/token）仍归 `BotsService`。
+  渲染规则 `packages/services/src/bots/astrbotSelectionPayload.ts`：
+  - 首行 `selection.title`；
+  - 每个选项一行 `序号. 标签`（1-based，与 `parseBotCommand` 的 `resolveOptionByValue` 口径一致），
+    有 `description` 时以 ` — ` 同行展示；
+  - `permission.respond`：选项行追加 `→ <命令>`，命令直接取 `options[].id`
+    （botsService 已构造成 `/approve <requestId> <optionId>` / `/deny <requestId>`）；
+  - 每个 action **只追加一行"怎么回"的提示**，取消项自成一行 `0. <cancelLabel>`，不叠加重复解释：
+    - `permission.respond` → `permissionSelectionHint`（说明 `/permission <序号>` 与照抄命令两种方式）；
+    - `elicitation.respond` → `elicitationReplyHint`（`/elicitation <token> <序号>`，并说明多选完成后 `submit`）；
+    - 其余菜单类 → `selectionCommandHint`（`<命令前缀> <序号>`）；
+  - 提示文案走 `formatBotMessage`，跟随 `message.locale`；选项 label/description 是业务内容，原样透传不改写。
+- `requestId` 仅 permission 需要：由选项命令反解（`/approve <requestId> <optionId>`、`/deny <requestId>`），
+  解析不到时留空；纯文本插件不消费该字段，不影响 canonical 文本。
+- `meta.kind` 按 `action` 映射：`permission.respond → permission`、`elicitation.respond → elicitation`、
+  其余 → `menu`。
+- selection payload 与 text payload 走同一条 `deliveryLog.append`，因此重连补投 / snapshot 对交互同样生效。
+
+事件顺序（与轮次模型一致，无新状态所有者）：
+
+```text
+BotsService 权限/提问/菜单事件
+  → createSelectionReply → sendOutbound(astrbot, {text: title, selection})
+  → astrbotProvider.send → delivery{payload: selection}
+  → notifyTaskLifecycle("awaiting_input") → status{awaiting_input}
+插件打印 payload.text 并结束本轮
+用户回复 /permission <序号> | /elicitation <token> <序号> | /workspace <序号>
+  → command → accepted(新 stream) → ... → status
+```
 
 ### command
 
@@ -217,6 +261,13 @@ server→client  error      协议级错误
 8. 未绑定用户发消息：不建任务，只回绑定提示。
 9. `allowedWorkspaces` 外的 `workspace.set` 被拒。
 10. 群聊按 `channel + 用户 id` 绑定，私聊按 `channel + 用户 id`，互不串。
+11. 权限请求下发 `selection` payload：canonical 文本含序号选项与对应命令，`requestId` 可反解；
+    插件渲染后用户回 `/permission <序号>` 能继续原任务。
+12. elicitation 下发 `selection` payload 且带 `token`，canonical 文本含 `/elicitation <token> <序号>`；
+    多选含 `submit` 提示。
+13. 菜单类（workspace/model/mode/task/reply/thoughtLevel）同样下发 `selection` payload，
+    canonical 文本含对应命令前缀，不再只有标题。
+14. 同一条出站若带 `selection`，不得再发重复的 `{type:"text"}` 标题。
 
 ## 迁移边界
 

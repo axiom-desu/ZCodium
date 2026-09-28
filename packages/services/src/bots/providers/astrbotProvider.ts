@@ -21,11 +21,13 @@ import {
   type BotOutboundMessage,
   type BotsBridgeCommandFrame,
   type BotsBridgeDeliveryFrame,
+  type BotsBridgeDeliveryPayload,
   type BotsBridgeResumeCursor,
   type BotsBridgeServerFrame,
   type BotsBridgeStreamState,
 } from "@zcode/shared";
 import { createServiceLogger, type ServiceLogger } from "#src/logger/serviceLogger.js";
+import { buildAstrBotSelectionDeliveryPayload } from "../astrbotSelectionPayload.js";
 import type { AstrBotBridgeTransport, IAstrBotBridgeService } from "../astrbotBridgePort.js";
 import { BotsDeliveryLog, type BotsDeliveryReplay } from "../botsDeliveryLog.js";
 import type { BotProviderAdapter, BotTaskLifecyclePhase } from "./types.js";
@@ -106,17 +108,25 @@ export function createAstrBotBotProvider(options: AstrBotProviderOptions = {}): 
     });
   }
 
-  function emitDelivery(bindingId: string, streamId: string, text: string): void {
+  function emitDeliveryPayload(
+    bindingId: string,
+    streamId: string,
+    payload: BotsBridgeDeliveryPayload,
+  ): void {
     const currentCursor = cursors.get(bindingId) ?? 0;
     const frame = deliveryLog.append({
       bindingId,
       streamId,
       currentCursor,
-      payload: { type: "text", text },
+      payload,
     });
     cursors.set(bindingId, frame.seq);
     latestFrames.set(bindingId, frame);
     emit(frame);
+  }
+
+  function emitDelivery(bindingId: string, streamId: string, text: string): void {
+    emitDeliveryPayload(bindingId, streamId, { type: "text", text });
   }
 
   function beginTurn(frame: BotsBridgeCommandFrame, botId: string): string {
@@ -189,6 +199,18 @@ export function createAstrBotBotProvider(options: AstrBotProviderOptions = {}): 
       // 命令窗口内走当前命令流；任务运行期间走任务流；兜底新建流。
       const streamId =
         currentTurns.get(bindingId)?.streamId ?? taskStreams.get(bindingId) ?? idFactory();
+      // 修复原因：带 selection 的出站（权限 / elicitation / 菜单）以前只把 message.text 下发，
+      // 而 BotsService 对非 weixin provider 只把 selection.title 写进 text，选项被整体丢弃，
+      // 用户在 AstrBot 里看不到可选项也无法应答。这里改发协议里的 selection payload，
+      // canonical 文本由 astrbotSelectionPayload 渲染；此时不再补发标题文本，避免重复。
+      if (message.selection) {
+        emitDeliveryPayload(
+          bindingId,
+          streamId,
+          buildAstrBotSelectionDeliveryPayload(message.selection, message.locale),
+        );
+        return;
+      }
       emitDelivery(bindingId, streamId, message.text);
     },
 

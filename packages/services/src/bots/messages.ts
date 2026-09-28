@@ -46,6 +46,10 @@ const messages = {
     selectionCancelOption: "取消",
     selectionTextHint: "回复数字选择，0 取消。",
     selectionTextHintNoCancel: "回复数字选择。",
+    // AstrBot 桥接的 canonical 文本提示：纯文本渠道需要把「对应命令」一起告诉用户。
+    selectionCommandHint: "回复 {command} <序号> 进行选择。",
+    permissionSelectionHint: "回复 /permission <序号>，或直接发送上方对应命令。",
+    elicitationReplyHint: "回复 /elicitation {token} <序号> 进行选择；多选完成后发送 submit。",
     newTaskDraft: "已进入 {workspacePath} 的新任务草稿。",
     workspaceSelectTitle: "当前 workspace {workspace}\n选择 workspace",
     workspaceMissing: "未找到可用 workspace。",
@@ -163,6 +167,10 @@ const messages = {
     selectionCancelOption: "Cancel",
     selectionTextHint: "Reply with a number to choose, or 0 to cancel.",
     selectionTextHintNoCancel: "Reply with a number to choose.",
+    // Canonical-text hints for the AstrBot bridge: text-only channels must also show the command.
+    selectionCommandHint: "Reply with {command} <number> to choose.",
+    permissionSelectionHint: "Reply with /permission <number>, or send the command above.",
+    elicitationReplyHint: "Reply with /elicitation {token} <number>; send submit when a multi-select is done.",
     newTaskDraft: "Entered a new task draft in {workspacePath}.",
     workspaceSelectTitle: "Current workspace {workspace}\nSelect workspace",
     workspaceMissing: "No available workspace found.",
