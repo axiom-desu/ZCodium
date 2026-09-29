@@ -13,7 +13,7 @@ import type { BindCodeState } from "./shared.js";
  * 没有平台凭据/二维码，绑定走官方 bind code，连接状态来自官方 runtime。
  * 这里只负责展示桥接运行时文件 + 插件入口，并复用官方绑定/解绑流程。
  */
-export const ASTRBOT_BRIDGE_RUNTIME_FILE = ".zcodium/v2/bots-bridge.runtime.v2.json";
+const ASTRBOT_BRIDGE_RUNTIME_FILE = ".zcodium/v2/bots-bridge.runtime.v2.json";
 export const ASTRBOT_PLUGIN_URL = "https://github.com/axiom-desu/astrbot-zcodium-plugin";
 
 export function AstrBotSettingsCard({

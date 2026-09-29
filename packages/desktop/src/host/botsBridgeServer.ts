@@ -25,7 +25,7 @@ import {
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 
 /** 传输层最小依赖面：由 host 用 IBotsService + astrbotProvider 适配。 */
-export interface BotsBridgeServicePort {
+interface BotsBridgeServicePort {
   /** AstrBot bot 是否启用（welcome 帧）。 */
   isEnabled(): Promise<boolean>;
   /** 可用于绑定的 workspace 数量（welcome 帧）。 */
@@ -37,7 +37,7 @@ export interface BotsBridgeServicePort {
   buildSnapshot(bindingId: string): Promise<BotsBridgeDeliveryFrame | null>;
 }
 
-export interface BotsBridgeServerOptions {
+interface BotsBridgeServerOptions {
   service: BotsBridgeServicePort;
   /** 用户填到 AstrBot 插件里的桥接 token；必须非空。 */
   token: string;
