@@ -81,8 +81,13 @@ export function createAstrBotBotProvider(options: AstrBotProviderOptions = {}): 
   const routing = new Map<string, string>();
   /** bindingId → 当前命令轮次（命令窗口内出站走它）。 */
   const currentTurns = new Map<string, { streamId: string; startedTask: boolean }>();
-  /** bindingId → 正在运行的任务流。 */
-  const taskStreams = new Map<string, string>();
+  /**
+   * bindingId → 任务流。`awaiting_input` 时**保留**条目并把状态改成 awaiting：
+   * 修复依据：原来一进 awaiting_input 就 delete，用户应答权限/提问后任务恢复的出站
+   * 在两个 Map 里都查不到 stream，于是每帧 idFactory() 新建一个无主 stream，
+   * 协议的 streamId 分组语义失效，插件按 stream 收口时恢复后的正文变成孤立帧。
+   */
+  const taskStreams = new Map<string, { streamId: string; state: "running" | "awaiting_input" }>();
   /** bindingId → 最近分配的下行 seq。 */
   const cursors = new Map<string, number>();
   /** bindingId → 最近一条 delivery（snapshot 用）。 */
@@ -159,7 +164,10 @@ export function createAstrBotBotProvider(options: AstrBotProviderOptions = {}): 
       return;
     }
     currentTurns.delete(bindingId);
-    // 启动任务的轮次由任务终态收口；其余命令立即收口。
+    // 启动任务的轮次由任务终态收口；其余命令（含任务等待期间收到的 /status、
+    // 普通消息回 taskRunning）立即收口，否则插件侧的流永远不会结束。
+    // startedTask 由 notifyTaskLifecycle("started") 置位：BotsService 在权限/问答
+    // 应答成功后重新通知 started，任务随即在同一轮次的 stream 上继续。
     if (!turn.startedTask) {
       emitStatus(bindingId, turn.streamId, "completed");
     }
@@ -167,17 +175,30 @@ export function createAstrBotBotProvider(options: AstrBotProviderOptions = {}): 
 
   function notifyTaskLifecycle(_bot: unknown, actor: BotActor, phase: BotTaskLifecyclePhase): void {
     const bindingId = routing.get(targetKey(actor)) ?? resolveBindingId(actor);
+    const existing = taskStreams.get(bindingId);
     if (phase === "started") {
       const turn = currentTurns.get(bindingId);
-      const streamId = turn?.streamId ?? idFactory();
       if (turn) {
+        // 命令轮次启动了任务流（含权限/问答应答后任务恢复）：该轮次的 stream 提升为
+        // 任务流，startedTask 阻止 settleTurn 提前收口。
         turn.startedTask = true;
+        taskStreams.set(bindingId, { streamId: turn.streamId, state: "running" });
+        return;
       }
-      taskStreams.set(bindingId, streamId);
+      taskStreams.set(bindingId, {
+        streamId: existing?.streamId ?? idFactory(),
+        state: "running",
+      });
       return;
     }
-    const streamId =
-      taskStreams.get(bindingId) ?? currentTurns.get(bindingId)?.streamId ?? idFactory();
+    if (phase === "awaiting_input") {
+      // 保留任务流并标记暂停，供后续终态事件回落；见 taskStreams 声明处的修复依据。
+      const streamId = existing?.streamId ?? currentTurns.get(bindingId)?.streamId ?? idFactory();
+      taskStreams.set(bindingId, { streamId, state: "awaiting_input" });
+      emitStatus(bindingId, streamId, "awaiting_input");
+      return;
+    }
+    const streamId = existing?.streamId ?? currentTurns.get(bindingId)?.streamId ?? idFactory();
     taskStreams.delete(bindingId);
     emitStatus(bindingId, streamId, toBridgeState(phase));
   }
@@ -198,7 +219,9 @@ export function createAstrBotBotProvider(options: AstrBotProviderOptions = {}): 
       }
       // 命令窗口内走当前命令流；任务运行期间走任务流；兜底新建流。
       const streamId =
-        currentTurns.get(bindingId)?.streamId ?? taskStreams.get(bindingId) ?? idFactory();
+        currentTurns.get(bindingId)?.streamId ??
+        taskStreams.get(bindingId)?.streamId ??
+        idFactory();
       // 修复原因：带 selection 的出站（权限 / elicitation / 菜单）以前只把 message.text 下发，
       // 而 BotsService 对非 weixin provider 只把 selection.title 写进 text，选项被整体丢弃，
       // 用户在 AstrBot 里看不到可选项也无法应答。这里改发协议里的 selection payload，

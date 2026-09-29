@@ -3378,6 +3378,9 @@ export function createBotsService(
     }
     if (action === "accept") {
       startTyping(auth.bot, actor, pending.taskId);
+      // 与 permission.respond 同理：问答提交后任务恢复，重新通知 started，
+      // 避免恢复后的出站失去 stream 归属。
+      providers[auth.bot.provider]?.notifyTaskLifecycle?.(auth.bot, actor, "started");
       // Bugfix: AskUserQuestion 只是在回复问题，不属于命令配置成功；这里保留原问答提交文案，避免误回 /status。
       return [createCompletedElicitationOutbound(actor, pending, auth.locale, action)];
     }
@@ -6195,6 +6198,11 @@ export function createBotsService(
               },
             );
             startTyping(auth.bot, message.actor, auth.context.activeTaskId);
+            // 修复原因：权限应答成功后任务会立即恢复输出，但传输 provider 在
+            // awaiting_input 时已把任务流标记为暂停。这里重新通知 started，
+            // 让 provider 把当前轮次的 stream 提升为任务流并保留收口归属；
+            // 否则恢复后的每帧出站都落在新建的无主 stream 上（见 astrbotProvider）。
+            providers[auth.bot.provider]?.notifyTaskLifecycle?.(auth.bot, message.actor, "started");
             return [
               createOutbound(
                 message.actor,

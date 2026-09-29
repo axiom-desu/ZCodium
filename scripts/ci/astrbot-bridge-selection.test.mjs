@@ -149,7 +149,8 @@ test("英文 locale 只本地化提示行，选项 label 原样透传", () => {
   const elicitationPayload = buildAstrBotSelectionDeliveryPayload(elicitationSelection, "en-US");
   assert.match(
     elicitationPayload.text,
-    /Reply with \/elicitation abcdef123456 <number>; send submit when a multi-select is done\./u,
+    // 修复依据：裸 submit 会被 elicitation.submit 分支拒绝，必须带 token。
+    /Reply with \/elicitation abcdef123456 <number>; send \/elicitation abcdef123456 submit when a multi-select is done\./u,
   );
 });
 
@@ -260,4 +261,145 @@ test("群聊按 chatId 路由，selection 也能到达同一绑定", async () =>
   assert.equal(deliveries[0].payload.type, "selection");
 
   provider.dispose();
+});
+
+// ── 任务流归属回归 ─────────────────────────────────────────────
+// 修复依据：notifyTaskLifecycle("awaiting_input") 原会 delete 任务流，用户应答权限/提问后
+// 任务恢复的出站在 currentTurns / taskStreams 里都查不到 stream，于是每帧 idFactory()
+// 新建无主 stream，插件按 stream 收口时恢复后的正文变成孤立帧。现在 awaiting_input 只标记
+// 暂停，BotsService 在应答成功后重新通知 started，provider 把当前轮次提升为任务流。
+
+function taskActor() {
+  return {
+    provider: "astrbot",
+    botId: "bot-1",
+    providerUserId: "lark:u1",
+    chatType: "private",
+  };
+}
+
+function commandFrame(id, text) {
+  return {
+    v: 2,
+    kind: "command",
+    id,
+    commandId: id,
+    actor: { channel: "astrbot", externalUserId: "lark:u1", chatType: "private" },
+    command: { type: "prompt", text },
+  };
+}
+
+/** 协议不变量：① delivery 的 stream 必须被某个 accepted 预告；② 终态 status 与最后一条 delivery 同 stream。 */
+function assertStreamInvariants(frames) {
+  const announced = new Set(
+    frames.filter((frame) => frame.kind === "accepted").map((frame) => frame.streamId),
+  );
+  const deliveries = frames.filter((frame) => frame.kind === "delivery");
+  for (const delivery of deliveries) {
+    assert.ok(
+      announced.has(delivery.streamId),
+      `delivery 落在未预告的 stream 上：${delivery.streamId}`,
+    );
+  }
+  const terminal = frames.filter((frame) => frame.kind === "status").at(-1);
+  const lastDelivery = deliveries.at(-1);
+  assert.ok(terminal, "缺少终态 status");
+  assert.equal(terminal.streamId, lastDelivery.streamId, "终态与正文的 stream 不一致");
+}
+
+function createTurnHarness() {
+  let seq = 0;
+  const provider = createAstrBotBotProvider({
+    logger: silentLogger,
+    clock: () => 1_700_000_000_000,
+    idFactory: () => `id-${++seq}`,
+  });
+  const frames = [];
+  provider.attachTransport({ send: (frame) => frames.push(frame) });
+  const actor = taskActor();
+  const send = (text, selection) =>
+    provider.send(
+      {},
+      {
+        botId: "bot-1",
+        provider: "astrbot",
+        providerUserId: "lark:u1",
+        text,
+        ...(selection ? { selection } : {}),
+      },
+    );
+  return {
+    provider,
+    frames,
+    actor,
+    send,
+    begin: (id, text) => provider.beginTurn(commandFrame(id, text), "bot-1"),
+    lifecycle: (phase) => provider.notifyTaskLifecycle({}, actor, phase),
+    settle: (bindingId) => provider.settleTurn(bindingId),
+  };
+}
+
+test("权限应答后任务恢复：无无主 stream，终态与恢复后的正文同 stream", async () => {
+  const h = createTurnHarness();
+  const bindingId = h.begin("cmd-prompt", "帮我看一下");
+  h.lifecycle("started");
+  await h.send("正在处理…");
+  await h.send("是否允许执行命令？", permissionSelection);
+  h.lifecycle("awaiting_input");
+  // 用户应答权限：BotsService 处理成功后重新通知 started，任务在该轮次 stream 上继续。
+  h.begin("cmd-perm", "/permission 1");
+  h.lifecycle("started");
+  h.settle(bindingId);
+  await h.send("已允许，继续执行…");
+  await h.send("执行完成。");
+  h.lifecycle("completed");
+
+  assertStreamInvariants(h.frames);
+  // 恢复后的正文与终态必须落在应答轮次的 stream 上，而不是各自新建。
+  const resumed = h.frames.filter((frame) => frame.kind === "delivery" && frame.seq >= 3);
+  assert.ok(resumed.length >= 2);
+  assert.equal(new Set(resumed.map((frame) => frame.streamId)).size, 1);
+  h.provider.dispose();
+});
+
+test("任务等待期间收到独立命令：该轮次仍被收口，不会被挂住", async () => {
+  const h = createTurnHarness();
+  const bindingId = h.begin("cmd-prompt", "帮我看一下");
+  h.lifecycle("started");
+  await h.send("正在处理…", permissionSelection);
+  h.lifecycle("awaiting_input");
+
+  // BotsService 对「运行中任务 + 普通消息」回 taskRunning，是独立出站。
+  const statusBinding = h.begin("cmd-status", "/status");
+  await h.send("任务正在进行中。");
+  h.settle(statusBinding);
+
+  const statusStream = h.frames.find(
+    (frame) => frame.kind === "accepted" && frame.inReplyTo === "cmd-status",
+  ).streamId;
+  assert.ok(
+    h.frames.some((frame) => frame.kind === "status" && frame.streamId === statusStream),
+    "独立命令轮次没有被收口，插件侧的流永远不会结束",
+  );
+
+  // 之后再应答权限，任务恢复仍走自己的 stream。
+  h.begin("cmd-perm", "/permission 1");
+  h.lifecycle("started");
+  h.settle(bindingId);
+  await h.send("已允许，继续执行…");
+  h.lifecycle("completed");
+  assertStreamInvariants(h.frames);
+  h.provider.dispose();
+});
+
+test("非任务命令保持「立即收口」的原有语义", async () => {
+  const h = createTurnHarness();
+  const bindingId = h.begin("cmd-help", "/help");
+  await h.send("命令列表…");
+  h.settle(bindingId);
+
+  const last = h.frames.at(-1);
+  assert.equal(last.kind, "status");
+  assert.equal(last.state, "completed");
+  h.provider.dispose();
 });

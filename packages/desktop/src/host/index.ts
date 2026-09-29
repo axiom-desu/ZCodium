@@ -55,7 +55,7 @@ import {
   createServiceLogger,
   createHostApiNetworkTransport,
   createSettingService,
-  IAstrBotBridgeService,
+  getAstrBotBridgeProvider,
   getAppConfigDir,
 } from "@zcode/services/node";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -1526,7 +1526,8 @@ let activeBotsBridge: {
  */
 async function startBotsBridge(services: ServiceCollection): Promise<void> {
   const botsService = services.getOptional(IBotsService);
-  const astrBotProvider = services.getOptional(IAstrBotBridgeService);
+  // 传输控制面走专用 getter，不经 ServiceCollection（否则会暴露到通用 RPC）。
+  const astrBotProvider = getAstrBotBridgeProvider(services);
   if (!botsService || !astrBotProvider) {
     return;
   }
