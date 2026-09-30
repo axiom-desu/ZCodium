@@ -7,6 +7,11 @@ import type {
   MigrateLegacyCommonMcpRequest,
   MigrateLegacyCommonMcpResult,
   SaveCliMcpToUserDirectoryRequest,
+  WebRemoteControlStartRequest,
+  WebRemoteControlResetPairingRequest,
+  WebRemoteControlStatusSnapshot,
+  WebRemoteControlTaskSync,
+  WebRemoteControlWorkspaceSync,
 } from "./index.js";
 import type { AppSettings, Locale } from "./protocol.js";
 import type { StorageCleanRequest, StorageCleanResult, StorageUsageSnapshot } from "./storage.js";
@@ -170,6 +175,22 @@ export const PlatformChannels = {
   BindRemoteWorkspaceSessionContext: "zcode:bind-remote-workspace-session-context",
   /** 释放当前窗口里的远程 session */
   DisposeRemoteSession: "zcode:dispose-remote-session",
+  /** Renderer → Main：开启当前窗口的手机远控（配对 / QR） */
+  StartWebRemoteControl: "zcode:web-remote-control:start",
+  /** Renderer → Main：停止当前窗口的手机远控 */
+  StopWebRemoteControl: "zcode:web-remote-control:stop",
+  /** Renderer → Main：查询当前窗口的手机远控状态 */
+  GetWebRemoteControlStatus: "zcode:web-remote-control:get-status",
+  /** Renderer → Main：刷新配对（作废旧链接并重新注册） */
+  ResetWebRemoteControlPairing: "zcode:web-remote-control:reset-pairing",
+  /** Renderer → Main：同步窗口内已打开的工作区清单 */
+  SyncWebRemoteControlWorkspaces: "zcode:web-remote-control:sync-workspaces",
+  /** Renderer → Main：同步窗口内任务清单 */
+  SyncWebRemoteControlTasks: "zcode:web-remote-control:sync-tasks",
+  /** Main → Renderer：远控状态变化推送 */
+  WebRemoteControlStatusChanged: "zcode:web-remote-control:status-changed",
+  /** Main → Renderer：请 renderer 重连指定 workspace 的远端会话 */
+  WebRemoteControlReconnectWorkspace: "zcode:web-remote-control:reconnect-workspace",
   /** Renderer → Main：检查本机 Docker daemon 是否可用 */
   IsDockerAvailable: "zcode:is-docker-available",
   /** Renderer → Main：列出本机可用的 WSL 发行版 */
@@ -644,6 +665,38 @@ export interface PlatformChannelMap {
   [PlatformChannels.DisposeRemoteSession]: {
     request: string;
     response: void;
+  };
+  [PlatformChannels.StartWebRemoteControl]: {
+    request: WebRemoteControlStartRequest;
+    response: WebRemoteControlStatusSnapshot;
+  };
+  [PlatformChannels.StopWebRemoteControl]: {
+    request: void;
+    response: void;
+  };
+  [PlatformChannels.GetWebRemoteControlStatus]: {
+    request: void;
+    response: WebRemoteControlStatusSnapshot;
+  };
+  [PlatformChannels.ResetWebRemoteControlPairing]: {
+    request: WebRemoteControlResetPairingRequest;
+    response: WebRemoteControlStatusSnapshot;
+  };
+  [PlatformChannels.SyncWebRemoteControlWorkspaces]: {
+    request: WebRemoteControlWorkspaceSync;
+    response: void;
+  };
+  [PlatformChannels.SyncWebRemoteControlTasks]: {
+    request: WebRemoteControlTaskSync;
+    response: void;
+  };
+  [PlatformChannels.WebRemoteControlStatusChanged]: {
+    request: WebRemoteControlStatusSnapshot;
+    response: void;
+  };
+  [PlatformChannels.WebRemoteControlReconnectWorkspace]: {
+    request: { requestId: string; workspaceKey: string };
+    response: { requestId: string; success: boolean; error?: string };
   };
   [PlatformChannels.IsDockerAvailable]: {
     request: void;

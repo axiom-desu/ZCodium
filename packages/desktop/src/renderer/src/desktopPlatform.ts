@@ -28,6 +28,18 @@ export function createDesktopPlatform(options: {
     bindRemoteWorkspaceSessionContext: (context) =>
       window.zcode.bindRemoteWorkspaceSessionContext?.(context) ?? Promise.resolve(),
     disposeRemoteSession: (sessionId) => window.zcode.disposeRemoteSession(sessionId),
+    startWebRemoteControl: (request) => window.zcode.startWebRemoteControl(request),
+    stopWebRemoteControl: () => window.zcode.stopWebRemoteControl(),
+    getWebRemoteControlStatus: () => window.zcode.getWebRemoteControlStatus(),
+    refreshWebRemoteControlPairing: (request) =>
+      window.zcode.refreshWebRemoteControlPairing(request),
+    syncWebRemoteControlWorkspaces: (payload) =>
+      window.zcode.syncWebRemoteControlWorkspaces(payload),
+    syncWebRemoteControlTasks: (payload) => window.zcode.syncWebRemoteControlTasks(payload),
+    onWebRemoteControlStatusChanged: (handler) =>
+      window.zcode.onWebRemoteControlStatusChanged(handler),
+    onWebRemoteControlReconnectWorkspace: (handler) =>
+      window.zcode.onWebRemoteControlReconnectWorkspace(handler),
     isDockerAvailable: () => window.zcode.isDockerAvailable(),
     listWSLDistros: () => window.zcode.listWSLDistros(),
     listDockerContainers: () => window.zcode.listDockerContainers(),

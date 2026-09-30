@@ -339,6 +339,52 @@ IPC 面（preload ↔ main，`packages/shared/src/channels.ts` 新增）：
    信封（P6 评估，默认关闭）。
 6. **README 缺口表**在本 spec 落地实现后更新（89 → 0），不在本 spec 内修改。
 
+## 实现状态（2026-09-29 更新）
+
+| 阶段                                 | 状态 | 落地位置                                                                                                                                                                                                                                                                  |
+| ------------------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0 协议契约                          | ✅   | `packages/shared/src/webRemoteControl/`（envelope / relayFrame / rpcTransport / status）+ `channels.ts` 8 个 IPC + settings 4 键 + `IPlatformService` 8 方法                                                                                                              |
+| P1 桌面运行时 + LAN 直连 + UI + i18n | ✅   | `packages/desktop/src/main/webRemoteControl/`（manager / lanEndpoint / deviceTransport / authProvider / authStorage / qrUrl / mobileAppAssets / ipc）；`WebRemoteControlDialog` + `WorkspaceWebRemoteControlTrigger` + `useWebRemoteControl`；89 键已落 `zh-CN` / `en-US` |
+| P2 Host bridge + RPC 装配器          | ✅   | `hostBridge.ts`（AttachServicePort `web-remote-replayable` + MessagePortProtocol + ChannelClient + 服务代理）+ `bridgeController.ts`                                                                                                                                      |
+| P3 移动端 mobile entry               | ✅   | `packages/web/mobile.html` + `src/mobile/`（protocol 配对客户端 / MobileApp mobileHome+mobileShell）；vite 多入口构建                                                                                                                                                     |
+| P4 可配置对外端点 + relay 客户端传输 | ⬠    | settings 已有 `webRemoteControlEndpointMode/CustomEndpointUrl`；`DeviceTransport` 接口已留位，WS 客户端传输未实现                                                                                                                                                         |
+| P5 `packages/relay` 自托管包         | ⬠    | 未开始；wire 契约已在 shared，relay 侧按同一份 schema 实现                                                                                                                                                                                                                |
+| P6 hardening + 全量验收              | ⬠    | TLS/限流/TTL/互踢/脱敏已随 P1–P2 落地（ secret 只展示一次、日志脱敏、KICKED、TTL 24h）；E2E 信封与全量验收场景待跑                                                                                                                                                        |
+
+落地时对 spec 的两处修正（以代码为准）：
+
+1. **设备侧握手在 LAN 模式走同进程直连**：`LanRemoteControlEndpoint.registerDevice` 复用与 WS 相同的
+   challenge/proof 语义，但不产生真实 loopback 帧；relay 传输（P5）才走完整 wire。
+2. **rpc 装配器 v1 不做分片重组**：一个应用消息一帧，靠 seq 保序 + ack 确认；分片与回放留给
+   relay 传输（上限常量已在 `WEB_REMOTE_CONTROL_RPC_LIMITS`）。
+
+### 冒烟实测（2026-09-29）
+
+脚本：真起 `LanRemoteControlEndpoint`，用 `ws` 客户端模拟手机走完整握手（authenticate →
+pair → data 双向 → 互踢 → 拒绝路径）。覆盖验收场景 1/2/3 与失败语义：
+
+```text
+PASS endpoint listening: 4 addresses（loopback + 3 个 LAN IPv4）
+PASS device registered, state=waiting_terminal
+PASS qr url carries sid/hash
+PASS mobile paired (matched)
+PASS device sees paired
+PASS mobile payload routed to desktop（bootstrap-request）
+PASS desktop payload delivered to mobile（bootstrap-response）
+PASS second mobile kicks first（error KICKED → session-conflict）
+PASS wrong proof rejected（AUTH_FAILED）
+PASS unknown sid rejected（AUTH_FAILED）
+PASS healthz
+```
+
+冒烟抓到并修复的两个真 bug（均已回归通过）：
+
+1. `registerDevice` 返回的 device handle `sendPayload` 是空桩——桌面出站会被静默丢弃；
+2. 互踢只 `close()` 不发 `error{KICKED}`——旧页面静默掉线，无法映射 `session-conflict`。
+
+未覆盖项：真实 Electron 窗口的 Host attachment 桥接（需桌面运行时）、移动端浏览器端到端、
+跨网（4G/relay）路径——分别属于 P2 联调、P3 联调与 P4/P5。
+
 ## 实测证据（2026-09-29，附录）
 
 来源：`official-builds/ZCode-3.14.3-win-x64.exe` → `$PLUGINSDIR/app-64.7z` →

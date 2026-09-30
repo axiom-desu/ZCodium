@@ -35,22 +35,22 @@ ZCodium 是 ZCode 的社区衍生仓库。上游 ZCode 是 AI 编程工作台，
 
 **尚未补全**（共 258 键）：
 
-| 领域               | 缺口  | 说明                                                     |
-| ------------------ | ----- | -------------------------------------------------------- |
-| `webRemoteControl` | 89 键 | 手机远控桌面；仓库只有 botChannel 渠道选择外壳           |
-| `manualClaimPlan`  | 53 键 | 权益领取与验证码流程                                     |
-| `mode`             | 38 键 | 会话模式扩展                                             |
-| `settings`         | 26 键 | 含 Claude 模型槽位映射、Anthropic/OpenAI/Gemini 端点模板 |
-| `server`           | 12 键 | Server 入口                                              |
-| `appHeader`        | 8 键  | Provider 配置入口                                        |
-| `marketingTouch`   | 7 键  | 权益触达                                                 |
-| `taskList`         | 6 键  | Codex / Claude 新建任务                                  |
-| `chat`             | 5 键  | agent 切换                                               |
-| `rewards`          | 5 键  | 权益菜单                                                 |
-| `onboarding`       | 4 键  | agent 设置步骤                                           |
-| 其他               | 5 键  | `remote`、`zcode`、`titleBar`                            |
+| 领域                   | 缺口  | 说明                                                     |
+| ---------------------- | ----- | -------------------------------------------------------- |
+| ~~`webRemoteControl`~~ | 0 键  | 手机远控桌面已补齐（LAN 直连）；relay 自托管包为可选后续 |
+| `manualClaimPlan`      | 53 键 | 权益领取与验证码流程                                     |
+| `mode`                 | 38 键 | 会话模式扩展                                             |
+| `settings`             | 26 键 | 含 Claude 模型槽位映射、Anthropic/OpenAI/Gemini 端点模板 |
+| `server`               | 12 键 | Server 入口                                              |
+| `appHeader`            | 8 键  | Provider 配置入口                                        |
+| `marketingTouch`       | 7 键  | 权益触达                                                 |
+| `taskList`             | 6 键  | Codex / Claude 新建任务                                  |
+| `chat`                 | 5 键  | agent 切换                                               |
+| `rewards`              | 5 键  | 权益菜单                                                 |
+| `onboarding`           | 4 键  | agent 设置步骤                                           |
+| 其他                   | 5 键  | `remote`、`zcode`、`titleBar`                            |
 
-`bots` 的 259 个键已由上游 3.14.3 全部开源并随合并进入本仓库，缺口为 0。`webRemoteControl` 只进来了渠道选择一层（15 键，另含自研 AstrBot 2 键），远控本体仍未实现，因此是当前最大缺口。反向还有 33 个键是本仓库特有、官方包没有的，主要来自 AstrBot 桥接与 `.zcodium` 命名空间。
+`bots` 的 259 个键已由上游 3.14.3 全部开源并随合并进入本仓库，缺口为 0。`webRemoteControl` 的 89 键已由本仓库补齐（2026-09-29，spec 见 `.agents/specs/web-remote-control.md`）：默认同网扫码直连，桥接桌面已有 Host；用户自托管 relay（跨网）为可选后续。当前最大缺口为 `manualClaimPlan`。反向还有 33 个键是本仓库特有、官方包没有的，主要来自 AstrBot 桥接与 `.zcodium` 命名空间。
 
 **有意不补全**：
 
@@ -98,6 +98,7 @@ ZCodium 是 ZCode 的社区衍生仓库。上游 ZCode 是 AI 编程工作台，
 
 ## 更新
 
+- 2026-09-29：补齐手机远控（`webRemoteControl`）本体：桌面 LAN 直连配对/QR + 桥接已有 Host + `packages/web` mobile entry，89 键全量落地；跨网 relay 为用户自托管可选件（[spec](.agents/specs/web-remote-control.md)）。
 - 2026-09-24：AstrBot 桥接整合为官方 `BotsService` 的传输 provider，并在官方 Bots GUI 与手机远控入口接入（#11–#14）。
 - 2026-09-24：按官方 3.14.3 安装包重新核对 i18n 键缺口，`bots` 259 键已归零，剩余 258 键；核对方法记入「与官方包的能力差异」。
 - 2026-09-24：Computer Use 运行时改为复用 `@trycua/cua-driver` 作为唯一原生引擎，移除自研 desk-pilot；client 由上层注入，缺失时保持 fail-closed，老 GNOME / Wayland 另走物理输入兼容层。

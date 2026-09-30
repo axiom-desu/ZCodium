@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#161616" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>ZCode 远程控制</title>
+    <script>
+      // 配对链接带 theme 参数（桌面主题种子）；JS bundle 执行前先落地，避免首帧闪白。
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        const theme = params.get("theme");
+        const resolved =
+          theme === "light" || theme === "zai-light"
+            ? "light"
+            : theme === "system"
+              ? window.matchMedia?.("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark"
+              : "dark";
+        document.documentElement.classList.toggle("theme-zai-light", resolved === "light");
+        document.documentElement.classList.toggle("theme-zai-dark", resolved !== "light");
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="mobile-root"></div>
+    <script type="module" src="/src/mobile/main.tsx"></script>
+  </body>
+</html>

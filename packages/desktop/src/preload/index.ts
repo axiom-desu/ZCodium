@@ -6,6 +6,11 @@ import {
 /* eslint-disable max-lines -- preload bridge 集中暴露桌面平台 IPC，拆散会让 contextBridge 权限边界更难审计。 */
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 import type {
+  WebRemoteControlResetPairingRequest,
+  WebRemoteControlStartRequest,
+  WebRemoteControlStatusSnapshot,
+  WebRemoteControlTaskSync,
+  WebRemoteControlWorkspaceSync,
   AppSettings,
   ApplicationIconRequest,
   BrowserViewOperationPayload,
@@ -216,6 +221,59 @@ contextBridge.exposeInMainWorld("zcode", {
     ipcRenderer.invoke(PlatformChannels.BindRemoteWorkspaceSessionContext, context),
   disposeRemoteSession: (sessionId: string): Promise<void> =>
     ipcRenderer.invoke(PlatformChannels.DisposeRemoteSession, sessionId),
+  /** 开启当前窗口的手机远控（默认仅同网可达；跨网由用户自备端点） */
+  startWebRemoteControl: (
+    request: WebRemoteControlStartRequest,
+  ): Promise<WebRemoteControlStatusSnapshot> =>
+    ipcRenderer.invoke(PlatformChannels.StartWebRemoteControl, request),
+  /** 停止当前窗口的手机远控并作废配对 */
+  stopWebRemoteControl: (): Promise<void> =>
+    ipcRenderer.invoke(PlatformChannels.StopWebRemoteControl),
+  /** 查询当前窗口的手机远控状态 */
+  getWebRemoteControlStatus: (): Promise<WebRemoteControlStatusSnapshot> =>
+    ipcRenderer.invoke(PlatformChannels.GetWebRemoteControlStatus),
+  /** 刷新配对：作废旧二维码/链接并重新注册 */
+  refreshWebRemoteControlPairing: (
+    request: WebRemoteControlResetPairingRequest,
+  ): Promise<WebRemoteControlStatusSnapshot> =>
+    ipcRenderer.invoke(PlatformChannels.ResetWebRemoteControlPairing, request),
+  /** 同步窗口内已打开的工作区清单给远控运行时 */
+  syncWebRemoteControlWorkspaces: (payload: WebRemoteControlWorkspaceSync): Promise<void> =>
+    ipcRenderer.invoke(PlatformChannels.SyncWebRemoteControlWorkspaces, payload),
+  /** 同步窗口内任务清单给远控运行时 */
+  syncWebRemoteControlTasks: (payload: WebRemoteControlTaskSync): Promise<void> =>
+    ipcRenderer.invoke(PlatformChannels.SyncWebRemoteControlTasks, payload),
+  /** 订阅手机远控状态变化，返回 disposer */
+  onWebRemoteControlStatusChanged: (
+    callback: (snapshot: WebRemoteControlStatusSnapshot) => void,
+  ) => {
+    const handler = (_event: unknown, payload: unknown) =>
+      callback(payload as WebRemoteControlStatusSnapshot);
+    ipcRenderer.on(PlatformChannels.WebRemoteControlStatusChanged, handler);
+    return () => {
+      ipcRenderer.removeListener(PlatformChannels.WebRemoteControlStatusChanged, handler);
+    };
+  },
+  /**
+   * 订阅桌面端下发的重连请求（手机触发 workspace-reconnect-request）。
+   * renderer 完成重连后经 invoke 回填结果；main 侧 120s 超时。
+   */
+  onWebRemoteControlReconnectWorkspace: (
+    callback: (request: {
+      requestId: string;
+      workspaceKey: string;
+    }) => Promise<{ requestId: string; success: boolean; error?: string }>,
+  ) => {
+    const handler = (_event: unknown, request: { requestId: string; workspaceKey: string }) => {
+      void callback(request).then((response) => {
+        ipcRenderer.invoke(PlatformChannels.WebRemoteControlReconnectWorkspace, response);
+      });
+    };
+    ipcRenderer.on(PlatformChannels.WebRemoteControlReconnectWorkspace, handler);
+    return () => {
+      ipcRenderer.removeListener(PlatformChannels.WebRemoteControlReconnectWorkspace, handler);
+    };
+  },
   isDockerAvailable: (): Promise<boolean> => ipcRenderer.invoke(PlatformChannels.IsDockerAvailable),
   listWSLDistros: () => ipcRenderer.invoke(PlatformChannels.ListWSLDistros),
   listDockerContainers: () => ipcRenderer.invoke(PlatformChannels.ListDockerContainers),

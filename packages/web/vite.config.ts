@@ -67,6 +67,14 @@ export default defineConfig(({ mode }) => {
     build: {
       // 生产不在浏览器产物暴露 sourceMappingURL，避免客户端侧还原业务源码。
       sourcemap: mode === "production" ? "hidden" : true,
+      rollupOptions: {
+        // 多入口：index.html（Web 工作台）+ mobile.html（手机远控 SPA）。
+        // 移动端产物由桌面 main 的 web-remote 静态目录托管（electron-builder extraResources）。
+        input: {
+          index: resolve(HERE, "index.html"),
+          mobile: resolve(HERE, "mobile.html"),
+        },
+      },
     },
   };
 });

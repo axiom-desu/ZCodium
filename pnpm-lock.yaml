@@ -1230,6 +1230,9 @@ importers:
       '@zcode/client':
         specifier: workspace:*
         version: link:../client
+      '@zcode/rpc':
+        specifier: workspace:*
+        version: link:../rpc
       '@zcode/shared':
         specifier: workspace:*
         version: link:../shared

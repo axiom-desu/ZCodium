@@ -619,6 +619,9 @@ export default {
   },
   extraResources: [
     { from: "bundled-remote-assets", to: "remote-assets" },
+    // 手机远控的移动端 web 产物（packages/web 的 mobile.html 多入口构建）。
+    // main 的 resolveMobileAppRoot 按 resourcesPath/web-remote 解析；dev 下回退仓库 dist。
+    { from: resolve(workspaceRoot, "packages/web/dist"), to: "web-remote" },
     { from: resolve(workspaceRoot, noticesFileName), to: noticesFileName },
     ...(targetPlatform.os === "darwin"
       ? [

@@ -99,6 +99,17 @@ function createWebPlatform(): IPlatformService {
     },
     cancelPendingRemoteConnection: (_requestId?: string) => Promise.resolve(),
     disposeRemoteSession: () => Promise.resolve(),
+    // 手机远控走独立的 mobile entry 与配对协议，普通 Web 模式不暴露这些能力。
+    startWebRemoteControl: () =>
+      Promise.reject(new Error("Web remote control is not supported in Web mode")),
+    stopWebRemoteControl: () => Promise.resolve(),
+    getWebRemoteControlStatus: () => Promise.resolve({ status: "idle" as const }),
+    refreshWebRemoteControlPairing: () =>
+      Promise.reject(new Error("Web remote control is not supported in Web mode")),
+    syncWebRemoteControlWorkspaces: () => Promise.resolve(),
+    syncWebRemoteControlTasks: () => Promise.resolve(),
+    onWebRemoteControlStatusChanged: () => () => {},
+    onWebRemoteControlReconnectWorkspace: () => () => {},
     isDockerAvailable: () => Promise.resolve(false),
     listWSLDistros: () => Promise.resolve([]),
     listDockerContainers: () => Promise.resolve([]),

@@ -361,4 +361,18 @@ export interface AppSettings {
   settingsSyncFirstRunPromptHandled?: boolean;
   /** 设置页里的临时 endpoint override；正式/测试默认 base url 由 ZCODE_BASE_URL env 管理。 */
   zcodeEndpointOrigin?: string;
+  /** 手机远控：外部端点设备注册 Sid；passHash 存 credential store（web-remote-control:external-relay:pass_hash）。 */
+  webRemoteControlExternalRelayDevice?: { deviceSid: string };
+  /** 手机远控：上次开启时的工作区 / 初始任务，用于启动恢复。 */
+  webRemoteControlLastEnabledContext?: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    initialTaskId?: string;
+  };
+  /** 手机远控端点模式：lan = 仅同网直连（默认）；custom = 用户自备隧道 / relay。 */
+  webRemoteControlEndpointMode?: "lan" | "custom";
+  /** 手机远控：custom 模式的用户自备端点地址（如 wss://域名/ws）。 */
+  webRemoteControlCustomEndpointUrl?: string;
+  /** 手机远控：本机设备标识（首次开启时生成，写入 QR 的 mid 参数）。 */
+  webRemoteControlDeviceMid?: string;
 }

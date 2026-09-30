@@ -9,6 +9,7 @@ import {
   embeddedBrowserViewportPreferenceSchema,
 } from "./browser-use/command-metadata.js";
 import { providerFamilyConnectionSelectionSettingsSchema } from "./provider-family-connection-selection.js";
+import { webRemoteControlEndpointModeSchema } from "./webRemoteControl/index.js";
 
 /** 引导职业枚举；单独导出供 onboarding 记录回填 settings 时做窄化校验。 */
 const appSettingsOccupationSchema = z.enum([
@@ -468,6 +469,27 @@ const appSettingsObjectSchema = z.object({
   skippedElectronUpdateVersions: skippedElectronUpdateVersionsSchema,
   settingsSyncFirstRunPromptHandled: z.boolean().optional(),
   zcodeEndpointOrigin: zcodeEndpointOriginSchema.optional(),
+  // 手机远控：外部端点设备注册仅持久化 deviceSid；passHash 走 credential store。
+  webRemoteControlExternalRelayDevice: z
+    .object({ deviceSid: nonEmptyStringSchema })
+    .strict()
+    .optional(),
+  // 手机远控：启动恢复上下文（上次开启时的工作区 / 初始任务）。
+  webRemoteControlLastEnabledContext: z
+    .object({
+      workspacePath: nonEmptyStringSchema,
+      workspaceIdentity: z.string().optional(),
+      initialTaskId: z.string().optional(),
+    })
+    .strict()
+    .optional(),
+  // 手机远控：端点模式。默认 lan（仅同网可达）；custom 时读取用户自备隧道 / relay 地址。
+  // patch 侧保持 optional：update() 只覆盖调用方显式提供的字段，不把默认值写回每次补丁。
+  webRemoteControlEndpointMode: webRemoteControlEndpointModeSchema.optional(),
+  // 手机远控：用户自备端点地址（custom 模式必填，如 wss://域名/ws）。
+  webRemoteControlCustomEndpointUrl: z.string().trim().optional(),
+  // 手机远控：本机设备标识（首次开启时生成，写入 QR 的 mid 参数）。
+  webRemoteControlDeviceMid: nonEmptyStringSchema.optional(),
 });
 
 export const appSettingsSchema = z.preprocess(
@@ -553,4 +575,24 @@ export const appSettingsPatchSchema = z.object({
     .optional(),
   settingsSyncFirstRunPromptHandled: z.boolean().optional(),
   zcodeEndpointOrigin: zcodeEndpointOriginSchema.optional(),
+  // 手机远控：外部端点设备注册仅持久化 deviceSid；passHash 走 credential store。
+  webRemoteControlExternalRelayDevice: z
+    .object({ deviceSid: nonEmptyStringSchema })
+    .strict()
+    .optional(),
+  // 手机远控：启动恢复上下文（上次开启时的工作区 / 初始任务）。
+  webRemoteControlLastEnabledContext: z
+    .object({
+      workspacePath: nonEmptyStringSchema,
+      workspaceIdentity: z.string().optional(),
+      initialTaskId: z.string().optional(),
+    })
+    .strict()
+    .optional(),
+  // 手机远控：端点模式。默认 lan（仅同网可达）；custom 时读取用户自备隧道 / relay 地址。
+  webRemoteControlEndpointMode: webRemoteControlEndpointModeSchema.default("lan"),
+  // 手机远控：用户自备端点地址（custom 模式必填，如 wss://域名/ws）。
+  webRemoteControlCustomEndpointUrl: z.string().trim().optional(),
+  // 手机远控：本机设备标识（首次开启时生成，写入 QR 的 mid 参数）。
+  webRemoteControlDeviceMid: nonEmptyStringSchema.optional(),
 });

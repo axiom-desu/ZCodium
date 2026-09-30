@@ -61,12 +61,17 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import {
   createSettingService,
+  createCredentialService,
   buildRuntimeProcessEnvPatch,
   captureLoginShellEnvSnapshot,
   getConversationWorkspaceDir,
   normalizeRuntimeProcessEnv,
   setDataBaseDir,
 } from "@zcode/services/node";
+import {
+  createWebRemoteControl,
+  type WebRemoteControlRuntimeHandle,
+} from "./webRemoteControl/index.js";
 import {
   desktopMenuMessageIds,
   type Locale,
@@ -625,6 +630,8 @@ const remoteSessionManager = createRemoteWorkspaceSessionManager({
   resolveRemoteAssetDirs,
   resolveWslTarget: resolveCanonicalWslTarget,
 });
+// 手机远控运行时：main 持有配对/传输/bridge；IPC 在 webRemoteControl/ipc.ts 注册。
+let webRemoteControlHandle: WebRemoteControlRuntimeHandle | null = null;
 
 ipcMain.on(PlatformChannels.ReportDiagnostic, (_event, input: unknown) => {
   const parsed = DiagnosticRecordSchema.safeParse(input);
@@ -1828,6 +1835,17 @@ app.whenReady().then(async () => {
     logger,
   });
 
+  // 手机远控：设置/凭据/窗口 host 就绪后组装运行时；失败不影响桌面启动。
+  webRemoteControlHandle = await createWebRemoteControl({
+    logger,
+    settingService: mainSettingService,
+    credentialService: createCredentialService(),
+    resolveHostProcess: (webContentsId) => windowHostProcessMap.get(webContentsId),
+  }).catch((error) => {
+    logger.error("[web-remote-control] failed to initialize:", error);
+    return null;
+  });
+
   registerPlatformIpcHandlers({
     logger,
     // CDP-on-guest pivot：renderer `<webview>` dom-ready 上报 guest webContentsId → attach。
@@ -2009,6 +2027,7 @@ app.on("browser-window-created", (_, win) => {
     // Electron 进入 closed 回调时，win.webContents 可能已经被销毁。
     // 之前这里现取 win.webContents.id，会在关窗收尾阶段抛出 "Object has been destroyed"。
     // 改为在窗口创建时缓存 webContents id，确保清理工作区深链接状态时不再访问已销毁对象。
+    void webRemoteControlHandle?.manager.disposeWindow(win.id);
     clearWorkspaceDeepLinkStateForWindow(windowWebContentsId);
     // 录制中关窗/崩溃时 renderer 不会发复位 IPC，这里按发起 webContents 复位录制态，
     // 防止菜单 accelerator 被永久摘除。
