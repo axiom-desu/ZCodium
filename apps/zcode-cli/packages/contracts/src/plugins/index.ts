@@ -156,8 +156,27 @@ export interface PluginManifest {
   repository?: string;
   settings?: unknown;
   skills?: unknown;
+  /** 插件 UI：`ui.surfaces[]` 面板入口声明，adapters 解析。 */
+  ui?: unknown;
   userConfig?: Record<string, PluginUserConfigOption>;
   version?: string;
+}
+
+/** 面板生命周期：第一版只接受会话级；`draft` 留待需要时放开。 */
+export type PluginUiSurfaceAvailability = "session";
+/** 标题：单一字符串或按 locale 键的映射（`{ "zh-CN": "...", "en-US": "..." }`）。 */
+export type PluginUiSurfaceTitle = string | Record<string, string>;
+export interface PluginUiSurfaceDefinition {
+  id: string;
+  title: PluginUiSurfaceTitle;
+  icon?: string;
+  /** 运行时 namespaced MCP server 名（`plugin:${name}:${server}`），UI 直接用它调 mcp/uiReadResource。 */
+  server: string;
+  /** 清单里声明的原始 server 键，仅供诊断与展示。 */
+  declaredServer: string;
+  /** 必须以 `ui://` 开头。 */
+  resourceUri: string;
+  availability: PluginUiSurfaceAvailability;
 }
 
 export interface PluginConfig {
@@ -196,6 +215,8 @@ export interface PluginMetadata {
   skillCount: number;
   skillRootCount: number;
   source: PluginSource;
+  /** 清单 `ui.surfaces[]` 解析结果（已校验）；未声明或全部非法时缺省。 */
+  uiSurfaces?: PluginUiSurfaceDefinition[];
   userConfig?: Record<string, PluginUserConfigOption>;
   version?: string;
 }
@@ -239,6 +260,8 @@ export interface PluginReferenceCatalogEntry {
    * 禁止进入 provider reminder 或协议投影——路径不属于 identifiers-only 契约。
    */
   rootPath: string;
+  /** 面板入口声明（A5）；供 host 在 session 冻结 catalog 里查面板定义。 */
+  uiSurfaces?: PluginUiSurfaceDefinition[];
 }
 
 export interface PluginReferenceCatalog {

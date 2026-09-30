@@ -1,3 +1,4 @@
+import type { PluginUiToolBinding } from "@/plugin-ui/contract.js";
 import type { ReactNode } from "react";
 import type { WorkflowRunState } from "@zcode/shared/zcode-protocol-v4";
 import type { MessageFileLinkTarget } from "@/components/ai-elements/message.js";
@@ -204,6 +205,11 @@ export interface ToolCallBlockRenderContext {
   isOfficeMode?: boolean;
   toolCallNode: TaskChatToolCallTreeNode;
   workspacePath: string;
+  /**
+   * 插件 UI：scope 是沙箱登记需要的 session 范围，onOpenSidePane 是"在侧栏打开"回调；
+   * 由 PluginUiSessionProvider 在边界注入。缺省表示宿主不提供，带 ui:// 资源的工具回退普通 MCP 卡片。
+   */
+  pluginUi?: PluginUiToolBinding;
   /**
    * 应用主题（store 耦合剥离）：由构建 render context 的宿主
    * （ToolCallBlock / PermissionDialog 等）从上层状态传入，供

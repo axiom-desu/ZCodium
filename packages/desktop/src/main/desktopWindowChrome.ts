@@ -35,6 +35,7 @@ import {
   resolveDesktopWindowSize,
   type DesktopWindowSize,
 } from "./desktopWindowSize.js";
+import { getPluginSandboxHost, isPluginSandboxSrc } from "./pluginSandbox/index.js";
 // CDP-on-guest pivot：内置浏览器改回 `<webview>` 渲染，宿主 BrowserWindow 需重新开 webviewTag，
 // 并在 will/did-attach-webview 里做 guest 硬化 + URL 白名单 + popup 路由回内部 tab。
 const ALLOWED_EMBEDDED_BROWSER_PROTOCOLS = new Set([
@@ -431,6 +432,10 @@ export function createBrowserWindow(options: {
   win.on("maximize", () => syncDesktopWindowChromeState(win));
   win.on("unmaximize", () => syncDesktopWindowChromeState(win));
   attachWindowsWindowRepaint(win);
+  // will-attach 与 did-attach 按顺序配对；队列元素记录 guest 种类，did-attach 据此分派策略。
+  const pendingWebviewGuestKinds: Array<
+    { kind: "browser" | "codingPlan" } | { kind: "pluginSandbox"; sandboxId: string }
+  > = [];
 
   win.webContents.once("did-finish-load", () => {
     // 生产包使用 loadFile(file://...) 导航时，Chromium 可能在页面加载完成后重放
@@ -460,7 +465,28 @@ export function createBrowserWindow(options: {
     // Chromium NSAlert。固定 preload 在每个 frame 调用原生 API 前拦截，且隔离世界只
     // 暴露 alert/confirm 同步桥；网页主世界仍没有 Node 或任意 IPC 能力。
     const targetUrl = params.src ?? "about:blank";
-    webPreferences.preload = embeddedBrowserJavaScriptDialogPreloadPath;
+    // 插件 UI 沙箱 guest：独立分支，不走内置浏览器的 preload / allowpopups / 协议白名单。
+    if (isPluginSandboxSrc(targetUrl)) {
+      const host = getPluginSandboxHost();
+      const decision = host?.configureGuest({
+        webPreferences,
+        params,
+        ownerWebContentsId: win.webContents.id,
+      });
+      if (!decision?.ok) {
+        options.logger.warn(
+          `[plugin-sandbox] blocked webview attach: ${decision ? decision.reason : "host-not-installed"}`,
+        );
+        event.preventDefault();
+        return;
+      }
+      pendingWebviewGuestKinds.push({ kind: "pluginSandbox", sandboxId: decision.sandboxId });
+      return;
+    }
+    const isCodingPlanWebview = isCodingPlanEmbeddedWebviewSrc(targetUrl);
+    webPreferences.preload = isCodingPlanWebview
+      ? codingPlanWebviewPreloadPath
+      : embeddedBrowserJavaScriptDialogPreloadPath;
     webPreferences.contextIsolation = true;
     webPreferences.nodeIntegration = false;
     webPreferences.nodeIntegrationInSubFrames = true;
@@ -486,13 +512,31 @@ export function createBrowserWindow(options: {
       event.preventDefault();
       return;
     }
+
+    pendingWebviewGuestKinds.push({
+      kind: isCodingPlanWebview ? "codingPlan" : "browser",
+    });
   });
 
   win.webContents.on("did-attach-webview", (_event, guestWebContents) => {
+    const guestKind = pendingWebviewGuestKinds.shift() ?? {
+      kind: "browser" as const,
+    };
+    if (guestKind.kind === "pluginSandbox") {
+      getPluginSandboxHost()?.attachGuest({
+        guest: guestWebContents,
+        hostWebContents: win.webContents,
+        sandboxId: guestKind.sandboxId,
+      });
+      return;
+    }
     attachEmbeddedBrowserWindowOpenHandler({
       guestWebContents,
       hostWebContents: win.webContents,
       resolveBrowserViewOwner: options.resolveBrowserViewOwner,
+      // PayPal/relay 的 30x 重定向不保证逐跳触发 will-navigate。
+      // Coding Plan guest 身份必须按初始 src 粘住，不能由当前 URL 解防护。
+      isCodingPlanGuest: guestKind.kind === "codingPlan",
       logger: options.logger,
     });
   });

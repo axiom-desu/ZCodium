@@ -1,0 +1,8 @@
+{
+  "name": "@zcode/visualize-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ZCode Gen UI authoring skill and examples",
+  "license": "SEE LICENSE IN skills/visualize/LICENSE.md",
+  "type": "module"
+}

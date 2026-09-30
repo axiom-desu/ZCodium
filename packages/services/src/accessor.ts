@@ -1,3 +1,7 @@
+import type { IGenUiService } from "./gen-ui/contract.js";
+import type { IPluginUiBridgeService } from "./plugin-ui-bridge/contract.js";
+import type { IPluginUiSamplingService } from "./plugin-ui-bridge/samplingContract.js";
+import type { IPluginUiAppToolsService } from "./plugin-ui-bridge/appToolsContract.js";
 import type { IFileService } from "./file/file.js";
 import type { IMediaPreviewService } from "./media-preview/mediaPreview.js";
 import type { IGitService } from "./git/git.js";
@@ -72,6 +76,13 @@ export interface IServiceAccessor {
   readonly skillsService: ISkillsService;
   readonly skillSyncService: ISkillSyncService;
   readonly mcpSyncService: IMcpSyncService;
+  /** 插件 UI 桥；web 或旧 host 可不提供，UI 据此回退普通 MCP 卡片。 */
+  readonly genUiService?: IGenUiService;
+  readonly pluginUiBridgeService?: IPluginUiBridgeService;
+  /** 页面 sampling；只有桌面本地任务开放。 */
+  readonly pluginUiSamplingService?: IPluginUiSamplingService;
+  /** App-Provided Tools；只有桌面本地 agent 时存在。 */
+  readonly pluginUiAppToolsService?: IPluginUiAppToolsService;
   readonly pluginSyncService: IPluginSyncService;
   readonly pluginsService: IPluginsService;
   /** 设置页插件管理（UI 不再直触 zcodeAgentService 的 plugins/* 面） */

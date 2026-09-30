@@ -6,6 +6,7 @@ import { bashOutputDisplaySchema } from "../bash-output-display.js";
 import { timestampSchema } from "./core.js";
 import { OFFICIAL_MCP_TOOL_ERROR_CODES } from "../official-mcp-tool-error.js";
 import { cuaRequestAccessStatusSchema } from "./cuaPermission.js";
+import { mcpToolDisplayUiSchema } from "../mcp-apps/schemas.js";
 import { toolCallCreateWorkflowDisplaySchema } from "./create-workflow-display.js";
 import {
   toolCallEvalWorkflowSnippetDisplaySchema,
@@ -133,6 +134,8 @@ const toolResultDisplaySchema = z.discriminatedUnion("kind", [
       .object({ code: z.enum(OFFICIAL_MCP_TOOL_ERROR_CODES) })
       .strict()
       .optional(),
+    // 插件 UI 元数据；与 CLI contracts 的 mcpToolResultDisplayPayloadSchema 同源复用，见 mcp-apps/schemas.ts。
+    ui: mcpToolDisplayUiSchema.optional(),
   }),
   // buildToolOutput 把 CLI 侧 ToolResultDisplayPayload 原样塞进 toolOutput.display，
   // 而这条 union 是 strict 的——create_workflow 不在成员里，CreateWorkflow 的 display 会被整段
@@ -164,9 +167,14 @@ export const toolOutputSchema = z.object({
 });
 export type ToolOutput = z.infer<typeof toolOutputSchema>;
 
+// 工具运行中的进度（）：MCP `notifications/progress` 经 ToolCallProgress 事件投影到行上。
+// fraction 由 payload progress/total 推得（total 缺失时不填）；bytes / previewLine 保留给 shell 输出型进度。
 export const toolProgressSchema = z.object({
-  bytes: z.number(),
+  bytes: z.number().optional(),
   previewLine: z.string().optional(),
+  fraction: z.number().min(0).max(1).optional(),
+  total: z.number().optional(),
+  message: z.string().max(200).optional(),
   updatedAt: timestampSchema,
 });
 export type ToolProgress = z.infer<typeof toolProgressSchema>;
@@ -245,6 +253,7 @@ const toolCallMcpDisplaySchema = z
       .object({ code: z.enum(OFFICIAL_MCP_TOOL_ERROR_CODES) })
       .strict()
       .optional(),
+    ui: mcpToolDisplayUiSchema.optional(),
   })
   .strict();
 

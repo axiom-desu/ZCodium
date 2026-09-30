@@ -12,6 +12,7 @@ import type {
   PluginHookDetail,
   PluginLoadOutcome,
   PluginManifest,
+  PluginUiSurfaceDefinition,
   PluginMetadata,
   PluginOperationOptions,
   PluginPort,
@@ -35,6 +36,7 @@ import {
 } from "./helpers.js";
 import { scanSkillFilesUnderRootSync } from "../skills/scan.js";
 import { loadPluginMcpServerDefinitions, resolvePluginMcpServers } from "./mcp.js";
+import { parsePluginUiSurfaces } from "./ui-surfaces.js";
 import { listPluginHookSources } from "./hook-sources.js";
 import { enumeratePluginComponents } from "./plugin-components.js";
 import {
@@ -200,14 +202,17 @@ export class NodePluginAdapter implements PluginPort {
       mergeHookEvents(hooks, component.hooks);
       skillRoots.push(...component.skillRoots);
       commandRoots.push(...component.commandRoots);
+      const declaredMcpServerNames = Object.keys(mcpServerDefinitions);
       plugins.push(
         createPluginMetadata(
           loaded,
           component,
           dataPath,
           enabled,
-          Object.keys(mcpServerDefinitions),
+          declaredMcpServerNames,
           request.config.options[loaded.id] ?? {},
+          // 插件 UI 面板入口（A5）：与启用态无关地解析，禁用插件的入口由 listUiSurfaces 过滤。
+          parsePluginUiSurfaces({ loaded, declaredMcpServerNames, diagnostics }),
         ),
       );
     }
@@ -284,6 +289,7 @@ function createPluginMetadata(
   enabled: boolean,
   declaredMcpServerNames: string[],
   configuredOptions: Record<string, string | number | boolean>,
+  uiSurfaces: PluginUiSurfaceDefinition[],
 ): PluginMetadata {
   // manifest 的 author/homepage 作为详情页信息区的回退来源（商店 listing 优先）。
   const author = normalizeAuthorValue(loaded.manifest.author);
@@ -317,6 +323,7 @@ function createPluginMetadata(
     skillCount: component.skillCount,
     skillRootCount: component.skillRoots.length,
     source: loaded.source,
+    ...(uiSurfaces.length > 0 ? { uiSurfaces } : {}),
     userConfig: loaded.manifest.userConfig,
     version: loaded.manifest.version,
   };

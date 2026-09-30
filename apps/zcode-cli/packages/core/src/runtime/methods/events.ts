@@ -555,7 +555,25 @@ export function isSessionPersisted(this: AgentRuntimeInternal): boolean {
   return this.sessionPersisted;
 }
 
+const pendingSessionPersistence = new WeakMap<AgentRuntimeInternal, Promise<void>>();
+
 export async function ensureSessionPersisted(
+  this: AgentRuntimeInternal,
+  input: string,
+  traceContext: TraceContext,
+): Promise<void> {
+  if (!this.sessionStore || this.sessionPersisted) return;
+  const pending = pendingSessionPersistence.get(this);
+  if (pending) return pending;
+  // App sampling 可与首轮任务并发；同一任务创建必须合并，避免重复插入及模型配置覆盖。
+  const created = persistSession
+    .call(this, input, traceContext)
+    .finally(() => pendingSessionPersistence.delete(this));
+  pendingSessionPersistence.set(this, created);
+  return created;
+}
+
+async function persistSession(
   this: AgentRuntimeInternal,
   input: string,
   traceContext: TraceContext,

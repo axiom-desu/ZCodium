@@ -897,6 +897,29 @@ body {
   }
 }
 
+/* 工具摘要行细进度条的 indeterminate 扫光（ToolCallProgressIndicator，第三批 R7）。 */
+.tool-call-progress-indeterminate {
+  animation: tool-call-progress-indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes tool-call-progress-indeterminate {
+  0% {
+    left: -33%;
+  }
+
+  100% {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-call-progress-indeterminate {
+    animation: none;
+    left: 0;
+    width: 100%;
+  }
+}
+
 @keyframes zcode-stream-text-in {
   0% {
     opacity: 0;

@@ -11,6 +11,7 @@ import {
   MapIcon,
   MessageSquareTextIcon,
   ListTreeIcon,
+  PlugIcon,
   NotepadTextIcon,
   PackageIcon,
   PaletteIcon,
@@ -269,6 +270,9 @@ export function SidePaneTabIcon({ tab }: { tab: WorkspaceSidePaneTab }) {
   // 那会与状态面板 Todo section 撞图标，语义上也偏向 todo 而非计划方案文档。
   if (tab.type === "plan-detail") {
     return <NotepadTextIcon className="size-3.5" />;
+  }
+  if (tab.type === "plugin-ui") {
+    return <PlugIcon className="size-3.5" />;
   }
   // 同一条约定：来源卡片（CreateWorkflow）用 lucide Workflow，tab 必须与它一致。
   if (tab.type === "workflow-run") {
@@ -545,6 +549,10 @@ export function getSidePaneTabTitle(
   // 用页面标题（agent 导航后由 getState 回填），缺省复用 browser.title 文案。
   if (tab.type === "browser-use") {
     return tab.title?.trim() || formatMessage({ id: "browser.title" });
+  }
+
+  if (tab.type === "plugin-ui") {
+    return tab.title.trim() || formatMessage({ id: "sidePane.pluginUi" });
   }
 
   return tab.source.title || formatMessage({ id: "codeViewer.title" });

@@ -20,6 +20,27 @@ type ZCodeProtocolMessageHandler = (
 ) => Promise<ZCodeProtocolOutgoingMessage | undefined>;
 
 const PROTOCOL_EOF_DRAIN_MS = 100;
+// MCP App 的请求由实例凭证和 callId 隔离；若与普通命令一起等待完成，
+// uiCallTool 会挡住自己的 cancel/close，真实 stdio 链路将死锁。
+const MCP_APP_CONCURRENT_METHODS = new Set<string>([
+  zcodeProtocolMethods.mcpReadResource,
+  zcodeProtocolMethods.mcpUiOpenInstance,
+  zcodeProtocolMethods.mcpUiCloseInstance,
+  zcodeProtocolMethods.mcpUiValidateInstance,
+  zcodeProtocolMethods.mcpUiCallTool,
+  zcodeProtocolMethods.mcpUiSampling,
+  zcodeProtocolMethods.mcpUiCancelSampling,
+  zcodeProtocolMethods.mcpUiCancelCall,
+  zcodeProtocolMethods.mcpUiReadResource,
+  zcodeProtocolMethods.mcpUiListResources,
+  zcodeProtocolMethods.mcpUiListResourceTemplates,
+  zcodeProtocolMethods.mcpUiSubscribeResource,
+  zcodeProtocolMethods.mcpUiUnsubscribeResource,
+  zcodeProtocolMethods.mcpUiRegisterAppTools,
+  zcodeProtocolMethods.mcpUiUnregisterAppTools,
+  zcodeProtocolMethods.mcpUiClaimAppToolCall,
+  zcodeProtocolMethods.mcpUiResolveAppToolCall,
+]);
 
 interface ZCodeProtocolNdjsonConnectionOptions {
   signal?: AbortSignal;
@@ -228,7 +249,8 @@ export class ZCodeProtocolNdjsonConnection {
       "id" in message &&
       "method" in message &&
       (message.method === zcodeProtocolMethods.sessionStop ||
-        message.method === zcodeProtocolMethods.workspaceCancelGenerateText)
+        message.method === zcodeProtocolMethods.workspaceCancelGenerateText ||
+        MCP_APP_CONCURRENT_METHODS.has(message.method))
     );
   }
 

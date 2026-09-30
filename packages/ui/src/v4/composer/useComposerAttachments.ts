@@ -88,6 +88,8 @@ interface ComposerAttachmentsApi {
   handleDragLeaveComposer: (event: React.DragEvent<HTMLElement>) => void;
   handleDropComposer: (event: React.DragEvent<HTMLElement>) => void;
   handleWhiteboardMentionSelected: (boardId: string) => Promise<void>;
+  /** 程序化加入文件（插件 UI 图片上下文等）；返回被接受的附件 id，超出上限的部分被丢弃。 */
+  addAttachmentFiles: (files: File[]) => string[];
   removeAttachment: (id: string) => void;
   retryAttachment: (id: string) => void;
   /** 发送成功只清冻结的附件 id；不传表示用户主动清空整个附件区。 */
@@ -626,14 +628,14 @@ export function useComposerAttachments(
   }, [intl, scopeKey]);
 
   const addPreparedAttachments = useCallback(
-    (selectedAttachments: ChatComposerAttachment[]) => {
-      if (selectedAttachments.length === 0) return;
+    (selectedAttachments: ChatComposerAttachment[]): string[] => {
+      if (selectedAttachments.length === 0) return [];
       const current = readComposerAttachmentScope(scopeKey);
       const remainingSlots = MAX_CHAT_ATTACHMENTS - current.length;
       if (remainingSlots <= 0) {
         selectedAttachments.forEach(revokeChatComposerAttachment);
         showAttachmentLimitWarning();
-        return;
+        return [];
       }
       const accepted = selectedAttachments.slice(0, remainingSlots);
       selectedAttachments.slice(remainingSlots).forEach(revokeChatComposerAttachment);
@@ -673,13 +675,14 @@ export function useComposerAttachments(
       for (const item of items) {
         if (item.uploadStatus === "queued") enqueueUpload(scopeKey, item.id);
       }
+      return items.map((item) => item.id);
     },
     [commitScope, enqueueUpload, scopeKey, showAttachmentLimitWarning],
   );
 
   const addAttachmentFiles = useCallback(
-    (selectedFiles: File[]) => {
-      addPreparedAttachments(
+    (selectedFiles: File[]): string[] => {
+      return addPreparedAttachments(
         selectedFiles.map((file) => {
           let localPath: string | undefined;
           try {
@@ -1077,6 +1080,7 @@ export function useComposerAttachments(
       handleDragLeaveComposer,
       handleDropComposer,
       handleWhiteboardMentionSelected,
+      addAttachmentFiles,
       removeAttachment,
       retryAttachment,
       clearAttachments,
@@ -1086,6 +1090,7 @@ export function useComposerAttachments(
       setAttachmentError,
     }),
     [
+      addAttachmentFiles,
       attachmentError,
       adoptSentAttachments,
       attachments,

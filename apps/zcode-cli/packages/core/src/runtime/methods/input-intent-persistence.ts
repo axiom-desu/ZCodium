@@ -46,5 +46,6 @@ export function buildPersistedConversationInputIntent(
     dispatch: { state: dispatchState },
     admittedAt: intent.admittedAt,
     ...(intent.provenance ? { provenance: intent.provenance } : {}),
+    ...(intent.source ? { source: intent.source } : {}),
   };
 }

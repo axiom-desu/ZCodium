@@ -409,6 +409,7 @@ function inputIntentOfMessage(message: MessageWithParts): TurnInputIntentMetadat
         : {}),
       ...(value.attachments.length > 0 ? { attachmentRefs: value.attachments } : {}),
       ...(value.provenance ? { provenance: value.provenance } : {}),
+      ...(value.source ? { source: value.source } : {}),
     };
   }
 
@@ -770,6 +771,9 @@ function synthesizeToolPart(
       turnId,
     );
   }
+
+  // （2026-09-12）：历史 transcript 里残留的 metadata.widgetState 不再合成事件，
+  // 冷恢复直接忽略（widgetState 只留 renderer 内存）。
 
   const subagentInfo = subagentInfoFromToolPart(part);
   if (subagentInfo && started) {

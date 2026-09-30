@@ -10,7 +10,6 @@
 //   因此「snapshot(W)+续流 ≡ 全量重放」黄金测试可直接覆盖恢复路径。
 // - 重订阅 = 替换：同 connectionId 重复 subscribe 即作废旧订阅并清其
 //   flush buffer，旧 subscriptionId 不再产帧，客户端按 subId 丢弃旧代际帧。
-import { Buffer } from "node:buffer";
 import { SessionEventType, type SessionEvent } from "@zcode/contracts";
 import type {
   CommandEnvelope,
@@ -22,8 +21,8 @@ import type {
   DeliveryProfileName,
   QueueItem,
   SubscribeAck,
-  TopicFrameDeliveryKind,
   ToolCallRow,
+  TopicFrameDeliveryKind,
   V4ConversationPlansResult,
   V4ConversationRowsRangeResult,
 } from "@zcode/shared/zcode-protocol-v4";
@@ -36,18 +35,19 @@ import {
   filterConversationRowsForProfile,
   utf8JsonByteLength,
 } from "@zcode/shared/zcode-protocol-v4";
+import { Buffer } from "node:buffer";
 import {
   encodeConversationDeltasForLegacy,
   workflowRunDeltaGrowthUpperBound,
 } from "./conversation-workflow-run-deltas.js";
 import {
   ProductProjection,
-  type StableForkCandidateResolution,
   type ConversationRowTargetAction,
   type ConversationRowTargetResolution,
   type SessionConfigSeed,
   type SessionSubagentsSeed,
   type SessionUsageSeed,
+  type StableForkCandidateResolution,
 } from "./product-projection.js";
 import type { TopicFrameReservation } from "./topic-frame-reservation.js";
 
@@ -690,6 +690,14 @@ export class ConversationTopicPublisher {
         const wireDeltas = deltas.filter((delta) => {
           if (delta.op === "state.updated" || delta.op === "row.appended") return true;
           if (delta.op === "row.removed") return false;
+          // 4b-2：插件资源通知只走实时增量，不进冷启动测量。
+          if (
+            delta.op === "pluginUi.resourceUpdated" ||
+            delta.op === "pluginUi.resourceListChanged" ||
+            delta.op === "pluginUi.appToolCall" ||
+            delta.op === "pluginUi.instanceClosed"
+          )
+            return false;
           // 键级增量作用在状态键上，不在 60 行 wire tail 里——没有「已滑出窗口所以不计」这一说，
           // 与 state.updated 同规一律计入。
           if (delta.op === "workflowRun.updated" || delta.op === "workflowRun.removed") return true;

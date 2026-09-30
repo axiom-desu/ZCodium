@@ -93,6 +93,7 @@ export interface CanonicalUserIntentFact extends CanonicalConversationFactBase {
     queueItemId?: string;
     clientId?: string;
   };
+  source?: TurnInputIntentMetadata["source"];
 }
 
 export interface CanonicalTurnAttachment {
@@ -286,6 +287,7 @@ function normalizeTurnStarted(
       ? { planEnabled: payload.intent.planEnabled }
       : {}),
     ...(payload.intent?.provenance ? { provenance: payload.intent.provenance } : {}),
+    ...(payload.intent?.source ? { source: payload.intent.source } : {}),
     ...normalizeAttachments(payload),
   };
 }

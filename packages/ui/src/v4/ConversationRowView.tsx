@@ -1,3 +1,4 @@
+import { GenUiMessageResponse } from "@/gen-ui/index.js";
 /* oxlint-disable eslint(max-lines) -- v4 逐行 row 渲染分发集中收口（每种 row 一个 memo 叶子 + timelineMarker 分隔线），拆分会打散行类型对照。 */
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -61,11 +62,7 @@ import {
   type ChatMediaAttachmentPreviewTarget,
 } from "@/ChatMediaAttachmentPreviewDialog.js";
 import type { PdfViewerRangeSource } from "@/components/ui/pdf-viewer.js";
-import {
-  MessageAction,
-  MessageActions,
-  MessageResponse,
-} from "@/components/ai-elements/message.js";
+import { MessageAction, MessageActions } from "@/components/ai-elements/message.js";
 import {
   Reasoning,
   ReasoningContent,
@@ -88,6 +85,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useOptionalPlatform } from "@/hooks/usePlatform.js";
 
 import { logger } from "@/logger.js";
+import { PluginUiModelContextChip, formatPluginDisplayName } from "@/plugin-ui/index.js";
 import type { AssistantPreviewCard } from "@/lib/assistantPreviewCards.js";
 import {
   FileDisplayIcon,
@@ -922,13 +920,15 @@ const UserInputRowView = memo(function UserInputRowView({
         !attachment.mime.startsWith("image/") && !attachment.mime.startsWith("video/"),
     ) ?? false;
   const hasVisibleText = visibleText.trim().length > 0;
+  const pluginUiContexts = parsedPrompt.pluginUiContexts;
   // nudge 轮整条都是引擎文本：正文为空但气泡仍要画，里面只有那一枚披露。
   const hasBubble = hasVisibleText || epilogue !== undefined;
   const hasContextReferences =
     codeCommentContexts.length > 0 ||
     webElementContexts.length > 0 ||
     pptxElementReferences.length > 0 ||
-    conversationSelections.length > 0;
+    conversationSelections.length > 0 ||
+    pluginUiContexts.length > 0;
   const hasAttachmentArea = hasAttachments || hasContextReferences;
   const hasAttachmentPills = hasFileAttachments || hasContextReferences;
   const openPptxElementReference = useOpenPptxElementReference({
@@ -1240,6 +1240,7 @@ const UserInputRowView = memo(function UserInputRowView({
                 references={conversationSelections}
                 contentAlign="end"
               />
+              <PluginUiModelContextChip contexts={pluginUiContexts} contentAlign="end" />
             </div>
           ) : null}
         </div>
@@ -1262,6 +1263,26 @@ const UserInputRowView = memo(function UserInputRowView({
             </ConversationUserInputBody>
           ) : null}
           {epilogue === undefined ? null : <ConversationUserInputEpilogue text={epilogue} />}
+        </div>
+      ) : null}
+      {row.source?.kind === "genUi" && (
+        <div
+          className="mt-1 text-right text-ui-sm text-foreground-subtlest"
+          data-v4-user-input-source="genUi"
+        >
+          {intl.formatMessage({ id: "genUi.from" }, { name: row.source.title || "Gen UI" })}
+        </div>
+      )}
+      {row.source?.kind === "pluginUi" ? (
+        // 插件 UI 代发：来源标记来自 CLI 持久化的 intent.source，不由 renderer 推断。
+        <div
+          data-v4-user-input-source={row.source.pluginId}
+          className="mt-1 text-right text-ui-sm text-foreground-subtlest"
+        >
+          {intl.formatMessage(
+            { id: "pluginUi.fromPlugin" },
+            { name: formatPluginDisplayName(row.source.pluginId) },
+          )}
         </div>
       ) : null}
       {status ? (
@@ -1496,7 +1517,9 @@ const AssistantTextRowView = memo(function AssistantTextRowView({
           导致 assistant 正文虽然在 JSX 上标了 selectable，框选逻辑却永远找不到该区域。
           selectable 语义必须放在稳定的 DOM 包装层上，完成态和 streaming 共用同一路径。 */}
       <div data-conversation-selectable="true" className="w-full text-ui-base">
-        <MessageResponse
+        <GenUiMessageResponse
+          completed={row.state === "complete"}
+          messageKey={`${row.rowId}:${row.entityId ?? ""}`}
           renderZCodeFileCitations
           streaming={streaming}
           workspacePath={context.workspacePath}
@@ -1512,7 +1535,7 @@ const AssistantTextRowView = memo(function AssistantTextRowView({
           readAttachment={context.readAttachment}
         >
           {visibleText}
-        </MessageResponse>
+        </GenUiMessageResponse>
       </div>
       {codeCommentCardsEnabled && codeCommentCards && codeCommentCards.length > 0 ? (
         <div className="mt-3">

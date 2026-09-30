@@ -119,6 +119,10 @@ export const ServiceChannels = {
   Plugins: "plugins",
   /** 设置页插件管理服务（UI 平台能力面收敛，不再直触 zcodeAgentService） */
   PluginManagement: "plugin-management",
+  /** 插件 UI 沙箱桥：host 读取 ui:// 资源并向 main 登记、代理 UI 发起的工具调用 */
+  PluginUiBridge: "plugin-ui-bridge",
+  PluginUiSampling: "plugin-ui-sampling",
+  PluginUiAppTools: "plugin-ui-app-tools",
   /** Subagents 管理服务 */
   Subagents: "subagents",
   /** Commands 管理服务 */
@@ -147,6 +151,13 @@ export type ServiceChannelName = (typeof ServiceChannels)[keyof typeof ServiceCh
 
 /** Electron IPC 频道名。仅在 preload ↔ main 之间使用。 */
 export const PlatformChannels = {
+  /** renderer → main：释放插件 UI 沙箱（关闭 ports、撤 protocol handler、清 partition） */
+  PluginSandboxDispose: "zcode:plugin-sandbox-dispose",
+  PluginSandboxCopyImage: "zcode:plugin-sandbox-copy-image",
+  /** renderer → main：一次性消费插件 UI 沙箱 guest 的用户手势 token */
+  PluginSandboxConsumeUserGesture: "zcode:plugin-sandbox-consume-user-gesture",
+  /** renderer → main：查询自身 webContents id，作为沙箱登记的 owner */
+  PluginSandboxOwnerWebContentsId: "zcode:plugin-sandbox-owner-web-contents-id",
   /** 打开系统目录选择框 */
   SelectDirectory: "zcode:select-directory",
   /** 打开系统文件选择框 */
@@ -423,6 +434,50 @@ export interface EmbeddedBrowserWheelBoundaryPayload {
 }
 
 // ============================================================================
+// Coding Plan WebView 频道 —— 官网页 preload ↔ App renderer
+// ============================================================================
+
+/**
+ * Electron `<webview>`（partition=persist:zcode-coding-plan）的 `sendToHost` / `ipc-message` 频道。
+ * 官网页通过 preload 注入的 window.zcodeBridge 调用，不经过 main process。
+ */
+export const CodingPlanWebviewChannels = {
+  /** 官网页购买成功后通知 App 刷新 entitlements 并关闭 webview。 */
+  PurchaseComplete: "zcode:coding-plan-purchase-complete",
+} as const;
+
+/**
+ * 插件 UI 沙箱 guest（partition=plugin-sandbox:<id>）的 main → guest preload 频道。
+ * preload 只把 MessagePort 组经 window.postMessage 转交给受信 shell，不暴露任何 contextBridge API。
+ */
+export const PluginSandboxChannels = {
+  /** main → guest：{ sandboxId, initId, names } + port1[]，shell 据此建立宿主端口 */
+  Init: "zcode:plugin-sandbox-init",
+} as const;
+
+/** 购买完成回传 payload。provider 与官网 CodingPlanProvider / auth-ready 事件 detail.provider 同构。 */
+export interface CodingPlanPurchaseCompletePayload {
+  provider: "zai" | "bigmodel";
+  /** 客户端时间戳，用于 App 侧去重/日志，不参与判等。 */
+  timestamp: number;
+}
+
+/**
+ * 官网页 window.__zcodeLang__ 的取值，与 App IntlProvider 的 Locale 一致。
+ * App locale 变化时通过 executeJavaScript 重写此变量并派发 lang-change 事件。
+ */
+export type CodingPlanWebviewLocale = "zh-CN" | "en-US";
+
+/**
+ * 官网页 lang-change 事件 detail。App 用 executeJavaScript 在 main world 派发
+ * `zcode-coding-plan-lang-change` CustomEvent，website 侧（zcodeBridge.onLangChange 或
+ * 直接 window.addEventListener）订阅后切换 copy。
+ */
+export interface CodingPlanWebviewLangChangeDetail {
+  locale: CodingPlanWebviewLocale;
+}
+
+// ============================================================================
 // 内部传输频道 —— 框架级别的通信
 // ============================================================================
 /** 内部传输频道。用于 MessagePort 转发等框架级通信。 */
@@ -437,6 +492,8 @@ export const InternalChannels = {
   ScopedServicePortReady: "zcode:scoped-service-port-ready",
   /** preload → renderer：主进程已确认系统通知展示，renderer 可播放提示音 */
   TaskNotificationSound: "zcode:task-notification-sound",
+  /** main → 宿主 renderer：插件 UI 沙箱的 MessagePort 组（port2[]），payload { sandboxId, initId, names } */
+  PluginSandboxPorts: "zcode:plugin-sandbox-ports",
 } as const;
 
 /** @deprecated `/ws` 已忽略该头；保留常量仅供旧客户端兼容。 */
@@ -495,6 +552,10 @@ export const HostMessageTypes = {
   BrowserExecuteResult: "browser-execute-result",
   /** main → host：本地视频 canonical path 授权结果 */
   LocalMediaPreviewPathAuthorizeResult: "local-media-preview-path-authorize-result",
+  /** main → host：插件 UI 沙箱登记结果（PluginSandboxRegisterResultPayload） */
+  PluginSandboxRegisterResult: "plugin-sandbox-register-result",
+  /** Main → Host：全局前台 ZCode 窗口派生的 producer focus fact。 */
+  CuaPipFocusChanged: "cua-pip-focus-changed",
   /** main → host：要求 Host 现读本地 Source，并同步指定 Remote Environment。 */
   ProviderProvisioningExecute: "provider-provisioning-execute",
   /** main → host：资源管理器请求 Host 采样其后代进程（Agent / MCP / 终端）的 CPU 与内存 */
@@ -581,6 +642,8 @@ export const HostResponseTypes = {
   BrowserExecuteRequest: "browser-execute-request",
   /** host → main：请求授权 Agent 已精确校验的本地视频路径 */
   LocalMediaPreviewPathAuthorizeRequest: "local-media-preview-path-authorize-request",
+  /** host → main：登记已校验的插件 UI HTML 与 CSP，换取 sandbox 句柄（PluginSandboxRegisterRequestPayload） */
+  PluginSandboxRegisterRequest: "plugin-sandbox-register-request",
   /** host → main：本地 Provisioning Source 成功持久化。 */
   ProviderProvisioningSourceChanged: "provider-provisioning-source-changed",
   /** host → main：一次 Remote Environment 同步执行完毕。 */

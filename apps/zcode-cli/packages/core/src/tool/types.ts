@@ -1,62 +1,61 @@
+import type { McpToolUiDescriptor } from "@zcode/shared/mcp-apps";
 // ============================================================
 // Tool Types - Core tool types for registry and executor
 // ============================================================
 
 import type {
-  ExecutionShellSelection,
   AutomationPort,
-  EmbeddedSearchBackend,
-  ExecutionPort,
   BrowserControlPort,
-  FileSystemPort,
-  HttpClientPort,
-  ImageProcessorPort,
-  PdfDocumentPort,
-  ModelMessageContent,
-  ModelContentProtection,
-  Model,
   CoordinatorResponsePort,
   DynamicWorkflowRunPort,
   DynamicWorkflowSnippetPort,
-  ModelCatalogPort,
-  RiskLevel,
-  SessionId,
-  SessionEvent,
-  SessionModePort,
-  SessionStorePort,
-  SkillPort,
-  SubagentRunOptions,
-  SubagentPort,
-  ToolArtifactStorePort,
-  TraceContext,
-  TraceId,
-  TurnId,
-  WorkflowPort,
-  WorkflowEscalatePort,
-  WorkflowSubmitPort,
-} from "@zcode/contracts";
-import type {
+  EmbeddedSearchBackend,
+  ExecutionPort,
+  ExecutionShellSelection,
+  FileSystemPort,
+  HttpClientPort,
+  ImageProcessorPort,
   JsonSchema,
+  Model,
+  ModelCatalogPort,
+  ModelContentProtection,
+  ModelMessageContent,
   ModelToolSideEffectScope,
+  PdfDocumentPort,
   PermissionBrokerReasonSource,
   PermissionCapabilityGroup,
   PermissionRuleBehavior,
   PermissionRuleValue,
   PermissionUpdate,
   ProviderNativeToolSpec,
-  ToolExecutionMode,
+  RiskLevel,
+  SessionEvent,
+  SessionId,
+  SessionModePort,
+  SessionStorePort,
+  SkillPort,
+  SubagentPort,
+  SubagentRunOptions,
+  ToolArtifactStorePort,
   ToolCancellationPolicy,
   ToolContractDeclaration,
+  ToolExecutionMode,
+  ToolExecutionPerformance,
   ToolResultBudgetStrategy,
   ToolResultDisplayPayload,
   ToolTimeoutPolicy,
-  ToolExecutionPerformance,
+  TraceContext,
+  TraceId,
+  TurnId,
+  WorkflowEscalatePort,
+  WorkflowPort,
+  WorkflowSubmitPort,
 } from "@zcode/contracts";
+import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
 import type {
   PersistedReadFileStateMetadata,
   PersistedReadFileStateTool,
 } from "./read-file-state-metadata.js";
-import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
 
 // -----------------------------------------------
 // Tool Metadata
@@ -88,6 +87,12 @@ export interface ToolMetadata {
     serverName: string;
     toolName: string;
     description?: string;
+    /** 来自声明 zcode_official 鉴权的 MCP server；仅用于信任其结果里的结构化标识。 */
+    official?: boolean;
+    /** 该 server 所属插件的稳定 id（`${name}@${marketplace}`）；非插件 MCP 为空。 */
+    pluginId?: string;
+    /** 工具 `_meta` 归一化后的 MCP App 描述；存在即投影 display.ui（pluginId 缺省时用 serverName 顶替）。 */
+    ui?: McpToolUiDescriptor;
   };
 }
 
@@ -262,6 +267,8 @@ export type ToolHandler<TInput = unknown, TOutput = unknown> = (
 // -----------------------------------------------
 
 export interface ToolEntry extends ToolContractDeclaration {
+  /** 宿主资源在审批之前固定归属；所有返回路径均释放，撤销信号进入现有取消链。 */
+  retainExecution?: (callId: string) => { signal: AbortSignal; release(): void };
   aliases?: readonly string[];
   /**
    * Host-issued atomicity policy for model content. Only an authority-verified

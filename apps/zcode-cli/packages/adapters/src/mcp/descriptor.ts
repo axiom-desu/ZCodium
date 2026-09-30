@@ -1,4 +1,11 @@
-import type { JsonSchema, McpToolAnnotations, McpToolDescriptor } from "@zcode/contracts";
+import {
+  MCP_TOOL_META_TIMEOUT_MAX_MS,
+  MCP_TOOL_META_TIMEOUT_MIN_MS,
+  type JsonSchema,
+  type McpToolAnnotations,
+  type McpToolDescriptor,
+} from "@zcode/contracts";
+import { normalizeMcpToolUiMeta, readMcpToolVisibility } from "@zcode/shared/mcp-apps";
 
 export function normalizeMcpToolDescriptor(
   serverName: string,
@@ -7,16 +14,30 @@ export function normalizeMcpToolDescriptor(
 ): McpToolDescriptor {
   const record = isRecord(tool) ? tool : {};
   const toolName = typeof record.name === "string" ? record.name : "unknown";
+  // 插件 UI：tools/list 的 `_meta` 只在这里读一次，归一化成 descriptor.ui；下游不再碰原始 _meta。
+  const ui = normalizeMcpToolUiMeta(record._meta);
   return {
     serverName,
     toolName,
     name: `mcp__${sanitizeMcpName(serverName)}__${sanitizeMcpName(toolName)}`,
     description: typeof record.description === "string" ? record.description : undefined,
-    timeoutMs,
+    // 工具级 `_meta.timeoutMs`（A8）覆盖服务器级超时：长任务（下载引擎、渲染）按工具声明，上限 30 分钟。
+    timeoutMs: readToolMetaTimeoutMs(record._meta) ?? timeoutMs,
     inputSchema: normalizeInputSchema(record.inputSchema),
     outputSchema: isRecord(record.outputSchema) ? (record.outputSchema as JsonSchema) : undefined,
     annotations: normalizeAnnotations(record.annotations),
+    // 可见性独立于 UI 呈现——没有 resourceUri 的 app-only 数据工具也不能进模型工具表。
+    visibility: readMcpToolVisibility(record._meta),
+    ...(ui ? { ui } : {}),
   };
+}
+
+function readToolMetaTimeoutMs(meta: unknown): number | undefined {
+  if (!isRecord(meta)) return undefined;
+  const value = meta.timeoutMs;
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  if (value < MCP_TOOL_META_TIMEOUT_MIN_MS) return undefined;
+  return Math.min(Math.floor(value), MCP_TOOL_META_TIMEOUT_MAX_MS);
 }
 
 function normalizeInputSchema(schema: unknown): JsonSchema {

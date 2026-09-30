@@ -6,6 +6,7 @@ import type {
   SSHConnectOptions,
   WSLConnectOptions,
 } from "./remoteTarget.js";
+import type { PluginSandboxPlatformPort } from "./mcp-apps/contract.js";
 import type {
   LoadCliMcpFromUserDirectoryRequest,
   LoadCliMcpFromUserDirectoryResult,
@@ -540,6 +541,12 @@ export type CuaOsSupport =
 export interface IPlatformService {
   /** 当前平台的文件选择框是否能返回 agent 可访问的本地绝对路径 */
   canSelectFilePath?: boolean;
+
+  /**
+   * 插件 UI 沙箱平台端口。只有桌面端实现；
+   * web / 手机远控为 undefined，plugin-ui 据此回退到普通 MCP 工具卡片。
+   */
+  pluginSandbox?: PluginSandboxPlatformPort;
 
   /** 打开系统目录选择框，返回选中路径或 null */
   selectDirectory(): Promise<string | null>;

@@ -18,12 +18,14 @@
     "./workspaceFileSearch": "./src/workspaceFileSearch.ts",
     "./workspaceFileEntriesCodec": "./src/workspaceFileEntriesCodec.ts",
     "./zcode-protocol-v4": "./src/zcode-protocol-v4/index.ts",
+    "./mcp-apps": "./src/mcp-apps/index.ts",
     "./workspace-hook-discovery": "./src/workspace-hook-discovery.ts",
     "./workspace-hook-mutation": "./src/workspace-hook-mutation.ts",
     "./workspace-hook-review-monotonicity": "./src/workspace-hook-review-monotonicity.ts",
     "./workspace-hook-trust-store-file": "./src/workspace-hook-trust-store-file.ts",
     "./builtin-plugin-assets": "./src/builtinPluginAssets.ts",
-    "./bundled-remote-assets": "./src/bundledRemoteAssets.ts"
+    "./bundled-remote-assets": "./src/bundledRemoteAssets.ts",
+    "./gen-ui": "./src/gen-ui/index.ts"
   },
   "scripts": {
     "lint": "oxlint",

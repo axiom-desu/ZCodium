@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { executionOutputPreviewSchema } from "../execution-output-preview.js";
 import { timestampSchema } from "./core.js";
+import { conversationInputSourceSchema } from "./input-intent.js";
 import { backgroundResultOriginMetaSchema, workflowLaunchMetaSchema } from "./workflow-row-meta.js";
 
 // RowBase。rowId：session 内单调、永不复用、事件日志的确定性纯函数。
@@ -146,6 +147,8 @@ export const userInputRowSchema = z.object({
       }),
     )
     .optional(),
+  // 插件 UI 代发的消息带来源；卡片显示"来自插件 X"。旧 transcript 可缺省。
+  source: conversationInputSourceSchema.optional(),
 });
 export type UserInputRow = z.infer<typeof userInputRowSchema>;
 
@@ -203,9 +206,10 @@ export const toolCallRowSchema = z.object({
   // display 解析失败只丢这张卡的载荷，不拒整条 row（理由见 toolDisplay.ts 的 toolOutputSchema
   // 注释：装饰载荷不得决定 row/帧/订阅的生死）。
   display: toolCallDisplaySchema.optional().catch(undefined),
+  // （2026-09-12）：原 widgetState / widgetStateVisibility 已删除，插件 UI 界面状态不再进 row。
   // status=error 时必带。
   error: z.object({ code: z.string(), message: z.string() }).optional(),
-  // 仅 replayable 档运行中出现，终态清除。
+  // 运行中出现（ToolCallProgress 事件），终态清除。
   progress: toolProgressSchema.optional(),
   // continuous/replayable 共用的有界 Bash 内容，终态或后台移交时清除。
   outputPreview: executionOutputPreviewSchema.optional(),

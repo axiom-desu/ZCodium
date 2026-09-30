@@ -1,25 +1,4 @@
-import type { ZCodeToolExecResource, BackgroundBashOutputResult } from "@zcode/shared";
 import type { AiSdkModelAdapter } from "@zcode/adapters/model";
-import type {
-  AgentRuntime,
-  AgentRuntimeConfig,
-  ExecuteTurnOptions,
-  ExpertWorkflowCommandResult,
-  PresentationSurface,
-  ResumeSessionResult,
-  StartSavedWorkflowRunResult,
-  AmendWorkflowRunSettingsInput,
-  AmendWorkflowRunSettingsResult,
-  TurnAttachment,
-  ModelExecutionContext,
-  TurnResult,
-  WorkflowAgentRunner,
-  WorkspaceCheckpointSummary,
-  WorkspaceForkResult,
-  WorkspaceGenerateTextInput,
-  WorkspaceHookReviewTarget,
-  WorkspaceHookPolicyProvider,
-} from "@zcode/core";
 import type {
   WorkspaceHookReviewDecision,
   WorkspaceHookTrustRevokeTarget,
@@ -31,36 +10,45 @@ import type { ZCodeInstalledPluginData } from "../plugins.js";
 import type {
   AutomationPort,
   BackgroundTaskCancelResult,
+  BrowserControlPort,
   CollaborationMode,
   ContextSourcePort,
   DynamicWorkflowRunArtifact,
   DynamicWorkflowRunArtifactBytes,
   DynamicWorkflowRunArtifactItem,
+  DynamicWorkflowRunEvent,
+  DynamicWorkflowRunProgressPayload,
+  DynamicWorkflowRunResumeResult,
+  DynamicWorkflowRunSessionSummary,
   DynamicWorkflowRunWorkspaceNode,
   DynamicWorkflowRunWorkspaceNodeResult,
-  DynamicWorkflowRunEvent,
-  DynamicWorkflowRunResumeResult,
-  DynamicWorkflowRunProgressPayload,
-  DynamicWorkflowRunSessionSummary,
   ExecutionPort,
-  BrowserControlPort,
+  ExecutionShellSelection,
   FileSystemPort,
   GoalStatus,
   HttpClientPort,
   ImageProcessorPort,
-  PdfDocumentPort,
   InputDelivery,
   InputHistoryEntry,
   InputHistoryKind,
   InputHistoryStorePort,
   LoggerFactory,
+  McpListResourceTemplatesResult,
+  McpListResourcesResult,
   McpPort,
+  McpReadResourceResult,
   McpServerStatus,
+  McpToolCallResult,
+  MessageWithParts,
   ModelSelection,
+  ModelToolCall,
+  ModelUsage,
+  PdfDocumentPort,
   PermissionBrokerPort,
   PluginLoadOutcome,
   PluginMetadata,
   PluginReferenceCatalog,
+  QueryId,
   SessionEvent,
   SessionEventSink,
   SessionEventStorePort,
@@ -70,28 +58,50 @@ import type {
   SessionStorePort,
   SkillLoadOutcome,
   SkillPort,
+  SupportedLocale,
+  TodoItem,
   ToolArtifactReadResult,
   ToolArtifactStorePort,
-  TodoItem,
-  QueryId,
   TraceContext,
   TurnId,
-  TurnSteerResult,
   TurnInputIntentMetadata,
-  MessageWithParts,
-  ModelUsage,
-  ModelToolCall,
-  SupportedLocale,
+  TurnSteerResult,
   UiLocale,
   UiThemePreference,
   WorkflowEvent,
   WorkflowRunListItem,
-  ExecutionShellSelection,
+  WorkspaceHookPolicy,
 } from "@zcode/contracts";
-import type { NodeReplBrowserBroker } from "./node-repl-browser-broker.js";
+import type {
+  AgentRuntime,
+  AgentRuntimeConfig,
+  AmendWorkflowRunSettingsInput,
+  AmendWorkflowRunSettingsResult,
+  ExecuteTurnOptions,
+  ExpertWorkflowCommandResult,
+  McpAppProvidedToolDefinition,
+  McpAppProvidedToolExecutor,
+  ModelExecutionContext,
+  PresentationSurface,
+  ResumeSessionResult,
+  StartSavedWorkflowRunResult,
+  TurnAttachment,
+  TurnResult,
+  WorkflowAgentRunner,
+  WorkspaceCheckpointSummary,
+  WorkspaceForkResult,
+  WorkspaceGenerateTextInput,
+  WorkspaceHookPolicyProvider,
+  WorkspaceHookReviewTarget,
+} from "@zcode/core";
+import type {
+  BackgroundBashOutputResult,
+  ZCodeToolExecResource,
+} from "@zcode/shared";
+import type { McpAppsToolVisibility } from "@zcode/shared/mcp-apps";
 import type { SessionTranscriptMessage } from "../session-transcript.js";
 import type { WorkspaceHookReviewCommandResult } from "./workspace-hook-review-controller.js";
-import type { WorkspaceHookPolicy } from "@zcode/contracts";
+import type { NodeReplBrowserBroker } from "./node-repl-browser-broker.js";
 import type { ProviderRegistryModelSource } from "./provider-registry-model-runtime.js";
 
 export interface WorkspaceHookReviewHostContext {
@@ -378,6 +388,70 @@ export interface ZCodeApp {
   getSkillCatalog(): Promise<SkillLoadOutcome>;
   listMcpServers(): Promise<Record<string, McpServerStatus>>;
   connectMcpServer(name: string): Promise<McpServerStatus>;
+  /**
+   * 插件 UI：UI 发起的资源读取与工具调用，
+   * 走 session 自己的 mcpPort；归属校验在 mcp-ui 处理器完成，这里不重复。
+   */
+  readMcpResource(
+    serverName: string,
+    uri: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<McpReadResourceResult>;
+  onMcpAppConnectionInvalidated(serverName: string, listener: () => void): () => void;
+  getMcpAppConnectionSnapshot(serverName: string): { identity: string; generation: number } | null;
+  callMcpToolForUi(
+    serverName: string,
+    toolName: string,
+    args: Record<string, unknown> | undefined,
+    options?: { signal?: AbortSignal },
+  ): Promise<McpToolCallResult>;
+  /**
+   * 按 tools/list 的 descriptor 给出工具可见性；工具不存在返回 null。
+   * mcp-ui 用它拒绝 model-only 工具的 UI 调用。
+   */
+  getMcpToolVisibility(
+    serverName: string,
+    toolName: string,
+  ): Promise<readonly McpAppsToolVisibility[] | null>;
+  /**
+   * App-Provided Tools：用给定集合整体替换本会话的 App 工具，失效工具缓存让下一次模型请求可见。
+   * 与非 App 工具重名的定义跳过。返回实际登记的模型侧名字。
+   */
+  replaceMcpAppProvidedTools(
+    definitions: readonly McpAppProvidedToolDefinition[],
+    execute: McpAppProvidedToolExecutor,
+  ): string[];
+  /** 页面发起的 resources/list、resources/templates/list 与订阅（订阅者身份由调用方给出）。 */
+  listMcpResourcesForUi(
+    serverName: string,
+    cursor?: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<McpListResourcesResult>;
+  listMcpResourceTemplatesForUi(
+    serverName: string,
+    cursor?: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<McpListResourceTemplatesResult>;
+  subscribeMcpResourceForUi(
+    serverName: string,
+    uri: string,
+    subscriberKey: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<void>;
+  unsubscribeMcpResourceForUi(
+    serverName: string,
+    uri: string,
+    subscriberKey: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<void>;
+  /** 会话关闭：清掉本会话（subscriberKey 前缀）的全部订阅。 */
+  unsubscribeMcpResourcesForUi(subscriberKeyPrefix: string): Promise<number>;
+  /** 插件页面发起的 resources/read；与 readMcpResource 同一端口，独立入口便于审计与限流。 */
+  readMcpResourceForUi(
+    serverName: string,
+    uri: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<McpReadResourceResult>;
   readBackgroundBashOutput(workId: string, sessionId?: string): Promise<BackgroundBashOutputResult>;
   cancelBackgroundTask?(
     taskId: string,
@@ -503,6 +577,10 @@ export interface ZCodeApp {
     targetMessageId?: string;
     traceContext?: TraceContext;
   }): Promise<WorkspaceForkResult>;
+  sampleModel(
+    input: Parameters<AgentRuntime["sampleModel"]>[0],
+    options: Parameters<AgentRuntime["sampleModel"]>[1],
+  ): ReturnType<AgentRuntime["sampleModel"]>;
   generateWorkspaceText(
     input: WorkspaceGenerateTextInput,
     options?: { abortSignal?: AbortSignal; traceContext?: TraceContext },

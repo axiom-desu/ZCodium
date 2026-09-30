@@ -136,6 +136,13 @@ interface MergeInput {
   target?: SessionGoal | null;
 }
 
+const LIVE_ONLY_EVENT_TYPES = new Set<string>([
+  SessionEventType.PluginUiResourceUpdated,
+  SessionEventType.PluginUiResourceListChanged,
+  SessionEventType.PluginUiAppToolCallRequested,
+  SessionEventType.PluginUiInstanceClosed,
+]);
+
 const MEMORY_ONLY_EVENT_TYPES = new Set<string>([
   SessionEventType.SessionResumed,
   SessionEventType.SessionTitleUpdated,
@@ -856,6 +863,11 @@ export function mergeColdConversationEvents(input: MergeInput): ColdEventMergeRe
       // session_target 已是持久权威，旧 merge 却把内存 TargetChanged 当
       // ephemeral 尾事件追加，冷恢复终态会被旧 goal 覆盖；显式 null 也必须压掉旧事件。
       recordDiagnostic(diagnostics, "cold_merge.durable_event_suppressed", event);
+      return;
+    }
+    if (LIVE_ONLY_EVENT_TYPES.has(event.type)) {
+      // 插件 UI 资源通知只对当时活着的沙箱实例有意义，冷恢复一律丢弃。
+      recordDiagnostic(diagnostics, "cold_merge.non_product_event_suppressed", event);
       return;
     }
     if (MEMORY_ONLY_EVENT_TYPES.has(event.type)) {

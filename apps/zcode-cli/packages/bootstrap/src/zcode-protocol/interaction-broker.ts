@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { raceClientRequestWithV4Interaction } from "./interaction-response-race.js";
 import {
   ASK_USER_QUESTION_TOOL_NAME,
@@ -6,12 +7,23 @@ import {
   CREATE_WORKFLOW_TOOL_NAME,
   EXIT_PLAN_MODE_TOOL_NAME,
   SESSION_ENTRY_USER_INPUT_AUTO_RESOLUTION,
+  SessionEventType,
+  createEventId,
   type AskUserQuestion,
+  type McpElicitationRequest,
+  type McpElicitationResult,
   type PermissionBrokerPort,
   type PermissionBrokerRequest,
   type PermissionBrokerRequestOptions,
   type PermissionBrokerResult,
+  type SessionEvent,
 } from "@zcode/contracts";
+import {
+  MCP_ELICITATION_INTERACTION,
+  MCP_ELICITATION_TOOL_NAME,
+  mcpElicitationContentFromAnswers,
+  mcpElicitationQuestions,
+} from "../zcode-protocol-v4/mcp-elicitation.js";
 import {
   WORKFLOW_REFINE_PERMISSION_OPTION_ID,
   zcodePermissionResponseSchema,
@@ -190,6 +202,103 @@ function v4AnswerToPermissionResponse(
   }
   // deny/rejectOnce/rejectAlways、未知 optionId、无 optionId 全部落 deny。
   return { decision: "deny", reason: buildPermissionDeniedContent(answer.freeText) };
+}
+
+/**
+ * MCP elicitation：server 在工具执行中向用户提问。
+ * 复用 AskUserQuestion 的两条通道——旧 RPC interaction/requestUserInput 与 v4 pending interaction——
+ * 后者靠合成（不持久化）的 PermissionRequested / PermissionResolved 事件推进投影。
+ */
+export async function requestMcpElicitation(
+  context: ZCodeProtocolAgentServerContext,
+  request: McpElicitationRequest,
+  options?: { signal?: AbortSignal },
+): Promise<McpElicitationResult> {
+  const sessionId = request.trace?.sessionId;
+  const record = sessionId ? context.sessions?.get(sessionId) : undefined;
+  if (!sessionId || !record) {
+    // 没有正在执行的工具调用可归属（如 server 在空闲时主动提问）：拒绝而不是猜会话。
+    return { action: "decline" };
+  }
+  const interactionId = `mcp-elicit-${randomUUID()}`;
+  const toolCallId = request.trace?.toolCallId ?? interactionId;
+  const questions = mcpElicitationQuestions(request.message, request.requestedSchema);
+  const input = {
+    serverName: request.serverName,
+    message: request.message,
+    requestedSchema: request.requestedSchema,
+  };
+  const traceId = request.trace?.traceId ?? String(record.traceContext.traceId);
+  const ingestSynthetic = async (
+    type: typeof SessionEventType.PermissionRequested | typeof SessionEventType.PermissionResolved,
+    payload: Record<string, unknown>,
+  ) => {
+    const gateway = context.v4Gateway;
+    if (!gateway) return;
+    const event: SessionEvent = {
+      id: createEventId(),
+      sessionId: sessionId as never,
+      ...(request.trace?.turnId ? { turnId: request.trace.turnId as never } : {}),
+      type,
+      timestamp: new Date(),
+      traceId: traceId as never,
+      // 只进 live 投影、不落盘：raw seq 置 0，让 v4 gateway 分配 transport 序号。
+      // 若沿用持久化高水位 +1，第二条合成事件会因 seq 不高于游标被当作重放丢弃，pending 永远清不掉。
+      sequenceNumber: 0,
+      payload: payload as never,
+    };
+    gateway.ingest(sessionId, event);
+  };
+  await ingestSynthetic(SessionEventType.PermissionRequested, {
+    requestId: interactionId,
+    toolCallId,
+    toolName: MCP_ELICITATION_TOOL_NAME,
+    riskLevel: "low",
+    reason: request.message,
+    input,
+  });
+  let response: ZCodeUserInputResponse;
+  try {
+    response = await raceClientRequestWithV4Interaction(
+      context,
+      interactionId,
+      options?.signal,
+      (signal) =>
+        context.requestClient(
+          zcodeProtocolMethods.interactionRequestUserInput,
+          {
+            input,
+            prompt: request.message,
+            questions,
+            requestId: interactionId,
+            schema: {
+              interaction: MCP_ELICITATION_INTERACTION,
+              serverName: request.serverName,
+              requestedSchema: request.requestedSchema,
+            },
+            sessionId,
+            toolCallId,
+            toolName: MCP_ELICITATION_TOOL_NAME,
+            ...(request.trace?.turnId ? { turnId: request.trace.turnId } : {}),
+          },
+          zcodeUserInputResponseSchema,
+          withInteractionRequestRecovery(options, signal),
+        ),
+      (answer) => v4AnswerToUserInputResponse(answer),
+      { sessionId, kind: "other" },
+    );
+  } finally {
+    await ingestSynthetic(SessionEventType.PermissionResolved, {
+      requestId: interactionId,
+      toolCallId,
+      decision: "allow",
+    }).catch(() => undefined);
+  }
+  if (response.action !== "accept") return { action: response.action };
+  return {
+    action: "accept",
+    content: mcpElicitationContentFromAnswers(request.requestedSchema, questions, response.content),
+  };
 }
 
 async function requestUserInput(
