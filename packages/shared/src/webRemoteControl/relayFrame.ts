@@ -112,6 +112,18 @@ const dataFrameSchema = z
   })
   .strict();
 
+/**
+ * 桌面主动失效自己的配对（刷新二维码 / 传输销毁时发送）。
+ * 官方协议无此帧；自托管场景下没有它，旧链接会一直有效到 TTL，
+ * 「刷新后旧链接失效」的验收不成立。relay 收到即整对删除。
+ */
+const deviceUnregisterFrameSchema = z
+  .object({
+    type: z.literal("device_unregister"),
+    device_sid: nonEmptyStringSchema,
+  })
+  .strict();
+
 const errorFrameSchema = z
   .object({
     type: z.literal("error"),
@@ -134,8 +146,8 @@ export const webRemoteControlRelayFrameSchema = z.discriminatedUnion("type", [
 ]);
 export type WebRemoteControlRelayFrame = z.infer<typeof webRemoteControlRelayFrameSchema>;
 
-/** 端点（LAN 服务 / relay）→ 移动端方向。 */
-export const webRemoteControlEndpointToMobileFrameSchema = z.discriminatedUnion("type", [
+/** 端点（LAN 服务 / relay）→ 客户端方向（桌面设备 / 手机共用）。 */
+export const webRemoteControlEndpointToClientFrameSchema = z.discriminatedUnion("type", [
   deviceRegisterAckFrameSchema,
   authChallengeFrameSchema,
   authAckFrameSchema,
@@ -143,18 +155,19 @@ export const webRemoteControlEndpointToMobileFrameSchema = z.discriminatedUnion(
   dataFrameSchema,
   errorFrameSchema,
 ]);
-export type WebRemoteControlEndpointToMobileFrame = z.infer<
-  typeof webRemoteControlEndpointToMobileFrameSchema
+export type WebRemoteControlEndpointToClientFrame = z.infer<
+  typeof webRemoteControlEndpointToClientFrameSchema
 >;
 
-/** 移动端 → 端点（LAN 服务 / relay）方向。 */
-export const webRemoteControlMobileToEndpointFrameSchema = z.discriminatedUnion("type", [
+/** 客户端（桌面设备 / 手机）→ 端点（LAN 服务 / relay）方向。 */
+export const webRemoteControlClientToEndpointFrameSchema = z.discriminatedUnion("type", [
   deviceRegisterInitFrameSchema,
   authInitFrameSchema,
   authResponseFrameSchema,
   pairStatusQueryFrameSchema,
   dataFrameSchema,
+  deviceUnregisterFrameSchema,
 ]);
-export type WebRemoteControlMobileToEndpointFrame = z.infer<
-  typeof webRemoteControlMobileToEndpointFrameSchema
+export type WebRemoteControlClientToEndpointFrame = z.infer<
+  typeof webRemoteControlClientToEndpointFrameSchema
 >;

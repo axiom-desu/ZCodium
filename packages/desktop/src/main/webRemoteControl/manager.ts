@@ -16,6 +16,11 @@ import { createWebRemoteControlRelayAuthStorageProvider } from "./authStorage.js
 import { buildWebRemoteControlQrUrl } from "./qrUrl.js";
 import { LanRemoteControlEndpoint } from "./lanEndpoint.js";
 import { createLanDeviceTransport } from "./deviceTransport.js";
+import {
+  createRelayDeviceTransport,
+  type WebRemoteControlDeviceTransport,
+  type WebRemoteControlDeviceTransportEvents,
+} from "./relayTransport.js";
 import { buildStatusSnapshot, type WebRemoteControlRuntime } from "./runtime.js";
 import { routeMobilePayload } from "./payloadRouter.js";
 import { clearPendingOutbound, flushPendingOutbound, sendAppPayload } from "./outboundBuffer.js";
@@ -32,6 +37,30 @@ import { openWorkspaceBridge } from "./bridgeController.js";
 
 interface ElectronUtilityProcessLike {
   postMessage(message: unknown, transfer?: unknown[]): void;
+}
+
+/** 用户自备端点必须是 ws/wss；http(s) 一律拒绝（避免把页面地址当 relay 用）。 */
+function isRelayWsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "ws:" || url.protocol === "wss:";
+  } catch {
+    return false;
+  }
+}
+
+/** relay WS 地址 → 移动页 http(s) base（同 origin 托管）。 */
+function deriveRelayHttpBase(relayWsUrl: string): string {
+  try {
+    const url = new URL(relayWsUrl);
+    url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+    url.pathname = "/";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return relayWsUrl;
+  }
 }
 
 export interface WebRemoteControlTarget {
@@ -166,6 +195,16 @@ export function createWebRemoteControlManager(
   async function start(windowId: number, target: WebRemoteControlTarget) {
     const parsed = webRemoteControlStartRequestSchema.parse(target);
     await stopRuntime(windowId, "restart");
+    const settings = await deps.settingService.get();
+    const endpointMode = settings.webRemoteControlEndpointMode ?? "lan";
+    if (endpointMode === "custom") {
+      // 跨网端点由用户自备（自己的隧道 / 自托管 relay）；未配置地址直接失败，
+      // 不回退 LAN——避免把「跨网失败」伪装成「同网可用」。
+      const customUrl = settings.webRemoteControlCustomEndpointUrl?.trim();
+      if (!customUrl || !isRelayWsUrl(customUrl)) {
+        throw new Error("尚未配置可用的远程端点地址（设置 → 远程控制 → 我的端点）");
+      }
+    }
     const persisted = await authStorage.load();
     const auth:
       | { mode: "register"; passHash: string }
@@ -196,46 +235,65 @@ export function createWebRemoteControlManager(
       workspaces: [],
       tasks: [],
     };
-    const transport = createLanDeviceTransport({
-      logger: deps.logger,
-      deviceMid: deps.deviceMid,
-      deviceName: deps.deviceName,
-      appVersion: deps.appVersion,
-      auth,
-      endpoint,
-      events: {
-        onStateChange: (state) =>
-          mapTransportState(runtime, state, emitStatus, (pairedRuntime) =>
-            flushPendingOutbound(pairedRuntime, deps.logger),
-          ),
-        onPayload: (payload) => void routeMobilePayload(payload, buildRouterContext(runtime)),
-        onRegisteredAuth: (registered) => {
-          runtime.deviceSid = registered.deviceSid;
-          runtimesByDeviceSid.set(registered.deviceSid, runtime);
-          void authStorage.save(registered);
-          deps.logger.info("[web-remote-control] device registered", {
-            windowId,
-            deviceSidSuffix: registered.deviceSid.slice(-6),
-          });
-        },
-        onError: (error) => {
-          deps.logger.warn("[web-remote-control] device transport error", {
-            windowId,
-            message: error.message,
-          });
-        },
-        onInvalidPersistedAuth: async () => {
-          await authStorage.clear();
-        },
+    const events: WebRemoteControlDeviceTransportEvents = {
+      onStateChange: (state) =>
+        mapTransportState(runtime, state, emitStatus, (pairedRuntime) =>
+          flushPendingOutbound(pairedRuntime, deps.logger),
+        ),
+      onPayload: (payload) => void routeMobilePayload(payload, buildRouterContext(runtime)),
+      onRegisteredAuth: (registered) => {
+        runtime.deviceSid = registered.deviceSid;
+        runtimesByDeviceSid.set(registered.deviceSid, runtime);
+        void authStorage.save(registered);
+        deps.logger.info("[web-remote-control] device registered", {
+          windowId,
+          transport: endpointMode,
+          deviceSidSuffix: registered.deviceSid.slice(-6),
+        });
       },
-      handleMobilePayload: (deviceSid, payload) => {
-        const target2 = runtimesByDeviceSid.get(deviceSid);
-        if (!target2) return;
-        void routeMobilePayload(payload, buildRouterContext(target2));
+      onError: (error) => {
+        deps.logger.warn("[web-remote-control] device transport error", {
+          windowId,
+          transport: endpointMode,
+          message: error.message,
+        });
       },
-      maxPhysicalFrameBytes: WEB_REMOTE_CONTROL_RPC_LIMITS.maxPhysicalFrameBytes,
-      port: deps.lanPort,
-    });
+      onInvalidPersistedAuth: async () => {
+        await authStorage.clear();
+      },
+    };
+    let lanTransport: ReturnType<typeof createLanDeviceTransport> | null = null;
+    const transport: WebRemoteControlDeviceTransport =
+      endpointMode === "custom"
+        ? createRelayDeviceTransport({
+            logger: deps.logger,
+            relayWsUrl: (settings.webRemoteControlCustomEndpointUrl ?? "").trim(),
+            deviceMid: deps.deviceMid,
+            deviceName: deps.deviceName,
+            appVersion: deps.appVersion,
+            maxPhysicalFrameBytes: WEB_REMOTE_CONTROL_RPC_LIMITS.maxPhysicalFrameBytes,
+            auth,
+            events,
+          })
+        : createLanDeviceTransport({
+            logger: deps.logger,
+            deviceMid: deps.deviceMid,
+            deviceName: deps.deviceName,
+            appVersion: deps.appVersion,
+            auth,
+            endpoint,
+            events,
+            handleMobilePayload: (deviceSid, payload) => {
+              const target2 = runtimesByDeviceSid.get(deviceSid);
+              if (!target2) return;
+              void routeMobilePayload(payload, buildRouterContext(target2));
+            },
+            maxPhysicalFrameBytes: WEB_REMOTE_CONTROL_RPC_LIMITS.maxPhysicalFrameBytes,
+            port: deps.lanPort,
+          });
+    if (endpointMode !== "custom") {
+      lanTransport = transport as ReturnType<typeof createLanDeviceTransport>;
+    }
     runtime.transport = transport;
     runtimes.set(windowId, runtime);
     emitStatus(runtime);
@@ -245,8 +303,15 @@ export function createWebRemoteControlManager(
       await stopRuntime(windowId, "transport-start-failed");
       throw error;
     }
-    const baseUrls = transport.baseUrls();
-    runtime.qrBaseUrl = baseUrls.find((url) => !url.includes("127.0.0.1")) ?? baseUrls[0] ?? "";
+    if (endpointMode === "custom") {
+      // 用户的 relay 同时托管移动页与 WS；QR 指向它的 http(s) base。
+      runtime.qrBaseUrl = deriveRelayHttpBase(
+        (settings.webRemoteControlCustomEndpointUrl ?? "").trim(),
+      );
+    } else {
+      const baseUrls = lanTransport?.baseUrls() ?? [];
+      runtime.qrBaseUrl = baseUrls.find((url) => !url.includes("127.0.0.1")) ?? baseUrls[0] ?? "";
+    }
     if (runtime.deviceSid && runtime.deviceSid !== "pending") {
       runtime.qrUrl = buildQrUrl(runtime);
     }

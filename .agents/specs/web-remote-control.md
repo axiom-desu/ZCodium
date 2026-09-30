@@ -347,9 +347,9 @@ IPC 面（preload ↔ main，`packages/shared/src/channels.ts` 新增）：
 | P1 桌面运行时 + LAN 直连 + UI + i18n | ✅   | `packages/desktop/src/main/webRemoteControl/`（manager / lanEndpoint / deviceTransport / authProvider / authStorage / qrUrl / mobileAppAssets / ipc）；`WebRemoteControlDialog` + `WorkspaceWebRemoteControlTrigger` + `useWebRemoteControl`；89 键已落 `zh-CN` / `en-US` |
 | P2 Host bridge + RPC 装配器          | ✅   | `hostBridge.ts`（AttachServicePort `web-remote-replayable` + MessagePortProtocol + ChannelClient + 服务代理）+ `bridgeController.ts`                                                                                                                                      |
 | P3 移动端 mobile entry               | ✅   | `packages/web/mobile.html` + `src/mobile/`（protocol 配对客户端 / MobileApp mobileHome+mobileShell）；vite 多入口构建                                                                                                                                                     |
-| P4 可配置对外端点 + relay 客户端传输 | ⬠    | settings 已有 `webRemoteControlEndpointMode/CustomEndpointUrl`；`DeviceTransport` 接口已留位，WS 客户端传输未实现                                                                                                                                                         |
-| P5 `packages/relay` 自托管包         | ⬠    | 未开始；wire 契约已在 shared，relay 侧按同一份 schema 实现                                                                                                                                                                                                                |
-| P6 hardening + 全量验收              | ⬠    | TLS/限流/TTL/互踢/脱敏已随 P1–P2 落地（ secret 只展示一次、日志脱敏、KICKED、TTL 24h）；E2E 信封与全量验收场景待跑                                                                                                                                                        |
+| P4 可配置对外端点 + relay 客户端传输 | ✅   | `relayTransport.ts`（注册/挑战鉴权/心跳 10s±jitter/重连续配/`AUTH_FAILED` 转注册/oversize）；settings `webRemoteControlEndpointMode/CustomEndpointUrl` + 弹层「连接方式」区；未配置 custom 地址时直接失败，不回退 LAN                                                     |
+| P5 `packages/relay` 自托管包         | ✅   | `packages/relay`（esbuild 单文件 CLI + Dockerfile + compose + README）：配对注册表、per-IP 限速、静态托管 mobile 页、`/healthz`、TTL 清扫、优雅退出                                                                                                                       |
+| P6 hardening + 全量验收              | ⬠    | TLS 由前置（Caddy/cloudflared）终结，relay 只跑明文 WS；限速/TTL/互踢/脱敏已落地；E2E 信封与全量验收场景待跑                                                                                                                                                              |
 
 落地时对 spec 的两处修正（以代码为准）：
 
@@ -357,6 +357,11 @@ IPC 面（preload ↔ main，`packages/shared/src/channels.ts` 新增）：
    challenge/proof 语义，但不产生真实 loopback 帧；relay 传输（P5）才走完整 wire。
 2. **rpc 装配器 v1 不做分片重组**：一个应用消息一帧，靠 seq 保序 + ack 确认；分片与回放留给
    relay 传输（上限常量已在 `WEB_REMOTE_CONTROL_RPC_LIMITS`）。
+
+P4/P5 对 spec 的一处协议扩展（已注释在 `relayFrame.ts`）：新增 `device_unregister` 帧
+（client→endpoint）。官方协议没有它，导致「刷新二维码后旧链接失效」在 relay 模式下不成立——
+桌面刷新配对后旧 sid 会在 relay 上存活到 TTL，旧二维码仍能配对（只是背后没有桌面）。
+relay 与该帧由本仓库同时提供，桌面 `relayTransport.dispose()` 发送；socket 已断时由 TTL 兜底。
 
 ### 冒烟实测（2026-09-29）
 
@@ -382,8 +387,24 @@ PASS healthz
 1. `registerDevice` 返回的 device handle `sendPayload` 是空桩——桌面出站会被静默丢弃；
 2. 互踢只 `close()` 不发 `error{KICKED}`——旧页面静默掉线，无法映射 `session-conflict`。
 
+P4/P5 冒烟（`packages/relay` 真起 + `createRelayDeviceTransport` 真实链路）：
+
+```text
+PASS relay listening（健康检查 / 配对统计）
+PASS device registered+authed（register → challenge → auth_ack）
+PASS mobile paired（matched，桌面侧看到 paired）
+PASS device->mobile data / mobile->device data（经 relay 双向转发）
+PASS second mobile kicks first（error KICKED）
+PASS wrong proof rejected / unknown sid rejected（AUTH_FAILED）
+PASS stale sid rejected after refresh（device_unregister 生效）
+PASS healthz / mobile dir 未配置时 503
+```
+
+该轮冒烟同样抓到并修复真 bug：`dispose()` 先把 `disposed=true`，导致 `device_unregister`
+被自己的发送守卫挡掉（relay 模式特有）。
+
 未覆盖项：真实 Electron 窗口的 Host attachment 桥接（需桌面运行时）、移动端浏览器端到端、
-跨网（4G/relay）路径——分别属于 P2 联调、P3 联调与 P4/P5。
+真实公网 relay 部署（4G/WG）——分别属于 P2 联调、P3 联调与 P5 部署验证。
 
 ## 实测证据（2026-09-29，附录）
 

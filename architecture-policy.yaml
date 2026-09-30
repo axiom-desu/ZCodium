@@ -55,6 +55,9 @@ modules:
   - id: zcode-cua
     roots: [packages/zcode-cua]
     managed: false
+  - id: relay
+    roots: [packages/relay/src]
+    managed: false
   - id: zcode-cli
     roots: [apps/zcode-cli]
     managed: false

@@ -4,9 +4,9 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
   webRemoteControlAppPayloadSchema,
-  webRemoteControlMobileToEndpointFrameSchema,
+  webRemoteControlClientToEndpointFrameSchema,
   type WebRemoteControlAppPayload,
-  type WebRemoteControlEndpointToMobileFrame,
+  type WebRemoteControlEndpointToClientFrame,
   type WebRemoteControlPairStatus,
 } from "@zcode/shared";
 import type { WebRemoteControlLogger } from "./logger.js";
@@ -246,7 +246,7 @@ export class LanRemoteControlEndpoint {
 
   private async attachMobileSocket(ws: WebSocket): Promise<void> {
     let entry: PairEntry | null = null;
-    const send = (frame: WebRemoteControlEndpointToMobileFrame): void => {
+    const send = (frame: WebRemoteControlEndpointToClientFrame): void => {
       ws.send(JSON.stringify(frame));
     };
     const fail = (code: "AUTH_FAILED" | "WRONG_PARAM" | "INTERNAL", message?: string): void => {
@@ -264,9 +264,9 @@ export class LanRemoteControlEndpoint {
         fail("WRONG_PARAM", "frame too large");
         return;
       }
-      let parsed: ReturnType<typeof webRemoteControlMobileToEndpointFrameSchema.safeParse>;
+      let parsed: ReturnType<typeof webRemoteControlClientToEndpointFrameSchema.safeParse>;
       try {
-        parsed = webRemoteControlMobileToEndpointFrameSchema.safeParse(JSON.parse(text));
+        parsed = webRemoteControlClientToEndpointFrameSchema.safeParse(JSON.parse(text));
       } catch {
         fail("WRONG_PARAM", "invalid json");
         return;
@@ -371,7 +371,7 @@ export class LanRemoteControlEndpoint {
     if (!entry || !mobile) {
       return false;
     }
-    const frame: WebRemoteControlEndpointToMobileFrame = { type: "data", payload };
+    const frame: WebRemoteControlEndpointToClientFrame = { type: "data", payload };
     const serialized = JSON.stringify(frame);
     if (Buffer.byteLength(serialized) > this.maxFrameBytes) {
       this.options.logger.warn("[web-remote-control] dropped oversize app payload", {

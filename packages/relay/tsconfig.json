@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["es2025"],
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

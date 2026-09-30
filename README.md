@@ -37,7 +37,7 @@ ZCodium 是 ZCode 的社区衍生仓库。上游 ZCode 是 AI 编程工作台，
 
 | 领域                   | 缺口  | 说明                                                     |
 | ---------------------- | ----- | -------------------------------------------------------- |
-| ~~`webRemoteControl`~~ | 0 键  | 手机远控桌面已补齐（LAN 直连）；relay 自托管包为可选后续 |
+| ~~`webRemoteControl`~~ | 0 键  | 手机远控桌面已补齐（LAN 直连 + 用户自托管 relay）        |
 | `manualClaimPlan`      | 53 键 | 权益领取与验证码流程                                     |
 | `mode`                 | 38 键 | 会话模式扩展                                             |
 | `settings`             | 26 键 | 含 Claude 模型槽位映射、Anthropic/OpenAI/Gemini 端点模板 |
@@ -98,7 +98,7 @@ ZCodium 是 ZCode 的社区衍生仓库。上游 ZCode 是 AI 编程工作台，
 
 ## 更新
 
-- 2026-09-29：补齐手机远控（`webRemoteControl`）本体：桌面 LAN 直连配对/QR + 桥接已有 Host + `packages/web` mobile entry，89 键全量落地；跨网 relay 为用户自托管可选件（[spec](.agents/specs/web-remote-control.md)）。
+- 2026-09-29：补齐手机远控（`webRemoteControl`）本体：桌面 LAN 直连配对/QR + 桥接已有 Host + `packages/web` mobile entry，89 键全量落地；跨网提供用户自托管 relay 包（`packages/relay`，Docker 一键），本项目不运营任何中转（[spec](.agents/specs/web-remote-control.md)）。
 - 2026-09-24：AstrBot 桥接整合为官方 `BotsService` 的传输 provider，并在官方 Bots GUI 与手机远控入口接入（#11–#14）。
 - 2026-09-24：按官方 3.14.3 安装包重新核对 i18n 键缺口，`bots` 259 键已归零，剩余 258 键；核对方法记入「与官方包的能力差异」。
 - 2026-09-24：Computer Use 运行时改为复用 `@trycua/cua-driver` 作为唯一原生引擎，移除自研 desk-pilot；client 由上层注入，缺失时保持 fail-closed，老 GNOME / Wayland 另走物理输入兼容层。

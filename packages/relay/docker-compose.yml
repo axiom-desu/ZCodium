@@ -1,0 +1,18 @@
+# 用户自托管 relay：默认只监听明文 WS，TLS 由 Caddy/traefik/cloudflared 前置终结。
+# 移动端页面目录指向 @zcode/web 的构建产物（含 mobile.html）。
+services:
+  zcode-relay:
+    image: zcode-relay
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8443:8443"
+    environment:
+      ZCODE_RELAY_PORT: "8443"
+      ZCODE_RELAY_PATH: "/ws"
+      ZCODE_RELAY_PAIR_TTL_HOURS: "24"
+      ZCODE_RELAY_MAX_FRAME_BYTES: "1048576"
+      # 挂载或构建时注入 web dist；留空则只做 WS 转发，页面用你自己的静态托管。
+      ZCODE_RELAY_MOBILE_DIR: "/mobile"
+    volumes:
+      - ../web/dist:/mobile:ro

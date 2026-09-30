@@ -819,6 +819,25 @@ importers:
         specifier: ^6.0.2
         version: 6.0.2
 
+  packages/relay:
+    dependencies:
+      '@zcode/shared':
+        specifier: workspace:*
+        version: link:../shared
+      ws:
+        specifier: ^8.20.0
+        version: 8.20.0
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.12
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
   packages/rpc:
     devDependencies:
       ts-node:

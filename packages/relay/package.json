@@ -1,0 +1,23 @@
+{
+  "name": "@zcode/relay",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "zcode-relay": "./dist/cli.mjs"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/cli.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@zcode/shared": "workspace:*",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.25.0",
+    "typescript": "^6.0.2"
+  }
+}

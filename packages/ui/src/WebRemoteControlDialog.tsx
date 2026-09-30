@@ -23,6 +23,7 @@ import { Bot as BotIcon, MonitorSmartphone, XIcon } from "lucide-react";
 import { BotsDialog } from "@/BotsDialog.js";
 import { ProviderIcon } from "@/BotsDialog/shared.js";
 import { getBotProviderRegionTagLabelId } from "@/botsUi.js";
+import { WebRemoteControlEndpointSection } from "@/WebRemoteControlEndpointSection.js";
 import { useWebRemoteControl } from "@/hooks/useWebRemoteControl.js";
 import { useZCodeTaskService } from "@/hooks/useZCodeTaskService.js";
 import type {
@@ -179,6 +180,8 @@ export const WebRemoteControlDialog = memo(function WebRemoteControlDialogCompon
             </DialogHeader>
 
             <div className="mt-5 grid gap-4">
+              <WebRemoteControlEndpointSection />
+
               <section className="flex flex-col rounded-xl border border-border bg-card p-4">
                 <div className="mb-4 flex items-start gap-2">
                   <MonitorSmartphone className="mt-0.5 size-4 shrink-0 text-foreground-subtle" />
