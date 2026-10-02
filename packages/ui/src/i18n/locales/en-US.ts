@@ -2,7 +2,7 @@
 const enUS: Record<string, string> = {
   "occupationOnboarding.stepMode": "UI mode",
   "occupationOnboarding.modeTitle": "Choose your UI mode",
-  "occupationOnboarding.modeDescription": "How would you like ZCodium to show its work?",
+  "occupationOnboarding.modeDescription": "How would you like ZCodium Exp to show its work?",
   "occupationOnboarding.coding": "Coding mode",
   "occupationOnboarding.codingDescription":
     "I want to see code, command output, and change details throughout the development process.",
@@ -57,7 +57,7 @@ const enUS: Record<string, string> = {
   "occupationOnboarding.suggestionsDescription":
     "Show suggestions in new conversations. Click to fill the composer.",
   "occupationOnboarding.close": "Exit onboarding",
-  "startup.global.silent": "Starting ZCodium",
+  "startup.global.silent": "Starting ZCodium Exp",
   "startup.global.upgrading": "Upgrading local data",
   "startup.global.initializing": "Initializing local data",
   "startup.global.waiting": "Waiting for database preparation",
@@ -68,7 +68,7 @@ const enUS: Record<string, string> = {
   "startup.global.starting": "Preparing local data",
   "startup.global.preparing_host_storage": "Preparing task index",
   "startup.global.preparing_session_storage": "Preparing chat history",
-  "startup.global.starting_services": "Starting ZCodium",
+  "startup.global.starting_services": "Starting ZCodium Exp",
   "startup.global.ready": "Local data is ready",
   "startup.global.failed": "Startup preparation failed",
   "startup.global.help":
@@ -823,14 +823,14 @@ const enUS: Record<string, string> = {
   "bots.deleteFailed": "Failed to delete bot: {error}",
 
   // Welcome / Login
-  "welcome.title": "Welcome to ZCodium",
+  "welcome.title": "Welcome to ZCodium Exp",
   "welcome.username": "Username",
   "welcome.password": "Password",
   "welcome.login": "Login",
   "welcome.loggingIn": "Logging in...",
   "welcome.loginFailed": "Login failed",
-  "login.title": "Welcome to ZCodium",
-  "login.description": "Connect your account to start using ZCodium",
+  "login.title": "Welcome to ZCodium Exp",
+  "login.description": "Connect your account to start using ZCodium Exp",
   "login.oauth.activeProviderHint":
     "Current active provider: {provider}. Signing in again replaces the current identity.",
   "login.oauth.loadingProviders": "Loading account providers...",
@@ -873,7 +873,7 @@ const enUS: Record<string, string> = {
   "app.currentTheme": "Current: {theme}",
   "app.login": "Connect",
   "app.logout": "Disconnect",
-  "logout.confirm.title": "Disconnect and restart ZCodium?",
+  "logout.confirm.title": "Disconnect and restart ZCodium Exp?",
   "logout.confirm.descriptionWithRunningSessions":
     "{count} session(s) are currently running. Disconnecting will interrupt them and restart the app.",
   "logout.confirm.descriptionDefault":
@@ -1057,7 +1057,7 @@ const enUS: Record<string, string> = {
   "modelTrajectory.refresh": "Refresh",
   "modelTrajectory.close": "Close",
   "modelTrajectory.loading": "Loading trajectory…",
-  "modelTrajectory.empty": "No model calls recorded (only ZCodium Agent writes model-io)",
+  "modelTrajectory.empty": "No model calls recorded (only ZCodium Exp Agent writes model-io)",
   "modelTrajectory.error": "Failed to load trajectory",
   "modelTrajectory.truncatedNotice": "Too many records, showing the most recent calls",
   "modelTrajectory.summaryCalls": "{count} calls",
@@ -1518,7 +1518,7 @@ const enUS: Record<string, string> = {
   "titleBar.menu.view.actualSize": "Actual size",
   "titleBar.menu.view.zoomIn": "Zoom in",
   "titleBar.menu.view.zoomOut": "Zoom out",
-  "titleBar.menu.help.about": "About ZCodium",
+  "titleBar.menu.help.about": "About ZCodium Exp",
   "titleBar.menu.help.checkForUpdates": "Check for updates",
   "titleBar.menu.help.feedback": "Feedback",
   "sidebar.menu.community": "Community",
@@ -1571,7 +1571,7 @@ const enUS: Record<string, string> = {
   "update.toast.ready": "v{version} downloaded, restart to install",
   "update.toast.devSkipped": "Updates are disabled in dev builds",
   "update.toast.error": "Update check failed: {error}",
-  "forceUpdate.title": "Update ZCodium to continue",
+  "forceUpdate.title": "Update ZCodium Exp to continue",
   "forceUpdate.description":
     "Your current version v{currentVersion} is below the minimum supported version v{minimalVersion}. Update first before continuing with this client.",
   "forceUpdate.currentVersion": "Current version",
@@ -2446,14 +2446,14 @@ const enUS: Record<string, string> = {
   "settings.usageTitle": "Usage stats",
   "settings.usageDescription":
     "Review rough activity and model usage aggregated from local sessions.",
-  "resourceManager.storage.summaryTotal": "Total used by ZCodium",
+  "resourceManager.storage.summaryTotal": "Total used by ZCodium Exp",
   "resourceManager.storage.scanning": "Calculating…",
   "resourceManager.storage.lastScanned": "Last calculated {time}",
   "resourceManager.storage.idle": "Not calculated yet",
   "resourceManager.storage.failed": "Calculation failed",
   "resourceManager.storage.rescan": "Recalculate",
   "resourceManager.storage.disk": "Disk",
-  "resourceManager.storage.diskUsage": "ZCodium uses {used}",
+  "resourceManager.storage.diskUsage": "ZCodium Exp uses {used}",
   "resourceManager.storage.diskFree": "{free} free of {total}",
   "resourceManager.storage.diskUnknown": "Disk capacity unavailable",
   "resourceManager.storage.roots": "Data directories",
@@ -2521,7 +2521,8 @@ const enUS: Record<string, string> = {
   "settings.embeddedBrowserAllowInsecureCertificatesSavedHint":
     "Certificate setting saved. Restart the app to take effect.",
   "settings.browser.data.section": "Browser data",
-  "settings.browser.desktopOnly": "Browser data can only be managed in the ZCodium desktop app.",
+  "settings.browser.desktopOnly":
+    "Browser data can only be managed in the ZCodium Exp desktop app.",
   "settings.browser.import.title": "Import Chrome sign-in state",
   "settings.browser.import.description":
     "Bring your Chrome sign-in state into the built-in browser once, so the AI can open sites you are already signed in to and work more smoothly.",
@@ -2604,7 +2605,7 @@ const enUS: Record<string, string> = {
   "settings.previewBadge.dark": "Dark",
   "settings.modelProviderTitle": "Model settings",
   "settings.mcpTitle": "MCP Servers",
-  "settings.mcp.description": "Manage MCP server configurations used by ZCodium Agent.",
+  "settings.mcp.description": "Manage MCP server configurations used by ZCodium Exp Agent.",
   "settings.mcp.create.open": "Add MCP server",
   "settings.mcp.import.open": "Import MCP servers from external agents",
   "settings.mcp.import.action": "Import",
@@ -2790,7 +2791,7 @@ const enUS: Record<string, string> = {
   "settings.mcpServers.import.targetLabel": "Import target",
   "settings.mcpServers.import.target.global": "Import to Global",
   "settings.mcpServers.import.target.project": "Import to Project",
-  "settings.mcpServers.import.importing": "Importing MCP servers into ZCodium",
+  "settings.mcpServers.import.importing": "Importing MCP servers into ZCodium Exp",
   "settings.mcpServers.import.imported": "Imported",
   "settings.mcpServers.import.skipped": "Skipped",
   "settings.mcpServers.import.failed": "Failed",
@@ -3581,7 +3582,7 @@ const enUS: Record<string, string> = {
   "sidebar.usage.plan.realtime": "Synced from quota api",
   "sidebar.usage.plan.currentPlan": "Plan level",
   "sidebar.usage.plan.expires": "Resets",
-  "sidebar.usage.plan.zcodeMcp": "ZCodium MCP",
+  "sidebar.usage.plan.zcodeMcp": "ZCodium Exp MCP",
   "sidebar.usage.plan.zcodeMcpDescription":
     "Daily aggregate quota for ZCodium built-in plugin MCPs",
   "chat.planUsage.title": "Plan usage",
@@ -3782,7 +3783,7 @@ const enUS: Record<string, string> = {
     "Copy the full skill directory into ZCodium. Later changes in the external agent directory will not sync automatically.",
   "settings.skills.import.mode.symlink.description":
     "Create a directory link to the external agent skill. ZCodium follows later source changes, but the skill depends on that source path remaining available.",
-  "settings.skills.import.importing": "Importing skills into ZCodium",
+  "settings.skills.import.importing": "Importing skills into ZCodium Exp",
   "settings.skills.import.imported": "Imported",
   "settings.skills.import.skipped": "Skipped",
   "settings.skills.import.failed": "Failed",
@@ -4209,7 +4210,7 @@ const enUS: Record<string, string> = {
     "Copy the full plugin directory into ZCodium and register it in plugins.dirs. Later changes in the external agent directory will not sync automatically.",
   "settings.plugins.import.mode.symlink.description":
     "Create a directory link to the external agent plugin and register it in plugins.dirs. ZCodium follows later source changes, but the plugin depends on that source path remaining available.",
-  "settings.plugins.import.importing": "Importing plugins into ZCodium",
+  "settings.plugins.import.importing": "Importing plugins into ZCodium Exp",
   "settings.plugins.import.imported": "Imported",
   "settings.plugins.import.skipped": "Skipped",
   "settings.plugins.import.failed": "Failed",
@@ -4220,7 +4221,7 @@ const enUS: Record<string, string> = {
   "settings.commands.description":
     "Manage ZCodium Agent .md command files. Commands can be invoked with /command-name in chat.",
   "settings.commands.sourceFilterLabel": "Source filter",
-  "settings.commands.source.zcodeAgent": "ZCodium Agent",
+  "settings.commands.source.zcodeAgent": "ZCodium Exp Agent",
   "settings.commands.add": "New",
   "settings.commands.addNew": "New command",
   "settings.commands.addDescription":
@@ -4283,7 +4284,7 @@ const enUS: Record<string, string> = {
     "Copy the command file into ZCodium. Later changes in the external agent file will not sync automatically.",
   "settings.commands.import.mode.symlink.description":
     "Create a file link to the external agent command. ZCodium follows later source changes, but the command depends on that source path remaining available.",
-  "settings.commands.import.importing": "Importing commands into ZCodium",
+  "settings.commands.import.importing": "Importing commands into ZCodium Exp",
   "settings.commands.import.imported": "Imported",
   "settings.commands.import.skipped": "Skipped",
   "settings.commands.import.failed": "Failed",
@@ -4380,8 +4381,8 @@ const enUS: Record<string, string> = {
   "settingsSync.action.rescanning": "Scanning...",
   "settingsSync.action.importSelected": "Import selected",
   "settingsSync.action.importing": "Importing...",
-  "settingsSync.action.finish": "Start using ZCodium",
-  "settingsSync.agent.zcode": "ZCodium Agent",
+  "settingsSync.action.finish": "Start using ZCodium Exp",
+  "settingsSync.agent.zcode": "ZCodium Exp Agent",
   "settingsSync.agent.claudeCode": "Claude Code",
   "settingsSync.agent.codexCli": "Codex CLI",
   "settingsSync.agent.openCode": "OpenCode",
@@ -4435,12 +4436,12 @@ const enUS: Record<string, string> = {
   "settingsSync.discovery.categoryCount": "Categories found: {count}",
   "settingsSync.discovery.error": "Scan failed: {error}",
   "settingsSync.discovery.continue": "Continue",
-  "onboarding.dialog.title": "Welcome to ZCodium",
+  "onboarding.dialog.title": "Welcome to ZCodium Exp",
   "onboarding.dialog.description": "Choose how to start your first session.",
   "onboarding.wizard.label": "Migration guide",
   "onboarding.welcome.eyebrow": "First run setup",
-  "onboarding.welcome.title": "Welcome to ZCodium",
-  "onboarding.welcome.start": "Start ZCodium",
+  "onboarding.welcome.title": "Welcome to ZCodium Exp",
+  "onboarding.welcome.start": "Start ZCodium Exp",
   "onboarding.welcome.migrate": "Migration Guide",
   "onboarding.welcome.helper":
     "Import existing tool settings now, or skip and continue later from Settings.",
@@ -4562,7 +4563,7 @@ const enUS: Record<string, string> = {
     "This task finished without any chat content. It may have been stopped before the model produced a response.",
   "chat.placeholder.newTask":
     "Ask ZCodium anything, @ to add context, / for commands or capabilities",
-  "chat.placeholder.newTaskMobile": "Ask ZCodium anything…",
+  "chat.placeholder.newTaskMobile": "Ask ZCodium Exp anything…",
   "chat.placeholder.followUpAsk": "Ask for follow-up changes",
   "chat.placeholder.followUpQueue": "Keep typing to queue follow-up changes",
   "chat.placeholder.loading": "Initializing task...",
@@ -5928,7 +5929,7 @@ const enUS: Record<string, string> = {
   "resourceManager.cpu": "CPU",
   "resourceManager.memory": "Memory",
   "resourceManager.storage": "Storage",
-  "resourceManager.appUsage": "ZCodium",
+  "resourceManager.appUsage": "ZCodium Exp",
   "resourceManager.systemUsage": "System",
   "resourceManager.category.base": "Base services",
   "resourceManager.category.builtinPlugin": "Built-in plugins",
@@ -5941,7 +5942,7 @@ const enUS: Record<string, string> = {
   "chat.error.copy.summaryLine": "Error Summary: {message}",
   "chat.error.copy.detail": "Error Details",
   "chat.error.copy.traceId": "TraceID: {traceId}",
-  "chat.error.copy.heading": "ZCodium Error Info",
+  "chat.error.copy.heading": "ZCodium Exp Error Info",
   // Forms
   "forms.labels.name": "Name",
   "forms.labels.description": "Description",
@@ -5991,7 +5992,7 @@ const enUS: Record<string, string> = {
   "automations.statusFilter.completed": "Completed",
   "automations.statusFilter.failed": "Failed",
   "automations.statusFilter.empty": "No tasks match this filter",
-  "automations.keepAwakeBanner": "Keep your computer awake while ZCodium is running a chat.",
+  "automations.keepAwakeBanner": "Keep your computer awake while ZCodium Exp is running a chat.",
   "offPeak.chatCreated.boundHint": "Runs in this session",
   "modelSelection.invalidated.fallback":
     "The previous model selection is no longer available. Switched to the current default; review it before continuing.",
@@ -6292,7 +6293,7 @@ const enUS: Record<string, string> = {
   "cuaPermission.modal.requestFailed": "Could not request permissions: {error}",
   "cuaPermission.modal.restarting": "Restarting Helper…",
   "cuaPermission.modal.restartFailed": "Couldn't restart Helper: {error}",
-  "cuaPermission.modal.relaunchAppButton": "Restart ZCodium",
+  "cuaPermission.modal.relaunchAppButton": "Restart ZCodium Exp",
   "cuaPermission.modal.relaunchAppHint":
     "Still not working after restarting Helper? Restart ZCodium to fully reload the Helper process.",
   "cuaPermission.status.granted": "Granted",
