@@ -434,7 +434,7 @@ export function createBrowserWindow(options: {
   attachWindowsWindowRepaint(win);
   // will-attach 与 did-attach 按顺序配对；队列元素记录 guest 种类，did-attach 据此分派策略。
   const pendingWebviewGuestKinds: Array<
-    { kind: "browser" | "codingPlan" } | { kind: "pluginSandbox"; sandboxId: string }
+    { kind: "browser" } | { kind: "pluginSandbox"; sandboxId: string }
   > = [];
 
   win.webContents.once("did-finish-load", () => {
@@ -483,10 +483,14 @@ export function createBrowserWindow(options: {
       pendingWebviewGuestKinds.push({ kind: "pluginSandbox", sandboxId: decision.sandboxId });
       return;
     }
-    const isCodingPlanWebview = isCodingPlanEmbeddedWebviewSrc(targetUrl);
-    webPreferences.preload = isCodingPlanWebview
-      ? codingPlanWebviewPreloadPath
-      : embeddedBrowserJavaScriptDialogPreloadPath;
+    // Bugfix：引入 UI 插件沙箱的那次上游移植（cherry-pick 662c30bea）夹带了一段
+    // Coding Plan 官网页 guest 分支，但它依赖的 isCodingPlanEmbeddedWebviewSrc、
+    // codingPlanWebviewPreloadPath 与 preload/codingPlanWebview.ts 都没有一起移植，
+    // 为此本 fork 也没有 Coding Plan 购买页。引用未定义标识符会让 did-attach-webview
+    // 在运行时抛 ReferenceError，任何 webview 附加都会触发。这里移除该分支，
+    // 保持移植前的 preload 行为；上游那套管道（attachEmbeddedBrowserWindowOpenHandler
+    // 的 isCodingPlanGuest）同样未随本次移植进入，不保留无效调用。
+    webPreferences.preload = embeddedBrowserJavaScriptDialogPreloadPath;
     webPreferences.contextIsolation = true;
     webPreferences.nodeIntegration = false;
     webPreferences.nodeIntegrationInSubFrames = true;
@@ -513,9 +517,7 @@ export function createBrowserWindow(options: {
       return;
     }
 
-    pendingWebviewGuestKinds.push({
-      kind: isCodingPlanWebview ? "codingPlan" : "browser",
-    });
+    pendingWebviewGuestKinds.push({ kind: "browser" });
   });
 
   win.webContents.on("did-attach-webview", (_event, guestWebContents) => {
@@ -534,9 +536,6 @@ export function createBrowserWindow(options: {
       guestWebContents,
       hostWebContents: win.webContents,
       resolveBrowserViewOwner: options.resolveBrowserViewOwner,
-      // PayPal/relay 的 30x 重定向不保证逐跳触发 will-navigate。
-      // Coding Plan guest 身份必须按初始 src 粘住，不能由当前 URL 解防护。
-      isCodingPlanGuest: guestKind.kind === "codingPlan",
       logger: options.logger,
     });
   });

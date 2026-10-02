@@ -26,6 +26,20 @@ export class BrowserWindow extends EventEmitter {
   isDestroyed() { return false; }
   maximize() {}
 }
+// pluginSandbox 的 host/session 会被 desktopWindowChrome 的依赖图带进这个 bundle。
+// 它们从 electron 取的符号此前不在 mock 里，esbuild 直接 "No matching export"
+// 构建失败——本用例只验证浏览器访客隔离与对话框 preload，不需要沙箱真实行为，
+// 因此这里只补到「能被解析」的最小形状，不模拟任何语义。
+export const clipboard = { writeImage: async () => {}, readText: async () => "" };
+export const MessageChannelMain = {};
+export const dialog = { showMessageBox: async () => ({ response: 0 }) };
+export const session = { fromPartition: () => ({}) };
+export const webContents = { fromId: () => undefined };
+export const ipcMain = { handle: () => {} };
+export const systemPreferences = {
+  getMediaAccessStatus: () => "granted",
+  askForMediaAccess: async () => true,
+};
 `;
 const result = await build({
   stdin: {
