@@ -12,6 +12,7 @@ import {
   DiagnosticMetricSchema,
   createDiagnosticTraceId,
   createDiagnosticSpanId,
+  ZCODE_USER_DATA_DIR_NAME,
   type DiagnosticRecord,
 } from "@zcode/shared";
 import {
@@ -243,7 +244,7 @@ export function createNodeLoggerFactory(options: NodeLoggerFactoryOptions = {}):
 }
 
 export function getDefaultLogDir(): string {
-  return join(homedir(), ".zcodium", "cli", "log", "diagnostics-v1");
+  return join(homedir(), ZCODE_USER_DATA_DIR_NAME, "cli", "log", "diagnostics-v1");
 }
 
 function getDefaultMinLevel(env: NodeJS.ProcessEnv | undefined): LogLevel {

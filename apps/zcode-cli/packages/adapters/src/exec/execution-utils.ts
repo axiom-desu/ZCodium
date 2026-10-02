@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { ZCODE_USER_DATA_DIR_NAME } from "@zcode/shared";
 import { join } from "node:path";
 import type { ExecutionRequest } from "@zcode/contracts";
 
@@ -16,7 +17,7 @@ export const DEFAULT_PROGRESS_INTERVAL_MS = 1_000;
 export const DEFAULT_PROGRESS_TAIL_BYTES = 4 * 1024;
 
 export function resolveDefaultOutputRootDir(processEnv: NodeJS.ProcessEnv = process.env): string {
-  const storageRoot = processEnv.ZCODE_STORAGE_DIR?.trim() || join(homedir(), ".zcodium");
+  const storageRoot = processEnv.ZCODE_STORAGE_DIR?.trim() || join(homedir(), ZCODE_USER_DATA_DIR_NAME);
   return join(storageRoot, "cli", "exec");
 }
 

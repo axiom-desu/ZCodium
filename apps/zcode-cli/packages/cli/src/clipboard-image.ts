@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
+import { ZCODE_USER_DATA_DIR_NAME } from "@zcode/shared";
 import { join } from "node:path";
 import type { TuiClipboardImage, TuiImageMediaType, TuiReadClipboardImage } from "@zcode/tui";
 
@@ -30,7 +31,7 @@ type NodeClipboardImageReaderOptions = {
 };
 
 function resolveDefaultClipboardDirectory(processEnv: NodeJS.ProcessEnv = process.env): string {
-  const storageRoot = processEnv.ZCODE_STORAGE_DIR?.trim() || join(homedir(), ".zcodium");
+  const storageRoot = processEnv.ZCODE_STORAGE_DIR?.trim() || join(homedir(), ZCODE_USER_DATA_DIR_NAME);
   return join(storageRoot, "clipboard");
 }
 
