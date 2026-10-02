@@ -54,14 +54,22 @@ function isTruthyRuntimeEnvOverride(name: string): boolean {
 // 这里允许测试显式隔离运行时身份，正常桌面/远控路径保持原来的默认值。
 // 应用名取构建期产品身份（desktop-product-identity.mjs），与安装包身份同源：
 // 之前这里硬编码 "ZCode"，导致 app 菜单、process.title、Linux desktop 条目的 Name
-// 和 Electron 用户数据目录都还是旧名，和包里的 ZCodium 身份不一致。
+// 和 Electron 用户数据目录都还是旧名，和包里的身份不一致。现在身份是 `ZCodium Exp`，
+// 于是 app 菜单名、进程标题、Linux desktop 条目 Name 与 userData 目录都跟着变成新名；
+// userData 的搬迁见下方 LEGACY_RUNTIME_APPLICATION_NAME 处的链式迁移。
 export const runtimeApplicationName =
   readRuntimeEnvOverride("ZCODE_DESKTOP_APPLICATION_NAME") ??
   (isLocalDevelopmentRuntime
     ? `${desktopProductIdentities.production.productName} Dev`
     : desktopProductIdentities[isPreviewPackagedRuntime ? "preview" : "production"].productName);
 // 改名前的 Electron 用户数据目录名，只用于一次性迁移。
+// Bugfix：产品身份从 `ZCodium` 改名为 `ZCodium Exp` 后，runtimeApplicationName 变成
+// "ZCodium Exp"，userData 目录随之从 `<appData>/ZCodium` 换到 `<appData>/ZCodium Exp`。
+// 若不做迁移，存量用户的登录态、会话与缓存会留在旧目录，表现为升级后要重新登录。
+// 于是这里从"单条链"变成"按时间倒序的链"：先搬最近一次改名前的身份，搬不动再试更早的。
+// 顺序很重要——若先把 `ZCode` 搬成 `ZCodium Exp`，用户的 `ZCodium` 数据就被跳过而遗留在原地。
 const LEGACY_RUNTIME_APPLICATION_NAME = "ZCode";
+const RENAMED_FROM_RUNTIME_APPLICATION_NAME = "ZCodium";
 // Electron 的 app.getPath("home") 不一定跟随测试进程里的 HOME 覆盖。
 // e2e 默认工作区依赖 home 路径，因此提供显式覆盖，避免测试写到开发者真实 ~/ZCodeProject。
 export const runtimeHomePath = readRuntimeEnvOverride("ZCODE_DESKTOP_HOME_DIR");
@@ -103,24 +111,33 @@ export function migrateRuntimeUserDataDir(logger: RuntimeUserDataMigrationLogger
   }
   const appDataDir = getElectronAppPath("appData");
   const nextPath = join(appDataDir, runtimeApplicationName);
-  const legacyPath = join(appDataDir, LEGACY_RUNTIME_APPLICATION_NAME);
-  if (nextPath === legacyPath || !existsSync(legacyPath)) {
+  // 从最近的旧身份开始试：`ZCodium` 优先于更早的 `ZCode`。只搬一次到 nextPath 就停，
+  // 避免连锁覆盖——连续换名两次时，用户真正的数据在 `ZCodium` 里，先搬 `ZCode` 会把
+  // 更近的那份留在原地。
+  for (const legacyName of [
+    RENAMED_FROM_RUNTIME_APPLICATION_NAME,
+    LEGACY_RUNTIME_APPLICATION_NAME,
+  ]) {
+    const legacyPath = join(appDataDir, legacyName);
+    if (nextPath === legacyPath || !existsSync(legacyPath)) {
+      continue;
+    }
+    if (existsSync(nextPath)) {
+      logger.warn("[runtime] 新旧用户数据目录同时存在，跳过迁移", {
+        legacyPath,
+        nextPath,
+      });
+      return;
+    }
+    try {
+      renameSync(legacyPath, nextPath);
+      logger.info("[runtime] 用户数据目录已迁移到新应用名", { legacyPath, nextPath });
+    } catch (error) {
+      // 目录被占用或跨设备时 rename 会失败；不能因此阻断启动，应用只在新目录重建，
+      // 旧目录原地保留，用户重新登录一次即可。
+      logger.warn("[runtime] 用户数据目录迁移失败，保留旧目录", { legacyPath, nextPath, error });
+    }
     return;
-  }
-  if (existsSync(nextPath)) {
-    logger.warn("[runtime] 新旧用户数据目录同时存在，跳过迁移", {
-      legacyPath,
-      nextPath,
-    });
-    return;
-  }
-  try {
-    renameSync(legacyPath, nextPath);
-    logger.info("[runtime] 用户数据目录已迁移到新应用名", { legacyPath, nextPath });
-  } catch (error) {
-    // 目录被占用或跨设备时 rename 会失败；不能因此阻断启动，应用只在新目录重建，
-    // 旧目录原地保留，用户重新登录一次即可。
-    logger.warn("[runtime] 用户数据目录迁移失败，保留旧目录", { legacyPath, nextPath, error });
   }
 }
 // Chromedriver 会注入临时 --user-data-dir，并在该目录等待 DevToolsActivePort。

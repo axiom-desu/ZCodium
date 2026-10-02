@@ -1,16 +1,26 @@
 /**
  * 构建期开关：为真时安装包使用 Preview 身份，而后端环境仍由 `ZCODE_ENV` 单独决定。
  * 典型用法是 `ZCODE_ENV=production ZCODE_PREVIEW_IDENTITY=1`，得到一个连接生产后端、
- * 可与正式版并排安装的 `ZCodium Preview`。
+ * 可与正式版并排安装的 `ZCodium Exp Preview`。
+ *
+ * Bugfix：正式身份由 `ZCodium` 改名为 `ZCodium Exp`。原因是 `ZCodium-project/ZCodium`
+ * 的 #13/#17 正把用户级数据根收敛到 `~/.zcodium`、bin 改名为 `zcodium`，与本仓库
+ * 自 `dev.zcodium.app` / `zcodium` 起的身份完全重合——两边的安装包在包管理器里是同一个
+ * 包（dpkg/rpm/pacman 同名同 appId，装一个卸一个），安装目录与桌面项也互相覆盖。
+ * 改名后本仓库是独立产品线 `ZCodium Exp`，与对方平级而非同身份。
+ *
+ * `productName` 不带缩写点：它会流进 macOS `.app` 名（`${productName}.app`）与
+ * Electron userData 目录名，带点会得到 `ZCodium Exp..app`，且 Windows 目录名不能以点
+ * 结尾。带点的展示形态放 i18n / About / 文档等纯展示层。
  */
 export const ZCODE_PREVIEW_IDENTITY_ENV = "ZCODE_PREVIEW_IDENTITY";
 
 const PRODUCTION_IDENTITY = Object.freeze({
   flavor: "production",
-  appId: "dev.zcodium.app",
-  productName: "ZCodium",
-  linuxExecutableName: "zcodium",
-  linuxPackageName: "zcodium",
+  appId: "dev.zcodium.app.exp",
+  productName: "ZCodium Exp",
+  linuxExecutableName: "zcodium-exp",
+  linuxPackageName: "zcodium-exp",
   cuaHelperInstallVariant: null,
 });
 
