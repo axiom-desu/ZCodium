@@ -9,9 +9,9 @@
  *   scan-legacy-sessions.mjs conversations --agent <provider> --workspace <path> [--query <text>] [--limit <n>] [--json]
  *
  * 选项：
- *   --legacy-dir <path>   旧快照根目录。默认 ~/.zcodium/v2/sessions
- *   --task-index <path>   任务索引 sqlite。默认 ~/.zcodium/v2/tasks-index.sqlite
- *   --cli-db <path>       新 ZCode 会话 sqlite。默认 ~/.zcodium/cli/db/db.sqlite
+ *   --legacy-dir <path>   旧快照根目录。默认 ~/.zcodium-exp/v2/sessions
+ *   --task-index <path>   任务索引 sqlite。默认 ~/.zcodium-exp/v2/tasks-index.sqlite
+ *   --cli-db <path>       新 ZCode 会话 sqlite。默认 ~/.zcodium-exp/cli/db/db.sqlite
  *   --agent <provider>    按 provider 过滤，如 glm、claude、codex、opencode
  *   --workspace <path>    按 workspace 路径精确过滤
  *   --query <text>        按标题、ID 或可见正文过滤会话
@@ -25,9 +25,16 @@ import { join } from "node:path";
 
 import { runScan } from "./legacy-scan.mjs";
 
-const DEFAULT_LEGACY_DIR = join(homedir(), ".zcodium", "v2", "sessions");
-const DEFAULT_TASK_INDEX_PATH = join(homedir(), ".zcodium", "v2", "tasks-index.sqlite");
-const DEFAULT_CLI_DB_PATH = join(homedir(), ".zcodium", "cli", "db", "db.sqlite");
+// 技能脚本由 agent 直接以 node 执行，没有打包/依赖注入，无法 import @zcode/shared 的
+// 常量，只能在这里写字面量。Bugfix：用户级数据根从 `.zcodium` 让位给 `.zcodium-exp`
+// （ZCodium-project/ZCodium 的 #13/#17 要占 `~/.zcodium`），默认值必须跟着走，
+// 否则扫到的是迁移后的空树。改这里的字符串时同步
+// packages/shared/src/appDirNames.ts 的 ZCODE_USER_DATA_DIR_NAME。
+// 基目录沿用 ZCODE_DATA_BASE_DIR，与 packages/services/src/paths.ts 的优先级一致。
+const DATA_ROOT = process.env.ZCODE_DATA_BASE_DIR?.trim() || homedir();
+const DEFAULT_LEGACY_DIR = join(DATA_ROOT, ".zcodium-exp", "v2", "sessions");
+const DEFAULT_TASK_INDEX_PATH = join(DATA_ROOT, ".zcodium-exp", "v2", "tasks-index.sqlite");
+const DEFAULT_CLI_DB_PATH = join(DATA_ROOT, ".zcodium-exp", "cli", "db", "db.sqlite");
 
 const USAGE = `Usage:
   scan-legacy-sessions.mjs summary [--json]

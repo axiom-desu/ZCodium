@@ -1,5 +1,5 @@
 // 影子重放对账（交付 / 测试基建）。
-// 用途：把本机真实 CLI 库（默认 ~/.zcodium/cli/db/db.sqlite）的历史会话全量喂给
+// 用途：把本机真实 CLI 库（默认 ~/.zcodium-exp/cli/db/db.sqlite）的历史会话全量喂给
 // 冷恢复管线（transcript 合成 → ProductProjection），输出守恒对账报告——
 // 每阶段上线门槛 = 全量重放无崩溃、无静默丢弃、失败清单审查完毕。
 //
@@ -43,7 +43,11 @@ const {
 const { ProductProjection } = projectionModule;
 const { SESSION_ENTRY_TARGET_COMPLETION_VERIFICATION } = contracts;
 
-const sourceDbPath = args.db ?? join(homedir(), ".zcodium", "cli", "db", "db.sqlite");
+// 用户级数据根已从 `.zcodium` 让位给 `.zcodium-exp`；本脚本是独立 node 工具，
+// 无法 import @zcode/shared 常量，只能写字面量。改这里时同步
+// packages/shared/src/appDirNames.ts 的 ZCODE_USER_DATA_DIR_NAME。
+const sourceDbPath =
+  args.db ?? join(process.env.ZCODE_DATA_BASE_DIR?.trim() || homedir(), ".zcodium-exp", "cli", "db", "db.sqlite");
 const limit = args.limit ? Number(args.limit) : Infinity;
 
 let dbPath = sourceDbPath;
