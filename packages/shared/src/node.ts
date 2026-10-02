@@ -15,6 +15,11 @@ export {
   migrateSubagentStateFile,
 } from "./node/subagentMarkdownMigration.js";
 export {
+  migrateLegacyUserDataRoot,
+  type MigrateLegacyUserDataRootOptions,
+  type MigrateLegacyUserDataRootResult,
+} from "./node/userDataRootMigration.js";
+export {
   atomicWritePrivateTextFile,
   backupCorruptFile,
   withFileLock,

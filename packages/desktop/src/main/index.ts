@@ -23,6 +23,10 @@ import {
 import { createLocalTtftDiagnostics } from "./localTtftDiagnostics.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
+// 必须在 desktopEarlyDataBaseDirBootstrap 之后：那个模块用旧根里的 dataBaseDir 调
+// setDataBaseDir，之后的 getDataBaseDir() 才是用户真实的基目录；顺序反了会让
+// 自定义数据目录的用户被按默认 HOME 迁移，数据搬错地方。
+import "./desktopEarlyUserDataRootMigration.js";
 import "./desktopEarlyChromiumHardwareAccelerationBootstrap.js";
 import { powerSaveBlocker } from "electron";
 import {

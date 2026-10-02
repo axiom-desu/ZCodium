@@ -1,14 +1,20 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { ZCODE_USER_DATA_DIR_NAME } from "@zcode/shared";
+import { LEGACY_ZCODE_USER_DATA_DIR_NAME, ZCODE_USER_DATA_DIR_NAME } from "@zcode/shared";
 
 interface ChromiumHardwareAccelerationApp {
   disableHardwareAcceleration(): void;
 }
 
 function resolveChromiumHardwareAccelerationSettingsFile(homePath: string = homedir()): string {
-  return join(homePath, ZCODE_USER_DATA_DIR_NAME, "v2", "setting.json");
+  // 与 desktopDataBaseDirBootstrap 同理：换名后的首次启动必须能从旧根读到
+  // 硬件加速开关，否则迁移发生前会用默认值创建 Chromium 实例。
+  const nextRoot = join(homePath, ZCODE_USER_DATA_DIR_NAME, "v2", "setting.json");
+  if (existsSync(nextRoot)) {
+    return nextRoot;
+  }
+  return join(homePath, LEGACY_ZCODE_USER_DATA_DIR_NAME, "v2", "setting.json");
 }
 
 function extractBootstrapChromiumHardwareAccelerationEnabled(rawValue: unknown): boolean {

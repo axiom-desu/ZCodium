@@ -6,8 +6,21 @@
  * 引用这些常量，不要在业务代码里散落字面量，否则改名会再次漏改。
  */
 
-/** 用户级数据根目录名，默认 `~/.zcodium`（可被 ZCODE_DATA_BASE_DIR 改写基路径）。 */
-export const ZCODE_USER_DATA_DIR_NAME = ".zcodium";
+/**
+ * 用户级数据根目录名，默认 `~/.zcodium-exp`（可被 ZCODE_DATA_BASE_DIR 改写基路径）。
+ *
+ * Bugfix：ZCodium-project/ZCodium 的 #13/#17 正把用户级数据根收敛到 `~/.zcodium`，
+ * 与本仓库自 f12f4ea 起持有的 `~/.zcodium` 必然相撞（两个产品会读写彼此的凭据、
+ * 配置与会话）。本仓库让出 `~/.zcodium`，改占 `~/.zcodium-exp`；
+ * 旧根名见 LEGACY_ZCODE_USER_DATA_DIR_NAME，仅用于一次性迁移。
+ */
+export const ZCODE_USER_DATA_DIR_NAME = ".zcodium-exp";
+
+/** 换名前用户级数据根目录名，仅用于一次性迁移，不再作为读写目标。 */
+export const LEGACY_ZCODE_USER_DATA_DIR_NAME = ".zcodium";
+
+/** 迁移成功后写在旧根内的标记文件，防止下次启动重复灌入。 */
+export const ZCODE_USER_DATA_MIGRATION_MARKER_FILE_NAME = ".migrated-to-zcodium-exp";
 
 /** 用户级 App 配置子目录名，即 `~/.zcodium/v2`。 */
 export const ZCODE_APP_CONFIG_SUBDIR_NAME = "v2";

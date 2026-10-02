@@ -1,4 +1,6 @@
 import { safeLogArgs } from "@zcode/shared";
+import { migrateLegacyUserDataRoot } from "@zcode/shared/node";
+import { homedir } from "node:os";
 import { interceptTuiStderr, isTuiInvocation } from "./tui-stderr.js";
 import { interceptKnownRuntimeWarnings } from "./runtime-warnings.js";
 import { installStderrConsoleBoundary } from "./protocol-console.js";
@@ -21,6 +23,21 @@ async function main(): Promise<void> {
   // 真实 zcode CLI 进程里仍可能有少量路径直接读取 process.env。
   // 入口先清洗用户 shell 注入的 NODE_ENV、代理和证书变量；网络变量只封存给后续 Bash/tool 子进程恢复。
   applyCliRuntimeEnvSanitization(process.env);
+  // 用户级数据根换名（.zcodium → .zcodium-exp）后，旧根里的凭据/配置/会话要跟着搬。
+  // 必须在任何读写 `~/.zcodium-exp/...` 的模块之前执行，且必须在 --prepare-storage
+  // 等存储模式之前，否则它们会先在新根建一棵空树，把迁移变成"两边都有"而跳过。
+  // baseDir 与 packages/services/src/paths.ts 的优先级一致：env 优先，否则 HOME。
+  // 失败只告警不抛：入口阶段抛异常会让整个 CLI 起不来。
+  try {
+    const migrated = migrateLegacyUserDataRoot({
+      baseDir: process.env.ZCODE_DATA_BASE_DIR?.trim() || homedir(),
+    });
+    if (migrated.status === "failed") {
+      console.error("[runtime] user data root migration failed", migrated.legacyRoot);
+    }
+  } catch {
+    // 迁移失败不影响本次启动，下次启动会重试。
+  }
   const isProtocol = isProtocolServerInvocation(argv);
   const isTui = isTuiInvocation(argv);
   if (isProtocol) installProtocolStderrBoundary(process.stderr);
