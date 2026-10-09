@@ -1,0 +1,12 @@
+[package]
+name = "zcode-cli-domain"
+description = "Session、history、queue、context、goal、todo、attachment 与 workspace identity 的纯领域模型"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+

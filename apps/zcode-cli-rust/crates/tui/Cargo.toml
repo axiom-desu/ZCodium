@@ -1,0 +1,21 @@
+[package]
+name = "zcode-cli-tui"
+description = "TUI 输入与渲染，只通过 core-api 工作"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zcode-cli-protocol.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-core-api.workspace = true
+zcode-cli-core.workspace = true
+zcode-cli-state.workspace = true
+zcode-cli-model.workspace = true
+zcode-cli-tools.workspace = true
+zcode-cli-host.workspace = true

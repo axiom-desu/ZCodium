@@ -1,0 +1,87 @@
+[workspace]
+members = [
+  ".",
+  "crates/protocol",
+  "crates/domain",
+  "crates/core-api",
+  "crates/core",
+  "crates/host",
+  "crates/net",
+  "crates/state",
+  "crates/model",
+  "crates/tools",
+  "crates/bash-parse",
+  "crates/bash",
+  "crates/plugins",
+  "crates/app-server",
+  "crates/headless",
+  "crates/tui",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "Apache-2.0"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+zcode-cli-protocol = { path = "crates/protocol" }
+zcode-cli-domain = { path = "crates/domain" }
+zcode-cli-core-api = { path = "crates/core-api" }
+zcode-cli-core = { path = "crates/core" }
+zcode-cli-host = { path = "crates/host" }
+zcode-cli-net = { path = "crates/net" }
+zcode-cli-state = { path = "crates/state" }
+zcode-cli-model = { path = "crates/model" }
+zcode-cli-tools = { path = "crates/tools" }
+zcode-cli-bash-parse = { path = "crates/bash-parse" }
+zcode-cli-bash = { path = "crates/bash" }
+zcode-cli-plugins = { path = "crates/plugins" }
+zcode-cli-app-server = { path = "crates/app-server" }
+zcode-cli-headless = { path = "crates/headless" }
+zcode-cli-tui = { path = "crates/tui" }
+
+[package]
+name = "zcode-cli-rust"
+description = "ZCode CLI runtime with shared core, App Server and TUI frontends"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zcode-cli-protocol.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-core-api.workspace = true
+zcode-cli-core.workspace = true
+zcode-cli-host.workspace = true
+zcode-cli-net.workspace = true
+zcode-cli-state.workspace = true
+zcode-cli-model.workspace = true
+zcode-cli-tools.workspace = true
+zcode-cli-bash-parse.workspace = true
+zcode-cli-bash.workspace = true
+zcode-cli-plugins.workspace = true
+zcode-cli-app-server.workspace = true
+zcode-cli-headless.workspace = true
+zcode-cli-tui.workspace = true
+
+[profile.release]
+lto = "thin"
+strip = true
