@@ -95,3 +95,34 @@ export function findZCodeAgentRuntimeNodeBundle(): string | null {
   ];
   return resolveExistingPath(candidates);
 }
+
+/** Rust CLI runtime 的随包目录名（resources/rust，由 prepare:cli-rust 生成）。 */
+const CLI_RUST_RESOURCE_DIR = "rust";
+const CLI_RUST_BINARY_BASE = "zcode-cli-rust";
+
+/**
+ * 查找随包分发的 Rust CLI runtime 可执行文件（resources/rust/zcode-cli-rust）。
+ *
+ * 只在 Preview（ZCodium Rust）口味里存在：prepare-runtime-assets 仅在
+ * `ZCODE_PREVIEW_IDENTITY=1` 时运行 prepare:cli-rust，electron-builder 也只在同一条件下
+ * 把 bundled-agents/<platform>/rust 拷进 resources/rust。生产口味没有这个文件，
+ * 返回 null 后继续解析 TS bundle，两条链路互不影响。
+ *
+ * 候选目录与 findZCodeAgentRuntimeNodeBundle 平行，便于 dev 与打包态共用一套解析。
+ * 不设 env 覆盖：显式覆盖走 ZCODE_AGENT_SERVER_COMMAND，那条路在解析链更前面。
+ */
+export function findZCodeCliRustBinary(): string | null {
+  const binaryName =
+    process.platform === "win32" ? `${CLI_RUST_BINARY_BASE}.exe` : CLI_RUST_BINARY_BASE;
+  const resourceSegments = [CLI_RUST_RESOURCE_DIR, binaryName];
+  const moduleDir: string | undefined = import.meta.dirname;
+  const platformScopedRoots = resolvePlatformScopedBundledAgentRoots(moduleDir);
+  const legacyRoots = resolveLegacyBundledResourceRoots(moduleDir);
+
+  const candidates = [
+    packagedResourcesPath ? resolvePath(packagedResourcesPath, ...resourceSegments) : null,
+    ...platformScopedRoots.map((root) => (root ? resolvePath(root, ...resourceSegments) : null)),
+    ...legacyRoots.map((root) => (root ? resolvePath(root, ...resourceSegments) : null)),
+  ];
+  return resolveExistingPath(candidates);
+}

@@ -26,6 +26,7 @@ import {
 import {
   findZCodeAgentRuntimeBinary,
   findZCodeAgentRuntimeNodeBundle,
+  findZCodeCliRustBinary,
 } from "../runtime-tools/providerRuntimeResolver.js";
 import { isEffectiveDevelopmentNodeEnv } from "#src/runtime-tools/nodeEnv.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
@@ -370,6 +371,27 @@ function resolveDeployedZCodeAgentBinaryCommand(
   };
 }
 
+/**
+ * 解析随包分发的 Rust CLI runtime（resources/rust/zcode-cli-rust）。
+ *
+ * 只在 Preview（ZCodium Rust）口味存在该文件；生产口味与 dev 未构建时返回 null，
+ * 由调用方继续解析 TS bundle。Rust runtime 是独立可执行文件，不需要
+ * ELECTRON_RUN_AS_NODE——它本身就是纯 Node 之外的进程。
+ */
+function resolvePackagedZCodeCliRustCommand(
+  context: ZCodeAgentCommandResolverContext,
+): ZCodeAgentCommand | null {
+  const binaryPath = findZCodeCliRustBinary();
+  if (!binaryPath) {
+    return null;
+  }
+  return {
+    command: binaryPath,
+    args: [...ZCODE_AGENT_RUNTIME.spawnArgs],
+    cwd: context.workspacePath,
+  };
+}
+
 function resolveElectronRuntimeZCodeAgentCommand(
   context: ZCodeAgentCommandResolverContext,
 ): ZCodeAgentCommand | null {
@@ -412,9 +434,15 @@ export function resolveDefaultZCodeAgentCommand(
   }
 
   // 顺序：env 显式覆盖 → monorepo dev 源码/dist（dev 改源码立刻生效，不会被远端历史装的 native binary
-  // 抢先匹配）→ 桌面打包态 Electron Node runtime 跑 zcode.cjs → 已部署 native binary（远端 SSH 兜底）。
+  // 抢先匹配）→ 随包 Rust CLI（仅 Preview 口味有）→ 桌面打包态 Electron Node runtime 跑 zcode.cjs
+  // → 已部署 native binary（远端 SSH 兜底）。
+  //
+  // Rust 排在 TS bundle 之前：Preview 口味的目的就是提前验证 Rust runtime（见
+  // .agents/specs/cli-rust-runtime.md 的 D4）。没有随包 Rust binary 时（生产口味、dev 未构建）
+  // 解析返回 null，自然落到 TS bundle，不需要额外开关。
   const bundled =
     resolveBundledWorkspaceZCodeAgentCommand(context) ??
+    resolvePackagedZCodeCliRustCommand(context) ??
     resolveElectronRuntimeZCodeAgentCommand(context);
   return applyPresentationSurfaceToCommand(
     bundled
