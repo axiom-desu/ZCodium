@@ -25,6 +25,11 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           persist-credentials: false
+      # Rust 构建不需要 node_modules，但命令走 pnpm script（单一事实来源），
+      # 所以要 pnpm 与 node 而跳过依赖安装。
+      - uses: ./.github/actions/setup-workspace
+        with:
+          install-dependencies: "false"
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
