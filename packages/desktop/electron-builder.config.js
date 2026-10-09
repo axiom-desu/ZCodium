@@ -19,6 +19,7 @@ import { verifyBundledRemoteAssets } from "../../scripts/bundle-remote-assets.mj
 import { noticesFileName, stageElectronNotices } from "../../scripts/third-party-notices.mjs";
 import { resolveNativeSearchReleasePlan } from "../../scripts/native-search-tools-config.mjs";
 import { getBuildMetadata } from "./scripts/build-metadata.mjs";
+import { isPreviewIdentityRequested } from "./scripts/desktop-product-identity.mjs";
 import { collectRuntimeModuleClosureEntries } from "./scripts/runtime-dependency-closure.mjs";
 import {
   resolvePackagedNodePtyPrebuildPath,
@@ -689,6 +690,18 @@ export default {
       to: "glm",
       filter: ["**/*", "!**/*.map"],
     },
+    // Rust CLI runtime，只在 Preview（ZCodium Rust）口味随包分发，落到 resources/rust。
+    // 生产口味不构建也不打包，继续只用上面的 glm/ JS bundle。
+    // 目录与 glm/ 平级但分开，保证两套 runtime 的启停与回退互不影响。
+    ...(isPreviewIdentityRequested()
+      ? [
+          {
+            from: `bundled-agents/${targetPlatform.key}/rust`,
+            to: "rust",
+            filter: ["**/*"],
+          },
+        ]
+      : []),
     {
       // agent shell 之前完全依赖宿主系统 PATH，GUI 启动时经常拿不到用户自己装的 rg。
       // 这里把 ripgrep 作为桌面端内置 runtime tool 打进 resources/tools，
