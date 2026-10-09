@@ -26,10 +26,12 @@ jobs:
         with:
           persist-credentials: false
       # Rust 构建不需要 node_modules，但命令走 pnpm script（单一事实来源），
-      # 所以要 pnpm 与 node 而跳过依赖安装。
+      # 所以要 pnpm 与 node 而跳过依赖安装。install-pnpm 必须显式为 true：
+      # setup-workspace 原本把「装 pnpm」与「装依赖」绑在同一个开关上。
       - uses: ./.github/actions/setup-workspace
         with:
           install-dependencies: "false"
+          install-pnpm: "true"
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
