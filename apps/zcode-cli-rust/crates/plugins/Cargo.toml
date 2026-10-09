@@ -1,0 +1,16 @@
+[package]
+name = "zcode-cli-plugins"
+description = "插件市场、清单解析、安装/更新/卸载与内置恢复"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zcode-cli-protocol.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-core-api.workspace = true

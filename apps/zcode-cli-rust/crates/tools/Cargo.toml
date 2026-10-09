@@ -1,0 +1,20 @@
+[package]
+name = "zcode-cli-tools"
+description = "文件工具、Shell、后台任务、MCP、Skills、checkpoint/rewind 与 process cleanup"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zcode-cli-protocol.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-core-api.workspace = true
+zcode-cli-host.workspace = true
+zcode-cli-bash-parse.workspace = true
+zcode-cli-bash.workspace = true
+zcode-cli-plugins.workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "zcode-cli-protocol"
+description = "V4 RPC、command、ACK、snapshot、event、capability 与错误 DTO；只含 schema/type 转换"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+

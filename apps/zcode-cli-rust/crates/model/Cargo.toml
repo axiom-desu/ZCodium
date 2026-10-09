@@ -1,0 +1,18 @@
+[package]
+name = "zcode-cli-model"
+description = "OpenAI/Anthropic provider、SSE、retry、registry 与请求期鉴权"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zcode-cli-protocol.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-core-api.workspace = true
+zcode-cli-host.workspace = true
+zcode-cli-net.workspace = true
