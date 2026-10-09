@@ -1,0 +1,17 @@
+[package]
+name = "zcode-cli-bash"
+description = "POSIX/Windows 进程组、取消与进程树清理"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zcode-cli-protocol.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-core-api.workspace = true
+zcode-cli-bash-parse.workspace = true

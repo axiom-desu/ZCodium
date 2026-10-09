@@ -1,0 +1,17 @@
+[package]
+name = "zcode-cli-state"
+description = "SQLite、session index/history、ACK、TS 只读导入、附件快照与 recovery"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zcode-cli-protocol.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-core-api.workspace = true
+zcode-cli-host.workspace = true

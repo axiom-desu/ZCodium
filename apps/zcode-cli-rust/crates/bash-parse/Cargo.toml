@@ -1,0 +1,12 @@
+[package]
+name = "zcode-cli-bash-parse"
+description = "Shell 命令的词法与语法分析（只读判定、进程替换识别）"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
