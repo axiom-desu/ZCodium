@@ -4,6 +4,9 @@ inputs:
   install-dependencies:
     description: Install pnpm and workspace dependencies
     default: "true"
+  install-pnpm:
+    description: Install pnpm even when skipping the workspace dependency install
+    default: "true"
 runs:
   using: composite
   steps:
@@ -12,7 +15,7 @@ runs:
       shell: bash
       run: node scripts/ci/toolchain.mjs
     - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-      if: inputs.install-dependencies == 'true'
+      if: inputs.install-pnpm == 'true'
       with:
         run_install: false
     - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
