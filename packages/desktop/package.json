@@ -15,6 +15,7 @@
     "prepare:runtime-assets": "node scripts/prepare-runtime-assets.mjs",
     "prepare:remote-assets": "node ../../scripts/prepare-prebuilds.mjs",
     "prepare:agent-bundle": "node scripts/prepare-agent-node-bundle.mjs",
+    "prepare:cli-rust": "node scripts/prepare-cli-rust.mjs",
     "prepare:native-search": "node ../../scripts/prepare-native-search-tools.mjs",
     "prepare:browser-import-helper": "node scripts/build-windows-browser-import-helper.mjs",
     "prepare:macos-window-bounds": "node scripts/build-macos-window-bounds.mjs",

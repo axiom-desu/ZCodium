@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { resolveNativeSearchReleasePlan } from "../../../scripts/native-search-tools-config.mjs";
 import { runCommand } from "../../../scripts/spawn-command.mjs";
 import { getTargetPlatform } from "./target-platform.mjs";
+import { isPreviewIdentityRequested } from "./desktop-product-identity.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(scriptDir, "..");
@@ -22,12 +23,17 @@ const shouldPrepareWindowsBrowserImportHelper =
 // CUA 权限浮窗的吸附数据源。仅 macOS；缺 swiftc 时脚本内部自行降级为跳过（浮窗 fail-open
 // 到屏幕底部，仍可用），所以无条件挂在 darwin 上不会让构建变脆。
 const shouldPrepareMacosWindowBounds = target.os === "darwin";
+// Rust CLI runtime 只在 Preview（ZCodium Rust）口味随包分发：生产口味继续只带 glm/ 的 JS bundle。
+// 见 packages/desktop/scripts/desktop-product-identity.mjs 的身份注释与
+// .agents/specs/cli-rust-runtime.md 的 D4（默认 runtime 仍为 TS，可回退）。
+const shouldPrepareCliRust = isPreviewIdentityRequested();
 
 // 本机桌面包内置 agent 的 JS bundle（prepare:agent-bundle），运行时由 app 的 Electron Node runtime 执行。
 // Linux x64 远端资源由 prepare:remote-assets 生成，两种桌面包消费同一份归档。
 // native-search 归档随仓库分发，准备步骤只做本地解包校验，不需要任何下载源配置。
 const localRuntimeScripts = [
   "prepare:agent-bundle",
+  ...(shouldPrepareCliRust ? ["prepare:cli-rust"] : []),
   ...(nativeSearchReleasePlan.enabled ? ["prepare:native-search"] : []),
   ...(shouldPrepareWindowsBrowserImportHelper ? ["prepare:browser-import-helper"] : []),
   ...(shouldPrepareMacosWindowBounds ? ["prepare:macos-window-bounds"] : []),
