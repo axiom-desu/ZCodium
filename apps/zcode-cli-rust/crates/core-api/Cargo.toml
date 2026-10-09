@@ -1,0 +1,15 @@
+[package]
+name = "zcode-cli-core-api"
+description = "SessionRuntime、SessionStore、ModelPort、ToolPort、ContextPort、AuthPort 与 Clock 公共契约"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zcode-cli-protocol.workspace = true
+zcode-cli-domain.workspace = true
