@@ -1,234 +1,276 @@
-# Math formulas
+# Math Formulas — LaTeX → docx-js Mapping
 
-How equations are numbered, aligned and placed in a `.docx`, and where the plugin's
-help stops. **This plugin has no equation builder.** There is no macro layer, no
-LaTeX-to-OOXML translator and no symbol palette: an equation is an `m:oMath` fragment
-you write yourself and insert through the editor. Everything below is the conventions
-that fragment has to satisfy.
+## Design Philosophy
 
-## 1. Inline or display
+GLM uses **LaTeX as the formula input syntax**, internally converting to docx-js Math objects.
 
-|             | inline                       | display                                        |
-| ----------- | ---------------------------- | ---------------------------------------------- |
-| element     | `m:oMath`                    | `m:oMathPara` containing one or more `m:oMath` |
-| where       | inside a `w:r`, mid-sentence | a child of `w:p`, on its own line              |
-| punctuation | the sentence's               | its own, when it ends a sentence               |
-| numbering   | none                         | optional, on the right                         |
+**Why not write OMML directly?**
+- Models are naturally proficient in LaTeX (abundant in training data)
+- LaTeX is semantically clear and highly readable
+- Conversion layer is encapsulated internally, transparent to the user
 
-The namespace for both is
-`http://schemas.openxmlformats.org/officeDocument/2006/math`.
+## Quick Start
 
-An inline equation is part of the sentence and takes the sentence's punctuation —
-including the comma. A display equation is a sentence of its own: it gets a period
-when the text stops there, and nothing when the text continues on the next line.
+```js
+const { Math: OoxmlMath, MathRun, MathFraction, MathSuperScript,
+        MathSubScript, MathRadical, MathSum, MathSubSuperScript } = require("docx");
 
-A formula short enough to sit inline stays inline. An inline formula that wraps
-across two lines is a display formula that has not been given a line of its own.
-
-## 2. The anatomy of a display equation
-
-```xml
-<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:pPr>
-    <w:jc w:val="center"/>
-    <w:spacing w:before="120" w:after="120"/>
-  </w:pPr>
-  <m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
-    <m:oMathParaPr>
-      <m:jc w:val="center"/>
-    </m:oMathParaPr>
-    <m:oMath>
-      <m:r><m:t>E</m:t></m:r>
-      <m:sSub>
-        <m:e><m:r><m:t>X</m:t></m:r></m:e>
-        <m:sub><m:r><m:t>t</m:t></m:r></m:sub>
-      </m:sSub>
-      <m:r><m:t>=</m:t></m:r>
-      <m:d>
-        <m:dPr>
-          <m:begChr m:val="("/>
-          <m:endChr m:val=")"/>
-          <m:ctrlPr/>
-        </m:dPr>
-        <m:e>
-          <m:f>
-            <m:num><m:r><m:t>1</m:t></m:r></m:num>
-            <m:den><m:r><m:t>N</m:t></m:r></m:den>
-          </m:f>
-        </m:e>
-      </m:d>
-    </m:oMath>
-  </m:oMathPara>
-</w:p>
+// Embed formula in paragraph
+new Paragraph({
+  alignment: AlignmentType.CENTER,
+  children: [
+    new OoxmlMath({
+      children: [/* Math components */]
+    })
+  ]
+})
 ```
 
-`m:oMathParaPr/m:jc` centres the block; `w:pPr/w:jc` centres the paragraph that
-holds it. Set both — some readers honour one and not the other. `m:jc` accepts
-`center`, `left` and `right`.
+## LaTeX → docx-js Conversion Table
 
-The building blocks, all in the `m:` namespace:
+### Basic Operations
 
-| element                         | for                                                                          |
-| ------------------------------- | ---------------------------------------------------------------------------- |
-| `m:r`                           | a run of math text; `m:rPr/m:sty` sets `p` plain, `i` italic, `b` bold, `bi` |
-| `m:f`                           | a fraction — `m:num` over `m:den`                                            |
-| `m:sSub`, `m:sSup`, `m:sSubSup` | a sub- and/or superscript on an `m:e` base                                   |
-| `m:nary`                        | a large operator with `m:sub` / `m:sup` and `m:naryPr/m:chr` for the sign    |
-| `m:d`                           | a delimited group — `m:begChr` / `m:endChr` around an `m:e`                  |
-| `m:func`                        | a function name in `m:fName` applied to an `m:e`                             |
-| `m:limLow`, `m:limUpp`          | limits below or above an operator, rather than beside it                     |
-| `m:acc`, `m:bar`, `m:rad`       | an accent, an overbar, a radical (`m:rad` carries `m:deg`)                   |
-| `m:eqArr`                       | an array of equations, aligned — one `m:e` per row                           |
-| `m:m`                           | a matrix — `m:mr` rows of `m:e` cells                                        |
-| `m:groupChr`                    | a brace or bracket grouping rows of cases                                    |
+| LaTeX | Meaning | docx-js Implementation |
+|-------|---------|----------------------|
+| `x + y` | Addition | `new MathRun("x + y")` |
+| `x - y` | Subtraction | `new MathRun("x − y")` (use Unicode minus `−`) |
+| `x \times y` | Multiplication | `new MathRun("x × y")` |
+| `x \div y` | Division | `new MathRun("x ÷ y")` |
+| `x \pm y` | Plus-minus | `new MathRun("x ± y")` |
+| `x \neq y` | Not equal | `new MathRun("x ≠ y")` |
+| `x \leq y` | Less or equal | `new MathRun("x ≤ y")` |
+| `x \geq y` | Greater or equal | `new MathRun("x ≥ y")` |
 
-Variables are italic by default in math runs; operators, digits and function names
-are not. `m:rPr/m:sty` overrides it when the default is wrong.
+### Fractions
 
-## 3. Numbering
+| LaTeX | docx-js |
+|-------|---------|
+| `\frac{a}{b}` | `new MathFraction({ numerator: [new MathRun("a")], denominator: [new MathRun("b")] })` |
+| `\frac{x+1}{x-1}` | `new MathFraction({ numerator: [new MathRun("x+1")], denominator: [new MathRun("x−1")] })` |
 
-- The number is **not part of the equation**. It is a separate right-aligned run in
-  the same paragraph, or a separate paragraph, so it can be cross-referenced and it
-  survives the equation being edited.
-- The reliable OOXML mechanism is a `SEQ` field: a right-aligned tab at the right
-  margin, then the field. A typed `(3)` does not renumber when an equation is
-  inserted, and a numbered equation set is exactly the thing that grows.
-- Number only equations the text refers to. An unnumbered display equation is
-  perfectly correct and saves the reader a lookup.
-- Number continuously through the document, or per chapter with the counter reset —
-  pick one. `A.1`, `A.2` in an appendix is the convention when the appendix restarts.
-- The number sits in parentheses at the right margin, on the equation's own line.
+### Superscripts & Subscripts
 
-## 4. Alignment
+| LaTeX | docx-js |
+|-------|---------|
+| `x^2` | `new MathSuperScript({ children: [new MathRun("x")], superScript: [new MathRun("2")] })` |
+| `x_i` | `new MathSubScript({ children: [new MathRun("x")], subScript: [new MathRun("i")] })` |
+| `x_i^2` | `new MathSubSuperScript({ children: [new MathRun("x")], subScript: [new MathRun("i")], superScript: [new MathRun("2")] })` |
 
-- One equation per line, centred, is the default and is right for almost everything.
-- A multi-line derivation aligns on a relation — usually the `=` — not on the left
-  edge. In OOXML that is `m:eqArr` with one `m:e` per row, inside a single
-  `m:oMathPara`; the alignment point is the same column on every row.
-- `=` broken across a line goes at the **start** of the continuation line, not at the
-  end of the first. A trailing `=` reads as an unfinished line.
-- A derivation that is not aligned is a sequence of equations; a derivation that is
-  aligned is an argument. The difference is visible at a glance.
-- Do not align with spaces. Math runs are not monospaced, and a hand-aligned column
-  collapses the moment a symbol changes.
+### Radicals
 
-## 5. Breaking across pages
+| LaTeX | docx-js |
+|-------|---------|
+| `\sqrt{x}` | `new MathRadical({ children: [new MathRun("x")] })` |
+| `\sqrt[3]{x}` | `new MathRadical({ children: [new MathRun("x")], degree: [new MathRun("3")] })` |
 
-- A display equation is a paragraph like any other: `w:keepLines` keeps it whole,
-  `w:keepNext` keeps it with the text that introduces it.
-- A long derivation may break between rows, never inside a row. That is a property of
-  `m:eqArr` plus the paragraph's widow/orphan control, not of the equation.
-- An equation separated from the sentence that introduces it is a defect even though
-  nothing in the file is invalid.
+### Summation & Integrals
 
-## 6. Cross-referencing
+| LaTeX | docx-js |
+|-------|---------|
+| `\sum_{i=1}^{n}` | `new MathSum({ subScript: [new MathRun("i=1")], superScript: [new MathRun("n")], children: [new MathRun("aᵢ")] })` |
 
-- A bookmark on the equation's paragraph, and a `REF` field in the text, resolves to
-  the number. A typed "equation (3)" drifts.
-- The bookmark name is prefixed (`eq:`), unique, and says what the equation is:
-  `eq:bayes-update`, not `_Ref12345`.
-- Reference the number, not the page. "Substituting into (7)" survives a reflow;
-  "substituting into the equation on page 12" does not.
+### Greek Letters
 
-## 7. Naming conventions
+Use Unicode characters directly:
 
-There is no macro layer here, so a repeated expression is a repeated fragment. Two
-mitigations, both structural rather than automatic:
+```js
+// LaTeX → Unicode mapping
+const GREEK = {
+  "\\alpha": "α", "\\beta": "β", "\\gamma": "γ", "\\delta": "δ",
+  "\\epsilon": "ε", "\\zeta": "ζ", "\\eta": "η", "\\theta": "θ",
+  "\\iota": "ι", "\\kappa": "κ", "\\lambda": "λ", "\\mu": "μ",
+  "\\nu": "ν", "\\xi": "ξ", "\\pi": "π", "\\rho": "ρ",
+  "\\sigma": "σ", "\\tau": "τ", "\\phi": "φ", "\\chi": "χ",
+  "\\psi": "ψ", "\\omega": "ω",
+  "\\Alpha": "Α", "\\Beta": "Β", "\\Gamma": "Γ", "\\Delta": "Δ",
+  "\\Theta": "Θ", "\\Lambda": "Λ", "\\Pi": "Π", "\\Sigma": "Σ",
+  "\\Phi": "Φ", "\\Psi": "Ψ", "\\Omega": "Ω",
+};
+```
 
-- Factor the expression. A term that appears in five equations is five chances to
-  disagree with itself; a definition it can be substituted into is one.
-- Keep the equations in one part. `word/document.xml` holds them; do not split a
-  derivation across a header, a footer and a text box, because the editor finds
-  nodes by part and a fragment split across parts cannot be edited as one thing.
+## Complete Formula Examples
 
-Where a document genuinely needs a macro layer — `\E` for an expectation, `\norm`
-for a norm — the answer is a template with the macros expanded at build time, not a
-fragment library in the `.docx`.
+### Quadratic Formula
 
-## 8. Interaction with the gate
+LaTeX: `x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}`
 
-Three rules touch equations, and two of them are surprising:
+```js
+new OoxmlMath({
+  children: [
+    new MathRun("x = "),
+    new MathFraction({
+      numerator: [
+        new MathRun("−b ± "),
+        new MathRadical({
+          children: [
+            new MathSuperScript({
+              children: [new MathRun("b")],
+              superScript: [new MathRun("2")],
+            }),
+            new MathRun(" − 4ac"),
+          ],
+        }),
+      ],
+      denominator: [new MathRun("2a")],
+    }),
+  ],
+})
+```
 
-- **`blank-pages` counts a display equation as an empty paragraph.** The rule looks
-  for text, a page break, or a drawing; an `m:oMathPara` paragraph has none of the
-  three, because a drawing means `wp:inline` or `wp:anchor` and math is neither. Five
-  or more consecutive display equations with no text between them is reported as a
-  blank-page pattern. Either put a line of text between them, or scope the rule with
-  `--only` and record why.
-- **`line-spacing` skips an equation paragraph**, for the same reason: it has no text.
-  Equations may carry their own leading without tripping the rule.
-- **`cjk-indent` skips an equation paragraph** as well, because it contains no CJK
-  text. An equation between two Chinese paragraphs does not need an indent and does
-  not need to be exempted by hand.
+### Pythagorean Theorem
 
-A paragraph that mixes Chinese text and an inline `m:oMath` is body text for all
-three rules, and behaves accordingly.
+LaTeX: `a^2 + b^2 = c^2`
 
-## 9. Checklist
+```js
+new OoxmlMath({
+  children: [
+    new MathSuperScript({ children: [new MathRun("a")], superScript: [new MathRun("2")] }),
+    new MathRun(" + "),
+    new MathSuperScript({ children: [new MathRun("b")], superScript: [new MathRun("2")] }),
+    new MathRun(" = "),
+    new MathSuperScript({ children: [new MathRun("c")], superScript: [new MathRun("2")] }),
+  ],
+})
+```
 
-- Inline formulas part of the sentence; display formulas on their own line.
-- `m:oMathParaPr/m:jc` and `w:pPr/w:jc` both set on every display equation.
-- Numbered equations numbered by a `SEQ` field, right-aligned, in parentheses; only
-  the ones the text refers to.
-- Multi-line derivations in `m:eqArr`, aligned on the relation, breaking only
-  between rows.
-- Every referenced equation carrying a `eq:` bookmark and a `REF` field in the text.
-- No run of five or more consecutive display equations without intervening text, or
-  `blank-pages` scoped and the reason recorded.
+### Trigonometric Identity
 
-## 10. The LaTeX → OOXML conversion table
+LaTeX: `\sin^2\theta + \cos^2\theta = 1`
 
-Formulas arrive from LaTeX sources more often than they are typed. The mapping
-below is the one that matters — everything else follows from it:
+```js
+new OoxmlMath({
+  children: [
+    new MathSuperScript({ children: [new MathRun("sin")], superScript: [new MathRun("2")] }),
+    new MathRun("θ + "),
+    new MathSuperScript({ children: [new MathRun("cos")], superScript: [new MathRun("2")] }),
+    new MathRun("θ = 1"),
+  ],
+})
+```
 
-| LaTeX | OOXML / this plugin | note |
-| --- | --- | --- |
-| `$...$` | inline run, no special markup | the equation is text with italic variables |
-| `\[...\]` / `equation` | display paragraph, centred, own spacing | never a paragraph that merely looks centred |
-| `\frac{a}{b}` | `<m:f><m:num><m:r>a</m:r></m:num><m:den>…</m:den></m:f>` | numerator/denominator, not a slash |
-| `x^{2}` | `<m:sSup><m:e><m:r>x</m:r></m:e><m:sup>…</m:sup></m:sSup>` | superscript, not a caret |
-| `x_{i}` | `<m:sSub>` … `</m:sSub>` | subscript, same shape as superscript |
-| `\sqrt{x}` | `<m:rad><m:deg/><m:e>…</m:e></m:rad>` | the radical's degree is empty for a square root |
-| `\sum_{i=1}^{n}` | `<m:nary><m:sub>…</m:sub><m:sup>…</m:sup>` | n-ary with both limits |
-| `\int`, `\prod`, `\lim` | the same `<m:nary>` shape | one construct covers the class |
-| `\left(...\right)` | `<m:d>` with the delimiter as an attribute | the fence grows with its content |
-| `\begin{aligned}...\end{aligned}` | one display equation with aligned rows | alignment points are `&`, as in LaTeX |
-| `\begin{matrix}` | `<m:m>` with `<m:mr>` rows | matrix rows, not a table |
-| `\alpha`, `\to`, `\in` | the Unicode character (α, →, ∈) | never a picture of a symbol |
-| `\text{...}` | a plain run inside the math | the only way to get spaces inside a formula |
+## Common Exam Formula Templates
 
-The rule underneath the table: **OMML is a tree of function applications**,
-and LaTeX's commands map onto its elements one-for-one. A conversion that
-flattens a fraction into `a/b` has not converted the formula; it has destroyed
-it.
+### Middle School Math
 
-## 11. Worked examples
+```js
+// Quadratic discriminant
+const discriminant = new OoxmlMath({
+  children: [
+    new MathRun("Δ = "),
+    new MathSuperScript({ children: [new MathRun("b")], superScript: [new MathRun("2")] }),
+    new MathRun(" − 4ac"),
+  ],
+});
 
-The three shapes that cover most of what arrives:
+// Circle area
+const circleArea = new OoxmlMath({
+  children: [
+    new MathRun("S = π"),
+    new MathSuperScript({ children: [new MathRun("r")], superScript: [new MathRun("2")] }),
+  ],
+});
+```
 
-    inline:      E = mc^2
-    display:     ∫_0^∞ e^{-x^2} dx = √π / 2
-    aligned:     f(x) = (x+1)^2
-                       = x^2 + 2x + 1
+### High School Math
 
-In OMML the third is one `<m:oMathPara>` containing one `<m:oMath>` per row,
-with the alignment point marked. The numbering (§3) is a property of the
-paragraph, and the cross-reference (§6) points at it.
+```js
+// Logarithm change of base
+const logChange = new OoxmlMath({
+  children: [
+    new MathSubScript({ children: [new MathRun("log")], subScript: [new MathRun("a")] }),
+    new MathRun("b = "),
+    new MathFraction({
+      numerator: [new MathRun("ln b")],
+      denominator: [new MathRun("ln a")],
+    }),
+  ],
+});
 
-## 12. Complexity fallback
+// Arithmetic series sum
+const arithmeticSum = new OoxmlMath({
+  children: [
+    new MathSubScript({ children: [new MathRun("S")], subScript: [new MathRun("n")] }),
+    new MathRun(" = "),
+    new MathFraction({
+      numerator: [
+        new MathRun("n("),
+        new MathSubScript({ children: [new MathRun("a")], subScript: [new MathRun("1")] }),
+        new MathRun(" + "),
+        new MathSubScript({ children: [new MathRun("a")], subScript: [new MathRun("n")] }),
+        new MathRun(")"),
+      ],
+      denominator: [new MathRun("2")],
+    }),
+  ],
+});
+```
 
-Some formulas are not worth converting — a multi-case definition with
-conditionals, a commutative diagram, a proof tree. The fallback strategy:
+### Physics
 
-1. **Try the conversion.** The table above covers more than it appears.
-2. **If the formula exceeds ~3 levels of nesting or needs a construct the
-   table does not have**, render it as a **vector image** (from LaTeX via
-   `dvisvgm`/`pdfcrop`, or matplotlib's mathtext) at 300 dpi at final size.
-3. **The image carries a text alternative** — the LaTeX source in the
-   document's comments or an adjacent caption line — because an image of a
-   formula cannot be searched, copied, or read by a screen reader.
-4. **Record the choice** in the delivery note: which formulas are images and
-   why. A reader who finds an image-formula without an explanation assumes the
-   generator was lazy.
+```js
+// Newton's second law
+const newton2 = new OoxmlMath({
+  children: [new MathRun("F = ma")],
+});
 
-The fallback is a decision with a record, not a silent degradation.
+// Kinetic energy
+const kineticEnergy = new OoxmlMath({
+  children: [
+    new MathSubScript({ children: [new MathRun("E")], subScript: [new MathRun("k")] }),
+    new MathRun(" = "),
+    new MathFraction({
+      numerator: [new MathRun("1")],
+      denominator: [new MathRun("2")],
+    }),
+    new MathRun("m"),
+    new MathSuperScript({ children: [new MathRun("v")], superScript: [new MathRun("2")] }),
+  ],
+});
+```
+
+## Complexity Fallback Strategy
+
+When formulas are too complex (nesting >3 levels) for docx-js Math, **fall back to matplotlib PNG rendering:**
+
+```python
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+def latex_to_png(latex_str: str, output_path: str, fontsize: int = 14, dpi: int = 200):
+    """Render LaTeX formula as PNG image"""
+    fig, ax = plt.subplots(figsize=(0.1, 0.1))
+    ax.axis("off")
+    text = ax.text(0, 0.5, f"${latex_str}$", fontsize=fontsize,
+                   transform=ax.transAxes, verticalalignment="center")
+
+    fig.canvas.draw()
+    bbox = text.get_window_extent(fig.canvas.get_renderer())
+    fig.set_size_inches(bbox.width / dpi + 0.2, bbox.height / dpi + 0.2)
+
+    plt.savefig(output_path, dpi=dpi, bbox_inches="tight",
+                pad_inches=0.05, transparent=True)
+    plt.close()
+    return output_path
+```
+
+Then embed the PNG in the document:
+
+```js
+const formulaImg = fs.readFileSync("formula.png");
+new Paragraph({
+  alignment: AlignmentType.CENTER,
+  children: [new ImageRun({
+    data: formulaImg,
+    transformation: { width: 300, height: 40 }, // adjust based on actual size
+    type: "png",
+  })],
+})
+```
+
+**Fallback rules:**
+- Nested fractions >2 levels → fallback
+- Matrices/determinants → fallback
+- Complex integrals (multiple integrals + limits + integrand) → fallback
+- Piecewise functions → fallback
+- All other cases → prefer docx-js Math

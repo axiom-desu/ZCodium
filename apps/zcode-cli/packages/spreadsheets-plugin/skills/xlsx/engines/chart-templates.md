@@ -1,120 +1,164 @@
-# Chart templates
+# Chart Templates — Implementation Code
 
-Ready-made chart configurations for the recurring claims, in XlsxWriter and
-openpyxl syntax. Palette and typography from `engines/design.md`; the encoding
-decisions from `engines/chart.md`. Each template names the claim it serves —
-use it only for that claim.
+> This file contains chart implementation code. **Read it together with `engines/chart.md`** whenever the task involves charts.
 
-Shared palette (one accent, greys for the rest):
+---
 
-    ACCENT   = "#1F6FEB"   # the one series that matters
-    SUPPORT  = "#8A94A6"   # every other series
-    GRID     = "#E3E7EE"
-    INK      = "#1A1A1A"
+## Native Excel Charts (openpyxl.chart)
 
-## 1. Magnitude by category (horizontal bar)
+### Bar Chart
+```python
+from openpyxl.chart import BarChart, Reference
+from templates.base import make_chart_title
 
-Claim: "X is bigger than Y". Categories with long names.
+chart = BarChart()
+chart.type = "col"
+chart.title = make_chart_title("Revenue by Product", 14)
+chart.y_axis.title = make_chart_title("Revenue ($)", 10, bold=False, axis=True)
+chart.x_axis.title = make_chart_title("Product", 10, bold=False)
 
-    chart = workbook.add_chart({"type": "bar"})
-    chart.add_series({
-        "name": "Revenue",
-        "categories": "=Data!$A$2:$A$13",
-        "values": "=Data!$B$2:$B$13",
-        "fill": {"color": ACCENT},
-        "data_labels": {"value": True},
-    })
-    chart.set_legend({"none": True})
-    chart.set_x_axis({"name": "Revenue ($mm)", "num_format": "$#,##0"})
-    chart.set_y_axis({"reverse": True})       # first row at the top
+data = Reference(ws, min_col=3, min_row=4, max_col=3, max_row=last_row)
+cats = Reference(ws, min_col=2, min_row=5, max_row=last_row)
 
-The `reverse` on the category axis is what puts the largest bar at the top —
-without it the chart reads bottom-up.
+chart.add_data(data, titles_from_data=True)
+chart.set_categories(cats)
+chart.shape = 4
+chart.width = 18
+chart.height = 10
 
-## 2. Trend over time (line)
+ws.add_chart(chart, "J4")
+```
 
-Claim: "it went up since March".
+### Line Chart
+```python
+from openpyxl.chart import LineChart, Reference
+from templates.base import make_chart_title
 
-    chart = workbook.add_chart({"type": "line"})
-    chart.add_series({
-        "name": "Revenue",
-        "categories": "=Data!$A$2:$A$25",     # dates, temporal
-        "values": "=Data!$B$2:$B$25",
-        "line": {"color": ACCENT, "width": 2.25},
-    })
-    chart.set_x_axis({"date_axis": True, "num_format": "mmm yyyy"})
-    chart.set_y_axis({"name": "Revenue ($mm)"})
+chart = LineChart()
+chart.title = make_chart_title("Monthly Trend", 14)
+chart.y_axis.title = make_chart_title("Amount", 10, bold=False, axis=True)
+chart.style = 10
 
-`date_axis: True` makes the axis calendar-aware — equal time spacing even when
-a month is missing from the data.
+data = Reference(ws, min_col=3, max_col=5, min_row=4, max_row=last_row)
+cats = Reference(ws, min_col=2, min_row=5, max_row=last_row)
 
-## 3. This period vs last (clustered column)
+chart.add_data(data, titles_from_data=True)
+chart.set_categories(cats)
+for series in chart.series:
+    series.smooth = True
 
-Claim: "growth came from these two regions".
+ws.add_chart(chart, "J4")
+```
 
-    chart = workbook.add_chart({"type": "column"})
-    chart.add_series({"name": "FY2024", "categories": "=Data!$A$2:$A$9",
-                      "values": "=Data!$B$2:$B$9", "fill": {"color": SUPPORT}})
-    chart.add_series({"name": "FY2025", "categories": "=Data!$A$2:$A$9",
-                      "values": "=Data!$C$2:$C$9", "fill": {"color": ACCENT}})
+### Pie Chart
+```python
+from openpyxl.chart import PieChart, Reference
+from openpyxl.chart.label import DataLabelList
+from templates.base import make_chart_title
 
-The current period takes the accent; the comparison period is grey. Growth
-numbers go in the caption, not as a third series.
+chart = PieChart()
+chart.title = make_chart_title("Market Share", 14)
 
-## 4. Composition (stacked bar, 100%)
+data = Reference(ws, min_col=3, min_row=4, max_row=last_row)
+cats = Reference(ws, min_col=2, min_row=5, max_row=last_row)
 
-Claim: "the mix shifted".
+chart.add_data(data, titles_from_data=True)
+chart.set_categories(cats)
 
-    chart = workbook.add_chart({"type": "bar", "subtype": "percent_stacked"})
+chart.dataLabels = DataLabelList()
+chart.dataLabels.dLblPos = 'bestFit'
+chart.dataLabels.showLeaderLines = True
+chart.dataLabels.showCatName = True
+chart.dataLabels.showPercent = True
+chart.dataLabels.showVal = False
 
-`percent_stacked` normalises each row to 100%. Use it when the claim is about
-share; use plain `stacked` when the absolute total also matters and say so in
-the axis title.
+ws.add_chart(chart, "J4")
+```
 
-## 5. Distribution (histogram via column)
+### Combo Chart (Bar + Line, dual axis)
+```python
+from openpyxl.chart import BarChart, LineChart, Reference
+from templates.base import make_chart_title
 
-Claim: "most values sit here".
+bar = BarChart()
+bar.add_data(Reference(ws, min_col=2, max_col=2, min_row=1, max_row=10), titles_from_data=True)
+bar.title = make_chart_title("Revenue vs Growth", 14)
+bar.y_axis.title = make_chart_title("Revenue ($)", 10, bold=False, axis=True)
 
-Build the bins with `FREQUENCY`/`COUNTIFS` in the sheet, then plot the bin
-counts as a column chart with no gaps:
+line = LineChart()
+line.add_data(Reference(ws, min_col=3, max_col=3, min_row=1, max_row=10), titles_from_data=True)
+line.y_axis.title = make_chart_title("Growth %", 10, bold=False, axis=True)
+line.y_axis.axId = 200
 
-    chart = workbook.add_chart({"type": "column"})
-    chart.add_series({... "fill": {"color": ACCENT}})
-    chart.set_legend({"none": True})
-    chart.set_x_axis({"name": "Amount ($)"})
-    chart.set_y_axis({"name": "Count"})
+bar += line
+ws.add_chart(bar, "E2")
+```
 
-Excel has no histogram mark; the bins are a column of formulas, which also
-makes the bin edges auditable.
+---
 
-## 6. Relationship (scatter)
+## Matplotlib Charts (embedded as images)
 
-Claim: "these two move together".
+### Chinese Font Setup
+```python
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 
-    chart = workbook.add_chart({"type": "scatter"})
-    chart.add_series({
-        "name": "Accounts",
-        "categories": "=Data!$A$2:$A$200",   # x values, quantitative
-        "values": "=Data!$B$2:$B$200",       # y values
-        "marker": {"type": "circle", "size": 5, "fill": {"color": ACCENT}},
-        "line": {"none": True},
-    })
+fm.fontManager.addfont('/usr/share/fonts/truetype/chinese/NotoSansSC-Regular.ttf')
+fm.fontManager.addfont('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+# Noto Sans SC for Chinese, DejaVu Sans catches symbols Noto Sans SC lacks (²³♠ etc.)
+plt.rcParams['font.sans-serif'] = ['Noto Sans SC', 'DejaVu Sans']
+plt.rcParams['axes.unicode_minus'] = False
+```
 
-Both axes start at zero or the truncation is stated. A trendline only when the
-claim is the fit — and then the fit's R² goes in the caption.
+### Standard Template
+```python
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.bar(categories, values, color='#4A90D9')
+ax.set_title('Chart Title', fontsize=14, fontweight='bold', pad=15)
+ax.set_xlabel('X Label', fontsize=11)
+ax.set_ylabel('Y Label', fontsize=11)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.tick_params(axis='x', rotation=45)
+fig.tight_layout(pad=2.0)
+plt.legend(loc='best', fontsize='small')
+fig.savefig('chart.png', dpi=150, bbox_inches='tight', facecolor='white')
+plt.close()
+```
 
-## 7. Top-N with remainder
+### Embed in Excel (preserving aspect ratio)
+```python
+from openpyxl.drawing.image import Image as XlImage
+from PIL import Image as PILImage
 
-Claim: "the head dominates".
+pil_img = PILImage.open('chart.png')
+orig_w, orig_h = pil_img.size
+target_w = 600
+scale = target_w / orig_w
 
-Compute the top-N and an "other" row in the sheet (`scenes/analyze-recipes.md`
-§5), then template 1 over N+1 rows. The "other" bar is drawn in SUPPORT — it
-is context, not a category.
+xl_img = XlImage('chart.png')
+xl_img.width = target_w
+xl_img.height = int(orig_h * scale)
 
-## Anti-patterns (all three fail review)
+ws.add_image(xl_img, 'B20')
+```
 
-- `type: "pie"` with more than ~5 slices, or 3-D anything.
-- A secondary y-axis: two scales on one plot invites the reader to compare
-  things that cannot be compared. Use two charts.
-- A gradient or picture fill on a data series: the fill now encodes nothing
-  and the legend lies.
+### Smart Chart Recommend Function
+```python
+def recommend_chart(df, x_col, y_cols):
+    if pd.api.types.is_datetime64_any_dtype(df[x_col]):
+        return "line"
+    n_categories = df[x_col].nunique()
+    n_series = len(y_cols)
+    if n_series == 1:
+        vals = df[y_cols[0]]
+        if vals.sum() > 95 and vals.sum() < 105:
+            return "pie" if n_categories <= 5 else "bar_horizontal"
+    if n_categories <= 6:
+        return "bar_grouped" if n_series > 1 else "bar"
+    elif n_categories <= 15:
+        return "bar_horizontal"
+    else:
+        return "bar_top10"
+```

@@ -1,241 +1,386 @@
-# Chart templates
+# Chart Templates — matplotlib Template Library
 
-What a chart is made of, what it must satisfy when it lands in a `.docx`, and the
-checks that catch the failures. This plugin has no chart generator: a chart arrives
-as an inline image inside a run, so everything here is about the image's extent, the
-type inside it, and the caption around it.
+## Design Philosophy
 
-## 1. The five parts of a chart
+GLM uses **matplotlib as the primary chart engine**. Advantages:
+- High chart quality, print-ready
+- Full style control, consistent with document palette
+- Supports complex chart types (heatmap, radar, box plot, etc.)
+- Reliable CJK rendering (with SimHei font configured)
 
-Every chart in the reference collection is the same five pieces, and a chart missing
-one of them is usually a chart that was never finished:
+**When to use native Word charts?**
+Only when the user explicitly requests "editable charts." Default is always matplotlib PNG embedding.
 
-| part        | what it is                                   | what goes wrong                                                       |
-| ----------- | -------------------------------------------- | --------------------------------------------------------------------- |
-| frame       | the axis lines and the plot background       | a full box around the data adds ink and no information                |
-| axes        | the two scales, their limits and their ticks | auto-chosen limits that make a 2% difference look like a collapse     |
-| tick labels | the numbers on the ticks                     | scientific notation, or `×10³` factored onto the axis                 |
-| series      | the data itself                              | thinner than the frame, so the data is quieter than its own container |
-| legend      | what each series is                          | repeating what the axis label already says                            |
+## Base Configuration
 
-The frame is drawn with two axis lines meeting at the origin — no top, no right, no
-box. The series is drawn at one and a half to three times the weight of the frame.
-That ratio is the whole reason a chart is readable at arm's length: the loudest ink
-on the page is the data.
+```python
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.font_manager import FontProperties
 
-## 2. The size rule
+# ── CJK Font ──
+_FONT_PATHS = [
+    "/System/Library/Fonts/Supplemental/SimHei.ttf",       # macOS
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",       # Linux
+    "/usr/share/fonts/truetype/chinese/SimHei.ttf",        # custom install
+    "./SimHei.ttf",                                         # current dir
+]
+ZH_FONT = None
+for _fp in _FONT_PATHS:
+    try:
+        ZH_FONT = FontProperties(fname=_fp)
+        break
+    except:
+        continue
 
-**Compile the chart at the size it will occupy.** A chart built at one width and
-scaled to another scales its type with everything else, so a chart reduced to 60%
-carries type at 60% of the size you chose — and the type is the first thing to
-become unreadable.
+plt.rcParams["axes.unicode_minus"] = False
 
-The size is set on the chart, in absolute units, not inherited:
+# ── Palette Adapter ──
+def make_chart_palette(accent: str, surface: str = "#F2F4F6") -> dict:
+    """Generate chart palette from document palette.accent"""
+    return {
+        "primary": accent,
+        "series": _generate_series_colors(accent, 6),
+        "grid": "#E0E0E0",
+        "bg": "white",
+        "text": "#333333",
+        "surface": surface,
+    }
 
-- width and height in centimetres, chosen against the text column;
-- the chart's own margins trimmed to a couple of millimetres, so the image's
-  bounding box is the plot plus its labels and nothing else.
+def _generate_series_colors(base_hex: str, count: int) -> list:
+    """Generate series colors via hue rotation from base color"""
+    import colorsys
+    base = tuple(int(base_hex.lstrip("#")[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+    h, s, v = colorsys.rgb_to_hsv(*base)
+    colors = []
+    for i in range(count):
+        hi = (h + i * (1.0 / count)) % 1.0
+        r, g, b = colorsys.hsv_to_rgb(hi, min(s * 0.9, 1.0), min(v * 1.05, 1.0))
+        colors.append(f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}")
+    return colors
 
-In the `.docx`, the image extent is `wp:extent/@cx` and `@cy` in EMU. **1 twip is
-635 EMU**, so an image that should fill a text column of N twips needs
-`cx = N × 635`. `image-overflow` makes exactly that comparison — an image wider than
-the narrowest usable text column across all sections fails the gate, and it compares
-width only.
+# ── Universal Export ──
+def save_chart(fig, path: str, dpi: int = 200):
+    """Save chart with uniform DPI. Square charts (pie/radar) use fixed padding to preserve 1:1 ratio."""
+    w, h = fig.get_size_inches()
+    if abs(w - h) < 0.1:
+        fig.savefig(path, dpi=dpi, bbox_inches="tight", pad_inches=0.3,
+                    facecolor="white", edgecolor="none")
+    else:
+        fig.savefig(path, dpi=dpi, bbox_inches="tight", pad_inches=0.1,
+                    facecolor="white", edgecolor="none")
+    plt.close(fig)
+    return path
+```
 
-Consequences worth knowing:
+## Template 1: Bar Chart
 
-- The narrowest column wins, not the first one. A document whose second section has
-  a wider margin is judged against the narrower of the two.
-- The check is on the drawing's declared extent. An image whose extent says 16 cm in
-  a 15 cm column fails even if the picture inside it has white space at the edges.
-- Landscape and portrait sections in the same document produce very different
-  columns; measure against the section the chart actually sits in.
+```python
+def bar_chart(categories: list, values: list, title: str = "",
+              ylabel: str = "", palette: dict = None, output: str = "bar.png"):
+    """
+    Basic bar chart.
+    categories: ["Q1", "Q2", "Q3", "Q4"]
+    values: [120, 150, 180, 200]
+    """
+    p = palette or make_chart_palette("#5B8DB8")
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-## 3. Type inside the chart
+    bars = ax.bar(categories, values, color=p["primary"], width=0.6, edgecolor="white")
 
-- The chart's tick labels and axis labels are set in the chart's own family and at a
-  size chosen against the document's body size, not against the chart's own canvas.
-  The rule of thumb: a tick label is never smaller than the body text it will sit
-  beside.
-- A chart set in a sans family inside a serif document is fine, and is the common
-  choice — tick labels are short and the sans shapes survive being small. What is not
-  fine is a third family appearing only inside the chart.
-- Pin the chart's compatibility level. Charting packages change behaviour between
-  versions, and a chart that compiled one way last year can compile differently
-  today without any change to its source. `compat=newest` is a decision; so is
-  pinning an older level.
-- Tick label style is set explicitly — the family and the size of the numbers are
-  not inherited from anything you control.
+    # Data labels
+    for bar, val in zip(bars, values):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(values) * 0.02,
+                str(val), ha="center", va="bottom", fontsize=10,
+                fontproperties=ZH_FONT, color=p["text"])
 
-## 4. Numbers on the axes
+    if title:
+        ax.set_title(title, fontproperties=ZH_FONT, fontsize=14, pad=15, color=p["text"])
+    if ylabel:
+        ax.set_ylabel(ylabel, fontproperties=ZH_FONT, fontsize=11, color=p["text"])
 
-Three specific failures, all of which come from the defaults:
+    ax.set_xticklabels(categories, fontproperties=ZH_FONT, fontsize=10)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="y", alpha=0.3, color=p["grid"])
 
-- **Scientific notation.** A tick reading `1.5e-3` on a business chart is a defect.
-  The fix is a number-format key on the chart, not a manual tick list.
-- **A factored scale.** An axis labelled `×10⁶` with ticks reading `1 2 3` is the
-  same defect in a different disguise. Turn scaled ticks off and let the labels carry
-  the magnitude.
-- **Too many ticks.** Auto-chosen tick density on a narrow chart produces labels
-  that collide. Set the tick positions explicitly and set their labels explicitly
-  when the labels are not plain numbers — `T`, `2T`, `3T` rather than `15`, `30`,
-  `45` is the pattern: a symbolic label on a numeric tick.
+    if len(categories) > 6:
+        plt.xticks(rotation=45, ha="right")
 
-Air above the data (`enlargelimits`) is not padding. Without it the topmost point
-sits exactly on the frame and reads as clipped.
+    return save_chart(fig, output)
+```
 
-## 5. Series, and where the data lives
+### Grouped Bar Chart
 
-- A series is either an expression or a file. An expression is written once as a
-  named function and referenced, so a parameter change is one edit and not five.
-- Data in a file is better than data inline, for a document that will be revised:
-  the numbers live in one place, they can be regenerated, and the chart source stays
-  readable. Keep the data file next to the output, not embedded in the document
-  source.
-- Several series share one axis only when they share a scale. Two series with
-  different units on one axis is a chart that cannot be read.
-- Smoothing is a claim about the data. `smooth` on a series of discrete measurements
-  invents values between the points; leave the points alone unless the underlying
-  function really is continuous.
-- Markers are for discrete observations, lines are for continuous functions. A line
-  through five measured points asserts something the measurements do not.
+```python
+def grouped_bar(categories: list, groups: dict, title: str = "",
+                ylabel: str = "", palette: dict = None, output: str = "grouped_bar.png"):
+    """
+    groups: {"Product A": [10, 20, 30], "Product B": [15, 25, 35]}
+    """
+    p = palette or make_chart_palette("#5B8DB8")
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-## 6. Annotation
+    x = np.arange(len(categories))
+    n = len(groups)
+    width = 0.8 / n
 
-- An annotation band is a filled rectangle drawn **after** the series, so it sits on
-  top. Draw it first and the series disappears under it.
-- A tinted band is a tint, not a colour. `green!10` — ten percent of the colour —
-  is the pattern: enough to separate a region, not enough to compete with the data
-  or to eat a printer's toner.
-- A band needs a legend entry or a caption note, or the reader does not know what it
-  marks. An unexplained shaded region is decoration.
+    for i, (name, vals) in enumerate(groups.items()):
+        offset = (i - n / 2 + 0.5) * width
+        bars = ax.bar(x + offset, vals, width, label=name, color=p["series"][i % len(p["series"])])
 
-## 7. Colour, and the greyscale test
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, fontproperties=ZH_FONT, fontsize=10)
+    ax.legend(prop=ZH_FONT, frameon=False)
+    if title:
+        ax.set_title(title, fontproperties=ZH_FONT, fontsize=14, pad=15)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="y", alpha=0.3)
 
-- One hue per series, or one hue at several lightness steps when there are more
-  series than hues. Never two mid-tone colours of similar lightness — they are
-  indistinguishable to a reader with reduced colour vision and identical in a
-  greyscale print.
-- Print one page in black and white before delivering. If two series merge, they
-  needed a different lightness or a different marker, not a different colour.
-- Restraint: a chart with an accent colour for the series that matters and grey for
-  the rest says more than a chart with five saturated colours.
+    return save_chart(fig, output)
+```
 
-## 8. The caption
+## Template 2: Line Chart
 
-- Caption **below** a figure, above a table. Readers navigate by this convention;
-  inverting it makes a caption read as a stray heading.
-- The label goes immediately after the caption and is prefixed (`fig:`). A label on
-  the image itself resolves to the enclosing counter and produces silently wrong
-  references.
-- The caption says what the chart shows and what the reader should take from it. "图
-  3 各方案耗时对比" is a title; "图 3 方案 B 在 10 万行以上明显优于方案 A" is a
-  caption.
-- Every chart is cross-referenced from the body text. A chart nothing points at is
-  decoration.
+```python
+def line_chart(x_data: list, series: dict, title: str = "",
+               xlabel: str = "", ylabel: str = "", palette: dict = None,
+               output: str = "line.png"):
+    """
+    series: {"Revenue": [100, 120, 150, 180], "Cost": [80, 90, 100, 110]}
+    """
+    p = palette or make_chart_palette("#5B8DB8")
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-## 9. Checklist before handing a document with charts over
+    for i, (name, values) in enumerate(series.items()):
+        color = p["series"][i % len(p["series"])]
+        ax.plot(x_data, values, marker="o", markersize=5, linewidth=2,
+                label=name, color=color)
 
-- Every chart compiled at the width it occupies, type inside it at or above body
-  size.
-- `image-overflow` passes: every `wp:extent` within the narrowest usable text column
-  (twips × 635 EMU).
-- No scientific notation and no factored scale on any axis.
-- One family per chart, two at most across the document.
-- Series distinguishable in greyscale; annotation bands tinted, not saturated.
-- Caption below, label after the caption, every chart referenced from the text.
-- `postcheck.py report.docx --only image-overflow,blank-pages,line-spacing`
+    if title:
+        ax.set_title(title, fontproperties=ZH_FONT, fontsize=14, pad=15)
+    if xlabel:
+        ax.set_xlabel(xlabel, fontproperties=ZH_FONT, fontsize=11)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontproperties=ZH_FONT, fontsize=11)
 
-## Source
+    ax.legend(prop=ZH_FONT, frameon=False, loc="best")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(True, alpha=0.3)
 
-The structure of this brief — a chart as its own document with trimmed margins and
-an explicitly pinned compatibility level, two axis lines rather than a box, the
-series drawn heavier than the frame, tick label style set explicitly, the
-fixed-decimal number format and the disabled scaled ticks, symbolic labels on
-numeric ticks, the named-function pattern for a parametrised expression, data held
-in a separate file and plotted from it, and annotation bands drawn over the series
-as a tint — follows the conventions of:
+    if len(x_data) > 6:
+        plt.xticks(rotation=45, ha="right")
 
-    xinychen/awesome-latex-drawing
-    https://github.com/xinychen/awesome-latex-drawing
-    Copyright (c) 2019 Xinyu Chen
-    MIT License — https://github.com/xinychen/awesome-latex-drawing/blob/master/LICENSE
+    return save_chart(fig, output)
+```
 
-The knowledge above is restated in this repository's own words and in `.docx` terms;
-no upstream file is distributed with this plugin.
+## Template 3: Pie Chart
 
-## 10. The six chart types
+```python
+def pie_chart(labels: list, values: list, title: str = "",
+              palette: dict = None, output: str = "pie.png"):
+    """Pie chart — auto-merges slices below 3% into 'Other'"""
+    p = palette or make_chart_palette("#5B8DB8")
+    fig, ax = plt.subplots(figsize=(8, 8))
 
-The parts above are shared; each type adds its own rules. Choose from the
-claim, not from habit.
+    # Merge slices below 3% into "Other"
+    total = sum(values)
+    merged_labels, merged_values = [], []
+    other = 0
+    for lbl, val in zip(labels, values):
+        if val / total < 0.03:
+            other += val
+        else:
+            merged_labels.append(lbl)
+            merged_values.append(val)
+    if other > 0:
+        merged_labels.append("Other")
+        merged_values.append(other)
 
-### Bar chart
+    colors = p["series"][:len(merged_labels)]
+    wedges, texts, autotexts = ax.pie(
+        merged_values, labels=merged_labels, colors=colors,
+        autopct="%1.1f%%", startangle=90, pctdistance=0.75,
+        textprops={"fontproperties": ZH_FONT, "fontsize": 11}
+    )
 
-- **Use for**: magnitude comparison across categories.
-- **Rules**: bars start at zero, always. Horizontal bars when category labels
-  are long; vertical when they are short. One series in the accent, the rest
-  grey. Data labels on the marks; a legend only when the marks cannot be
-  labelled. Sorted descending unless the order carries meaning.
-- **Grouped bars** (this vs last): the current period takes the accent, the
-  comparison period is grey. Growth numbers go in the caption, never as a
-  third series.
+    for t in autotexts:
+        t.set_fontsize(10)
+        t.set_color("white")
 
-### Line chart
+    if title:
+        ax.set_title(title, fontproperties=ZH_FONT, fontsize=14, pad=20)
 
-- **Use for**: trend over time.
-- **Rules**: a temporal axis with calendar-aware ticks (equal time spacing even
-  when a period is missing). Markers only when the individual points matter;
-  a smooth line without markers hides gaps. Truncated axes are allowed here —
-  the claim is change — and the truncation must be visible in the axis labels.
-- **Many series**: small multiples (one panel per series) beat ten lines on one
-  plot.
+    return save_chart(fig, output)
+```
 
-### Pie chart
+## Template 4: Box Plot
 
-- **Use for**: part-to-whole at a single moment, with few parts.
-- **Rules**: ≤ 5 slices, or the chart becomes unreadable. Slices sorted from
-  twelve o'clock clockwise, largest first. Direct labels with values, never a
-  legend alone. Never a 3-D pie: the perspective distorts the areas the chart
-  exists to compare.
+```python
+def box_plot(data: dict, title: str = "", ylabel: str = "",
+             palette: dict = None, output: str = "box.png"):
+    """
+    data: {"Class A": [78, 82, 91, ...], "Class B": [65, 70, 88, ...]}
+    """
+    p = palette or make_chart_palette("#5B8DB8")
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-### Box plot
+    labels = list(data.keys())
+    values = list(data.values())
 
-- **Use for**: distribution comparison across groups.
-- **Rules**: the box spans Q1–Q3, the median is marked distinctly from the
-  mean, whiskers to 1.5 × IQR with outliers as individual points. State the
-  n per group — a box plot without the n hides a group of three.
-- Boxes in greys with the group of interest in the accent.
+    bp = ax.boxplot(values, labels=labels, patch_artist=True, notch=False,
+                    medianprops={"color": "white", "linewidth": 2})
 
-### Radar chart
+    for i, patch in enumerate(bp["boxes"]):
+        patch.set_facecolor(p["series"][i % len(p["series"])])
+        patch.set_alpha(0.8)
 
-- **Use for**: multivariate profile comparison across few axes (3–8).
-- **Rules**: axes share one scale, labelled with units, and the same direction
-  of "better" on every axis. Two or three overlaid polygons maximum; more and
-  the plot becomes spaghetti. Radar charts flatter differences — use only when
-  the profile shape is the claim.
+    ax.set_xticklabels(labels, fontproperties=ZH_FONT, fontsize=11)
+    if title:
+        ax.set_title(title, fontproperties=ZH_FONT, fontsize=14, pad=15)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontproperties=ZH_FONT, fontsize=11)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="y", alpha=0.3)
 
-### Heatmap
+    return save_chart(fig, output)
+```
 
-- **Use for**: a matrix of values where the pattern is the claim (cohorts,
-  correlations, calendars).
-- **Rules**: a perceptually uniform sequential palette; the colour scale legend
-  states the range and the direction. Cell values printed when the matrix is
-  small enough. Row and column order chosen to reveal the pattern (clustered,
-  chronological), never alphabetical by default.
+## Template 5: Radar Chart
 
-## 11. Embedding rules (mandatory)
+```python
+def radar_chart(categories: list, series: dict, title: str = "",
+                palette: dict = None, output: str = "radar.png"):
+    """
+    categories: ["Chinese", "Math", "English", "Physics", "Chemistry"]
+    series: {"Student A": [85, 92, 78, 90, 88], "Student B": [75, 88, 92, 70, 85]}
+    """
+    p = palette or make_chart_palette("#5B8DB8")
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
 
-- **Preserve the aspect ratio**: set the width, never both width and height —
-  a chart with both set is stretched, and a stretched chart misreports its own
-  data.
-- **Size from the text block**: `\linewidth` at the point of insertion (inside
-  a list or table cell the width is the cell's, not the page's).
-- **Anchor, do not float blindly**: charts referenced from the text belong near
-  their first reference; a float that drifts three pages away is a defect.
-- **Caption below the chart**, first sentence = the claim, then source and
-  method. The caption is the most-read text in the figure.
-- **Vector first**: EMF/SVG for charts that will be printed; PNG at 300 dpi
-  when the chart must be a bitmap. A screenshot of a chart is not a chart.
-- **The greyscale test**: print the page in greyscale. If two series become
-  indistinguishable, colour was carrying meaning alone — fix it before
-  delivery.
+    n = len(categories)
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False).tolist()
+    angles += angles[:1]  # close the polygon
+
+    for i, (name, values) in enumerate(series.items()):
+        vals = values + values[:1]  # close the polygon
+        color = p["series"][i % len(p["series"])]
+        ax.plot(angles, vals, linewidth=2, label=name, color=color)
+        ax.fill(angles, vals, alpha=0.15, color=color)
+
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories, fontproperties=ZH_FONT, fontsize=11)
+    ax.legend(prop=ZH_FONT, loc="upper right", bbox_to_anchor=(1.2, 1.1), frameon=False)
+
+    if title:
+        ax.set_title(title, fontproperties=ZH_FONT, fontsize=14, pad=25)
+
+    return save_chart(fig, output)
+```
+
+## Template 6: Heatmap
+
+```python
+def heatmap(data: list, row_labels: list, col_labels: list, title: str = "",
+            palette: dict = None, output: str = "heatmap.png"):
+    """
+    data: 2D array [[1,2,3],[4,5,6]]
+    row_labels: ["Row 1", "Row 2"]
+    col_labels: ["Col 1", "Col 2", "Col 3"]
+    """
+    fig, ax = plt.subplots(figsize=(max(8, len(col_labels) * 1.2), max(6, len(row_labels) * 0.8)))
+
+    arr = np.array(data)
+    im = ax.imshow(arr, cmap="YlOrRd", aspect="auto")
+
+    ax.set_xticks(range(len(col_labels)))
+    ax.set_yticks(range(len(row_labels)))
+    ax.set_xticklabels(col_labels, fontproperties=ZH_FONT, fontsize=10)
+    ax.set_yticklabels(row_labels, fontproperties=ZH_FONT, fontsize=10)
+
+    # Value annotations
+    for i in range(len(row_labels)):
+        for j in range(len(col_labels)):
+            val = arr[i, j]
+            color = "white" if val > arr.max() * 0.7 else "black"
+            ax.text(j, i, f"{val:.1f}", ha="center", va="center",
+                    fontsize=10, color=color)
+
+    fig.colorbar(im, ax=ax, shrink=0.8)
+    if title:
+        ax.set_title(title, fontproperties=ZH_FONT, fontsize=14, pad=15)
+
+    return save_chart(fig, output)
+```
+
+## Embedding in Documents (MANDATORY — Preserve Aspect Ratio)
+
+**⚠️ Core Rule: When embedding any chart image, you MUST read actual image dimensions to calculate displayHeight. NEVER hardcode both width and height.**
+
+Pie and radar charts are square — mismatched width/height produces ellipses or diamonds.
+
+```js
+// ✅ Correct: read actual image dimensions
+const chartBuffer = fs.readFileSync("bar.png");
+const sizeOf = require("image-size");
+const dims = sizeOf(chartBuffer);
+const displayWidth = 500;
+const displayHeight = Math.round(displayWidth * (dims.height / dims.width));
+
+new Paragraph({
+  alignment: AlignmentType.CENTER,
+  spacing: { before: 200, after: 100 },
+  children: [
+    new ImageRun({
+      data: chartBuffer,
+      transformation: { width: displayWidth, height: displayHeight },
+      type: "png",
+    }),
+  ],
+})
+```
+
+```js
+// ❌ Wrong: hardcoded width and height (pie becomes ellipse, radar becomes diamond)
+new ImageRun({
+  data: chartBuffer,
+  transformation: { width: 500, height: 350 },  // wrong ratio!
+  type: "png",
+})
+```
+
+```python
+# ✅ Python (ReportLab) correct approach:
+from PIL import Image as PILImage
+from reportlab.platypus import Image
+pil_img = PILImage.open('chart.png')
+orig_w, orig_h = pil_img.size
+target_width = 400  # pt
+scale = target_width / orig_w
+img = Image('chart.png', width=target_width, height=orig_h * scale)
+```
+
+## Chart Selection Guide
+
+| Data Scenario | Recommended Chart | Template Function |
+|---------------|-------------------|-------------------|
+| Category comparison | Bar chart | `bar_chart()` |
+| Multi-group comparison | Grouped bar | `grouped_bar()` |
+| Trend over time | Line chart | `line_chart()` |
+| Proportion/composition | Pie chart | `pie_chart()` |
+| Distribution/spread | Box plot | `box_plot()` |
+| Multi-dimensional assessment | Radar chart | `radar_chart()` |
+| Matrix correlation | Heatmap | `heatmap()` |
+
+## Quality Standards
+
+1. **DPI**: Uniform 200 DPI (built into `save_chart`)
+2. **Colors**: Derived from document palette.accent for style consistency
+3. **CJK text**: Must configure SimHei font; otherwise renders as boxes
+4. **Label overlap prevention**: Auto-rotate 45° when >6 x-axis labels
+5. **Legend**: Move outside chart (`bbox_to_anchor`) when >4 series
+6. **Grid**: Light gray dashed grid lines for readability
+7. **Clean frames**: Remove top/right spines for modern minimalist look
+8. **Aspect ratio (CRITICAL)**: Must use `image-size` (JS) or `PIL` (Python) to read actual image dimensions and calculate displayHeight proportionally. **Pie and radar charts are square — hardcoding non-1:1 ratio causes ellipse/diamond distortion.**
+9. **Dimensions**: Default 10×6 inches, fits well within A4 page

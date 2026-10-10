@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
-"""Make footer page numbers survive WPS as well as Word.
+"""
+Fix footer PAGE field instructions in a DOCX file for WPS/Word compatibility.
 
-docx-js writes a bare ``PAGE`` field instruction into footers. Word resolves the
-number format from the section's <w:pgNumType>, but WPS ignores that and renders
-the raw instruction text — the reader sees "PAGE \\* arabic \\* MERGEFORMAT"
-where a page number should be.
+docx-js generates bare `PAGE` instrText in footers, but WPS ignores `pgNumType fmt`
+from section properties, causing page numbers to display as raw field codes like
+"PAGE \* arabic \* MERGEFORMAT" instead of actual numbers.
 
-Two things get fixed:
-
-  1. Every footer's PAGE field gains an explicit format switch, taken from the
-     section that actually references that footer (via <w:footerReference>),
-     not from a guessed index.
-  2. The empty <w:pgNumType/> elements docx-js emits on cover sections are
-     removed; WPS reads them as "restart numbering here".
+This script:
+  1. Reads document.xml to determine each section's page number format
+     (Roman vs Arabic) based on <w:pgNumType> and footer relationships
+  2. Patches each footer XML: replaces bare ` PAGE ` with the correct
+     format-switch variant (` PAGE \\* arabic \\* MERGEFORMAT` or
+     ` PAGE \\* ROMAN \\* MERGEFORMAT`)
+  3. Removes empty <w:pgNumType/> from cover sections (docx-js emits
+     these even when no pageNumbers is set, confusing WPS)
+  4. Replaces the original file in-place
 
 Usage:
-    python3 fix_footer_fields.py <file.docx>
-    python3 fix_footer_fields.py <file.docx> --dry-run
-"""
+    python fix_footer_fields.py <docx_file>
+    python fix_footer_fields.py <docx_file> --dry-run   # preview changes only
 
-from __future__ import annotations
+Example:
+    python fix_footer_fields.py output.docx
+"""
 
 import argparse
 import re
@@ -28,159 +31,255 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
-import xml.etree.ElementTree as ET
-
-W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
-
-# 尚未带格式开关的裸 PAGE。
-#
-# 正则里 `\*` 匹配的是字面星号，不是「反斜杠加星号」——OOXML 的格式开关长这样：
-# ` \* arabic `。要匹配字面反斜杠必须写 `\\`。若把负向断言写成 `(?!\s*\*)`，
-# 它永远不生效，重复运行会把开关一次次叠上去。
-BARE_PAGE = re.compile(r"\bPAGE\b(?!\s*\\\*)")
-ARABIC = r" PAGE \* arabic \* MERGEFORMAT "
-ROMAN = r" PAGE \* ROMAN \* MERGEFORMAT "
-EMPTY_PGNUM = re.compile(r"<w:pgNumType\s*/>")
-
-# 罗马数字的 fmt 取值；其余一律按阿拉伯数字处理。
-ROMAN_FORMATS = {"upperRoman", "lowerRoman"}
 
 
-def _footer_format_map(document_xml: str) -> dict[str, str]:
-    """Map each footer part to the page-number format of the section using it.
+# ── Namespace helpers ──────────────────────────────────────────────
 
-    A section may reference several footers (first / even / default) and may
-    reference none, in which case it inherits the previous section's footer —
-    OOXML's inheritance rule, and the reason this cannot be done by index.
+W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+# Patterns
+# Match bare PAGE (not already followed by \*)
+BARE_PAGE_RE = re.compile(
+    r'(<w:instrText[^>]*>)\s*PAGE\s*(</w:instrText>)'
+)
+# Match PAGE that already has a format switch (to detect and possibly fix)
+EXISTING_FORMAT_RE = re.compile(
+    r'(<w:instrText[^>]*>)\s*PAGE\s+\\\*\s+\w+.*?(</w:instrText>)'
+)
+# Match PAGE with wrong \* decimal format (common bug)
+DECIMAL_BUG_RE = re.compile(
+    r'(<w:instrText[^>]*>)\s*PAGE\s+\\\*\s+decimal\b[^<]*(</w:instrText>)'
+)
+# Empty pgNumType
+EMPTY_PGNUMTYPE_RE = re.compile(r'<w:pgNumType/>')
+# pgNumType with fmt attribute
+PGNUMTYPE_FMT_RE = re.compile(r'<w:pgNumType[^/]*?\bw:fmt="([^"]*)"')
+# Footer reference in sectPr
+FOOTER_REF_RE = re.compile(
+    r'<w:footerReference[^>]*r:id="([^"]*)"[^>]*/?>|'
+    r'<w:footerReference[^>]*r:id="([^"]*)"[^>]*>.*?</w:footerReference>'
+)
+# Section properties
+SECT_PR_RE = re.compile(r'<w:sectPr\b[^>]*>.*?</w:sectPr>', re.DOTALL)
+
+
+def _determine_section_formats(document_xml: str, rels_content: str) -> dict:
+    """Parse document.xml to map footer rId → format ('arabic' or 'ROMAN').
+
+    Strategy:
+    - Find each <w:sectPr> block
+    - Extract <w:pgNumType w:fmt="..."> if present
+    - Extract <w:footerReference r:id="...">
+    - Map rId to the inferred format
+
+    If pgNumType has fmt="upperRoman" or "lowerRoman" → ROMAN
+    Otherwise (including "decimal", absent, etc.) → arabic
+
+    Returns:
+        dict mapping rId (e.g. "rId8") to format string ("arabic" or "ROMAN")
     """
-    root = ET.fromstring(document_xml)
-    inherited = "decimal"
-    mapping: dict[str, str] = {}
+    fmt_map = {}  # rId → "arabic" | "ROMAN"
 
-    for sectpr in root.iter(f"{W}sectPr"):
-        pgnum = sectpr.find(f"{W}pgNumType")
-        if pgnum is not None and pgnum.get(f"{W}fmt"):
-            inherited = pgnum.get(f"{W}fmt")
-        for reference in sectpr.findall(f"{W}footerReference"):
-            target = reference.get(
-                "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
-            )
-            if target:
-                mapping[target] = inherited
-    return mapping
+    for sect_match in SECT_PR_RE.finditer(document_xml):
+        sect_xml = sect_match.group(0)
 
+        # Determine format from pgNumType
+        fmt_match = PGNUMTYPE_FMT_RE.search(sect_xml)
+        if fmt_match:
+            fmt_val = fmt_match.group(1).lower()
+            if "roman" in fmt_val:
+                page_format = "ROMAN"
+            else:
+                page_format = "arabic"
+        else:
+            # No pgNumType or no fmt → default to arabic
+            page_format = "arabic"
 
-def _resolve_footer_targets(document_xml: str, rels_xml: str | None) -> dict[str, str]:
-    """rId → footer part name, so the format map can be keyed by part name."""
-    if rels_xml is None:
-        return {}
-    rels = ET.fromstring(rels_xml)
-    resolved: dict[str, str] = {}
-    for relationship in rels.findall(
-        "{http://schemas.openxmlformats.org/package/2006/relationships}Relationship"
-    ):
-        rid = relationship.get("Id")
-        target = relationship.get("Target") or ""
-        if rid and target.startswith("footer"):
-            resolved[rid] = f"word/{target.lstrip('/')}"
-    return resolved
+        # Find footer references in this section
+        for fref_match in FOOTER_REF_RE.finditer(sect_xml):
+            rid = fref_match.group(1) or fref_match.group(2)
+            if rid:
+                fmt_map[rid] = page_format
+
+    return fmt_map
 
 
-def patch_footer(xml: str, fmt: str) -> tuple[str, int]:
-    """Give the PAGE field in one footer an explicit format switch.
+def _resolve_footer_files(rels_content: str) -> dict:
+    """Parse document.xml.rels to map rId → footer filename.
 
-    The spaces around the switch belong to the field grammar — a switch glued to
-    the keyword is not recognised. Only the bare keyword is matched, so a footer
-    that already carries a switch is left alone and re-runs are idempotent.
+    Returns:
+        dict mapping rId (e.g. "rId8") to filename (e.g. "footer1.xml")
     """
-    replacement = ROMAN if fmt in ROMAN_FORMATS else ARABIC
-    return BARE_PAGE.subn(replacement.strip(), xml)
+    rid_to_file = {}
+    # Match Relationship elements for footer targets
+    rel_re = re.compile(
+        r'<Relationship[^>]*\bId="([^"]*)"[^>]*\bTarget="([^"]*footer[^"]*)"',
+        re.IGNORECASE
+    )
+    for m in rel_re.finditer(rels_content):
+        rid = m.group(1)
+        target = m.group(2)
+        # Target is like "footer1.xml" or "word/footer1.xml"
+        filename = target.split("/")[-1]
+        rid_to_file[rid] = filename
+
+    return rid_to_file
 
 
-def fix_footer_fields(docx_path: str | Path, dry_run: bool = False) -> dict:
+def _patch_footer_xml(footer_xml: str, page_format: str) -> tuple:
+    """Patch a single footer XML string.
+
+    Args:
+        footer_xml: Raw XML content of footer file
+        page_format: "arabic" or "ROMAN"
+
+    Returns:
+        (patched_xml, changes_list)
+    """
+    changes = []
+    result = footer_xml
+
+    # Fix 1: Replace \* decimal with \* arabic (common bug)
+    if DECIMAL_BUG_RE.search(result):
+        replacement = rf'\g<1> PAGE \\* {page_format} \\* MERGEFORMAT \g<2>'
+        result = DECIMAL_BUG_RE.sub(replacement, result)
+        changes.append(f"Fixed \\* decimal → \\* {page_format}")
+
+    # Fix 2: Patch bare PAGE (no format switch at all)
+    if BARE_PAGE_RE.search(result):
+        replacement = rf'\g<1> PAGE \\* {page_format} \\* MERGEFORMAT \g<2>'
+        result = BARE_PAGE_RE.sub(replacement, result)
+        changes.append(f"Added \\* {page_format} \\* MERGEFORMAT to bare PAGE")
+
+    return result, changes
+
+
+def fix_footer_fields(docx_path: str, dry_run: bool = False) -> list:
+    """Fix footer PAGE field instructions in a DOCX file.
+
+    Args:
+        docx_path: Path to DOCX file (modified in-place unless dry_run)
+        dry_run: If True, only report changes without modifying
+
+    Returns:
+        List of change descriptions
+    """
     docx_path = Path(docx_path)
-    with zipfile.ZipFile(docx_path) as archive:
-        names = archive.namelist()
-        contents = {name: archive.read(name) for name in names}
+    if not docx_path.exists():
+        raise FileNotFoundError(f"File not found: {docx_path}")
 
-    document_name = "word/document.xml"
-    document_xml = contents.get(document_name, b"").decode("utf-8")
-    rels_name = "word/_rels/document.xml.rels"
-    rels_xml = contents.get(rels_name, b"").decode("utf-8") if rels_name in contents else None
+    all_changes = []
 
-    rid_format = _footer_format_map(document_xml)
-    rid_target = _resolve_footer_targets(document_xml, rels_xml)
-    part_format = {
-        rid_target[rid]: fmt for rid, fmt in rid_format.items() if rid in rid_target
-    }
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        extracted_dir = temp_path / "extracted"
+        temp_output = temp_path / "output.docx"
 
-    footers = sorted(
-        name for name in names if name.startswith("word/footer") and name.endswith(".xml")
+        # Extract DOCX
+        with zipfile.ZipFile(docx_path, 'r') as zip_ref:
+            zip_ref.extractall(extracted_dir)
+
+        word_dir = extracted_dir / "word"
+        document_xml_path = word_dir / "document.xml"
+        rels_path = word_dir / "_rels" / "document.xml.rels"
+
+        if not document_xml_path.exists():
+            raise ValueError("document.xml not found in DOCX")
+
+        document_xml = document_xml_path.read_text(encoding='utf-8')
+
+        # ── Step 1: Remove empty <w:pgNumType/> from cover section ──
+        empty_count = len(EMPTY_PGNUMTYPE_RE.findall(document_xml))
+        if empty_count > 0:
+            document_xml = EMPTY_PGNUMTYPE_RE.sub('', document_xml)
+            all_changes.append(
+                f"Removed {empty_count} empty <w:pgNumType/> from document.xml"
+            )
+
+        if not dry_run:
+            document_xml_path.write_text(document_xml, encoding='utf-8')
+
+        # ── Step 2: Determine section → format mapping ──
+        rels_content = ""
+        if rels_path.exists():
+            rels_content = rels_path.read_text(encoding='utf-8')
+
+        rid_to_format = _determine_section_formats(document_xml, rels_content)
+        rid_to_file = _resolve_footer_files(rels_content)
+
+        # Build filename → format mapping
+        file_to_format = {}
+        for rid, fmt in rid_to_format.items():
+            fname = rid_to_file.get(rid)
+            if fname:
+                file_to_format[fname] = fmt
+
+        # ── Step 3: Patch each footer XML ──
+        footer_files = sorted(word_dir.glob("footer*.xml"))
+        if not footer_files:
+            all_changes.append("No footer files found — nothing to patch")
+            return all_changes
+
+        for footer_path in footer_files:
+            fname = footer_path.name
+            # Determine format: use mapping if available, default to arabic
+            page_format = file_to_format.get(fname, "arabic")
+
+            footer_xml = footer_path.read_text(encoding='utf-8')
+            patched_xml, changes = _patch_footer_xml(footer_xml, page_format)
+
+            if changes:
+                for c in changes:
+                    all_changes.append(f"{fname}: {c}")
+                if not dry_run:
+                    footer_path.write_text(patched_xml, encoding='utf-8')
+            else:
+                all_changes.append(f"{fname}: already correct (format={page_format})")
+
+        if not dry_run:
+            # Repack DOCX
+            with zipfile.ZipFile(temp_output, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file_path in extracted_dir.rglob('*'):
+                    if file_path.is_file():
+                        arcname = file_path.relative_to(extracted_dir)
+                        zipf.write(file_path, arcname)
+
+            # Replace original
+            shutil.move(str(temp_output), str(docx_path))
+
+    return all_changes
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=(
+            'Fix footer PAGE field instructions in a DOCX file. '
+            'Patches bare PAGE → PAGE \\* arabic \\* MERGEFORMAT (or ROMAN), '
+            'fixes \\* decimal bug, and removes empty <w:pgNumType/>.'
+        )
+    )
+    parser.add_argument('docx_file', help='DOCX file to fix (modified in-place)')
+    parser.add_argument(
+        '--dry-run', action='store_true',
+        help='Preview changes without modifying the file'
     )
 
-    changed: list[str] = []
-    pgnum_removed = 0
-    for name in footers:
-        xml = contents[name].decode("utf-8")
-        # 没有被任何节引用的页脚按阿拉伯数字处理：那是 docx-js 的默认。
-        patched, hits = patch_footer(xml, part_format.get(name, "decimal"))
-        patched, removed = EMPTY_PGNUM.subn("", patched)
-        if hits or removed:
-            contents[name] = patched.encode("utf-8")
-            changed.append(name)
-            pgnum_removed += removed
+    args = parser.parse_args()
 
-    # 封面节的空 pgNumType 在 document.xml 里，不在页脚里。
-    document_stripped, document_removed = EMPTY_PGNUM.subn("", document_xml)
-    if document_removed:
-        contents[document_name] = document_stripped.encode("utf-8")
-        pgnum_removed += document_removed
-
-    if changed and not dry_run:
-        # 原子替换：先写临时文件再搬回，避免写一半损坏原文件。
-        handle = tempfile.NamedTemporaryFile(
-            dir=docx_path.parent, suffix=".docx", delete=False
-        )
-        temporary = Path(handle.name)
-        handle.close()
-        try:
-            with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as out:
-                for name in names:
-                    out.writestr(name, contents[name])
-            shutil.move(str(temporary), str(docx_path))
-        finally:
-            temporary.unlink(missing_ok=True)
-
-    return {
-        "footers_scanned": len(footers),
-        "footers_changed": len(changed),
-        "changed": changed,
-        "footer_formats": {name: part_format.get(name, "decimal") for name in footers},
-        "empty_pgnum_removed": pgnum_removed,
-        "dry_run": dry_run,
-    }
+    try:
+        changes = fix_footer_fields(args.docx_file, dry_run=args.dry_run)
+        prefix = "[DRY RUN] " if args.dry_run else ""
+        for c in changes:
+            print(f"  {prefix}{c}")
+        if args.dry_run:
+            print("\nDry run complete — no files modified.")
+        else:
+            print(f"\nSuccessfully fixed footer fields in {args.docx_file}")
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("docx")
-    parser.add_argument("--dry-run", action="store_true", help="report without writing")
-    args = parser.parse_args(argv)
-
-    if not Path(args.docx).is_file():
-        print(f"error: not a file: {args.docx}", file=sys.stderr)
-        return 2
-
-    result = fix_footer_fields(args.docx, dry_run=args.dry_run)
-    print(f"footers scanned: {result['footers_scanned']}")
-    print(f"footers changed: {result['footers_changed']} {result['changed']}")
-    print(f"footer formats:  {result['footer_formats']}")
-    print(f"empty pgNumType removed: {result['empty_pgnum_removed']}")
-    if result["dry_run"]:
-        print("dry run: nothing written")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    main()

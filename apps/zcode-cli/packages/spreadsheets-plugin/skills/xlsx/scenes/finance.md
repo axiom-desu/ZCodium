@@ -1,158 +1,318 @@
-# Financial and analyst-grade workbooks
+# Financial Model Specialist Guide
 
-A workbook that another person will open, check, or hand onward is a different
-artifact from a scratch data file. The conventions below exist so a reviewer can
-tell, at a glance and without opening a single formula, which cells are inputs,
-which are calculations, and which came from somewhere else.
+Load this reference when the task involves: financial statements, budgets, forecasts, DCF models, LBO, valuation, P&L, balance sheets, cash flow, or any investment banking deliverable.
 
-They apply **unless the user or an existing template says otherwise**. An
-established template's conventions always override this file — matching the file
-you were asked to edit is the first rule.
-
-## 1. Colour coding
-
-Text colour is metadata in analyst workbooks. The convention:
-
-| colour            | meaning                                              |
-| ----------------- | ---------------------------------------------------- |
-| blue `RGB(0,0,255)`   | hardcoded input, or a number a user will change for scenarios |
-| black `RGB(0,0,0)`    | every formula and calculation                        |
-| green `RGB(0,128,0)`  | a link pulling from another sheet in the same workbook |
-| red `RGB(255,0,0)`    | an external link to another file                     |
-| yellow fill `RGB(255,255,0)` | a key assumption that needs attention, or a cell awaiting input |
-
-Two rules that make the scheme work: **never colour a formula blue**, and **a
-cell that is not a plain input is not blue**. The point is that a reviewer can
-change every blue cell safely and break nothing.
-
-## 2. Number formats
-
-| value kind   | format                                             |
-| ------------ | -------------------------------------------------- |
-| years        | text, `2024` — never `2,024`                       |
-| currency     | `$#,##0`, with the unit stated in the header ("Revenue ($mm)") |
-| zeros        | display as `-`, e.g. `$#,##0;($#,##0);-`            |
-| percentages  | `0.0%` — one decimal by default                    |
-| multiples    | `0.0x` for EV/EBITDA, P/E and friends              |
-| negatives    | parentheses, `(123)`, not `-123`                   |
-
-Units in headers, not in cells. A column of bare numbers with the unit only in
-the title is the most common cause of a factor-of-a-thousand review comment.
-
-## 3. Assumptions live in their own cells
-
-Every growth rate, margin, multiple and driver goes in a visible assumption
-cell, and formulas reference it:
-
-    wrong:  =B5*1.05
-    right:  =B5*(1+$B$6)
-
-A formula with a magic number inside it cannot be scenario-tested, cannot be
-reviewed, and hides the assumption from the person who needs to argue with it.
-Assumptions that share one sheet, one block, one label style.
-
-## 4. Formula hygiene
-
-- Verify every reference after writing — an off-by-one range is invisible until
-  the total is wrong.
-- One formula across a row: fill the same formula across all projection periods
-  rather than editing the last column to be "special".
-- Test the edges: zero values, negative values, an empty period.
-- No circular references. If the model needs one, it needs an iteration setting
-  the reviewer was told about, not a silent cycle.
-
-## 5. Document every hardcode
-
-A number that is not a formula and not an assumption is a fact from somewhere.
-Say where — as a cell comment, or in a column beside the table when the sheet
-ends at a boundary:
-
-    Source: Company 10-K, FY2024, Page 45, Revenue Note, [SEC EDGAR URL]
-    Source: Company 10-Q, Q2 2025, Exhibit 99.1, [SEC EDGAR URL]
-    Source: Bloomberg Terminal, 8/15/2025, AAPL US Equity
-
-"Source: management" is documentation too, and better than nothing. What is not
-acceptable is an undocumented number in a delivered model.
-
-## 6. Delivery gate
-
-Before the file leaves:
-
-1. Recalculate with a real engine (LibreOffice headless), not the writing
-   library's cached values — see `scripts/recalc.py`.
-2. Zero formula errors: no `#REF!`, `#DIV/0!`, `#VALUE!`, `#N/A`, `#NAME?`. Any
-   error cell means the file is not delivered.
-3. Spot-check three totals against an independent calculation.
-4. Confirm the colour and format conventions above hold on the sheets a
-   reviewer will actually open.
+Also load `engines/design.md` → use **Finance** scene overrides (IB text color rules, section dividers).
 
 ---
 
-*The colour, number-format, assumption and hardcode-documentation conventions in
-this file are adapted from the `xlsx` skill of `appautomaton/document-SKILLs`
-(https://github.com/appautomaton/document-SKILLs, MIT License, Copyright (c)
-2026 appautomaton); see the plugin `NOTICE.md` for the derivation record.*
+## Financial Model Architecture
 
-## Model architecture
+### Standard Sheet Structure
+```
+Assumptions Sheet:
+  - All inputs, growth rates, margins, multiples
+  - Blue font for every changeable number
+  - Yellow background for key assumptions
+  - Source citations in adjacent cells or comments
 
-The sheet structure below is what a reviewer expects to find. Deviating needs a
-reason the reviewer accepts.
+Income Statement / P&L:
+  - Revenue → COGS → Gross Profit → OpEx → EBIT → Interest → Tax → Net Income
+  - All values are formulas referencing Assumptions
 
-### Standard sheet structure
+Balance Sheet:
+  - Assets = Liabilities + Equity (must balance!)
+  - Include balance check row: =Assets-Liabilities-Equity (should be 0)
+
+Cash Flow Statement:
+  - Operating → Investing → Financing → Net Change
+  - Ending Cash = Beginning Cash + Net Change
+
+Valuation / Output:
+  - DCF, comparables, or whatever model the user needs
+  - Green font for values pulled from other sheets
+```
+
+### Formula Construction Rules
+
+```python
+# ✅ CORRECT: Reference assumptions
+sheet['C10'] = '=C9*(1+Assumptions!$B$5)'  # Growth rate from assumptions
+
+# ❌ WRONG: Hardcoded magic number
+sheet['C10'] = '=C9*1.05'
+
+# ✅ CORRECT: Protected division
+sheet['D15'] = '=IF(C15=0,"-",B15/C15)'
+
+# ✅ CORRECT: Consistent formula across periods
+# If D10 = '=D9*(1+Assumptions!$B$5)' then E10 must follow the same pattern
+```
+
+### Assumptions Sheet Layout
+```
+B4: "Key Assumptions"           (section header, bold)
+B6: "Revenue Growth Rate"       C6: 0.05    (blue font, yellow bg)
+B7: "Gross Margin"              C7: 0.65    (blue font, yellow bg)
+B8: "OpEx as % Revenue"         C8: 0.30    (blue font, yellow bg)
+B9: "Tax Rate"                  C9: 0.21    (blue font, yellow bg)
+B10: "Discount Rate (WACC)"     C10: 0.10   (blue font, yellow bg)
+B11: "Terminal Growth Rate"     C11: 0.02   (blue font, yellow bg)
+```
+
+### Source Documentation for Hardcodes
+
+Every hardcoded input MUST have a source citation:
+
+```python
+# In cell comment
+ws['C6'].comment = Comment(
+    "Source: Company 10-K, FY2024, Page 45, Revenue Growth",
+    "Z.ai"
+)
+
+# Or in adjacent cell (if end of table)
+ws['D6'] = "Source: Management guidance, Q3 2024 earnings call"
+ws['D6'].font = Font(size=8, italic=True, color="808080")
+```
+
+---
+
+## Number Formatting (CRITICAL)
+
+> Finance-specific formats below. For general number formats, see `engines/design.md §10`.
+> Finance formats take priority when both apply.
+
+```python
+FINANCE_FORMATS = {
+    # Currency — zeros as dash, negatives in parentheses
+    'currency': '$#,##0;($#,##0);"-"',
+    'currency_k': '$#,##0,"K";($#,##0,"K");"-"',
+    'currency_mm': '$#,##0.0,,"M";($#,##0.0,,"M");"-"',
+
+    # Percentages — one decimal
+    'pct': '0.0%;(0.0%);"-"',
+
+    # Multiples — for EV/EBITDA, P/E etc.
+    'multiple': '0.0"x";(0.0"x");"-"',
+
+    # Years — MUST be text, not number (avoids "2,024")
+    'year': '@',
+
+    # Integer with thousands separator
+    'integer': '#,##0;(#,##0);"-"',
+
+    # Two decimal places
+    'decimal': '#,##0.00;(#,##0.00);"-"',
+
+    # Shares (millions)
+    'shares': '#,##0.0,,"M"',
+}
+
+# Apply
+cell.number_format = FINANCE_FORMATS['currency_mm']
+```
+
+**Always specify units in column headers**: "Revenue ($mm)", "Shares (M)", "Growth (%)"
+
+---
+
+## IB Model Layout Rules
+
+> All colors below use **design tokens from `engines/design.md`**. Do not hardcode hex values.
+> Finance-specific overrides (IB text color rules, section dividers) are in `design.md §2.4`.
+
+### Section Headers
+```python
+# Dark background, white bold text, merged across data width
+# Uses PRIMARY from design.md (or Finance palette PRIMARY from design.md)
+ws.merge_cells('B10:H10')
+ws['B10'] = 'Income Statement'
+ws['B10'].fill = PatternFill('solid', fgColor=PRIMARY)
+ws['B10'].font = Font(name=FONT_NAME, size=12, bold=HEADER_BOLD, color='FFFFFF')
+```
+
+### Data Alignment
+- Column labels (years, quarters): **right-aligned**
+- Row labels (line items): **left-aligned**
+- Submetrics: **indented** (add 2-3 spaces prefix)
+
+```python
+# Parent line item
+ws['B12'] = 'Revenue'
+ws['B12'].font = Font(name=FONT_NAME, bold=HEADER_BOLD)
+
+# Sub line item (indented)
+ws['B13'] = '   Product Revenue'
+ws['B14'] = '   Service Revenue'
+```
+
+### Totals Formatting
+```python
+# Uses design tokens — see engines/design.md §6.3
+total_border = Border(top=Side(style='thin', color=PRIMARY))
+for col in range(3, 9):  # C through H
+    cell = ws.cell(row=total_row, column=col)
+    cell.font = Font(name=FONT_NAME, bold=HEADER_BOLD)
+    cell.border = total_border
+```
+
+### Grid Lines
+```python
+ws.sheet_view.showGridLines = False  # Standard — defined in design.md §7.3
+```
+
+---
+
+## Balance Check Pattern
+
+For any financial model with a balance sheet:
+
+```python
+# Balance check row (should always be 0)
+check_row = bs_end + 2
+ws.cell(row=check_row, column=2, value='Balance Check')
+for col in range(3, last_col + 1):
+    letter = get_column_letter(col)
+    ws.cell(row=check_row, column=col).value = \
+        f'={letter}{assets_total_row}-{letter}{liab_total_row}-{letter}{equity_total_row}'
+    # Conditional: red if not zero
+    ws.conditional_formatting.add(
+        f'{letter}{check_row}',
+        CellIsRule(operator='notEqual', formula=['0'],
+                   font=Font(color='FF0000', bold=True))
+    )
+```
+
+---
+
+## Sensitivity / Scenario Tables
+
+```python
+# Two-way data table: vary growth rate (rows) × discount rate (cols)
+# Row headers: growth rates
+growth_rates = [0.02, 0.03, 0.04, 0.05, 0.06]
+# Col headers: discount rates
+discount_rates = [0.08, 0.09, 0.10, 0.11, 0.12]
+
+# Write headers
+for i, g in enumerate(growth_rates):
+    ws.cell(row=start_row + i + 1, column=start_col, value=g)
+    ws.cell(row=start_row + i + 1, column=start_col).number_format = '0.0%'
+    ws.cell(row=start_row + i + 1, column=start_col).font = Font(color='0000FF')
+
+for j, d in enumerate(discount_rates):
+    ws.cell(row=start_row, column=start_col + j + 1, value=d)
+    ws.cell(row=start_row, column=start_col + j + 1).number_format = '0.0%'
+    ws.cell(row=start_row, column=start_col + j + 1).font = Font(color='0000FF')
+
+# Fill formulas for each combination
+# Yellow background for the cell matching base case assumptions
+```
+
+---
+
+## Projection Period Patterns
+
+```python
+# Historical + Projected columns
+years = ['FY2022', 'FY2023', 'FY2024', 'FY2025E', 'FY2026E', 'FY2027E']
+
+for i, year in enumerate(years):
+    col = start_col + i
+    cell = ws.cell(row=header_row, column=col, value=year)
+    cell.font = Font(name=FONT_NAME, bold=HEADER_BOLD)
+    cell.alignment = Alignment(horizontal='center')
+
+    # Visual separator between historical and projected
+    if year.endswith('E') and not years[i-1].endswith('E'):
+        # Add left border to mark transition
+        for row in range(header_row, last_row + 1):
+            ws.cell(row=row, column=col).border = Border(
+                left=Side(style='medium', color=PRIMARY))
+```
+
+---
+
+## Additional Model Templates
+
+### Template: P&L (Profit & Loss) Statement
 
 ```
-Assumptions   every input, blue, labelled — nothing else on this sheet
-Drivers       intermediate calculations referencing Assumptions only
-Model         the computation; black formulas throughout
-Outputs       the presentation layer: summaries, charts, the sheets a reader sees
-Checks        reconciliation rows: does the model agree with its source
+Sheet: "P&L"
+  Row 1: Company Name + Period
+  Row 3: Headers (Month/Quarter columns)
+  
+  Revenue Section:
+    Product Revenue     =Assumptions!B5 * (1+Assumptions!C5)
+    Service Revenue     =Assumptions!B6 * (1+Assumptions!C6)
+    Total Revenue       =SUM(above)
+  
+  COGS Section:
+    Direct Costs        =Total_Revenue * Assumptions!gross_margin
+    Gross Profit        =Total_Revenue - Direct_Costs
+    Gross Margin %      =IFERROR(Gross_Profit/Total_Revenue, 0)
+  
+  OpEx Section:
+    S&M, R&D, G&A       (each from Assumptions)
+    Total OpEx          =SUM(S&M:G&A)
+    EBITDA              =Gross_Profit - Total_OpEx
+    EBITDA Margin %     =IFERROR(EBITDA/Total_Revenue, 0)
+  
+  Below the Line:
+    D&A, Interest, Tax
+    Net Income          =EBITDA - D&A - Interest - Tax
 ```
 
-### Formula construction rules
+### Template: Budget vs Actual
 
-- One direction of reference: Assumptions → Drivers → Model → Outputs. A
-  formula in Assumptions that reads from Model is a circular dependency in
-  waiting.
-- Fill one formula across a whole row or column; a hand-edited exception column
-  is a future bug with a comment apologising for it.
-- Verify ranges after writing — off-by-one is invisible until the total is wrong.
-- Test the edges: zero, negative, empty period.
-- No undocumented hardcodes: a number that is neither a formula nor an
-  assumption carries a source comment (§5 of this file).
+```
+Sheet: "Budget vs Actual"
+  Columns: Category | Budget | Actual | Variance | Var %
+  
+  Key formulas:
+    Variance     = =Actual - Budget
+    Var %        = =IFERROR(Variance/Budget, 0)
+  
+  Conditional formatting:
+    Var % > 0    → Green font (favorable)
+    Var % < -10% → Red font + red fill (unfavorable)
+    Var % -10~0  → Orange font (watch)
+  
+  Summary section:
+    Total Budget    =SUM(Budget range)
+    Total Actual    =SUM(Actual range)
+    Overall Var %   =IFERROR((Total_Actual-Total_Budget)/Total_Budget, 0)
+```
 
-### Assumptions sheet layout
+### Template: SaaS Metrics Dashboard
 
-- One block, one label style, one column of values, one column of units.
-- Named ranges for the assumptions formulas reference by name — a named
-  assumption survives row insertion; a coordinate reference does not.
-- Scenario switches (base/upside/downside) as a single cell driving `CHOOSE` /
-  `INDEX` over a scenario table, not as three parallel blocks that drift apart.
+```
+Sheet: "SaaS Metrics"
+  KPIs (each with formula, not hardcoded):
+    MRR              =SUMPRODUCT(Users * ARPU)
+    ARR              =MRR * 12
+    Net Revenue Retention = =IFERROR((Starting_MRR + Expansion - Contraction - Churn) / Starting_MRR, 0)
+    CAC              =IFERROR(Total_S&M / New_Customers, 0)
+    LTV              =IFERROR(ARPU * Gross_Margin / Monthly_Churn_Rate, 0)
+    LTV:CAC Ratio    =IFERROR(LTV / CAC, 0)
+    Payback Months   =IFERROR(CAC / (ARPU * Gross_Margin), 0)
+    
+  Chart: MRR waterfall (starting → new → expansion → contraction → churn → ending)
+  Chart: LTV:CAC trend line
+```
 
-## Number formatting (the critical section)
+### Template: Project Budget Tracker
 
-Formats are read before numbers. The table in `engines/design.md` §2 is the
-reference; what matters here is that **the format is part of the model, not
-decoration**:
-
-- Years as text (`2024`, never `2,024`) — a year formatted as a number with a
-  thousands separator is the defect a reviewer catches in one second.
-- Currency with the unit in the header, and the zero rendered as `-`:
-  `$#,##0;($#,##0);-`.
-- Percentages at one decimal; multiples as `0.0x`; negatives in parentheses.
-- Dates as dates, with a format that survives a locale change
-  (`yyyy-mm-dd` is the portable choice).
-- A column whose format differs between rows is a defect: select the column
-  and apply one format.
-
-## Layout rules for a reviewable model
-
-- **Section headers** are labelled rows with a panel fill, not merged cells —
-  a merged header breaks sorting and every range formula over the column.
-- **Line items down, periods across** — the orientation every financial reader
-  expects. A period column exists even when empty; a gap breaks the SUM range
-  and the chart's category axis.
-- **Totals at the bottom or right of the region they total**, labelled, and
-  computed by range formula rather than a sum of the visible rows.
-- **The Checks sheet is not optional**: reconciliation rows comparing the
-  model's totals against an independent calculation, with the tolerance stated.
-  A model without one cannot be audited; with one, an error announces itself.
+```
+Sheet: "Project Budget"
+  Columns: Phase | Task | Planned Cost | Actual Cost | Remaining | % Spent | Status
+  
+  Key formulas:
+    Remaining   = =Planned - Actual
+    % Spent     = =IFERROR(Actual/Planned, 0)
+    Status      = =IF(% Spent>1, "Over Budget", IF(% Spent>0.9, "At Risk", "On Track"))
+    
+  Phase subtotals with SUBTOTAL function
+  Grand total row with project-level health indicator
+```

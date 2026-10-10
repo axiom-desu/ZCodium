@@ -62,7 +62,9 @@ test("staging fails if any required asset is missing, including the shared host 
     `node-repl-host/${cuaRuntimeRequiredPaths(process.platform, process.arch).at(-2)}`,
     "zcode-cua-plugin/scripts/computer-use-target.mjs",
     "documents-plugin/skills/docx/scripts/document.py",
-    "pdf-plugin/skills/pdf/scripts/pdf_qa_checks.py",
+    // 换上游实现后 pdf 技能的关键脚本名变了（`pdf_qa_checks.py` → `pdf_qa.py`）；
+    // 这里必须点一个 seed 清单里真实存在的文件，否则失败信息变成 ENOENT 而不是缺资产。
+    "pdf-plugin/skills/pdf/scripts/pdf_qa.py",
   ]) {
     const file = join(directory, path);
     await rm(file);

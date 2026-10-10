@@ -1,13 +1,13 @@
 {
   "name": "pdf",
   "version": "0.2.0",
-  "description": "PDF production skills driven by a LaTeX toolchain, published as an official ZCode plugin.",
+  "description": "PDF document production skills, published as an official ZCode plugin.",
   "description_i18n": {
-    "en": "PDF production skills on a LaTeX toolchain: reports, resumes, posters and academic papers.",
-    "zh-CN": "基于 LaTeX 工具链的 PDF 制作技能：报告、简历、海报与学术论文。"
+    "en": "PDF production skills: typeset and render reports, resumes, posters, and covers to PDF.",
+    "zh-CN": "PDF 制作技能：报告、简历、海报、封面的排版与渲染输出。"
   },
   "author": {
-    "name": "ZCodium"
+    "name": "Z.ai"
   },
   "license": "Apache-2.0",
   "skills": "skills",

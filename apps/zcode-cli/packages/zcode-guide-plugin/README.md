@@ -1,24 +1,22 @@
 # zcode-guide
 
-The official built-in ZCode plugin for configuring the client's extension resources, diagnosing them when they misbehave, and authoring dynamic workflows. It is content-only — one slash command and seven skills, no scripts and no MCP servers — and it ships enabled, so a fresh install already has `/workflow` and every skill below.
+The official built-in ZCode plugin for configuration and self-diagnosis. It is content-only (skills) and enabled by default.
 
 ## What it provides
 
-| Component                   | What it covers                                                                                                                                                                                                                                           |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/workflow` (command)       | Entry point that turns an explicit workflow request into a `CreateWorkflow` run; mounts the `dynamic-workflows` skill before the body runs                                                                                                               |
-| `zcode-configuration-guide` | The map: where MCP servers, commands, skills, hooks and plugins are configured at user and workspace scope, the discovery order, precedence and merge rules, and which location to pick                                                                  |
-| `diagnosing-mcp`            | Servers that will not connect, whose tools do not appear, that time out, or that a configuration file silently fails to define                                                                                                                           |
-| `diagnosing-skills`         | Skills that are not discovered, do not trigger, are shadowed by a same-name skill, are disabled, or have a frontmatter error                                                                                                                             |
-| `diagnosing-commands`       | Slash commands that are missing, overridden by a higher-precedence duplicate, dropped for an invalid name or empty body, or whose arguments do not substitute                                                                                            |
-| `diagnosing-hooks`          | Hooks that never fire, whose matcher misses, whose script is not executable, that time out, or that block a session                                                                                                                                      |
-| `diagnosing-plugins`        | Plugins that are not listed, fail to install or update, or are enabled while their components are missing                                                                                                                                                |
-| `dynamic-workflows`         | How to write `CreateWorkflow` scripts: subagent topology, typed results, deterministic gates, reporting and artifacts, and revising a run after submission. `patterns.md` and `examples.md` ship beside it as the shape catalogue and the worked scripts |
+A set of skills that teach both users and agents how to configure ZCode's five extension resource types in the ZCode client, and how to locate and fix configuration problems for each:
+
+| Skill | Purpose |
+|---|---|
+| `zcode-configuration-guide` | Overview: the locations, scopes, precedence, and merge rules for MCP servers, commands, skills, hooks, and plugins, plus guidance on where to configure each |
+| `diagnosing-mcp` | Localize and fix MCP servers that will not connect, have missing tools, are untrusted, or time out |
+| `diagnosing-skills` | Localize and fix skills that are not discovered, do not trigger, are shadowed, or are disabled |
+| `diagnosing-commands` | Localize and fix slash commands that are missing, overridden, have frontmatter errors, or do not substitute arguments |
+| `diagnosing-hooks` | Localize and fix hooks that do not trigger, whose matcher does not match, whose script is not executable, that time out, or that block unexpectedly |
+| `diagnosing-plugins` | Localize and fix plugins that are not listed, fail to install, have missing components, or are not enabled |
 
 ## Design principle
 
-Every diagnosis resolves to one concrete action. For a person that is a thing to inspect and change in the client — Settings (Commands / Skills / MCP Servers / Hooks / Plugins) and the `/` menu. For an agent it is the specific configuration file and field to edit, reached with `zcode commands list`, `zcode skills list` and the file reads each skill names. The intent is that an agent can diagnose and repair a ZCode installation from these skills alone, without a human in the loop.
+Every diagnosis resolves to a concrete action: for a person, what to inspect and change in the client (Settings → Plugin Management / Skills / MCP, and the `/` menu); for an agent, the specific configuration file and field to edit. The goal is for an agent to diagnose and repair configuration on its own using these skills alone.
 
-## Enablement
-
-The plugin is registered as an official built-in and enabled by default. Turning it off in Settings → Plugins disables the whole package at once: a disabled plugin contributes no skill roots and no command roots, so `/workflow` and all seven skills disappear together until it is switched back on.
+A built-in plugin can be disabled but not uninstalled.

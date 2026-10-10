@@ -1,210 +1,357 @@
-# Installing the Android environment
+# Android Environment Setup
 
-What the android-dev skill needs on the machine, how to check it, and how to
-install what is missing. Nothing here is a workaround: when a piece is absent
-the skill reports it and stops, it does not pretend.
+Use this procedure only when `android_preflight` reports that the Android development environment is not ready.
 
-## The pieces
+The goal is to make the environment ready with deterministic shell commands, then return to MCP tools. Do not call removed setup tools such as `android_ensure_environment`.
 
-| piece | why | how it arrives |
-| --- | --- | --- |
-| JDK (17 by default) | Gradle and the Android Gradle Plugin run on it | Adoptium/Temurin, or the OS package |
-| Android SDK | platform, build-tools, platform-tools | `sdkmanager` from the command-line tools |
-| `adb` on `PATH` | every MCP tool shells out to it | ships in `platform-tools` |
-| `emulator` on `PATH` | AVD lifecycle tools | ships in `emulator`, plus a system image |
-| A system image | the thing an AVD boots | `sdkmanager "system-images;...;default;abi"` |
+## Configurable Defaults
 
-## Check
+The plugin manifest exposes the Android SDK path, default AVD, JDK major version,
+Android API level, build-tools version, and system image variant/ABI as user
+config. ZCode/OpenCLI passes those values to the MCP server as `ANDROID_PLUGIN_*`
+environment variables, and `android_preflight` reports the effective defaults.
+
+Use those configured values instead of inventing versions. The documented fallback defaults are:
+
+- `ANDROID_PLUGIN_JDK_MAJOR=17`
+- `ANDROID_PLUGIN_API_LEVEL=35`
+- `ANDROID_PLUGIN_BUILD_TOOLS_VERSION=35.0.0`
+- `ANDROID_PLUGIN_SYSTEM_IMAGE_VARIANT=default`
+- `ANDROID_PLUGIN_SYSTEM_IMAGE_ABI=` for host-based auto selection
+
+The Windows PowerShell setup commands also accept these shell environment
+overrides when you run them directly; they are not plugin user config and are
+not injected into the MCP server:
+
+- `ANDROID_PLUGIN_DEFAULT_PROFILE=medium_phone`
+- `ANDROID_PLUGIN_WINDOWS_JDK_WINGET_PACKAGE=EclipseAdoptium.Temurin.17.JDK`
+
+## Guardrails
+
+- Use explicit long timeouts for install commands, normally 10-30 minutes.
+- Do not run `brew`, `sdkmanager`, `avdmanager`, or PowerShell installers in the background.
+- Do not pipe long installer output through `tail` only; preserve logs when useful.
+- If a command asks for a password, administrator permission, or license acceptance, stop and ask the user to complete or approve that step.
+- After each setup phase, re-run `android_preflight` and continue from the latest result.
+
+## Quick Fix: Gradle Not Found
+
+If `android_preflight` only reports `Gradle` as `not found`, do not reinstall the Android SDK. Install Gradle, then re-run `android_preflight`.
+
+macOS:
 
 ```bash
-java -version 2>&1 | head -1          # JDK, major version
-adb version                           # platform-tools
-emulator -list-avds                   # emulator + AVDs
-echo "$ANDROID_HOME"                  # SDK root, if set
-ls "$ANDROID_HOME/platforms" 2>/dev/null   # installed platforms
+brew list gradle >/dev/null 2>&1 || brew install gradle
+gradle -v
 ```
 
-The plugin's `adb_path` / `emulator_path` settings accept a bare name (resolved
-on `PATH`) or an absolute path — set them when the SDK is not on `PATH`.
+Windows PowerShell:
 
-## Install, per platform
-
-**macOS**
-
-```bash
-brew install --cask temurin            # JDK
-brew install --cask android-command-tools
-export ANDROID_HOME="$HOME/Library/Android/sdk"
-yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
-"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" "system-images;android-35;default;arm64-v8a"
-"$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n medium_phone -k "system-images;android-35;default;arm64-v8a" -d medium_phone
+```powershell
+winget install --id Gradle.Gradle --exact --source winget --accept-source-agreements --accept-package-agreements --silent
+gradle -v
 ```
 
-**Linux (Debian/Ubuntu)**
+If a project already has `gradlew` or `gradlew.bat`, global Gradle is not required for that project. Generated projects initially need global Gradle so `android_build_app` can create the wrapper.
+
+## macOS
+
+### Detect Current State
 
 ```bash
-sudo apt install openjdk-17-jdk unzip
-mkdir -p ~/android-sdk && cd ~/android-sdk
-curl -O https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-unzip commandlinetools-linux-*.zip && mkdir -p cmdline-tools/latest
-# then the same sdkmanager/avdmanager sequence as macOS with ANDROID_HOME=~/android-sdk
+JDK_MAJOR="${ANDROID_PLUGIN_JDK_MAJOR:-17}"
+uname -s
+command -v brew || true
+/usr/libexec/java_home -V 2>&1 || true
+test -x "/opt/homebrew/opt/openjdk@$JDK_MAJOR/libexec/openjdk.jdk/Contents/Home/bin/java" && "/opt/homebrew/opt/openjdk@$JDK_MAJOR/libexec/openjdk.jdk/Contents/Home/bin/java" -version
+command -v gradle || true
+command -v sdkmanager || true
+command -v adb || true
+command -v emulator || true
+echo "ANDROID_HOME=$ANDROID_HOME"
+echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 ```
 
-KVM (`/dev/kvm` present and your user in the `kvm` group) is what makes the
-x86_64 emulator usable on Linux; without it the emulator runs but is unusably
-slow. On ARM hosts use the `arm64-v8a` system image instead.
+### Install JDK
 
-**Windows**
+Prefer the Homebrew formula. It is more reliable for headless setup than the JDK cask, and the plugin can inject its `JAVA_HOME` into child processes.
 
-Install the JDK and the "command line tools only" package from the Android
-developer site, then run the same `sdkmanager`/`avdmanager` sequence from
-PowerShell with `ANDROID_HOME` set. The emulator needs hardware acceleration
-(Hypervisor Platform / WHPX or Intel HAXM); without it, prefer a physical
-device with USB debugging.
-
-## API level and images
-
-The plugin's defaults (`api_level` 35, `build_tools_version` 35.0.0, variant
-`default`) are a coherent set. Change them together: an app targeting API 35
-needs `platforms;android-35`, and an AVD can only boot a system image it has.
-ABI follows the host — `arm64-v8a` on Apple Silicon and ARM Linux, `x86_64`
-elsewhere — and the `system_image_abi` setting overrides it when you know
-better.
-
-## Verifying
+Homebrew `openjdk@<major>` is keg-only. That means `java` and `/usr/libexec/java_home` may still fail until `JAVA_HOME`/`PATH` are set, or until the optional system symlink is created.
 
 ```bash
-adb devices            # a device or emulator listed, state "device"
-adb shell getprop ro.build.version.sdk   # the API level actually running
+JDK_MAJOR="${ANDROID_PLUGIN_JDK_MAJOR:-17}"
+brew list "openjdk@$JDK_MAJOR" >/dev/null 2>&1 || brew install "openjdk@$JDK_MAJOR"
+export JAVA_HOME="/opt/homebrew/opt/openjdk@$JDK_MAJOR/libexec/openjdk.jdk/Contents/Home"
+export PATH="$JAVA_HOME/bin:/opt/homebrew/bin:$PATH"
+java -version
 ```
 
-Both must answer before the skill's workflow is usable. A device in state
-`unauthorized` means the RSA prompt on the device was not accepted; `offline`
-usually means a half-booted emulator.
-
-## Configurable defaults
-
-The plugin's `userConfig` supplies these; every command below reads them, and
-changing a default means changing them together:
-
-| setting | default | what it drives |
-| --- | --- | --- |
-| `sdk_path` | (empty → `ANDROID_HOME`/`ANDROID_SDK_ROOT`) | where `adb`/`emulator`/`sdkmanager` are looked up |
-| `adb_path` / `emulator_path` | `adb` / `emulator` | bare name on `PATH`, or an absolute path |
-| `default_avd` | `medium_phone` | which device `start_avd` boots |
-| `api_level` | `35` | the platform to install and target |
-| `build_tools_version` | `35.0.0` | the build-tools package |
-| `system_image_variant` | `default` | `default` / `google_apis` / `google_apis_playstore` |
-| `system_image_abi` | (host-derived) | `arm64-v8a` on Apple Silicon/ARM, else `x86_64` |
-| `jdk_major` | `17` | the JDK the preflight expects |
-
-**Guardrails** — the checks that run before anything is installed:
-
-- `java -version` reports a JDK at or above `jdk_major`.
-- `adb version` answers (platform-tools installed).
-- `emulator -list-avds` answers and lists at least one AVD.
-- The ABI of the installed system image matches the host — an x86_64 image on
-  an ARM Mac boots (slowly, through Rosetta) or does not boot at all depending
-  on the macOS version; the arm64 image is the correct default there.
-- Disk space: a system image plus the AVD's userdata is ~2–4 GB. A full disk
-  produces "the emulator will not start" reports that are really disk reports.
-
-## Quick fix: Gradle not found
-
-The most common first-build failure, and it is not an SDK problem:
-
-- **Symptom**: `./gradlew: Permission denied` or `gradlew: command not found`
-  — or, on Windows, `./gradlew is not recognized`.
-- **Fix**: the wrapper script is not executable (`chmod +x gradlew`), or the
-  project has no wrapper (`gradle wrapper` once, with a system Gradle), or the
-  shell cannot see it (`bash gradlew` instead of `./gradlew`).
-- The wrapper is the supported path: it pins the Gradle version per project.
-  A system Gradle and the wrapper disagreeing produces builds that work on one
-  machine and fail on another.
-
-## macOS — the full sequence
-
-### Detect current state
+If the user wants Java visible to `/usr/libexec/java_home`, ask before running the privileged symlink:
 
 ```bash
-java -version 2>&1 | head -1
-adb version 2>/dev/null || echo "no adb"
-emulator -list-avds 2>/dev/null || echo "no emulator"
-echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
-ls ~/Library/Android/sdk 2>/dev/null || echo "no default SDK dir"
+JDK_MAJOR="${ANDROID_PLUGIN_JDK_MAJOR:-17}"
+sudo ln -sfn "/opt/homebrew/opt/openjdk@$JDK_MAJOR/libexec/openjdk.jdk" "/Library/Java/JavaVirtualMachines/openjdk-$JDK_MAJOR.jdk"
 ```
 
-### Install the JDK
+Only write shell startup files after user confirmation:
 
 ```bash
-brew install --cask temurin        # or: openjdk@17
+JDK_MAJOR="${ANDROID_PLUGIN_JDK_MAJOR:-17}"
+printf '\nexport JAVA_HOME=/opt/homebrew/opt/openjdk@%s/libexec/openjdk.jdk/Contents/Home\nexport PATH="$JAVA_HOME/bin:$PATH"\n' "$JDK_MAJOR" >> ~/.zshrc
 ```
 
-Verify the major version matches `jdk_major`. A newer JDK than the Android
-Gradle Plugin supports is the cause of `Unsupported class file major version`
-— the fix is the JDK version, not the plugin.
+### Install Gradle
 
-### Install Gradle (optional)
-
-The wrapper (§Quick fix) is preferred. When a system Gradle is wanted:
-`brew install gradle`.
-
-### Install the Android command-line tools
+Generated projects prefer `./gradlew`. If it is missing, `android_build_app` can generate a wrapper when `gradle` is available.
 
 ```bash
-brew install --cask android-command-tools
-export ANDROID_HOME="$HOME/Library/Android/sdk"
+brew list gradle >/dev/null 2>&1 || brew install gradle
 ```
 
-### Install SDK packages
+### Install Android Command-Line Tools
 
 ```bash
-yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
-"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+brew list --cask android-commandlinetools >/dev/null 2>&1 || brew install --cask android-commandlinetools
+```
+
+Use the plugin SDK path if configured; otherwise use the Homebrew cask location:
+
+```bash
+JDK_MAJOR="${ANDROID_PLUGIN_JDK_MAJOR:-17}"
+export ANDROID_HOME="${ANDROID_PLUGIN_SDK_PATH:-/opt/homebrew/share/android-commandlinetools}"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export JAVA_HOME="/opt/homebrew/opt/openjdk@$JDK_MAJOR/libexec/openjdk.jdk/Contents/Home"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:/opt/homebrew/bin:$PATH"
+sdkmanager --version
+```
+
+### Install SDK Packages
+
+Default to the smaller `default` system image. Use `google_apis` only when the app needs Google APIs.
+
+Image variants trade size for capabilities:
+
+- `default`: smaller, enough for normal build/run testing.
+- `google_apis`: larger, use when Google APIs are required.
+- `google_apis_playstore`: largest, use only when Play Store services are required.
+
+```bash
+ANDROID_API_LEVEL="${ANDROID_PLUGIN_API_LEVEL:-35}"
+ANDROID_BUILD_TOOLS_VERSION="${ANDROID_PLUGIN_BUILD_TOOLS_VERSION:-35.0.0}"
+SYSTEM_IMAGE_VARIANT="${ANDROID_PLUGIN_SYSTEM_IMAGE_VARIANT:-default}"
+if [ -n "${ANDROID_PLUGIN_SYSTEM_IMAGE_ABI:-}" ]; then
+  SYSTEM_IMAGE_ABI="$ANDROID_PLUGIN_SYSTEM_IMAGE_ABI"
+elif [ "$(uname -m)" = "arm64" ]; then
+  SYSTEM_IMAGE_ABI="arm64-v8a"
+else
+  SYSTEM_IMAGE_ABI="x86_64"
+fi
+SYSTEM_IMAGE="system-images;android-$ANDROID_API_LEVEL;$SYSTEM_IMAGE_VARIANT;$SYSTEM_IMAGE_ABI"
+
+sdkmanager --sdk_root="$ANDROID_HOME" --install \
+  "cmdline-tools;latest" \
   "platform-tools" \
-  "platforms;android-35" \
-  "build-tools;35.0.0" \
   "emulator" \
-  "system-images;android-35;default;arm64-v8a"
+  "platforms;android-$ANDROID_API_LEVEL" \
+  "build-tools;$ANDROID_BUILD_TOOLS_VERSION" \
+  "$SYSTEM_IMAGE"
 ```
 
-Accept the licences first — a package install without accepted licences fails
-at the build, not at the install, which is the confusing version.
+If the system image download times out, retry the exact command with a longer timeout and keep the output log. Avoid launching a second `sdkmanager` for the same package while the first one is still running.
 
-### Create the AVD
+If SDK licenses block installation, ask the user to approve license handling before running:
 
 ```bash
-"$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
-  -n medium_phone \
-  -k "system-images;android-35;default;arm64-v8a" \
-  -d medium_phone
+sdkmanager --sdk_root="$ANDROID_HOME" --licenses
 ```
 
-The `-d` device profile and the `-k` system image must both exist; a mismatch
-fails at `start_avd` with a message about the image, not the profile.
+### Create AVD
 
-## Windows — the differences
+Only create an AVD when no ready USB device is available and the user needs a
+new emulator target.
 
-Everything above applies with three changes:
+```bash
+AVD_NAME="${ANDROID_PLUGIN_DEFAULT_AVD:-medium_phone}"
+DEVICE_PROFILE="${ANDROID_PLUGIN_DEFAULT_PROFILE:-medium_phone}"
 
-1. **Detect**: `where adb`, `where emulator`, `echo %ANDROID_HOME%`. The
-   binaries live under `%LOCALAPPDATA%\Android\Sdk` by default, and a shell
-   started before the install will not see them — open a new shell, or add the
-   directories to `PATH`.
-2. **Install**: the JDK from Adoptium, and the "command line tools only" zip
-   from the Android developer site — extract it to
-   `%LOCALAPPDATA%\Android\Sdk\cmdline-tools\latest\` (the `latest` directory
-   name is what `sdkmanager` expects).
-3. **Acceleration**: the emulator needs Hyper-V / WHPX (or Intel HAXM on older
-   CPUs). Without it the emulator is unusably slow; a physical device with USB
-   debugging is the better path on a machine without it.
+avdmanager create avd \
+  --name "$AVD_NAME" \
+  --package "$SYSTEM_IMAGE" \
+  --device "$DEVICE_PROFILE"
+```
 
-## Linux — the differences
+If the AVD already exists, do not delete it unless the user explicitly confirms.
 
-- JDK from the distribution (`openjdk-17-jdk`), command-line tools from the
-  Google zip, same `sdkmanager` sequence.
-- **KVM is what makes the x86_64 emulator usable**: `/dev/kvm` must exist and
-  the user must be in the `kvm` group. Without it, use the `arm64-v8a` image on
-  ARM hosts or a physical device on x86.
-- Distribution packages (`adb`, `fastboot`) are often older than
-  platform-tools; prefer the SDK's own copies and put them first on `PATH`.
+## Windows PowerShell
+
+Run these commands step by step. They install the configured JDK and Android
+Studio with `winget`, then use the Android SDK tools that Android Studio
+installs. Keep the setup visible for review.
+
+### Detect Current State
+
+```powershell
+$PSVersionTable.PSVersion
+where.exe java 2>$null
+where.exe gradle 2>$null
+where.exe sdkmanager 2>$null
+where.exe adb 2>$null
+where.exe emulator 2>$null
+Write-Output "ANDROID_HOME=$env:ANDROID_HOME"
+Write-Output "ANDROID_SDK_ROOT=$env:ANDROID_SDK_ROOT"
+```
+
+### Install JDK, Gradle, and Android Studio
+
+```powershell
+$JdkPackage = if ($env:ANDROID_PLUGIN_WINDOWS_JDK_WINGET_PACKAGE) { $env:ANDROID_PLUGIN_WINDOWS_JDK_WINGET_PACKAGE } else { "EclipseAdoptium.Temurin.17.JDK" }
+winget install --id "$JdkPackage" --exact --source winget --accept-source-agreements --accept-package-agreements --silent
+winget install --id Gradle.Gradle --exact --source winget --accept-source-agreements --accept-package-agreements --silent
+winget install --id Google.AndroidStudio --exact --source winget --accept-source-agreements --accept-package-agreements
+```
+
+### Confirm Android Command-Line Tools
+
+Use Android Studio SDK Manager to install Android SDK Command-line Tools,
+Android SDK Platform-Tools, Android Emulator, the configured Android platform,
+build tools, and a system image. Avoid direct zip URLs here so the guide does
+not need to maintain Google command-line tools package identifiers.
+
+```powershell
+$SdkRoot = if ($env:ANDROID_PLUGIN_SDK_PATH) { $env:ANDROID_PLUGIN_SDK_PATH } else { "$env:LOCALAPPDATA\Android\Sdk" }
+$SdkManager = Join-Path $SdkRoot "cmdline-tools\latest\bin\sdkmanager.bat"
+if (-not (Test-Path $SdkManager)) {
+  throw "Install Android SDK Command-line Tools from Android Studio SDK Manager, then rerun android_preflight."
+}
+```
+
+Configure the current session:
+
+```powershell
+$env:ANDROID_HOME = $SdkRoot
+$env:ANDROID_SDK_ROOT = $SdkRoot
+$JdkMajor = if ($env:ANDROID_PLUGIN_JDK_MAJOR) { $env:ANDROID_PLUGIN_JDK_MAJOR } else { "17" }
+$JavaHome = Get-ChildItem "$env:ProgramFiles\Eclipse Adoptium" -Directory -Filter "jdk-$JdkMajor*" |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+$env:JAVA_HOME = $JavaHome.FullName
+$env:Path = "$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator;$env:ANDROID_HOME\cmdline-tools\latest\bin;$env:Path"
+```
+
+Persist user-level environment variables when the user wants future terminals to inherit them:
+
+```powershell
+[Environment]::SetEnvironmentVariable("ANDROID_HOME", $env:ANDROID_HOME, "User")
+[Environment]::SetEnvironmentVariable("ANDROID_SDK_ROOT", $env:ANDROID_HOME, "User")
+[Environment]::SetEnvironmentVariable("JAVA_HOME", $env:JAVA_HOME, "User")
+```
+
+Install SDK packages:
+
+Default to the smaller `default` system image.
+
+```powershell
+$AndroidApiLevel = if ($env:ANDROID_PLUGIN_API_LEVEL) { $env:ANDROID_PLUGIN_API_LEVEL } else { "35" }
+$BuildToolsVersion = if ($env:ANDROID_PLUGIN_BUILD_TOOLS_VERSION) { $env:ANDROID_PLUGIN_BUILD_TOOLS_VERSION } else { "35.0.0" }
+$SystemImageVariant = if ($env:ANDROID_PLUGIN_SYSTEM_IMAGE_VARIANT) { $env:ANDROID_PLUGIN_SYSTEM_IMAGE_VARIANT } else { "default" }
+$Abi = if ($env:ANDROID_PLUGIN_SYSTEM_IMAGE_ABI) { $env:ANDROID_PLUGIN_SYSTEM_IMAGE_ABI } elseif ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64-v8a" } else { "x86_64" }
+$SystemImage = "system-images;android-$AndroidApiLevel;$SystemImageVariant;$Abi"
+
+sdkmanager.bat --sdk_root="$env:ANDROID_HOME" --install `
+  "cmdline-tools;latest" `
+  "platform-tools" `
+  "emulator" `
+  "platforms;android-$AndroidApiLevel" `
+  "build-tools;$BuildToolsVersion" `
+  "$SystemImage"
+```
+
+If SDK licenses block installation, ask the user to approve license handling before running:
+
+```powershell
+sdkmanager.bat --sdk_root="$env:ANDROID_HOME" --licenses
+```
+
+Create an AVD:
+
+Only create an AVD when no ready USB device is available and the user needs a
+new emulator target.
+
+```powershell
+$AvdName = if ($env:ANDROID_PLUGIN_DEFAULT_AVD) { $env:ANDROID_PLUGIN_DEFAULT_AVD } else { "medium_phone" }
+$DeviceProfile = if ($env:ANDROID_PLUGIN_DEFAULT_PROFILE) { $env:ANDROID_PLUGIN_DEFAULT_PROFILE } else { "medium_phone" }
+
+avdmanager.bat create avd `
+  --name "$AvdName" `
+  --package "$SystemImage" `
+  --device "$DeviceProfile"
+```
+
+### Windows Emulator Acceleration
+
+The command-line flow can install the SDK and create an AVD, but Windows emulator acceleration may still require user or administrator action.
+
+Check acceleration:
+
+```powershell
+emulator.exe -accel-check
+```
+
+If acceleration or drivers are missing:
+
+- Ask the user to enable CPU virtualization in BIOS/UEFI if it is disabled.
+- Prefer enabling Windows Hypervisor Platform / WHPX when available.
+- If the emulator driver still needs setup, install Android Studio and ask the user to finish Device Manager or driver prompts:
+
+```powershell
+winget install --id Google.AndroidStudio --exact --source winget --accept-source-agreements --accept-package-agreements
+```
+
+## Project Configuration
+
+Generated projects include `gradle.properties` and create `local.properties` when the plugin can detect the SDK root. If you need to repair an existing Android Gradle root manually:
+
+Create `gradle.properties` when AndroidX or Compose dependencies are present:
+
+```properties
+android.useAndroidX=true
+android.nonTransitiveRClass=true
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+```
+
+macOS:
+
+```bash
+printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+```
+
+Windows PowerShell:
+
+```powershell
+$SdkDir = $env:ANDROID_HOME -replace '\\', '/'
+"sdk.dir=$SdkDir" | Set-Content local.properties
+```
+
+If the Gradle wrapper is missing and Gradle is installed:
+
+macOS:
+
+```bash
+gradle wrapper --gradle-version 8.9
+```
+
+Windows PowerShell:
+
+```powershell
+gradle wrapper --gradle-version 8.9
+```
+
+## Final Verification
+
+Re-run `android_preflight`. Continue when the host OS, SDK root, `adb`,
+`sdkmanager`, Java, Gradle, and at least one Android target path are ready. A
+ready USB device satisfies target readiness without an AVD. For emulator
+workflows, also require `emulator`, `avdmanager`, at least one AVD, and on
+Windows a passing `Emulator acceleration` check before starting the emulator. It
+is acceptable for `ADB devices` to show zero devices before an emulator is
+started.

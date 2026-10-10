@@ -2,7 +2,7 @@
   "mcpServers": {
     "ios-simulator": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp/server.mjs"],
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/mcp/server.js"],
       "cwd": "${CLAUDE_PROJECT_DIR}",
       "env": {
         "IOS_SIM_PACKAGE_ROOT": "${CLAUDE_PLUGIN_ROOT}",

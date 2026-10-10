@@ -39,16 +39,16 @@ Read this file in full before authoring. Reread truncated ranges in smaller call
 ### Content and response
 
 - Keep the fragment focused on the visualization. Do not include explanatory paragraphs, formulas, instructions, or narrative callouts. Include only necessary labels, legends, values, and accessible text alternatives.
-- Use the normal response flow. Put any necessary concise explanation outside the fragment, and add this visualization content reference on its own line where the visual should appear, using the absolute executor-side file path:
+- Use the normal response flow. Put any necessary concise explanation outside the fragment, and add this visualization content reference on its own line where the visual should appear, using the absolute executor-side file path. Emit the literal ASCII prefix `::visualize` followed by a JSON object; keep both colons, do not use Unicode private-use delimiters, and do not wrap the reference in backticks or a code fence:
 
 ```text
-visualize{"path":"<absolute-path>/<title>.html"}
+::visualize{"path":"<absolute-path>/<title>.html"}
 ```
 
 - Add `"mode":"wide"` for a full-screen desktop app mockup, including its application shell. For other visuals, add it only when several compact chart panels must remain side by side for direct comparison and would be unreadable at the normal width. Never widen a single plot, map, grid, diagram, or timeline merely because it is dense. Keep contained mockups, dialogs, and mobile screens at normal width; stack separate self-contained views vertically. Visualizations fill the available conversation width; the host does not impose a separate card width cap:
 
 ```text
-visualize{"path":"<absolute-path>/<title>.html","mode":"wide"}
+::visualize{"path":"<absolute-path>/<title>.html","mode":"wide"}
 ```
 
 - Whenever you create or update an inline visualization, include its content reference only in that same turn's final response (never in commentary or progress updates), even when editing an existing file or reusing a path shown in an earlier turn.
@@ -98,6 +98,7 @@ Choose the smallest composition that fits.
 
 - Prefer interaction detail over permanent panels, toolbars, repeated legends, or long stacks. Add only requested controls, use one mechanism per state, and never invent search, filter, or reset controls.
 - Keep filters, selections, and other presentation-only interactions local. For drill-down actions that ask ZCode to investigate or explain selected data, call `await window.zcode.sendFollowUpMessage({ prompt, title })`, where the optional `title` is a concise confirmation-dialog heading of up to 250 characters. Include the selected values and requested investigation in the prompt, and label the action clearly.
+- For external destinations, use a normal `<a href="https://example.com/subscribe">` link. If a button needs scripted handling, call `await window.zcode.openExternal({ href })` from its user click handler; see [API](references/api.md#external-links). Use an absolute HTTP(S) URL. Keep `#fragment` links for navigation within the page.
 - Show only metrics that explain the requested behavior. Put live values in control headers or on the visual before cards. Treat maxima as ceilings, not targets. Never invent qualitative scores, status cards, or secondary fact grids to fill space.
 
 ### Remembering inline interaction state
@@ -272,5 +273,5 @@ Choose the smallest composition that fits.
 
 - Emit inline references only when the Desktop context advertises Gen UI and supplies its session output directory; otherwise return an ordinary HTML artifact. Paths must be absolute on the executor, inside that session directory, with no symlinks or parent traversal. The host renders completed assistant messages only.
 - The frame starts at 240px, follows content height up to 10,000px, and has a host-compensated 5px paint gutter. These are implementation limits, not a target height or a reason to add padding. Secondary annotations are optional; there is no required footer.
-- `window.zcode` exposes widget state, state saving, and follow-up messages. See [API](references/api.md) for acknowledgement, cancellation, and Tweak object bindings. The standalone export supplies state fallback, not Agent access.
-- Older text `::visualize{path="..."}` references remain supported for historical replies. Generate the Unicode reference described above for new replies.
+- `window.zcode` exposes widget state, state saving, follow-up messages, and `openExternal({ href })`. See [API](references/api.md) for external links, acknowledgement, cancellation, and Tweak object bindings. The standalone export supplies state fallback, not Agent access.
+- Older Unicode references and `::visualize{path="..."}` references remain supported for historical replies. Generate the `::visualize` JSON reference described above for new replies.

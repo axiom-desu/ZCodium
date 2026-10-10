@@ -50,6 +50,30 @@ The host installs the bridge before your fragment's scripts run. Do not load ano
 
 `widgetState` is a snapshot or `null`. Saving replaces the whole `{modelContent, privateContent}` object; omitted fields become `null`. Both must be JSON values. The combined serialized size is at most 16 KiB. The host includes only `modelContent` as untrusted data on the next submitted input. No `callTool`, resource reader or full Desktop preload is available. Theme and size synchronize automatically.
 
+## External links
+
+Prefer a normal link for navigation:
+
+```html
+<a class="btn btn-primary" href="https://example.com/subscribe" target="_blank" rel="noopener noreferrer">Subscribe</a>
+```
+
+The inline host opens the destination through the current client's browser entrypoint and keeps the card in place. `target` does not choose a particular browser or tab. Use an absolute `http:` or `https:` URL; `#fragment` links remain within the page. Downloads and other protocols are unsupported.
+
+For a scripted action, `window.zcode.openExternal({ href: string }): Promise<void>` resolves after the host accepts the open operation and rejects on failure. Call it directly from a user click or keyboard activation, not on page load or a timer:
+
+```js
+document.getElementById("subscribe").onclick = async () => {
+  try {
+    await window.zcode.openExternal({ href: "https://example.com/subscribe" });
+  } catch {
+    document.getElementById("status").textContent = "Could not open the link. Try again.";
+  }
+};
+```
+
+The host requires an active, visible card and consumes a native user gesture. When replacing an anchor's default behavior with an explicit API call, call `event.preventDefault()` to avoid a second request. Normal anchor failures emit the existing `zcode:error` event with a string in `event.detail`. External links do not send an Agent message.
+
 ## Local design controls
 
 The source contract is [tweak.md](../tweak.md). The example below uses the same API with the ZCode bridge.

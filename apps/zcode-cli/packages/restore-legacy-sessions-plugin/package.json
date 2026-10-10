@@ -4,5 +4,5 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Recovers ZCode conversations recorded by an older client build so they reopen in the current task list."
+  "description": "Legacy ZCode session restoration skills published as an official ZCode plugin."
 }

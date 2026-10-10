@@ -7,8 +7,8 @@
     "zh-CN": "在 ZCode 会话中创建交互式讲解、图表与设计预览。"
   },
   "author": {
-    "name": "ZCodium"
+    "name": "ZCode"
   },
-  "license": "SEE LICENSE IN skills/visualize/LICENSE.md",
+  "license": "Apache-2.0",
   "skills": "skills"
 }

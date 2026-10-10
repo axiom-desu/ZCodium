@@ -1,54 +1,80 @@
-# Font list
-
-Fonts the docx skill's documents name, and the substitution risk that comes
-with them. A `.docx` stores font *names*, resolved on the machine that opens
-it: a face missing there is substituted, the substituted metrics re-wrap every
-paragraph, and the document the author approved is not the document the reader
-sees. This list exists so that risk is a decision.
-
-The list is factual data — font family names and their sources — not a
-redistribution of the fonts themselves.
-
-## The safe pairs
-
-| role | primary | metric-compatible fallback |
-| --- | --- | --- |
-| body (serif) | Times New Roman | Liberation Serif |
-| body (sans) | Arial | Liberation Sans |
-| headings | Calibri | Carlito |
-| monospace | Courier New | Liberation Mono |
-| CJK (Chinese) | SimSun / Microsoft YaHei | Noto Serif CJK SC / Noto Sans CJK SC |
-
-The Liberation family is metric-compatible with the Times/Arial/Courier trio,
-which is why a document that names Times New Roman renders with Liberation
-Serif at the same line breaks on a Linux machine without Microsoft fonts.
-
-## Families worth having installed
-
-| family | source |
-| --- | --- |
-| Liberation Sans / Serif / Mono | `fonts-liberation` (Debian/Ubuntu) |
-| Carlito, Caladea | `fonts-crosextra-carlito` / `fonts-crosextra-caladea` |
-| Noto Serif / Sans CJK | `fonts-noto-cjk` (Debian), `brew install font-noto-serif-cjk-sc` |
-| DejaVu Sans / Serif | ships with most Linux distributions |
-
-## Diagnosing a substitution
-
-- Export the document to PDF (LibreOffice headless, `soffice --headless
-  --convert-to pdf`) and read the result: re-wrapped paragraphs, changed line
-  counts, a table that grew a row — all symptoms of a substituted face.
-- `pdffonts document.pdf` on the export lists the faces actually used; a face
-  the document did not name is a substitution.
-- A font that exists only on the build machine is a defect, not a portability
-  detail — either install it where the document will be read, or change the
-  document to name a face that exists there.
-
-## Rules
-
-- Name fonts that exist on the machines that will open the document, or accept
-  the metric-compatible fallback explicitly.
-- Set the font through the document's style definitions (the docx `styles.xml`
-  defaults), not per run — a per-run font is what makes a font migration a
-  find-and-replace project.
-- CJK documents: the named face must exist on the rendering machine or the PDF
-  export shows tofu. Noto CJK is the portable choice.
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-Bold.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-Italic.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-BoldItalic.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-Light.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-LightItalic.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-ExtraLight.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-ExtraLightItalic.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-SemiBold.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-SemiBoldItalic.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC[wght].ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Thin.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-ExtraLight.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Light.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Regular.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Medium.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-SemiBold.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Bold.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-ExtraBold.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Black.ttf
+/usr/share/fonts/truetype/chinese/LiberationSans-Regular.ttf
+/usr/share/fonts/truetype/chinese/LiberationMono-Regular.ttf
+/usr/share/fonts/truetype/chinese/LiberationSerif-Regular.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-VariableFont_wght.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-ExtraLight.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Light.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Regular.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Medium.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-SemiBold.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Bold.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-ExtraBold.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Black.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKai-Regular.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKai-Medium.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKai-Light.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKaiMono-Regular.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKaiMono-Medium.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKaiMono-Light.ttf
+/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc
+/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Oblique.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSansMono-BoldOblique.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf
+/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf
+/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf
+/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf
+/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf
+/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf
+/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf
+/usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf
+/usr/share/fonts/truetype/liberation/LiberationSerif-BoldItalic.ttf
+/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf
+/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf
+/usr/share/fonts/truetype/liberation/LiberationMono-Italic.ttf
+/usr/share/fonts/truetype/liberation/LiberationMono-BoldItalic.ttf
+/usr/share/fonts/truetype/english/Tinos-Regular.ttf
+/usr/share/fonts/truetype/english/Tinos-Bold.ttf
+/usr/share/fonts/truetype/english/Tinos-Italic.ttf
+/usr/share/fonts/truetype/english/Tinos-BoldItalic.ttf
+/usr/share/fonts/truetype/english/Carlito-Regular.ttf
+/usr/share/fonts/truetype/english/Carlito-Bold.ttf
+/usr/share/fonts/truetype/english/Carlito-Italic.ttf
+/usr/share/fonts/truetype/english/Carlito-BoldItalic.ttf
+/usr/share/fonts/truetype/freefont/FreeSans.ttf
+/usr/share/fonts/truetype/freefont/FreeSansBold.ttf
+/usr/share/fonts/truetype/freefont/FreeSansOblique.ttf
+/usr/share/fonts/truetype/freefont/FreeSansBoldOblique.ttf
+/usr/share/fonts/truetype/freefont/FreeSerif.ttf
+/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf
+/usr/share/fonts/truetype/freefont/FreeSerifItalic.ttf
+/usr/share/fonts/truetype/freefont/FreeSerifBoldItalic.ttf
+/usr/share/fonts/truetype/freefont/FreeMono.ttf
+/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf
+/usr/share/fonts/truetype/freefont/FreeMonoOblique.ttf
+/usr/share/fonts/truetype/freefont/FreeMonoBoldOblique.ttf
+/usr/share/fonts/truetype/libreoffice/opens___.ttf

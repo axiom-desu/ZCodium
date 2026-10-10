@@ -138,7 +138,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../../node-repl-host",
       "../../../node-repl-host",
     ],
-    version: "0.6.0",
+    version: "0.6.1",
   },
   {
     listing: {
@@ -190,10 +190,10 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       // seed 注册与发行清单一致，资源完整性仍由 requiredSeedPaths 严格校验。
       // version 与各自 package.json / plugin.json 逐字一致：三处不一致会让官方 seed
       // 继续加载旧缓存目录（见上方 browser-use 的同类注释）。
-      ["presentations", "pptx", "Presentations", "演示文档", "0.1.7"],
-      ["documents", "docx", "Documents", "Word 文档", "0.1.7"],
+      ["presentations", "pptx", "Presentations", "演示文档", "0.1.8"],
+      ["documents", "docx", "Documents", "Word 文档", "0.1.8"],
       ["pdf", "pdf", "PDF", "PDF 文档", "0.2.0"],
-      ["spreadsheets", "xlsx", "Spreadsheets", "电子表格", "0.1.7"],
+      ["spreadsheets", "xlsx", "Spreadsheets", "电子表格", "0.1.8"],
     ] as const
   ).map(
     ([name, skill, displayName, chineseName, version]): OfficialPluginDefinition => ({
@@ -234,7 +234,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../../image-search-plugin",
       "../../../image-search-plugin",
     ],
-    version: "0.2.0",
+    version: "0.2.1",
   },
   {
     listing: {
@@ -342,7 +342,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../../zcode-guide-plugin",
       "../../../zcode-guide-plugin",
     ],
-    version: "0.2.0",
+    version: "0.3.0",
   },
   {
     // 产品决策：电脑控制回退为默认关闭，需用户在设置页显式开启。
@@ -378,7 +378,8 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     runtimeTopLevelPaths: [],
     // 这里的 version 追踪上游 zcode-cua runtime 版本，使插件 UI 展示、缓存路径、
     // marketplace 条目都对齐；具体版本由原子 producer bump 工作流维护。
-    version: "0.6.3",
+    // 0.6.4 = upstream/main aac47556（v3.15.1）的 zcode-cua-plugin/plugin.json。
+    version: "0.6.4",
   },
   {
     // Superpowers 方法论技能集（brainstorming / planning / TDD / debugging / review）。

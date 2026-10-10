@@ -1,81 +1,82 @@
-# Font list
-
-Fonts the pdf skill's documents actually name, grouped by the job they do.
-Use it to decide what to install before a build that needs a specific face,
-and to diagnose a substitution after the fact.
-
-The list is factual data — font family names and their sources — not a
-redistribution of the fonts themselves. Install from the upstream project of
-your platform.
-
-## Text faces (serif)
-
-| family | notes | typical use |
-| --- | --- | --- |
-| Latin Modern Roman | ships with every TeX Live; the Computer Modern descendant | default pdfLaTeX body face |
-| TeX Gyre Termes | Times-metrics, wide coverage | Times-style documents |
-| TeX Gyre Pagella | Palatino-metrics | bookish body text |
-| Libertinus / Linux Libertine | elegant, good italics | reports, theses |
-| Noto Serif | huge script coverage | CJK-adjacent Latin text, mixed documents |
-| DejaVu Serif | wide coverage, utilitarian | when nothing else is installed |
-
-## Text faces (sans)
-
-| family | notes | typical use |
-| --- | --- | --- |
-| Latin Modern Sans | ships with TeX Live | default sans |
-| TeX Gyre Heros | Helvetica-metrics | headings, slides |
-| Fira Sans | compact, modern | technical documents |
-| Noto Sans | huge script coverage | mixed documents |
-| DejaVu Sans | wide coverage, utilitarian | fallback |
-
-## Monospace
-
-| family | notes |
-| --- | --- |
-| Latin Modern Mono / TeX Gyre Cursor | Courier-metrics; ships with TeX Live |
-| DejaVu Sans Mono | clear at small sizes; the usual code face |
-| JetBrains Mono / Fira Code | ligatures and clearer digits; install explicitly |
-
-## CJK faces
-
-| script | families worth having | engine note |
-| --- | --- | --- |
-| Chinese | Noto Serif CJK SC, Noto Sans CJK SC, Source Han Serif/Sans, WenQuanYi | `xeCJK`/`ctex` with `fontspec`; XeLaTeX or LuaLaTeX |
-| Japanese | Noto Serif CJK JP, IPAex | same |
-| Korean | Noto Serif CJK KR, Nanum | same |
-
-CJK documents cannot use pdfLaTeX with the system faces — the engine choice is
-XeLaTeX or LuaLaTeX (SKILL.md §4), and the face must be named explicitly so the
-build does not depend on the machine's default fallback.
-
-## Math faces
-
-| family | notes |
-| --- | --- |
-| Latin Modern Math | the pdfLaTeX default |
-| TeX Gyre Termes Math / Pagella Math | to match the text face |
-| STIX Two Math | Times-compatible, broad symbol coverage |
-| Libertinus Math | matches Libertinus text |
-
-## Diagnosing a substitution
-
-```bash
-pdffonts document.pdf
-```
-
-Every font line should name a face you chose and show `emb yes`. A face you did
-not choose, or `emb no`, means the build machine substituted — the document's
-metrics moved with it. Fix by installing the named face, or by changing the
-preamble to a face that exists on the machine that renders.
-
-## Installing
-
-- **TeX Live**: most of the TeX Gyre and Latin Modern faces ship with
-  `collection-fontsrecommended` / `collection-fontsextra`
-  (`tlmgr install collection-fontsextra`).
-- **System fonts** (Noto, Fira, JetBrains, Source Han): the platform's package
-  manager — `apt install fonts-noto-cjk`, `brew install font-jetbrains-mono`,
-  or the upstream release archives. XeLaTeX/LuaLaTeX see system fonts through
-  `fontspec` by family name; after installing, refresh the font cache
-  (`fc-cache -f`) before building.
+/usr/share/fonts/truetype/chinese/NotoSansSC[wght].ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-Bold.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-Italic.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-BoldItalic.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-Light.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-LightItalic.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-ExtraLight.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-ExtraLightItalic.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-SemiBold.ttf
+/usr/share/fonts/truetype/chinese/SarasaMonoSC-SemiBoldItalic.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC[wght].ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Thin.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-ExtraLight.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Light.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Regular.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Medium.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-SemiBold.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Bold.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-ExtraBold.ttf
+/usr/share/fonts/truetype/chinese/NotoSansSC-Black.ttf
+/usr/share/fonts/truetype/chinese/LiberationSans-Regular.ttf
+/usr/share/fonts/truetype/chinese/LiberationMono-Regular.ttf
+/usr/share/fonts/truetype/chinese/LiberationSerif-Regular.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-VariableFont_wght.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-VariableFont_wght.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-ExtraLight.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Light.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Regular.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Medium.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-SemiBold.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Bold.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-ExtraBold.ttf
+/usr/share/fonts/truetype/noto-serif-sc/NotoSerifSC-Black.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKai-Regular.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKai-Medium.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKai-Light.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKaiMono-Regular.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKaiMono-Medium.ttf
+/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKaiMono-Light.ttf
+/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc
+/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Oblique.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSansMono-BoldOblique.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf
+/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf
+/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf
+/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf
+/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf
+/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf
+/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf
+/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf
+/usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf
+/usr/share/fonts/truetype/liberation/LiberationSerif-BoldItalic.ttf
+/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf
+/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf
+/usr/share/fonts/truetype/liberation/LiberationMono-Italic.ttf
+/usr/share/fonts/truetype/liberation/LiberationMono-BoldItalic.ttf
+/usr/share/fonts/truetype/english/Tinos-Regular.ttf
+/usr/share/fonts/truetype/english/Tinos-Bold.ttf
+/usr/share/fonts/truetype/english/Tinos-Italic.ttf
+/usr/share/fonts/truetype/english/Tinos-BoldItalic.ttf
+/usr/share/fonts/truetype/english/Carlito-Regular.ttf
+/usr/share/fonts/truetype/english/Carlito-Bold.ttf
+/usr/share/fonts/truetype/english/Carlito-Italic.ttf
+/usr/share/fonts/truetype/english/Carlito-BoldItalic.ttf
+/usr/share/fonts/truetype/freefont/FreeSans.ttf
+/usr/share/fonts/truetype/freefont/FreeSansBold.ttf
+/usr/share/fonts/truetype/freefont/FreeSansOblique.ttf
+/usr/share/fonts/truetype/freefont/FreeSansBoldOblique.ttf
+/usr/share/fonts/truetype/freefont/FreeSerif.ttf
+/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf
+/usr/share/fonts/truetype/freefont/FreeSerifItalic.ttf
+/usr/share/fonts/truetype/freefont/FreeSerifBoldItalic.ttf
+/usr/share/fonts/truetype/freefont/FreeMono.ttf
+/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf
+/usr/share/fonts/truetype/freefont/FreeMonoOblique.ttf
+/usr/share/fonts/truetype/freefont/FreeMonoBoldOblique.ttf
+/usr/share/fonts/truetype/libreoffice/opens___.ttf

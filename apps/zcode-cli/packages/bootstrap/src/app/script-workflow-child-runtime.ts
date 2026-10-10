@@ -13,6 +13,7 @@ import {
   type PermissionService,
 } from "@zcode/core";
 import {
+  type BrowserControlPort,
   type ContextSourcePort,
   type FileSystemPort,
   type HttpClientPort,
@@ -63,6 +64,13 @@ export function createScriptWorkflowAgentRuntime(input: {
   request: WorkflowAgentCallInput;
   traceContext: TraceContext;
   /**
+   * **父会话**的浏览器端口（主 runtime 用的那一份）。在场即给子代理 Browser Use：这里用
+   * `forChildSession` 派生出子端口——tab 归属是子会话自己的 id，workspace / clientMode 取父会话，
+   * runtime 关闭时连 tab 一起关并撤销登记。只有 dwf actor 传：它的 runtime 在 run dispose 时必然
+   * `closeBrowserSession`；legacy workflow child 没有关闭链路，不传。
+   */
+  browserControlPort?: BrowserControlPort;
+  /**
    * 覆盖 child runtime 的配置切片。dwf actor 用它落工具面：`workflowActorToolPolicy` 给出
    * `toolDisallowlist`（全集的减法），而 `request.opts.tools` 只能表达 allowlist——两者不是
    * 同一个自由度。
@@ -106,6 +114,15 @@ export function createScriptWorkflowAgentRuntime(input: {
     throw new Error(`Workflow child model must be provider-qualified: ${input.request.opts.model}`);
   }
   const modelSelection = requestedSelection ?? parentSelection;
+  // Browser Use：actor 的 tab 归属是子会话自己的 sessionId（默认 tabOwner），workspace /
+  // clientMode 经 forChildSession 登记回父会话解析；actor runtime 关闭时连 tab 一起关并
+  // 撤销登记。legacy workflow child 不传端口——它没有关闭链路，留下的是永不回收的登记。
+  // 见 .agents/specs/browser-subagent-shared-tabs.md。
+  const childBrowserControlPort =
+    input.browserControlPort?.forChildSession?.({
+      childSessionId: input.childSessionId,
+      parentSessionId: input.deps.sessionId,
+    }) ?? input.browserControlPort;
   return new AgentRuntime(
     input.childSessionId,
     {
@@ -134,6 +151,9 @@ export function createScriptWorkflowAgentRuntime(input: {
           ? {}
           : { parentTurnId: input.traceContext.turnId }),
       }),
+      ...(childBrowserControlPort === undefined
+        ? {}
+        : { browserControlPort: childBrowserControlPort }),
       ...(input.workflowSubmitPort ? { workflowSubmitPort: input.workflowSubmitPort } : {}),
       ...(input.workflowSubmitPort && input.workflowSubmitSchema
         ? { workflowSubmitSchema: input.workflowSubmitSchema }

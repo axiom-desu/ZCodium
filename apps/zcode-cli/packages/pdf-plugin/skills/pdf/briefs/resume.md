@@ -1,158 +1,227 @@
-# Brief — Resumes and CVs
+## Resume / CV Template (ATS-Friendly)
 
-Applies to one-page resumes, two-page CVs and short professional profiles. The
-constraints here are different in kind from a report's: the page budget is fixed
-before a single line is written, and the document is read by a parser before it is
-read by a person.
+Single-column, clean layout optimised for Applicant Tracking Systems (ATS). No graphics, no sidebars, no colour blocks - just well-structured text that parses perfectly by HR software.
 
-## The one-page constraint
+**When to use this template:**
+- Applying to corporate jobs through online portals
+- Any scenario where the PDF will be machine-parsed before a human reads it
+- When the recruiter explicitly asks for "a standard resume"
 
-Treat the page budget as a hard input, not an outcome.
+**When NOT to use (use Academic brief instead):**
+- Creative/design industry positions → Academic brief (AltaCV-style)
+- Academic CV with publications → Academic brief (Academic CV)
 
-- Decide the page count from the content first: one page for a resume with under
-  roughly eight years of experience, two for a CV with publications, teaching or a
-  long project list. Then fit the content to it.
-- Fit by cutting content, not by shrinking type. The order of preference is:
-  drop a section, drop a bullet, tighten the wording, and only then reduce the
-  leading or the margins.
-- Margins 1.5–2 cm. Below 1.5 cm a resume prints badly and looks like it is
-  hiding something.
-- Body size 10–11 pt. Never below 10 pt to make room — at that point the document
-  is being made unreadable to satisfy a page count that should have been met by
-  deleting a bullet.
-- Set `\raggedbottom` so a short final page does not stretch its spacing to fill
-  the sheet.
-- Name and contact details in a full-width block at the top, before any column
-  structure begins.
+### Resume Design Rules
+- **Target 1 page** unless user specifies otherwise
+- **Margins**: `left=1.5cm, right=1.5cm, top=1.5cm, bottom=1.5cm`
+- **No cover page** - content starts immediately
+- **No TOC** - too short for table of contents
+- **Font**: FreeSerif (English) or Noto Sans SC (Chinese)
+- **Body font size**: 10-10.5pt; Name: 22-26pt; Section titles: 13-14pt
+- **⚠️ Minimum font size: 12px (9pt) - HARD FLOOR.** No text in the entire resume may render smaller than 12px. This includes contact info, meta text, footnotes, and captions. Anything below 12px is unreadable in print and fails accessibility checks.
+- **Section separator**: thin horizontal rule (`HRFlowable`)
+- **Bullet style**: `•` with tight spacing
 
-## Information density
+### Resume Line-Break Rules (Language-Aware)
+- **English**: Prefer breaking at word boundaries (spaces, hyphens). If a long word must be split to avoid excessive whitespace, break at a valid syllable boundary and insert a hyphen (`-`) - this is standard typographic practice (e.g., `experi-\nence`, `develop-\nment`). ReportLab supports `wordWrap='CJK'` only for CJK content; for English use default paragraph wrapping with `allowWidows=0, allowOrphans=0`.
+- **Chinese/CJK**: Break allowed between any two CJK characters. Never break between a CJK character and its adjacent punctuation (、。,)》 etc. must stay with the preceding character.
+- **Mixed content** (e.g., "Python 开发工程师"): Break at CJK boundaries or English word boundaries. Never split an English word in a CJK paragraph unless hyphenated.
+- **Contact line**: Email, phone, location separated by `|` or `·`. Each segment must stay on one line - if too long, move to next line at the separator, not mid-segment.
+- **Dates and ranges**: "Jan 2022 - Present" must stay as one unit. Never break a date range across lines.
 
-- Reverse chronological within every section, most recent first, with consistent
-  date formatting throughout. A reader scans the top entry of each section and
-  stops.
-- Dates right-aligned on the same line as the role or degree, in a `tabular` or
-  with `\hfill`. Left-aligned dates that drift per entry read as sloppiness.
-- Bullets under each role, action verb first, one achievement per bullet, and a
-  number wherever a number exists. "Reduced build time by 40%" carries information
-  that "Improved build performance" does not.
-- Section order: experience, then projects or education depending on which is
-  stronger, then skills, then the short list of extras. Education first only for a
-  new graduate.
-- No objective statement, no "references available on request", no photo unless
-  the market the resume is aimed at expects one.
-- Every line earns its place. A resume is a list of claims, not a narrative.
+### Resume Page-Fill Rules (Anti-Blank-Space)
+- **Goal: Fill ≥85% of the page height.** Content should reach at least the bottom quarter of the page. A resume that stops at 60% height with blank space below = FAIL.
+- **Adaptive spacing strategy** (apply in order until page is ≥85% filled):
+  1. Increase `spaceBefore` / `spaceAfter` on section headers (from 10pt up to 18pt)
+  2. Increase `leading` (line height) on body text (from 14pt up to 18pt)
+  3. Increase body `fontSize` by 0.5-1pt (from 10pt up to 11.5pt max)
+  4. Add a "Professional Summary" or "Key Achievements" section if none exists
+  5. Increase margins slightly (from 1.5cm up to 2cm) to reduce line width and push content downward
+- **Never leave a visible blank area > 3cm at the bottom of the page.**
+- **If content overflows to page 2**: do the reverse - reduce spacing, tighten leading (min 12pt), reduce fontSize (min 9pt / 12px), before removing content.
 
-## ATS readability
+### Complete Resume Template
 
-Applicant tracking systems parse the PDF's text layer before any human sees it.
-This is the part that a purely visual review misses.
+```python
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm, mm
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib import colors
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle
+)
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.pdfmetrics import registerFontFamily
 
-- **Real, selectable text.** No image of a resume, no scanned page, no text baked
-  into a figure. Verify by selecting text in a viewer, or by extracting it.
-- **Embedded fonts.** A font that is not embedded may render as a substitute on
-  the reader's machine, and extraction can return garbage. Check `pdffonts`; `emb`
-  must be `yes` for every font.
-- **Standard section headings.** "Experience", "Education", "Skills" — spelled
-  plainly. A creative heading like "Where I've Been" can be dropped by a parser
-  that is looking for a known section name.
-- **Contact details as plain text**, not only inside a header/footer or a logo
-  image, and not split across lines in a way that breaks the email address.
-- **Build with a Unicode engine** (`xelatex` / `lualatex`) so the text layer keeps
-  correct character codes; `pdflatex` with a legacy encoding can extract accented
-  characters and ligatures incorrectly.
-- **No text in tables for the critical fields.** Name, contact, employer names,
-  job titles, dates and degrees read left-to-right through a table's cell order,
-  which a parser may reassemble in the wrong sequence.
-- **Keep the two-column structure shallow.** See below.
-- **Links as real hyperlinks** with visible text, so a printed copy still carries
-  the address.
+# ── Font Registration ──
+pdfmetrics.registerFont(TTFont('FreeSerif', '/usr/share/fonts/truetype/freefont/FreeSerif.ttf'))
+pdfmetrics.registerFont(TTFont('FreeSerif-Bold', '/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf'))
+pdfmetrics.registerFont(TTFont('FreeSerif-Italic', '/usr/share/fonts/truetype/freefont/FreeSerifItalic.ttf'))
+pdfmetrics.registerFont(TTFont('FreeSerif-BoldItalic', '/usr/share/fonts/truetype/freefont/FreeSerifBoldItalic.ttf'))
+registerFontFamily('FreeSerif', normal='FreeSerif', bold='FreeSerif-Bold', italic='FreeSerif-Italic', boldItalic='FreeSerif-BoldItalic')
+# For Chinese resumes, also register Noto Sans SC:
+# pdfmetrics.registerFont(TTFont('Noto Sans SC', '/usr/share/fonts/truetype/chinese/NotoSansSC-Regular.ttf'))
+# pdfmetrics.registerFont(TTFont('Noto Sans SC Bold', '/usr/share/fonts/truetype/chinese/NotoSansSC-Bold.ttf'))
+# registerFontFamily('Noto Sans SC', normal='Noto Sans SC', bold='Noto Sans SC Bold')
 
-## Columns
+# ── Styles ──
+# ACCENT must come from palette.generate (Step 2)
+# Run: python3 "$PDF_SKILL_DIR/scripts/pdf.py" palette.generate --title "Resume" --mode minimal
+ACCENT = colors.HexColor('<accent from palette>')  # Replace with palette output
 
-Two columns buy density and cost parseability. Both effects are real, so the
-split is deliberate:
+name_style = ParagraphStyle(
+    'ResumeName', fontName='FreeSerif', fontSize=24,
+    leading=28, alignment=TA_CENTER, spaceAfter=2
+)
+contact_style = ParagraphStyle(
+    'ResumeContact', fontName='FreeSerif', fontSize=10,
+    leading=14, alignment=TA_CENTER, textColor=TEXT_MUTED,  # From palette --c-muted
+    spaceAfter=8
+)
+section_title_style = ParagraphStyle(
+    'ResumeSectionTitle', fontName='FreeSerif', fontSize=13,
+    leading=16, spaceBefore=10, spaceAfter=4,
+    textColor=ACCENT
+)
+job_title_style = ParagraphStyle(
+    'ResumeJobTitle', fontName='FreeSerif', fontSize=11,
+    leading=14, spaceAfter=1
+)
+job_meta_style = ParagraphStyle(
+    'ResumeJobMeta', fontName='FreeSerif', fontSize=10,
+    leading=13, textColor=TEXT_MUTED, spaceAfter=4  # From palette --c-muted
+)
+bullet_style = ParagraphStyle(
+    'ResumeBullet', fontName='FreeSerif', fontSize=10,
+    leading=14, leftIndent=14, bulletIndent=0,
+    spaceBefore=1, spaceAfter=1
+)
+body_style = ParagraphStyle(
+    'ResumeBody', fontName='FreeSerif', fontSize=10,
+    leading=14, spaceAfter=2
+)
 
-- Name and contact full width at the top. They are the fields a parser keys on.
-- The left column, roughly 62–65% of `\textwidth`, carries experience and
-  education — the content that must be read in order.
-- The right column carries skills, tools, languages, certifications — short,
-  scannable, order-independent items where a misread sequence costs nothing.
-- `paracol`, or two `minipage` environments of fixed width inside a `noindent`
-  row. `multicol` balances its columns automatically, which is wrong here: the two
-  columns have deliberately different lengths.
-- Never let a single role or degree straddle the column break. Each entry stays
-  inside one column, whole.
-- Check the reading order after extraction. If the parser emits the right column
-  before the left, the section ordering has been lost and the document needs
-  restructuring, not a different package.
+# ── Helpers ──
+def section_header(title):
+    """Section title + thin rule separator."""
+    return [
+        Paragraph(f'<b>{title}</b>', section_title_style),
+        HRFlowable(width='100%', thickness=0.8, color=ACCENT,
+                    spaceBefore=0, spaceAfter=6),
+    ]
 
-## Typography
+def experience_entry(title, company, dates, location, bullets):
+    """One work experience block."""
+    elements = [
+        Paragraph(f'<b>{title}</b>', job_title_style),
+        Paragraph(f'{company}  |  {dates}  |  {location}', job_meta_style),
+    ]
+    for b in bullets:
+        elements.append(Paragraph(f'• {b}', bullet_style))
+    elements.append(Spacer(1, 4))
+    return elements
 
-- One family for headings and one for the body, or a single family at two weights.
-  Three or more families on one page is decoration, not hierarchy.
-- Bullets with `enumitem`, tight spacing (`itemsep` near zero, `parsep` small).
-  Default list spacing wastes a fifth of a page.
-- Section rules — a single `\rule` or a `titlesec` rule under each heading — give
-  the scan structure that colour cannot be relied on to give in a printed or
-  greyscale copy.
-- Consistent capitalisation and punctuation across all section headings.
-- Hyperlinks in a restrained colour, underlined or not, but present.
+def education_entry(degree, school, dates, details=None):
+    """One education block."""
+    elements = [
+        Paragraph(f'<b>{degree}</b>', job_title_style),
+        Paragraph(f'{school}  |  {dates}', job_meta_style),
+    ]
+    if details:
+        elements.append(Paragraph(details, body_style))
+    elements.append(Spacer(1, 4))
+    return elements
 
-## Self-check before handing this over
+def skills_row(categories):
+    """
+    Skills as compact label: value pairs.
+    categories = [('Programming', 'Python, Java, C++'), ('Tools', 'Git, Docker')]
+    """
+    elements = []
+    for cat, vals in categories:
+        elements.append(Paragraph(f'<b>{cat}:</b>  {vals}', body_style))
+    return elements
 
-- Exactly the intended page count (`pdfinfo`). One page means one page.
-- Page size matches the target market's stock — A4 or Letter, not both.
-- Text extracts in a sensible order; the email address survives extraction intact.
-- Every font embedded (`pdffonts`).
-- No overfull `hbox` pushing a line past the margin.
-- Dates aligned on every entry, formatting identical throughout.
-- No entry split across the column break.
-- Nothing below 10 pt.
+# ── Build Document ──
+doc = SimpleDocTemplate(
+    'resume.pdf', pagesize=A4,
+    leftMargin=1.5*cm, rightMargin=1.5*cm,
+    topMargin=1.5*cm, bottomMargin=1.5*cm,
+    title='Resume - Your Name',
+    author='Z.ai', creator='Z.ai'
+)
 
-## Line-break rules (language-aware)
+story = []
 
-A resume is parsed before it is read, and line breaks decide what the parser
-sees:
+# Header
+story.append(Paragraph('<b>YOUR NAME</b>', name_style))
+story.append(Paragraph(
+    'email@example.com  |  +86 138-0000-0000  |  Shanghai, China  |  github.com/yourname',
+    contact_style
+))
 
-- **Never break inside a date range**: `2021.03–2023.07` stays on one line. A
-  break inside it makes the parser see two dates.
-- **Never break inside a company/title pair**: the employer and the role belong
-  to the same visual line, or the parser attributes the role to the wrong
-  employer.
-- **Never break a bullet mid-phrase**: a bullet is one sentence; if it wraps,
-  the continuation is indented to the text, not to the bullet.
-- **CJK resumes**: the punctuation prohibitions apply (a line never starts with
-  `。，、`); Latin names inside CJK text keep their own word boundaries.
-- **No hyphenated line breaks in names, emails, URLs or version numbers** —
-  these are parsed as identifiers, and a hyphen changes the identifier.
+# Summary
+story.extend(section_header('PROFESSIONAL SUMMARY'))
+story.append(Paragraph(
+    'Results-driven software engineer with 5+ years of experience in backend systems, '
+    'distributed computing, and cloud-native architectures. Led a team of 8 engineers '
+    'delivering a real-time data pipeline processing 2M+ events/sec.',
+    body_style
+))
 
-## Page-fill rules (anti-blank-space)
+# Experience
+story.extend(section_header('WORK EXPERIENCE'))
+story.extend(experience_entry(
+    'Senior Software Engineer', 'Tech Company Inc.', 'Jan 2022 - Present', 'Shanghai',
+    [
+        'Designed and deployed a microservices architecture serving 10M daily active users',
+        'Reduced API latency by 40% through query optimisation and caching strategies',
+        'Mentored 3 junior engineers; established code review standards adopted team-wide',
+    ]
+))
+story.extend(experience_entry(
+    'Software Engineer', 'Startup Co.', 'Jul 2019 - Dec 2021', 'Beijing',
+    [
+        'Built real-time recommendation engine using collaborative filtering (CTR +25%)',
+        'Implemented CI/CD pipeline reducing deployment time from 2 hours to 15 minutes',
+    ]
+))
 
-The one-page constraint is a fill constraint, not just a length constraint:
+# Education
+story.extend(section_header('EDUCATION'))
+story.extend(education_entry(
+    'M.Sc. Computer Science', 'Tsinghua University', '2017 - 2019',
+    'GPA: 3.8/4.0 | Thesis: Distributed Graph Processing on Heterogeneous Clusters'
+))
+story.extend(education_entry(
+    'B.Eng. Software Engineering', 'Zhejiang University', '2013 - 2017'
+))
 
-- **The page is full or the page is short**: a resume ending two-thirds down
-  reads as "not enough experience". Either add the evidence or accept one page
-  with a deliberate bottom margin — never a half-empty page.
-- **Spacing is the last resort**: before stretching leading to fill a page,
-  check whether content is missing. Stretched spacing on a thin resume is
-  visible to every reader.
-- **Two pages are two full pages**: a second page with three lines on it is a
-  formatting defect; either the content fills page two or it fits on one.
-- **The bottom margin is a design element**: a resume that ends exactly at the
-  margin looks finished; one that ends mid-page looks truncated.
+# Skills
+story.extend(section_header('SKILLS'))
+story.extend(skills_row([
+    ('Languages', 'Python, Java, Go, SQL, TypeScript'),
+    ('Frameworks', 'Spring Boot, FastAPI, React, Kubernetes, Kafka'),
+    ('Tools', 'Git, Docker, Terraform, AWS (EC2/S3/Lambda), PostgreSQL, Redis'),
+]))
 
-## ATS readability checklist
+doc.build(story)
+```
 
-- [ ] Text is selectable and extractable (no image-only pages, no text as
-      curves).
-- [ ] Contact details are plain text at the top, not inside a header image or a
-      text box.
-- [ ] Section headings are real headings (bold or a heading style), not
-      all-caps body text that a parser might read as content.
-- [ ] Dates use one format throughout, parseable by a machine.
-- [ ] No multi-column layout that interleaves when extracted (a two-column
-      resume extracts as alternating lines — test by copy-pasting the PDF into
-      a text editor and reading what comes out).
-- [ ] No tables used for layout (a layout table extracts as a grid of
-      fragments).
-- [ ] Fonts embedded, so the file renders identically everywhere.
+### Resume Checklist
+- [ ] **1 page** (unless user says otherwise)
+- [ ] **No cover page, no TOC**
+- [ ] Tight margins (1.5cm all sides)
+- [ ] Name prominent at top (22-26pt)
+- [ ] Contact info single line, centered
+- [ ] Section headers with consistent separator style
+- [ ] Bullets concise - start with action verbs
+- [ ] Quantified achievements (%, $, count)
+- [ ] No photos, no icons, no colour blocks (ATS-safe)
+- [ ] Font: only registered fonts (FreeSerif / Noto Sans SC)
+- [ ] **⚠️ Minimum font size 12px (9pt)** - no text smaller than this anywhere
+- [ ] **Line breaks are language-aware** - no mid-word English breaks, no CJK punctuation orphans, no date range splits
+- [ ] **Page fill ≥85%** - no large blank area at bottom. If sparse, increase spacing/leading/font size adaptively
+

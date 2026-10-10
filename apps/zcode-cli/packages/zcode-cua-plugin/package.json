@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@zcode/zcode-cua-plugin",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "description": "ZCode Computer Use SDK 与配套 skill；原生执行由共享 node_repl host 提供。",
   "license": "MIT",
@@ -9,6 +9,7 @@
   "main": "./scripts/computer-use-client.mjs",
   "scripts": {
     "check:sdk": "node scripts/check-sdk.mjs",
+    "test": "node scripts/check-sdk.mjs",
     "clean": "node ../../scripts/clean-dist.mjs"
   }
 }

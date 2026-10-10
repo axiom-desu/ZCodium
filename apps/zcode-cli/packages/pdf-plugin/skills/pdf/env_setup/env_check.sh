@@ -1,104 +1,61 @@
 #!/usr/bin/env bash
-# Dependency self-check for the pdf skill: TeX toolchain, rasterizers, the HTML
-# path's renderer, and the Python interpreter the `scripts/` need.
-# Exit 0 when everything required is present, 1 otherwise.
-#
-# No network access, no installation, no writes to the plugin tree.
-# `setup.sh` (and env_setup/setup_mac_linux.sh / setup_windows.ps1) installs.
-#
-# Usage:
-#   bash env_check.sh            human-readable
-#   bash env_check.sh --quiet    only failures
-#
-# Required (a [FAIL] blocks): latexmk or an engine, at least one rasterizer,
-# python3 >= 3.10.
-# Conditional (a [WARN] notes a gap a particular document path needs):
-# biber/bibtex (bibliography documents), soffice (HTML/cover path),
-# xelatex/lualatex (fontspec documents).
+# Lightweight environment check for PDF skill.
+# Exit 0 = all CORE deps OK, exit 1 = missing CORE dependency.
+# Playwright/Chromium (Creative/HTML pipeline) and Tectonic (Academic/LaTeX) are
+# OPTIONAL — reported as INFO, never cause a non-zero exit. Install them on demand
+# (with the user's confirmation) only when a route actually needs them.
+# Also resolves and exports PDF_SKILL_DIR and FONT_DIR.
+# Usage: source env_check.sh  (preferred, exports vars to caller)
+#    or: bash env_check.sh [--quiet]
+QUIET=false; [ "${1:-}" = "--quiet" ] && QUIET=true
+FAIL=0
+check() { local desc="$1"; shift; if ! "$@" &>/dev/null; then $QUIET || echo "MISSING (core): $desc"; FAIL=1; fi; }
+optional() { local desc="$1"; shift; if "$@" &>/dev/null; then $QUIET || echo "optional OK: $desc"; else $QUIET || echo "optional MISSING: $desc (install on demand)"; fi; }
+# LibreOffice is install-on-demand like the others, but it is NOT substitutable: when an
+# Office→PDF route needs it and it is absent, the model must explain + warn + install, never
+# silently switch to the user's local Office/WPS.
+required_on_demand() { local desc="$1"; shift; if "$@" &>/dev/null; then $QUIET || echo "on-demand OK: $desc"; else $QUIET || echo "on-demand MISSING: $desc — if a route needs it you MUST install it, not substitute it. FORBIDDEN: using Word/WPS/Keynote/Pages instead; a large download is NOT a reason to skip. REQUIRED: explain the necessity to the user, say the package is large, then INSTALL (preferred source: https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/), THEN register it on PATH and re-verify 'soffice --version' (Linux/macOS: ln -sf the binary into /usr/local/bin; Windows: setx the program dir onto the user PATH) — see env_setup/setup.md \"Register the binary on PATH\". FIRST check whether it is already installed but merely off PATH (/opt/libreoffice*/program/soffice, /Applications/LibreOffice.app/Contents/MacOS/soffice) — if so register it instead of reinstalling. No install attempt = no substitute program."; fi; }
 
-set -u
+# ── Resolve PDF_SKILL_DIR & FONT_DIR ──
+_ENV_CHECK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+PDF_SKILL_DIR="$(cd "$_ENV_CHECK_DIR/.." && pwd)"
+export PDF_SKILL_DIR
 
-QUIET=0
-[ "${1:-}" = "--quiet" ] && QUIET=1
-
-failures=0
-
-pass() { [ "$QUIET" -eq 1 ] || printf '[PASS] %s\n' "$*"; }
-warn() { [ "$QUIET" -eq 1 ] || printf '[WARN] %s\n' "$*"; }
-fail() { printf '[FAIL] %s\n' "$*"; failures=$((failures + 1)); }
-
-have() { command -v "$1" >/dev/null 2>&1; }
-
-# ------------------------------------------------------------------- TeX stack
-
-if have latexmk; then
-  pass "latexmk"
+if [ "$(uname -s)" = "Darwin" ]; then
+    FONT_DIR="${HOME}/Library/Fonts"
 else
-  if have xelatex || have pdflatex || have lualatex; then
-    warn "latexmk missing — an engine exists, but the skill's build driver is latexmk"
-  else
-    fail "no TeX toolchain (latexmk / xelatex / pdflatex / lualatex)"
-  fi
+    FONT_DIR="/usr/share/fonts"
+fi
+export FONT_DIR
+
+# ── CORE (required): Python + ReportLab/pypdf toolchain + CJK font ──
+check "python3"    command -v python3
+check "pikepdf"    python3 -c "import pikepdf"
+check "pdfplumber" python3 -c "import pdfplumber"
+check "pypdf"      python3 -c "import pypdf"
+check "reportlab"  python3 -c "import reportlab"
+check "PyMuPDF"    python3 -c "import fitz"
+
+# Font check: verify an embeddable CJK font is available (SimHei/Noto/WenQuanYi/Songti…)
+if command -v fc-list &>/dev/null; then
+    fc-list :lang=zh 2>/dev/null | grep -qi "noto\|simhei\|simsun\|songti\|heiti\|wenquanyi\|yahei\|kai" \
+        || { $QUIET || echo "MISSING (core): CJK font"; FAIL=1; }
 fi
 
-for engine in xelatex lualatex pdflatex; do
-  if have "$engine"; then pass "$engine"; else warn "$engine missing (needed by some documents)"; fi
-done
+# ── OPTIONAL: Creative/HTML pipeline (Node + Playwright + Chromium) ──
+optional "node"       command -v node
+optional "playwright (npm)" node -e "require('playwright')"
 
-for tool in biber bibtex; do
-  if have "$tool"; then pass "$tool"; else warn "$tool missing (needed for bibliography documents)"; fi
-done
-
-# ----------------------------------------------------------------- rasterizer
-
-raster_found=0
-for tool in pdftoppm pdftocairo mutool magick gs; do
-  if have "$tool"; then pass "rasterize: $tool"; raster_found=1; break; fi
-done
-[ "$raster_found" -eq 1 ] || fail "no rasterizer (pdftoppm / pdftocairo / mutool / magick / gs)"
-
-for tool in pdfinfo pdffonts; do
-  if have "$tool"; then pass "$tool"; else warn "$tool missing (page count / font embedding checks)"; fi
-done
-
-# ------------------------------------------------------------------ HTML path
-
-if have soffice; then
-  pass "soffice (LibreOffice)"
+# ── OPTIONAL: Academic/LaTeX pipeline (Tectonic) ──
+if [ -x "$PDF_SKILL_DIR/scripts/tectonic" ] || command -v tectonic &>/dev/null; then
+    $QUIET || echo "optional OK: tectonic"
 else
-  warn "soffice missing (required by html2pdf.py and cover_render.py)"
+    $QUIET || echo "optional MISSING: tectonic (LaTeX/Academic; install on demand)"
 fi
 
-# -------------------------------------------------------------------- python
+# ── ON-DEMAND but NOT substitutable: Office→PDF (LibreOffice/soffice) ──
+required_on_demand "libreoffice (soffice)" command -v soffice
 
-PYTHON=""
-if have python3; then PYTHON=python3
-elif have python; then PYTHON=python
-fi
-
-if [ -z "$PYTHON" ]; then
-  fail "python interpreter (python3 or python) not on PATH"
-else
-  version="$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo "0.0")"
-  major="${version%%.*}"; minor="${version##*.}"
-  if [ "$major" -gt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -ge 10 ]; }; then
-    pass "python $version"
-  else
-    fail "python $version — the scripts need 3.10 or newer"
-  fi
-  # The scripts' declared dependencies (see each PEP 723 header).
-  if "$PYTHON" -c 'import pypdf, pdf2image, PIL' >/dev/null 2>&1; then
-    pass "python deps (pypdf, pdf2image, Pillow)"
-  else
-    warn "python deps incomplete (pypdf / pdf2image / Pillow) — form-filling and QA scripts need them"
-  fi
-fi
-
-# --------------------------------------------------------------------- verdict
-
-if [ "$failures" -eq 0 ]; then
-  [ "$QUIET" -eq 1 ] || printf '\nenvironment ready\n'
-  exit 0
-fi
-printf '\n%d required check(s) failed\n' "$failures"
-exit 1
+$QUIET || echo "PDF_SKILL_DIR=$PDF_SKILL_DIR"
+$QUIET || echo "FONT_DIR=$FONT_DIR"
+return $FAIL 2>/dev/null || exit $FAIL

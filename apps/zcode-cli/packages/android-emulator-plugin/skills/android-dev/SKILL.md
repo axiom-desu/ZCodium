@@ -1,95 +1,73 @@
 ---
 name: android-dev
-description: Use when the task involves an Android app or emulator — building one, running one, driving one, or verifying one. Covers the MCP tool surface this plugin exposes over ADB (devices, install, launch, input, screenshots, UI dumps, logcat, AVD lifecycle), the Gradle build path, and the environment the whole chain needs (JDK, Android SDK, platform tools, a running device or AVD). Trigger on requests to build, run, test, debug or screenshot an Android app, to automate the emulator, or on symptoms such as a device not appearing, an install failing, a launch that does nothing, or a build that cannot find the SDK.
+description: Build, run, inspect, and lightly automate Android apps with the android-emulator MCP tools.
 ---
 
 # Android Dev
 
-Build, run and drive Android apps from the agent session. This plugin exposes
-one MCP server (`android-emulator`) backed by the Android Debug Bridge; the
-skill below is how to use it well.
+Use this skill when the user wants you to create, modify, build, run, debug, screenshot, or inspect an Android app in the desktop Android Emulator or on a USB-connected Android device.
 
-## Tool surface
+## ZCode Tool Names
 
-All tools come from the `android-emulator` MCP server. Coordinates are absolute
-screen pixels; get them from `dump_ui` or a `screenshot`, never by guessing.
+This skill assumes the MCP server is configured in zcode as `android_emulator`. In zcode, MCP tools are exposed to the model as `mcp__android_emulator__<tool>`.
 
-| tool | what it does | notes |
-| --- | --- | --- |
-| `list_devices` | attached devices and emulators with state | the first command of every session |
-| `wait_for_device` | block until a device is online | after a boot or a replug |
-| `install_apk` | install/reinstall keeping data | `-r -d`; needs a host-side `.apk` path |
-| `uninstall` | remove a package by application id | |
-| `launch_app` | start an app by package id | via the launcher activity |
-| `stop_app` | force-stop a package | |
-| `tap` / `swipe` / `input_text` / `key_event` | input injection | `input_text` escapes spaces as `%s` |
-| `screenshot` | capture the screen to a host PNG | returns the path |
-| `dump_ui` | view hierarchy as XML on the host | the reliable way to find coordinates |
-| `current_focus` | the focused window and activity | the check that a launch happened |
-| `logcat` | recent log lines (`-d`) | filter by `tag:priority` |
-| `list_avds` / `start_avd` / `stop_avd` | AVD lifecycle | `start_avd` waits for boot |
-| `shell` | arbitrary `adb shell` | escape hatch; prefer the typed tools |
+If the server is configured with a different name, use the corresponding visible `mcp__<server>__...` tool names from the active zcode tool list.
 
-## Default workflow
+## Default Workflow
 
-1. **Environment first.** Run `INSTALL_ENVIRONMENT.md`'s check: JDK, SDK,
-   platform-tools on `PATH`, a device or AVD available. A missing tool is
-   reported, not worked around.
-2. **`list_devices`.** If it is empty, `list_avds` then `start_avd` (or tell the
-   user to plug in a device), then `wait_for_device`.
-3. **Build** on the host: `./gradlew :app:assembleDebug` (or
-   `installDebug`). The APK lands in `app/build/outputs/apk/debug/`.
-4. **`install_apk`** with that path. On failure read the message: signature
-   conflicts need an uninstall first; ABI mismatches need the right system
-   image; `INSTALL_FAILED_UPDATE_INCOMPATIBLE` is a debug-vs-release conflict.
-5. **`launch_app`** with the application id, then **`current_focus`** to confirm
-   the app is actually in the foreground — a launch that returns success but
-   leaves the launcher focused has not launched.
-6. **Drive and verify.** `dump_ui` to find targets, `tap`/`input_text` to act,
-   `screenshot` to see the result, `current_focus` and `logcat` when something
-   is wrong. Never claim a UI state without one of these three as evidence.
-7. **Finish.** `stop_app` when the session is done; leave the emulator running
-   only if the user is still iterating.
+1. Call `mcp__android_emulator__android_preflight` first.
+	   - If the required environment is not ready, follow `INSTALL_ENVIRONMENT.md` before continuing. Missing emulator-only checks do not block a selected ready USB device target.
+	   - Environment setup is done with the fixed macOS shell or Windows PowerShell procedure in that file; do not improvise unrelated install commands.
+	   - Do not accept Android SDK licenses, enter passwords, wipe emulator data, or delete AVDs on the user's behalf. Stop and ask the user for those cases.
+2. Discover the project with `mcp__android_emulator__android_discover_project`.
+   - If no Android project exists and the user wants a new app, call `mcp__android_emulator__android_create_app`.
+   - Prefer editing Kotlin/Compose files directly after project creation.
+   - `mcp__android_emulator__android_create_app` refuses to overwrite generated files by default; only pass `overwrite: true` after explicit user confirmation.
+   - Read `warnings` in the discovery result before building and repair missing `gradle.properties`, `local.properties`, or Gradle wrapper issues.
+3. Build and launch with `mcp__android_emulator__android_build_and_run`.
+   - Pass `module`, `variant`, or `applicationId` when discovery is ambiguous.
+   - Use a selected `serial` when the user wants a specific USB device or emulator. Use `mcp__android_emulator__android_start_emulator` only when a new GUI emulator is needed, then pass its returned `serial` to follow-up tools.
+   - Read the returned `output` first for compile errors; use the returned log path only when more detail is needed.
+4. Verify the app visually with `mcp__android_emulator__android_screenshot`.
+5. For runtime checks, use `mcp__android_emulator__android_open_url`, `mcp__android_emulator__android_launch_app`, `mcp__android_emulator__android_terminate_app`, and `mcp__android_emulator__android_logs`.
+6. For UI automation, call `mcp__android_emulator__android_ui_status` first.
+   - Prefer `mcp__android_emulator__android_ui_describe` or `mcp__android_emulator__android_ui_resolve` before tapping coordinates.
+   - `mcp__android_emulator__android_ui_tap`, `mcp__android_emulator__android_ui_swipe`, `mcp__android_emulator__android_ui_type_text`, and `mcp__android_emulator__android_ui_keyevent` use ADB/UI Automator based backends.
+   - If UI automation is unavailable, continue with build/run/screenshot checks and say UI automation is unavailable.
 
-## Tool notes
+## Tool Notes
 
-- **Coordinates**: `dump_ui` reports `bounds="[x1,y1][x2,y2]"` per node; tap the
-  centre of the target's bounds. A tap that lands on an overlaying element does
-  nothing visible — dump again after any layout change.
-- **`input_text`** sends the whole string at once into the focused field; focus
-  the field with a `tap` first, and remember `%s` is how spaces survive.
-- **`screenshot` returns a path, not an image.** Read the file when the task
-  needs the pixels.
-- **`logcat`** is `-d` (dump and exit); it never streams. Clear before a run
-  (`shell logcat -c`) when you want a clean trace.
-- **`shell`** exists for everything else, but a typed tool that does the job is
-  preferred — it keeps the transcript reviewable.
+- This MVP intentionally uses Android Emulator's own desktop window for rendering. Do not create or expect a custom emulator window.
+- `mcp__android_emulator__android_preflight` is a pure diagnostic check. Use `INSTALL_ENVIRONMENT.md` for guided environment setup when it reports missing dependencies.
+- The target MCP tools accept `serial` for a specific USB device or emulator and `avd` for the fallback emulator to start only when no target is ready. `mcp__android_emulator__android_start_emulator` starts a new GUI emulator and does not reuse existing targets.
+- Keep emulator interactions through MCP tools instead of raw `adb`/`emulator` commands unless a tool does not cover the operation.
+- `mcp__android_emulator__android_create_app` generates a minimal Kotlin + Jetpack Compose app suitable for model-driven iteration.
+- `mcp__android_emulator__android_build_app` only builds. `mcp__android_emulator__android_build_and_run` builds, reuses the selected Android target by serial or starts a GUI emulator when needed, installs, and launches the app.
+- Android SDK path, default AVD, API level, build-tools version, system image variant/ABI, and JDK major version come from plugin user config and are exposed to the MCP server as `ANDROID_PLUGIN_*` environment variables.
 
-## Project requirements
+## Project Requirements
 
-- A Gradle project with an `applicationId`; the plugin never invents one.
-- `compileSdk`/`targetSdk` at or below the device's API level; a device on API
-  34 cannot install an app targeting a newer SDK without the matching platform.
-- Debug builds for anything driven from here; release builds need a signing
-  config the project already has.
-- Minifying/dexdknife steps that rewrite the APK after `assembleDebug` break
-  the install path — install the APK Gradle produced.
+When creating or repairing a project manually, make sure these files exist before building:
 
-## Build troubleshooting
+- `settings.gradle` or `settings.gradle.kts`
+- root `build.gradle` or `build.gradle.kts`
+- `app/build.gradle` or `app/build.gradle.kts`
+- `gradle.properties` with `android.useAndroidX=true`
+- `local.properties` with `sdk.dir=<Android SDK path>` when the SDK is not otherwise discoverable
+- a Gradle wrapper (`gradlew` / `gradlew.bat`) or `gradle` available on `PATH`
 
-| symptom | first check |
-| --- | --- |
-| `SDK location not found` | `ANDROID_HOME`/`ANDROID_SDK_ROOT`, or `local.properties` `sdk.dir` |
-| `Could not resolve com.android.tools.build:gradle` | network/Gradle proxy, not the SDK |
-| `Unsupported class file major version` | JDK newer than the Gradle version supports; use the configured `jdk_major` |
-| device not in `list_devices` | USB debugging authorised; `adb kill-server` then retry |
-| `INSTALL_FAILED_INSUFFICIENT_STORAGE` | emulator has no room; wipe data or pick a bigger AVD |
-| app installs but does not launch | wrong application id, or no launcher activity |
+## Build Troubleshooting
 
-## Extension point
+- If Gradle reports `android.useAndroidX property is not enabled`, create or update `gradle.properties` with `android.useAndroidX=true`.
+- If `android_preflight` reports `Gradle` as `not found`, follow the quick Gradle fix in `INSTALL_ENVIRONMENT.md`; do not reinstall the Android SDK when Gradle is the only missing check.
+- If `android_preflight` reports no AVDs but a USB device is ready, continue by passing that device `serial` to target tools.
+- If Gradle cannot find the Android SDK, create `local.properties` in the Android Gradle root with `sdk.dir=<Android SDK path>`.
+- If `./gradlew` or `gradlew.bat` is missing, install Gradle and run `gradle wrapper --gradle-version 8.9`, or let `android_build_app` attempt wrapper generation when `gradle` is available.
+- If `sdkmanager` or `avdmanager` cannot find Java after installing Homebrew `openjdk@<configured JDK major>`, export the matching `JAVA_HOME` from `INSTALL_ENVIRONMENT.md` and retry. Use the optional symlink step only after user confirmation.
+- On Windows, if SDK package installation fails because Android SDK licenses are not accepted, ask the user for explicit approval before running `sdkmanager.bat --licenses`, then retry the same package installation command.
+- On Windows, if emulator acceleration is unavailable, ask the user to enable virtualization/WHPX or finish Android Emulator driver setup in Android Studio Device Manager, then rerun `android_preflight`.
+- If system image downloads time out, prefer the `default` image first and retry the exact `sdkmanager --install` command with a longer timeout before switching to larger `google_apis` images.
 
-The tool set is deliberately small. Anything ADB can do that is not covered is
-reachable through `shell`; when a need recurs, add a typed tool to
-`scripts/mcp/server.mjs` (the tool table at the top of that file is the whole
-contract) and document it here — never drive the MCP server through ad-hoc
-scripts outside this plugin.
+## Extension Point
+
+The Android backend is deliberately isolated. P0 uses Android SDK tools, ADB/UI Automator, and Gradle. Future backends can map the same public operations to Android Studio semantic tools, a UI Automator helper APK, Appium/uiautomator2, or another automation bridge without changing the skill workflow.

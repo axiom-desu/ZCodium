@@ -2,14 +2,14 @@
   "name": "ios-simulator",
   "version": "0.1.0",
   "description": "Provides iOS development workflows and simulator automation for ZCode.",
-  "author": { "name": "ZCodium" },
+  "author": { "name": "Z.ai" },
   "license": "MIT",
   "skills": "skills",
   "commands": "commands",
   "mcpServers": {
     "ios-simulator": {
       "command": "node",
-      "args": ["${ZCODE_PLUGIN_ROOT}/scripts/mcp/server.mjs"],
+      "args": ["${ZCODE_PLUGIN_ROOT}/dist/mcp/server.js"],
       "cwd": "${ZCODE_PROJECT_DIR}",
       "env": {
         "IOS_SIM_PACKAGE_ROOT": "${ZCODE_PLUGIN_ROOT}",
@@ -28,7 +28,7 @@
     "ui_backend": {
       "type": "string",
       "default": "auto",
-      "description": "UI interaction backend: auto, idb, xcodebuildmcp, or none. This plugin's own tools cover lifecycle, install, launch, screenshots, deep links and appearance; idb/xcodebuildmcp add gesture-level interaction when they are installed."
+      "description": "UI interaction backend: auto, idb, xcodebuildmcp, or none."
     }
   }
 }

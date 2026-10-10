@@ -1,78 +1,45 @@
 ---
 name: ios-dev
-description: Use when the task involves an iOS app or simulator — building one, running one, driving one, or verifying one. Covers the MCP tool surface this plugin exposes over xcrun simctl (devices, boot lifecycle, install, launch, screenshots, deep links, appearance, spawn), the Xcode build path, and the macOS-only environment the whole chain needs. Trigger on requests to build, run, test, debug or screenshot an iOS app, to automate the simulator, or on symptoms such as a simulator not booting, an install failing, a launch that does nothing, or a build that cannot find a scheme.
+description: Build, run, inspect, and lightly automate iOS simulator apps with the ios-simulator MCP tools.
 ---
 
 # iOS Dev
 
-Build, run and drive iOS apps from the agent session. This plugin exposes one
-MCP server (`ios-simulator`) backed by `xcrun simctl`; the skill below is how
-to use it well.
+Use this skill when the user wants you to create, modify, build, run, debug, screenshot, or inspect an iOS app in the macOS iOS Simulator.
 
-**Platform: macOS with Xcode installed.** `simctl` ships with Xcode; there is no
-Linux or Windows path. Every tool reports that clearly when `xcrun` is missing
-rather than pretending a simulator exists.
+## ZCode Tool Names
 
-## Tool surface
+This skill assumes the MCP server is configured in zcode as `ios_simulator`. In zcode, MCP tools are exposed to the model as `mcp__ios_simulator__<tool>`.
 
-All tools come from the `ios-simulator` MCP server. Devices are addressed by
-name (as `list_devices` reports it) or UDID; the name is usually easier.
+If the server is configured with a different name, use the corresponding visible `mcp__<server>__...` tool names from the active zcode tool list.
 
-| tool | what it does | notes |
-| --- | --- | --- |
-| `list_devices` | available simulators with name, UDID, state, runtime | the first command of every session |
-| `list_runtimes` | installed simulator runtimes and versions | when a device type is unavailable |
-| `boot` / `shutdown` | simulator lifecycle | `boot` waits for readiness |
-| `erase` | factory-reset a simulator | shuts down first |
-| `create_device` | create one from a device type + runtime | identifiers from `list_runtimes` |
-| `install_app` / `uninstall_app` | `.app` bundle in/out | needs a host-side `.app` path |
-| `launch_app` / `terminate_app` | by bundle id | `launch_app` returns the pid |
-| `screenshot` | capture to a host PNG | the primary visual evidence |
-| `open_url` | URL or custom scheme | deep links, universal links |
-| `get_container` | an app's container path on the host | inspect app/data containers |
-| `set_appearance` | light/dark | dark-mode verification |
-| `spawn` | run a command inside the simulator | escape hatch |
+## Default Workflow
 
-## Default workflow
+1. Call `mcp__ios_simulator__ios_preflight` first.
+   - If full Xcode or `simctl` is missing, stop the simulator workflow and explain the exact missing check.
+   - Command Line Tools alone are not enough for this plugin.
+2. Discover the project with `mcp__ios_simulator__ios_discover_project`.
+   - If no Xcode project exists and the user wants a new app, call `mcp__ios_simulator__ios_create_app`.
+   - Prefer editing the generated SwiftUI files directly after project creation.
+   - `mcp__ios_simulator__ios_create_app` refuses to overwrite generated files by default; only pass `overwrite: true` after explicit user confirmation.
+3. Build and launch with `mcp__ios_simulator__ios_build_and_run`.
+   - Pass `scheme` when multiple schemes exist.
+   - Use `openSimulator: true` when the user expects to see the macOS Simulator window.
+   - Read the returned `output` first for compile errors; use the returned log path only when more detail is needed.
+4. Verify the app visually with `mcp__ios_simulator__ios_screenshot`.
+5. For simple runtime checks, use `mcp__ios_simulator__ios_open_url`, `mcp__ios_simulator__ios_launch_app`, `mcp__ios_simulator__ios_terminate_app`, and `mcp__ios_simulator__ios_logs`.
+6. For UI automation, call `mcp__ios_simulator__ios_ui_status` first.
+   - `mcp__ios_simulator__ios_ui_tap`, `mcp__ios_simulator__ios_ui_swipe`, `mcp__ios_simulator__ios_ui_type_text`, `mcp__ios_simulator__ios_ui_button`, and `mcp__ios_simulator__ios_ui_describe` require the optional `idb` backend.
+   - If `idb` is unavailable, continue with build/run/screenshot checks and say UI automation is unavailable.
 
-1. **Environment first.** `xcrun simctl list devices` must answer. If `xcrun`
-   is missing, Xcode (or the Command Line Tools) is not installed — report it
-   and stop; there is no substitute.
-2. **`list_devices`**, then `boot` the device you want (by name, e.g.
-   `iPhone 16`). If the name you want is unavailable, `list_runtimes` explains
-   why — usually a runtime that is not installed.
-3. **Build** on the host: `xcodebuild -scheme <Scheme> -destination 'platform=iOS Simulator,name=<Device>' build` (or open the project and build). The `.app` lands in the derived data's `Build/Products/Debug-iphonesimulator/`.
-4. **`install_app`** with that path. A bundle identifier conflict means an
-   older build is installed — `uninstall_app` first.
-5. **`launch_app`** with the bundle id, then **`screenshot`** to see it. There
-   is no `current_focus` on iOS: the screenshot is the evidence that the launch
-   happened, and a launch that returns a pid but shows the home screen means
-   the app crashed on start — check the device log with `spawn log show`.
-6. **Drive and verify.** `open_url` for deep links, `set_appearance` for
-   dark mode, `screenshot` after each state change. Never claim a UI state
-   without a screenshot.
-7. **Finish.** `terminate_app`; leave the simulator booted only if the user is
-   still iterating. `erase` before a clean-state run.
+## Tool Notes
 
-## Tool notes
+- This MVP intentionally uses Apple's macOS Simulator app for rendering. Do not create or expect a custom simulator window.
+- The MCP tools accept `udid`, `device`, and `runtime` when a specific simulator is needed. Otherwise they choose the booted simulator, then the configured default iPhone device.
+- Keep simulator interactions through MCP tools instead of raw `xcrun` commands unless a tool does not cover the operation.
+- `mcp__ios_simulator__ios_create_app` generates a minimal SwiftUI app suitable for model-driven iteration.
+- `mcp__ios_simulator__ios_build_app` only builds. `mcp__ios_simulator__ios_build_and_run` builds, installs, launches, and opens Simulator.
 
-- **Device names are not unique across runtimes.** `list_devices` reports the
-  runtime per device; when two entries share a name, address by UDID.
-- **`launch_app` returns a pid**, not a success guarantee. The pid plus a
-  screenshot is the verification; the pid alone is not.
-- **`spawn` runs inside the simulator's environment** — `spawn log show
-  --last 1m --predicate 'process == "<bundle>"'` is how you read a crash
-  without opening Console.
-- **`get_container` needs the app installed**; it fails on an unknown bundle id.
-- **Deep links need the scheme registered** in `Info.plist` before `open_url`
-  can reach the app — an unhandled URL opens Safari instead.
+## Extension Point
 
-## Extension point
-
-Anything `simctl` can do that is not covered is reachable through `spawn` (for
-in-simulator commands) or by adding a typed tool to
-`scripts/mcp/server.mjs` — the tool table at the top of that file is the whole
-contract — and documenting it here. Gesture-level interaction (taps, swipes,
-text entry) is deliberately out of scope: this plugin's tools cover lifecycle
-and verification, and the `ui_backend` setting names the external tool (idb,
-xcodebuildmcp) to use when a task needs gestures.
+The UI backend is deliberately isolated. P0 uses `idb` when installed; future backends can map the same public operations to XcodeBuildMCP, native Accessibility, or another automation bridge without changing the skill workflow.

@@ -221,6 +221,15 @@ export function createDefaultSubagentPort(
             : { parentTurnId: request.traceContext.turnId }),
         },
       );
+      // Browser Use：子代理与当前对话共用 tab（tabOwner: "parent"），用户能在面板里看到它开的 tab，
+      // 它也能看到对话里已有的 tab；workspace / clientMode 经 forChildSession 登记回父会话解析。
+      // 子代理结束只撤销登记，不关 tab。端口没有 forChildSession（CLI headless）时退回子会话自己的 scope。
+      const childBrowserControlPort =
+        this.browserControlPort?.forChildSession?.({
+          childSessionId: request.sessionId,
+          parentSessionId: this.sessionId,
+          tabOwner: "parent",
+        }) ?? this.browserControlPort;
       const mirroredToolNameByChildToolCallId = new Map<string, string>();
       let sessionReadyNotified = false;
       const notifySessionReady = async () => {
@@ -300,6 +309,9 @@ export function createDefaultSubagentPort(
           // 桌面 UI 只认识父 task 的 sessionId。派生收敛在 deriveChildClientPorts 一处，
           // dwf actor 与 legacy workflow child 走同一条。
           ...childClientPorts,
+          ...(childBrowserControlPort === undefined
+            ? {}
+            : { browserControlPort: childBrowserControlPort }),
           coordinatorResponsePort: createCoordinatorResponsePort({
             agentId: request.agentId,
             agentType: request.agentType,
@@ -411,6 +423,16 @@ export function createDefaultSubagentPort(
             traceContext: request.traceContext,
           });
         }
+        // 子代理结束只撤销 Browser 子会话登记：tab 归父会话（tabOwner: "parent"），
+        // 收尾由父会话自己的 turnEnded / closeSession 负责。
+        await childBrowserControlPort
+          ?.closeSession?.({ sessionId: request.sessionId, traceContext: request.traceContext })
+          .catch((error: unknown) => {
+            this.logger?.warn("Subagent browser session cleanup failed", {
+              error: error instanceof Error ? error.message : String(error),
+              event: "browser.session_cleanup.failed",
+            });
+          });
       }
     },
   });

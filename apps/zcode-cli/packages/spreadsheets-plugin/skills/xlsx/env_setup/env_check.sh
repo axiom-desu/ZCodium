@@ -1,79 +1,41 @@
 #!/usr/bin/env bash
-# Dependency self-check for the xlsx skill: interpreter version, openpyxl, the
-# script files the skill depends on, and LibreOffice for recalculation.
-# Exit 0 when everything required passes, 1 otherwise.
-#
-# No network access, no installation, no writes to the plugin tree.
+# Lightweight environment check for XLSX skill.
+# Exit 0 = all OK, exit 1 = missing dependencies.
+# Also resolves and exports XLSX_SKILL_DIR and FONT_DIR.
+# Usage: source env_check.sh  (preferred, exports vars to caller)
+#    or: bash env_check.sh [--quiet]
+QUIET=false; [ "${1:-}" = "--quiet" ] && QUIET=true
+FAIL=0
+check() { local desc="$1"; shift; if ! "$@" &>/dev/null; then $QUIET || echo "MISSING: $desc"; FAIL=1; fi; }
+# LibreOffice is install-on-demand (its absence does not fail this check), but it is NOT
+# substitutable: when recalc / .xlsx→PDF / .csv→.xlsx needs it and it is absent, the model must
+# explain + warn + install, never silently switch to the user's local Excel/WPS/Numbers.
+required_on_demand() { local desc="$1"; shift; if "$@" &>/dev/null; then $QUIET || echo "on-demand OK: $desc"; else $QUIET || echo "on-demand MISSING: $desc — if a task needs it you MUST install it, not substitute it. FORBIDDEN: using Excel/WPS/Numbers instead, or skipping recalculation; a large download is NOT a reason to skip. REQUIRED: explain the necessity to the user, say the package is large, then INSTALL (preferred source: https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/), THEN register it on PATH and re-verify 'soffice --version' (Linux/macOS: ln -sf the binary into /usr/local/bin; Windows: setx the program dir onto the user PATH) — see env_setup/setup.md \"Register the binary on PATH\". FIRST check whether it is already installed but merely off PATH (/opt/libreoffice*/program/soffice, /Applications/LibreOffice.app/Contents/MacOS/soffice) — if so register it instead of reinstalling. No install attempt = no substitute program."; fi; }
 
-set -u
+# ── Resolve XLSX_SKILL_DIR & FONT_DIR ──
+_ENV_CHECK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+XLSX_SKILL_DIR="$(cd "$_ENV_CHECK_DIR/.." && pwd)"
+export XLSX_SKILL_DIR
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Importing the package must not litter the tree with __pycache__.
-export PYTHONDONTWRITEBYTECODE=1
-
-failures=0
-
-pass() { printf '[PASS] %s\n' "$*"; }
-fail() { printf '[FAIL] %s\n' "$*"; failures=$((failures + 1)); }
-warn() { printf '[WARN] %s\n' "$*"; }
-
-# ---------------------------------------------------------------- interpreter
-
-PYTHON="${PYTHON:-}"
-if [ -z "$PYTHON" ]; then
-  if command -v python3 >/dev/null 2>&1; then PYTHON=python3
-  elif command -v python >/dev/null 2>&1; then PYTHON=python
-  fi
-fi
-
-if [ -z "$PYTHON" ]; then
-  fail "python interpreter (python3 or python) not on PATH"
+if [ "$(uname -s)" = "Darwin" ]; then
+    FONT_DIR="${HOME}/Library/Fonts"
 else
-  version="$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo "0.0")"
-  major="${version%%.*}"; minor="${version##*.}"
-  if [ "$major" -gt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -ge 10 ]; }; then
-    pass "python $version"
-  else
-    fail "python $version — the scripts need 3.10 or newer"
-  fi
+    FONT_DIR="/usr/share/fonts"
+fi
+export FONT_DIR
+
+check "python3"     command -v python3
+check "openpyxl"    python3 -c "import openpyxl"
+check "xlsxwriter"  python3 -c "import xlsxwriter"
+
+# Font check
+if command -v fc-list &>/dev/null; then
+    fc-list :lang=zh 2>/dev/null | grep -qi "noto\|simhei\|wenquanyi" || { $QUIET || echo "MISSING: CJK fonts"; FAIL=1; }
 fi
 
-# ------------------------------------------------------------------- openpyxl
+# ── ON-DEMAND but NOT substitutable: recalc / .xlsx→PDF / .csv→.xlsx (LibreOffice/soffice) ──
+required_on_demand "libreoffice (soffice)" command -v soffice
 
-if [ -n "$PYTHON" ]; then
-  if "$PYTHON" -c 'import openpyxl' >/dev/null 2>&1; then
-    pass "openpyxl"
-  else
-    fail "openpyxl — python3 -m pip install openpyxl (every path in SKILL.md needs it)"
-  fi
-fi
-
-# ------------------------------------------------------------------ LibreOffice
-
-# Not substitutable: when recalculation is needed and soffice is absent, the
-# recalculation step reports it (recalc.py returns {"error": ...}) — it never
-# fails silently and never substitutes another program.
-if command -v soffice >/dev/null 2>&1; then
-  pass "soffice ($(soffice --version 2>/dev/null | head -1))"
-else
-  warn "soffice not found — scripts/recalc.py will report an error instead of recalculating"
-fi
-
-# --------------------------------------------------------------- script files
-
-for script in scripts/recalc.py xlsx.py templates/base.py templates/palettes.py; do
-  if [ -f "$SKILL_DIR/$script" ]; then
-    pass "$script present"
-  else
-    fail "$script missing"
-  fi
-done
-
-if [ "$failures" -eq 0 ]; then
-  printf '\nenvironment ready\n'
-  exit 0
-fi
-printf '\n%d check(s) failed\n' "$failures"
-exit 1
+$QUIET || echo "XLSX_SKILL_DIR=$XLSX_SKILL_DIR"
+$QUIET || echo "FONT_DIR=$FONT_DIR"
+return $FAIL 2>/dev/null || exit $FAIL

@@ -1,205 +1,534 @@
-# Brief — Resumes and CVs
+# Scene: Resume / CV
 
-Applies to a one-page resume, a two-page CV, and the short professional profile
-that is emailed rather than printed. A resume is read twice: once by a parser that
-extracts the text, once by a person who spends ninety seconds on it. Every decision
-below serves the second reading without breaking the first.
+## Goal
 
-## 1. The page budget is an input
+Generate a complete, authentic, well-structured, position-targeted resume with stable Word formatting. Must simultaneously meet:
+- Authentic and credible content, clear position targeting
+- ATS-friendly, stable Word layout
+- Clean structure, professional visual design, easy to scan
 
-Decide the page count before writing, then fit the content to it.
+**Execution priority** (when conflicting): Position relevance > Information readability > ATS compatibility > Visual decoration
 
-- One page for a resume under roughly eight years of experience; two for a CV with
-  publications, teaching, or a long project list.
-- Fit by deleting, never by shrinking type. The order of preference is: drop a
-  section, drop a bullet, tighten the wording, and only then reduce the leading.
-- Body size 10.5–11 pt. Nothing below 10 pt — at that point the document is being
-  made unreadable to satisfy a page count that should have been met by deleting a
-  bullet.
-- Margins: left and right 2 cm, top 1.8 cm, bottom 1.4 cm. Below 1.5 cm a resume
-  prints badly and reads as if it is hiding something.
-- No running head. A resume has one page of authority; a header repeating the
-  owner's name on page two spends it.
+**Forbidden:** Producing advice-only / fragments / half-finished drafts; outputting chat-style explanations.
 
-## 2. The header block
+→ Font profile: **B (Visual)** — see `references/common-rules.md`
+→ Placeholder convention & universal prohibitions — see `references/common-rules.md`
 
-Name and contact details form a full-width block at the top, before any column
-structure begins.
+---
 
-- Name centred, one or two steps above body size, in the heading family.
-- Contact on the next line, centred, in the body family at body size: email, phone,
-  location, and one link. Icons are optional; the text is not.
-- Contact details are plain paragraphs, not a table. A parser reads a table's cell
-  order and may reassemble the fields in the wrong sequence.
-- The block is followed by a rule, not by extra empty paragraphs. Five or more
-  consecutive empty paragraphs is what `blank-pages` counts as a blank page.
+## Scope
 
-## 3. Section headings
+Default: generate a position-oriented general resume. Switch to English resume, academic CV, international format, or design portfolio style only when explicitly requested by the user.
 
-- One heading level only. A resume has no subsections, so `heading-continuity` has
-  nothing to gap-check; adding a second level invites a skip.
-- Heading text left-aligned, a step above body size, small capitals or bold, with a
-  single horizontal rule underneath. In OOXML the rule is a `w:pBdr/w:bottom` on the
-  heading paragraph — a paragraph border, not a drawn line and not a table.
-- No numbering. A numbered section heading ("1. Experience") on a resume reads as a
-  report that lost its chapters.
-- Standard section names, spelled plainly: Experience, Education, Skills, Projects.
-  A parser looking for a known heading drops a creative one.
+---
 
-## 4. Entries, and where the date goes
+## Resume Type Routing
 
-- Reverse chronological inside every section, most recent first, with one date
-  format throughout. A reader scans the top entry of each section and stops.
-- The date is right-aligned on the same line as the role or degree. The OOXML
-  mechanism is a right-aligned tab stop at the right margin with the date after a
-  `w:tab`; a table with the date in a second column also works but then
-  `table-margins` and `table-pagination` both apply to it (§7).
-- Role or degree on its own line, employer or institution on the same line or the
-  next, then bullets. One achievement per bullet, action verb first, and a number
-  wherever a number exists.
-- Never let an entry straddle a page break. `w:keepNext` on the role line and
-  `w:keepLines` on the bullets keep an entry whole.
+Auto-select module order based on user background and target:
 
-## 5. Bullets
+### General Resume (default)
+Name & Contact → Target Position → Profile Summary (optional) → Core Skills → Work Experience → Projects → Education → Certifications / Awards
 
-- A real list: `w:numPr` on each paragraph with a `numId` from `word/numbering.xml`.
-  A typed hyphen is not a list, and `numbering-continuity` only sees real ones.
-- Tight vertical spacing. Default list spacing wastes a fifth of a page.
-- List items are exempt from `cjk-indent` — that is what makes a Chinese-language
-  resume's bullets legal without a first-line indent.
-- Bullets are also exempt from `line-spacing`, which only counts body paragraphs
-  outside tables and lists. Set the prose paragraphs to one spacing value and the
-  bullets may keep their own.
+### New Graduate Resume
+Name & Contact → Target Position → Education → Internship Experience → Projects → Campus Activities / Competitions / Awards → Skills & Certifications
 
-## 6. Two columns, and why not a table
+### Technical Role Resume
+Name & Contact → Target Direction → Profile Summary (optional) → Tech Stack / Core Skills → Work Experience → Projects → Education → Open Source / Papers / Patents / Competitions
 
-Density buys readability and costs parseability. Both are real, so the split is
-deliberate.
+### Academic CV
+Name & Contact → Research Direction / Target → Education → Research Experience → Papers / Patents / Projects / Grants → Teaching / Academic Service → Awards / Skills / Languages
 
-- Name and contact stay full width. They are the fields a parser keys on.
-- Use a real column section: `<w:cols w:num="2" w:space="425"/>` inside the
-  section's `w:sectPr`. Word balances and flows the columns itself.
-- **Do not build the columns out of a table.** A multi-row layout table with no
-  `w:tblHeader` header row fails `table-pagination`, and every row additionally
-  needs `w:cantSplit` to pass the same rule. A one-row table is not exempt — the
-  rule counts rows lacking `cantSplit` across every table, including a single-row
-  one. Every cell also needs `w:tcMar` padding to pass `table-margins`, and a
-  layout table has no padding to give.
-- The left column carries experience and education, the content that must be read in
-  order. The right column carries skills, tools, languages and certifications —
-  short, order-independent items where a misread sequence costs nothing.
-- No entry spans the column break. Each one stays inside one column, whole.
+---
 
-## 7. A photo
+## Input Processing Rules
 
-Only when the market the resume is aimed at expects one, and then it is an inline
-image sized against the text column. `image-overflow` compares an image's width in
-EMU against the narrowest usable text column across all sections, at 635 EMU per
-twip; a photo wider than the column fails the gate. Width, not height, is what is
-measured.
+1. If user provides a target position or JD → **must reorganize and rewrite content around position requirements**
+2. If user provides a raw draft → prioritize restructuring, phrasing refinement, and priority reordering; do not rewrite into an unfamiliar career
+3. **Never fabricate** companies, positions, degrees, projects, certifications, awards, papers, patents, data results, or achievements
+4. If critical data is missing → use conservative expressions or placeholder `【Please fill in: ______】`; never fabricate precise numbers
+5. A single resume should generally serve only one primary career direction
 
-## 8. Chinese-language resumes
+---
 
-- The body face is a serif Chinese face (宋体) or a sans one (黑体); the heading
-  face is the other one. Two families, no more.
-- Do not declare Noto Sans SC, Noto Serif SC, Source Han Sans, Source Han Serif,
-  LXGW WenKai or 霞鹜文楷. `font-fallback` flags all six as fonts that only exist on
-  the build machine.
-- A summary paragraph of twenty or more Chinese characters, not centred and not a
-  list item, needs a first-line indent in the 200–800 twip range. Bullets and the
-  centred contact line are exempt; a prose paragraph is not.
-- The indent must be `w:ind/@w:firstLine`. Word's `w:firstLineChars="200"` — the
-  usual way to ask for a two-character indent — is not read by the rule and the
-  paragraph is reported as unindented.
+## Content Quality Constraints
 
-## 9. Self-check before handing this over
+### Core Principles
+1. Resume must revolve around the target position — do not spread all experiences equally
+2. Most relevant experiences, projects, and skills must be **placed first and detailed**
+3. Terminology, company names, position titles, date formats, and skill names must be consistent
+4. Must demonstrate: **personal positioning → capability tags → relevant experience → provable results**
+5. No piling of vague self-praise; no inspirational writing or chronological dumps
 
-- Exactly the intended page count. One page means one page.
-- Every date aligned and formatted identically.
-- No entry split across a page or column break.
-- Nothing below 10 pt.
-- The email address survives text extraction intact, as one token.
-- `postcheck.py out.docx --only blank-pages,line-spacing,image-overflow,font-fallback,cjk-indent,heading-continuity,table-pagination,table-margins`
-  — a one-section resume fails `cover-separation` by design, so scope the run.
+### Experience Writing Standards
 
-## Source
+Each experience bullet should demonstrate: **Action + Object/Context + Method + Result/Impact**
 
-The structure of this brief — the centred name and contact block, the ruled
-left-aligned section heading with no number, the date right-aligned on the entry
-line, the zero paragraph indent, the tight list spacing and the 11 pt body — follows
-the conventions of:
+**Recommended verbs:** Led, built, drove, optimized, refactored, designed, delivered, coordinated, improved, reduced, achieved
 
-    billryan/resume
-    https://github.com/billryan/resume
-    Copyright (c) Bill Ryan (upstream LICENSE leaves the holder line blank)
-    MIT License — https://github.com/billryan/resume/blob/master/LICENSE
+**Rules:**
+- "Responsible for" / "participated in" are not absolutely forbidden, but must include scope and results
+- Each bullet is concise — one core contribution per bullet
+- Quantify when possible, but do not force-bold all numbers
+- Recent experience gets detail; low-relevance/low-value experience gets compressed or removed
+- Reverse chronological order — most recent and relevant first
+- Expand the most recent 2 experiences; compress earlier ones
 
-The knowledge above is restated in this repository's own words and in `.docx` terms;
-no upstream file is distributed with this plugin.
+### Profile Summary / Self-Assessment
+1. Not mandatory
+2. If included, frame as "Profile Summary" — **3–4 lines max**
+3. Focus on: years of experience, career direction, core capabilities, representative achievements, position fit
+4. **Forbidden** as main content: "hardworking", "strong sense of responsibility", "team player", "quick learner", "outgoing personality"
 
-## 10. Resume type routing
+### Truthfulness & Risk Control
+1. Never fabricate experiences, achievements, education, awards, or certifications
+2. Never upgrade "participated in" to "led" unless user information supports it
+3. Never attribute team results entirely to the individual
+4. Never fabricate revenue, conversion rates, headcount, budgets, or technical metrics
+5. If no data available, use restrained expressions: "improved delivery efficiency", "shortened processing cycle", "supported core business launch"
 
-Not every resume is the same document. Route on the first read, because the
-type changes the page budget, the section order, and what counts as evidence.
+---
 
-| type | who | what changes |
-| --- | --- | --- |
-| **General** (default) | any professional role | experience-first; sections in reverse-chronological order |
-| **New graduate** | ≤ 2 years, no full-time history | education moves above experience; projects and coursework carry the weight a work history cannot |
-| **Technical role** | engineering, data, infra | a skills block near the top, named tools with the level of use stated; projects over duties |
-| **Academic CV** | research, faculty positions | publications and grants first, in a full list; no page budget; teaching and service included |
+## Length Control
 
-The routing is a decision, not a discovery: if the input does not say which,
-ask once. A new-graduate resume built on the general template buries the only
-evidence the candidate has.
+| Candidate Type | Target Pages |
+|---------------|-------------|
+| New graduate / <3 years experience | **1 page** |
+| 3–10 years experience | 1–2 pages |
+| Senior manager / researcher / academic CV | May exceed 2 pages, but must maintain information density |
 
-## 11. Input processing rules
+**Compression rules:**
+- Experiences >5 years old with low relevance should be compressed
+- Experiences >10 years old and irrelevant may be omitted
+- Never pad low-value experiences just to "look comprehensive"
 
-- **Never invent.** A date range, a title, a metric or a tool that is not in
-  the input does not appear. A missing field renders as an explicit gap to
-  fill, never as a plausible guess.
-- **Dates are ranges or single points, consistently.** `2021.03–2023.07` or
-  `Mar 2021 – Jul 2023`; mixing formats within one document is the defect a
-  reviewer notices first.
-- **One entry per role**, not per task: the role carries the title, the
-  organisation, the dates; the bullets carry what was done.
-- **Quantify only what was given.** "Reduced load time by 40%" is input;
-  "significantly improved performance" is padding; "improved performance"
-  without a number is what the input said, and stays as it was.
-- **Contact block is verified, not assumed**: the email and phone in the
-  document are the ones the candidate supplied, character for character.
+---
 
-## 12. Content quality constraints
+## ATS & Structure Constraints
 
-### Core principles
+1. Core information must be plain text — never rely on images, icons, text boxes, or headers/footers for key content
+2. No embedded charts, objects, SmartArt, or WordArt
+3. Experience descriptions use consistent bullet symbols — no complex auto-numbering
+4. Bullets within the same position should be compact — no excess blank lines
 
-- **Every bullet is an achievement or a responsibility, never a duty
-  statement.** "Responsible for the build system" says nothing; "migrated the
-  build from Make to Bazel, cutting CI time from 22 to 9 minutes" is a bullet.
-- **Verb first, past tense, active voice.** Led, built, migrated, shipped —
-  not "was responsible for", not "helped with".
-- **One claim per bullet.** A bullet with two claims reads as two half-claims.
-- **No first person.** "I led" → "Led". The pronoun costs space and buys
-  nothing.
-- **Tail tense**: current roles in the present tense, past roles in the past.
+**Table layout vs. ATS balance:** The 3 visual templates (A/B/C) use Table-based layouts for Word visual quality. In strict ATS scenarios (user explicitly says "ATS priority"), prefer Template B (single-column) with reduced table dependency. Default: visual quality first.
 
-### Experience writing standards
+---
 
-- **Scope, then action, then result**: what you owned, what you did, what
-  changed. Three clauses, one bullet.
-- **Tools appear where they were used**, not in a separate list unless the
-  type routing put a skills block at the top.
-- **Promotions and role changes inside one organisation** are separate entries
-  with their own dates — the progression is the evidence.
-- **Gaps are not hidden and not explained in the document.** A date range that
-  ends is a date range that ends; the interview is where the conversation
-  happens.
+## Module Naming
 
-### Profile summary / self-assessment
+Use only standard, universal, recruiter-familiar names:
+- Personal Info, Target Position, Profile Summary, Core Skills, Work Experience, Projects, Education, Certifications, Awards, Languages
 
-- Three lines maximum, at the top, below the header block.
-- It states the role being sought, the years of relevant experience, and the
-  one thing the candidate is known for — nothing else.
-- No adjectives that cannot be checked: "results-driven", "team player",
-  "passionate" are all deleted on sight. The summary that survives is the one
-  a reviewer could verify from the bullets below it.
+**Forbidden fancy names:** "My Growth Journey", "Self-Appreciation", "Shining Moments", "Life Motto"
+
+---
+
+## Template Disease Prevention
+
+1. Do not include irrelevant identity tags (political affiliation, hometown, etc.) unless user explicitly requests
+2. Do not place low-priority modules (hobbies, languages, personality traits) before work experience
+3. Do not combine cover letter and resume in one document (unless user explicitly requests)
+4. Do not let template feel overpower actual personal information
+5. Do not let "self-assessment" occupy the golden area of the page (should come after core skills/experience)
+
+---
+
+## Template Selection
+
+Three templates are provided, auto-selected based on user needs:
+
+| Template | Layout | Best For | Color Style |
+|----------|--------|----------|-------------|
+| A | Left sidebar + right body | General purpose, tech roles | Dark grey sidebar + blue bar headings |
+| B | Dark header banner + single column | Content-heavy / senior candidates | Dark blue header + underline headings |
+| C | Left sidebar + vertical-line headings | International / bilingual / foreign companies | Blue sidebar + left-border headings |
+
+**Selection logic:**
+- Default: Template A
+- Lots of content (expected > 1 page) → Template B (no sidebar, better space utilization)
+- User explicitly requests bilingual / English → Template C
+
+### Industry Color Suggestions
+
+| Career Direction | Sidebar BG | Accent Color | Recommended Template |
+|-----------------|-----------|-------------|---------------------|
+| Tech / Internet | `#1A1F36` (deep blue-purple) | `#667eea` (amethyst) | A or C |
+| Finance / Consulting | `#0F2027` (deep sea blue) | `#D4AF37` (gold) | A or B |
+| Design / Creative | `#2D1B30` (deep purple) | `#f5576c` (coral pink) | A or C |
+| Education / Training | `#1A3A3A` (dark green) | `#3CB4A0` (mint green) | A |
+| Medical / Health | `#0E2030` (dark cyan) | `#3888A8` (medical blue) | B |
+| General / Default | `#303030` (warm dark neutral) | `#B89870` (warm accent) | A |
+
+When industry is unspecified, use default warm neutral palette. This aligns with the Visual Profile warm-neutral guidance in `design-system.md`.
+
+## Key Rules
+
+- **NO cover page / NO TOC**
+- **Target: 1 page** (2 pages max for senior roles)
+- **Compact spacing**: `line: 276` (1.15x)
+- All templates use **bilingual section headings** (e.g., "Work Experience 工作经历")
+
+---
+
+## Template A: Left Sidebar + Color Bar Headings
+
+### Color Palette
+```js
+const S = {
+  bg: "3B4F5C",      // sidebar background (dark grey-blue)
+  text: "D8E2E8",    // sidebar text
+  label: "8BA0AD",   // sidebar secondary text
+  accent: "2F97B8",  // accent color (blue-cyan)
+  title: "1A2D38",   // body heading
+  body: "2C3E4A",    // body content
+  sec: "6B8592",     // secondary info (dates etc.)
+};
+```
+
+### Layout Structure
+```
+┌──────────┬──────────────────────┐
+│ [Photo]  │ ██ Profile ██        │  ← Blue bar heading
+│          │ Summary text...      │
+│ Name     │                      │
+│ Title    │ ██ Work Experience ██│
+│          │ Company  Role  Date  │
+│ ──────── │ ▸ Achievement...     │
+│ Basic    │ ▸ Achievement...     │
+│ Info     │                      │
+│          │ ██ Projects ██       │
+│ ──────── │ ...                  │
+│ Contact  │                      │
+│          │ ██ Education ██      │
+│ ──────── │ ...                  │
+│ Skills   │                      │
+│ Java ●●●●○│                     │
+│ Go   ●●●○○│                     │
+│          │                      │
+│ ──────── │                      │
+│ Certs    │                      │
+└──────────┴──────────────────────┘
+     30%             70%
+```
+
+### Implementation Notes
+
+**Page setup:**
+```js
+page: { margin: { top: 0, bottom: 0, left: 0, right: 0 } }
+// Use Table to simulate columns: columnWidths: [3400, 8506]
+// ⚠️ Row height must use "exact" with safety margin to prevent overflow blank pages
+// Row height: height: { value: 16038, rule: "exact" }
+// 16038 = 16838(A4 height) - 1200(safety margin for cross-engine compatibility)
+```
+
+**Sidebar element order:**
+1. Photo placeholder (rectangle + border, width 2400 DXA, height 1800)
+2. Name (32pt bold white SimHei) + Title (18pt accent)
+3. Basic info (DOB / degree / school)
+4. Contact info (phone / email / address)
+5. Skill ratings (name + ●○ dot rating, 5 levels each)
+6. Certificates list
+
+**Right-side section headings (color bar style):**
+```js
+// Full-width bar background + white Chinese text + lighter English text
+new Table({ columnWidths:[7600], rows:[new TableRow({ children:[
+  new TableCell({
+    shading: { fill: S.accent, type: ShadingType.CLEAR },
+    margins: { top:40, bottom:40, left:200, right:100 },
+    children: [new Paragraph({ children: [
+      new TextRun({ text: "Work Experience  ", size:22, bold:true, color:"FFFFFF", font:"SimHei" }),
+      new TextRun({ text: "Experience", size:18, color:"C8E8F0", font:"Times New Roman", italics:true }),
+    ] })],
+  })
+] })] });
+```
+
+**Experience entry format:**
+```js
+// Line 1: Company(bold) + Title(accent) + Date(right-aligned)
+new Paragraph({
+  tabStops: [{ type: TabStopType.RIGHT, position: 7200 }],
+  children: [
+    new TextRun({ text: "Company Name", size:22, bold:true, color:S.title }),
+    new TextRun({ text: "    Role Title", size:20, color:S.accent }),
+    new TextRun({ text: "\t2023.06 — Present", size:17, color:S.sec }),
+  ]
+});
+// Line 2+: ▸ bullet points
+```
+
+---
+
+## Template B: Dark Header Banner + Single Column
+
+### Color Palette
+```js
+const C = {
+  dark: "1A3352",    // header background (dark blue)
+  accent: "2980B9",  // accent color
+  title: "1A2636",   // heading
+  body: "2C3E50",    // body text
+  sec: "6B8599",     // secondary info
+  light: "E8EFF5",   // light background
+};
+```
+
+### Layout Structure
+```
+┌────────────────────────────────┐
+│ ██████████████████████████████ │  ← Dark blue background banner
+│ █  Name    Title             █ │    Contains name / title /
+│ █  Phone | Email | Location  █ │    contact / basic info
+│ █  DOB | Degree | School     █ │
+│ ██████████████████████████████ │
+│                                │
+│ Profile                        │  ← Underline heading
+│ ─────────────────────────────  │
+│ Summary text...                │
+│                                │
+│ Work Experience                │
+│ ─────────────────────────────  │
+│ Company | Role        Date     │
+│ • Achievement...               │
+│ ...                            │
+│                                │
+│ Skills                         │
+│ ─────────────────────────────  │
+│ Programming ●●●●○  Java/Go/...│  ← Rating + details
+└────────────────────────────────┘
+```
+
+### Implementation Notes
+
+**Header banner:**
+```js
+// Table single row single column, dark background, height 2400 DXA
+new Table({ columnWidths:[11906], rows:[new TableRow({
+  height: { value:2400, rule:"exact" },
+  children:[new TableCell({
+    shading: { fill: C.dark },
+    margins: { top:300, bottom:200, left:800, right:800 },
+    verticalAlign: VerticalAlign.TOP, // Never use CENTER in exact-height rows (WPS incompatible)
+    children: [
+      // Line 1: Name(48pt white) + Title
+      // Line 2: Phone | Email | Location
+      // Line 3: DOB | Degree | School
+    ]
+  })]
+})] });
+```
+
+**Section headings (underline style):**
+```js
+new Paragraph({
+  borders: { bottom: { style: BorderStyle.SINGLE, size: 2, color: C.accent } },
+  children: [
+    new TextRun({ text: "Work Experience", size:24, bold:true, color:C.accent, font:"SimHei" }),
+    new TextRun({ text: "  Experience", size:18, color:C.sec, italics:true }),
+  ]
+});
+```
+
+**Skills display (rating + details):**
+```js
+// Name(bold) + ●○ rating + specific tools list
+new Paragraph({ children: [
+  new TextRun({ text: "Programming  ", size:19, bold:true, color:C.title }),
+  new TextRun({ text: "●●●●○  ", size:13, color:C.accent }),
+  new TextRun({ text: "Java / Go / Python / TypeScript", size:18, color:C.sec }),
+] });
+```
+
+---
+
+## Template C: Blue Sidebar + Vertical-Line Headings
+
+### Color Palette
+```js
+const C = {
+  side: "4A7C8F",     // sidebar background (teal-blue)
+  text: "FFFFFF",     // sidebar text
+  label: "A0C4D0",   // sidebar secondary text
+  accent: "357A8F",   // accent color
+  dot: "2F8FAD",      // skill dot fill color
+  dotDim: "B8D4DE",   // skill dot empty color
+  title: "1A3040",    // body heading
+  body: "2C4050",     // body content
+  sec: "6B8A98",      // secondary info
+};
+```
+
+### Sidebar-Specific Elements
+
+**Circular photo placeholder:**
+```js
+new Paragraph({ alignment: AlignmentType.CENTER,
+  children: [new TextRun({ text: "◯", size:80, color:C.label })]
+});
+```
+
+**Language proficiency matrix:**
+```js
+"English  ● ● ● ● ○"
+"Japanese ● ● ○ ○ ○"
+```
+
+**Right-side section headings (left-border style):**
+```js
+new Paragraph({
+  borders: { left: { style: BorderStyle.SINGLE, size:8, color:C.accent, space:8 } },
+  indent: { left: 120 },
+  children: [
+    new TextRun({ text: "Work Experience", size:24, bold:true, color:C.title, font:"SimHei" }),
+    new TextRun({ text: "  Experience", size:18, color:C.sec, italics:true }),
+  ]
+});
+```
+
+**Experience entry format (differs from A):**
+```js
+// Line 1: Company name (bold)
+// Line 2: Role (accent color) + Date
+// Line 3+: ▸ bullet points
+```
+
+---
+
+## Universal Rules
+
+### Font Specifications
+| Element | Font | Size | Style |
+|---------|------|------|-------|
+| Name (sidebar) | SimHei | 32pt (size:64) | Bold, white |
+| Name (header) | SimHei | 24pt (size:48) | Bold, white |
+| Section heading | SimHei | 11pt (size:22) | Bold |
+| Company / School | Microsoft YaHei | 11pt (size:22) | Bold |
+| Role title | Microsoft YaHei | 10pt (size:20) | accent color |
+| Date range | Microsoft YaHei | 8.5pt (size:17) | sec color |
+| Bullet description | Microsoft YaHei | 9.5pt (size:19) | body color |
+| Skill dots | Default | 6.5pt (size:13) | accent / dimColor |
+
+### Bullet Symbols
+- Template A / C: `▸` (small triangle)
+- Template B: `•` (round dot)
+
+### Skill Rating Rules
+- 1–5 levels using filled ● and empty ○ dots
+- One skill per line, name on the left, dots on the right
+- Filled dot color: accent; empty dot color: dimColor
+
+### JD Matching Logic
+When user provides a job description:
+1. Extract key requirements (skills, experience, education)
+2. Prioritize matching experience items to the top
+3. Naturally incorporate JD keywords into descriptions
+4. Highlight relevant skills
+
+### Multi-Page Handling
+
+- 1 page content: Sidebar templates (A/C) or single-column template (B)
+- Over 1 page: Prefer Template B; if using A/C, switch page 2 to full-width layout with a name bar at the top (Name | Title)
+
+⚠️ **Multi-page resumes must use multi-section structure:**
+
+Page 1 and Page 2 must be **different sections** for independent margin and layout control:
+
+```js
+sections: [
+  {
+    // Page 1 section — margin 0 (sidebar layout needs full-page)
+    properties: { page: { margin: { top: 0, bottom: 0, left: 0, right: 0 } } },
+    children: [page1Table],
+  },
+  {
+    // Page 2 section — normal margins with header bar
+    properties: { page: { margin: { top: 800, bottom: 600, left: 800, right: 800 } } },
+    children: [pageHeader(name, title), ...page2Content],
+  },
+]
+```
+
+⚠️ **Template B multi-page handling:**
+
+Template B header banner uses Table simulation:
+1. Banner `columnWidths` must equal **page content area width** (pageWidth - marginLeft - marginRight), not full page width
+2. If banner needs full page width → set page 1 section margin to 0, banner columnWidths to 11906
+3. Page 2+ must be independent sections, margin.top ≥ 800
+
+⚠️ **Page 2+ top spacing rules (mandatory):**
+
+1. **Page margin.top must be ≥ 800 twips** (~1.4 cm), never 0
+2. **Page 2+ needs a header info bar:** concise `Name | Title` bar, height ~400–600 twips, separated from body with light background or bottom line
+3. **200–300 twips spacing between header bar and body content**
+4. **Forbidden: content touching the very top of page 2**
+
+```js
+// Concise header bar for page 2+
+function pageHeader(name, title) {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: { top: NB, left: NB, right: NB, insideHorizontal: NB, insideVertical: NB,
+               bottom: { style: BorderStyle.SINGLE, size: 1, color: "D0D0D0" } },
+    rows: [new TableRow({
+      cantSplit: true,
+      height: { value: 500, rule: "atLeast" },
+      children: [new TableCell({
+        margins: { top: 60, bottom: 60, left: 200, right: 200 },
+        borders: { top: NB, left: NB, right: NB, bottom: NB },
+        children: [new Paragraph({
+          children: [
+            new TextRun({ text: name, size: 20, bold: true, color: S.title || C.title }),
+            new TextRun({ text: `  |  ${title}`, size: 18, color: S.sec || C.sec }),
+          ]
+        })],
+      })],
+    })],
+  });
+}
+```
+
+---
+
+## Scene-Specific Quality Checks
+
+In addition to universal checks (see `references/common-rules.md`):
+
+### Format
+- [ ] Fits within 1 page (senior ≤ 2 pages)
+- [ ] **Single-page fill rate ≥ 85%** (bottom whitespace ≤ 15%, ~2500 twips)
+- [ ] Section headings are bilingual
+- [ ] Skill rating dots correct (●○)
+- [ ] Experience in reverse chronological order
+- [ ] No cover page, no TOC
+- [ ] Line spacing 1.15x (line: 276)
+- [ ] No extra blank pages
+- [ ] **Table row height uses `rule: "exact"` with value ≤ 16038** (prevent overflow blank pages)
+- [ ] **Multi-page: page 2+ has header info bar + proper top spacing**
+
+### Content
+- [ ] Clearly organized around target position
+- [ ] No vague self-assessments ("hardworking", "responsible", "team player")
+- [ ] No fabricated data or exaggerated results
+- [ ] Most relevant experience placed first and detailed
+- [ ] Each bullet demonstrates action + object + method + result
+- [ ] No long narrative blocks / excessive long sentences / information density imbalance
+- [ ] Module names are standardized
+- [ ] Contact info is plain text, clearly positioned
+- [ ] Header area forms visual center
+- [ ] Work experience and projects are the visual main body
+- [ ] Page count matches candidate seniority
+
+### Single-Page Fill Rules
+
+Single-page resumes must fully utilize page space — **large bottom whitespace is forbidden:**
+
+1. If content is insufficient → **proactively expand:**
+   - Add project details, skill keywords, achievement data
+   - Add supplementary modules: profile summary, interests, awards
+2. Use section spacing (`spacing.before/after`) to **distribute content evenly**
+3. Sidebar templates (A/C): sidebar height should approach full page
+   - If sidebar content is sparse, increase element spacing
+   - Or add supplementary modules: "Languages", "Interests"
+4. Assessment: after generation, check last content element position; if >2500 twips from page bottom, adjust

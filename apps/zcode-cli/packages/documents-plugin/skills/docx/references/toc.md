@@ -1,242 +1,264 @@
-# Table of contents fields
+# Table of Contents (TOC) — Complete Reference
 
-How a TOC is built in OOXML, what `add_toc_placeholders.py` actually does to one, and
-where it stops.
+> **This is the single source of truth for all TOC rules.** Other files should reference this file instead of duplicating TOC instructions.
 
-## 1. The anatomy of a TOC field
+## Overview
 
-A table of contents is not a list of paragraphs with links. It is a **field**, and a
-field is five pieces living inside ordinary runs:
-
-```xml
-<w:p>
-  <w:r><w:fldChar w:fldCharType="begin"/></w:r>
-  <w:r><w:instrText xml:space="preserve"> TOC \o "1-3" \h \z \u </w:instrText></w:r>
-  <w:r><w:fldChar w:fldCharType="separate"/></w:r>
-</w:p>
-<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:t>第一章 概述</w:t></w:r></w:p>
-<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p>
-<w:p>
-  <w:r><w:fldChar w:fldCharType="end"/></w:r>
-</w:p>
-```
-
-| piece         | element                               | role                                                            |
-| ------------- | ------------------------------------- | --------------------------------------------------------------- |
-| begin         | `w:fldChar/@w:fldCharType="begin"`    | opens the field                                                 |
-| instruction   | `w:instrText`                         | what to build — here `TOC \o "1-3"` means heading levels 1 to 3 |
-| separate      | `w:fldChar/@w:fldCharType="separate"` | ends the instruction, begins the cached result                  |
-| cached result | ordinary paragraphs                   | what the reader sees until the field is refreshed               |
-| end           | `w:fldChar/@w:fldCharType="end"`      | closes the field                                                |
-
-The instruction and the result are separated for a reason: Word shows the cached
-result immediately and recomputes it lazily. Nothing in the file says "these page
-numbers are stale".
-
-Two consequences drive everything below:
-
-- **A programmatically built document caches nothing.** The begin, instruction,
-  separate and end are written by the build path, and the region between `separate`
-  and `end` is empty. The reader gets a blank gap where the contents belong.
-- **Word only refreshes when asked.** The trigger is `<w:updateFields/>` in
-  `word/settings.xml`. Without it the cached result — empty — is what ships.
-
-The `TOC1`, `TOC2`, `TOC3` styles referenced by the cached paragraphs are ordinary
-paragraph styles in `word/styles.xml`. A TOC field does not create them.
-
-## 2. What `add_toc_placeholders.py` does
+DOCX TOC is a **3-step process**: Code → Post-process → User opens Word.
 
 ```
-python3 add_toc_placeholders.py <file.docx> [--entries '[{"level":1,"text":"…","page":"1"}]'] [--dry-run]
+Step A: docx-js code generates empty TOC field structure
+Step B: add_toc_placeholders.py fills it with visible placeholder entries
+Step C: User opens Word → "Update Field" → real page numbers replace placeholders
 ```
 
-It works on the packed archive, rewrites `word/document.xml` and
-`word/settings.xml`, and swaps the file atomically through a temporary beside it.
+All 3 steps are **mandatory**. Skipping any step results in a broken or empty TOC.
 
-### Step 1 — collect the entries
+## When to Add TOC
 
-With no `--entries`, headings are extracted from `word/document.xml` in document
-order:
+- **Recommended**: Long or complex documents with many headings (reports, theses, papers, manuals)
+- **Do NOT add**: Resumes, contracts, letters, exam papers, short documents
+- **postcheck rule**: If document contains a "目录" title but no `TableOfContents` element → error
 
-- a paragraph qualifies when its `w:pStyle` starts with `heading`, case-insensitively;
-- the level is the numeric suffix of that style name, and levels above 3 are dropped;
-- the text is the concatenation of the paragraph's `w:t` nodes, stripped;
-- empty headings are skipped;
-- headings whose text matches `CAPTION_PREFIX` are skipped — `图 1：`, `表 2.`,
-  `Table 3.`, `Figure 4.`, `Fig. 5`, and the Chinese forms `表`, `图`, `附表`,
-  `插图`, `表格`, `图表`, each followed by digits or Chinese numerals and then `:`,
-  `：` or `.`.
+## Step A: Code Generation (docx-js)
 
-The caption filter exists because a caption in the contents makes the reader think a
-chapter is missing.
+Insert **4 elements** in sequence:
 
-`--entries` supplies the list explicitly as a JSON array of
-`{"level": int, "text": str, "page": str}`. `page` defaults to `"1"` and `level` to
-`1`. Anything unparseable, or not an array, exits `2` before the archive is opened.
+```js
+const { TableOfContents, Paragraph, TextRun, PageBreak, AlignmentType } = require("docx");
 
-### Step 2 — find the field
+// 1. TOC title — ⛔ DO NOT use HeadingLevel (or TOC will index itself!)
+new Paragraph({
+  alignment: AlignmentType.CENTER,
+  spacing: { before: 480, after: 360 },
+  children: [new TextRun({
+    text: "目  录",  // or "Table of Contents" for English docs
+    bold: true, size: 32,
+    font: { eastAsia: "SimHei", ascii: "Times New Roman" }
+  })],
+}),
 
-The script locates the field by `w:fldChar` type, not by the instruction text:
+// 2. TOC field element — ⚠️ first parameter is NOT displayed, it's internal name only
+new TableOfContents("Table of Contents", {
+  hyperlink: true,
+  headingStyleRange: "1-3",  // match HeadingLevel range used in document
+}),
 
-1. every `w:fldChar` in the document is collected in document order;
-2. the first one whose type is `separate` and the first whose type is `end` are taken;
-3. each is mapped to the top-level body block — the direct child of `w:body` — that
-   contains it.
+// 3. ★ MANDATORY Refresh Hint — tells user how to update page numbers
+new Paragraph({
+  spacing: { before: 200 },
+  children: [new TextRun({
+    text: "Note: This Table of Contents is generated via field codes. To ensure page number accuracy after editing, please right-click the TOC and select \"Update Field.\"",
+    italics: true, size: 18, color: "888888"
+  })]
+}),
 
-Both must resolve, and the end block must come strictly after the separate block.
-When they do not, nothing is inserted.
-
-### Step 3 — clear and write
-
-Everything between the separate block and the end block is removed, then one
-paragraph per entry is inserted, in order, starting at the block right after the
-separate block:
-
-```xml
-<w:p>
-  <w:pPr>
-    <w:pStyle w:val="TOC{level}"/>
-    <w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9000"/></w:tabs>
-    <w:ind w:left="{240 if level <= 1 else 480}"/>
-  </w:pPr>
-  <w:r><w:t xml:space="preserve">{text}</w:t></w:r>
-  <w:r><w:tab/></w:r>
-  <w:r><w:t>{page}</w:t></w:r>
-</w:p>
+// 4. ★ MANDATORY PageBreak after TOC — prevents TOC and body merging on same page
+new Paragraph({ children: [new PageBreak()] }),
 ```
 
-The right-aligned dot-leader tab sits at 9000 twips regardless of the page width.
-The indent is 240 twips at level 1 and 480 at levels 2 and 3. Every page number is
-the placeholder `1`.
+### Heading Requirements
 
-Clearing first is what makes repeated runs safe, and the re-insertion is byte-stable:
-the second run removes the same paragraphs and writes identical ones back, so the
-serialised document does not change and the report says `written: False`.
+**⚠️ CRITICAL**: TOC only picks up paragraphs with `heading: HeadingLevel.HEADING_X`.
 
-### Step 4 — turn on `updateFields`
+```js
+// ✅ Correct — Heading style, TOC can index
+new Paragraph({
+  heading: HeadingLevel.HEADING_1,
+  children: [new TextRun({ text: "第一章 引言", bold: true, size: 32, color: c(P.primary) })]
+})
 
-`word/settings.xml` gains `<w:updateFields w:val="true"/>` when it does not already
-have one. Placement follows the `CT_Settings` child order: after `defaultTabStop` or
-`hyphenationZone` when either exists, otherwise at the front of the element. An
-existing `w:updateFields` is left exactly as it is — value and position.
+// ❌ Wrong — manual bold + large font, TOC cannot detect
+new Paragraph({
+  children: [new TextRun({ text: "第一章 引言", bold: true, size: 32, color: c(P.primary) })]
+})
+```
 
-This is the step that makes the placeholders temporary. On the first open in Word the
-field is recomputed, the real headings and their real page numbers replace the
-placeholders, and the dot leaders re-align.
+**Exceptions:**
+- Cover title: does NOT need Heading style (should not appear in TOC)
+- "目录" title: **MUST NOT** use Heading style (prevents TOC from indexing itself)
 
-## 3. Idempotency
+## Step B: Post-Processing Script
 
-| run          | document.xml                                  | settings.xml                |
-| ------------ | --------------------------------------------- | --------------------------- |
-| first        | entries written between the markers           | `updateFields` added        |
-| second       | cleared and rewritten identically — no change | already present — no change |
-| third onward | same                                          | same                        |
+**MUST** run after generating the DOCX file:
 
-The report reflects it: `entries inserted` counts the entries written every time,
-while `written` is `False` once nothing changed. `--dry-run` reports without touching
-the file and always reports `written: False`.
+```bash
+python3 "$DOCX_SCRIPTS/add_toc_placeholders.py" output.docx --auto
+```
 
-`update_fields_ensured` in the report means "the element is present and correctly
-placed after this run", not "this run added it".
+### What the script does
 
-## 4. Known limitations
+1. Extracts Heading 1-3 from the document as TOC entries
+2. Fixes docx-js fldChar structure bug (begin+instrText+separate merged in one `<w:r>`)
+3. Patches `settings.xml` with `updateFields=true` (Word prompts to refresh on open)
+4. Ensures Heading styles have `outlineLvl` (required for TOC field update)
+5. Ensures TOC 1/2/3 styles exist in `styles.xml`
+6. Injects placeholder entries with HYPERLINK + PAGEREF between `separate` and `end` fldChars
+7. Handles duplicate heading texts (each gets its own bookmark)
 
-**Separate and end in the same paragraph.** Placement works on whole top-level
-blocks. When the entire field — begin, instruction, separate, cached result and end —
-sits inside a single `w:p`, the separate and the end map to the same block, the
-end-block check fails, and the script inserts nothing. The report says
-`entries inserted: 0` and only the settings change lands. This is the common shape
-for a TOC generated by a build path that writes one paragraph per field piece only
-when it does not; when it does, the fix is to split the field across paragraphs.
+### Error handling
 
-**No TOC field.** A document with no `w:fldChar` triple of begin, separate and end
-changes only in `settings.xml`. `entries inserted: 0`, exit `0`.
+The script **exits with code 1** if:
+- No TOC field structure found (missing `TableOfContents` element)
+- TOC field has `begin` but no `separate` fldChar (malformed structure)
+- Field structure exists but no TOC instrText detected
 
-**The field is found by type, not by instruction.** The first `separate` and the
-first `end` in document order win, whatever field they belong to. A body-level field
-earlier in the document — a cross-reference, a `NUMPAGES`, a page-number field typed
-into the text rather than placed in a footer — carries its own begin/separate/end and
-becomes the target. When that field's markers share one paragraph the script inserts
-nothing at all; when they span paragraphs, the entries land in the wrong field. If
-the document has body fields before the TOC, pass `--entries` and verify the result
-by reading `word/document.xml`.
+**If exit code = 1 → the generated code is wrong. Fix the code and regenerate.**
 
-**An end before a separate.** A field written as begin/end with no separate, ahead of
-the TOC, makes the first `end` precede the first `separate`. The check rejects it and
-nothing is inserted.
+### Options
 
-**`TOC{level}` styles are assumed to exist.** The placeholder paragraphs reference
-`TOC1`, `TOC2`, `TOC3` by style id. A `word/styles.xml` that does not define them
-renders the entries in the default paragraph style — the field still refreshes
-correctly in Word, but the cached view looks unstyled until it does.
+```bash
+# Auto mode (recommended — default behavior)
+python3 "$DOCX_SCRIPTS/add_toc_placeholders.py" output.docx --auto
 
-**Placeholder pages are all `1`.** By design. They exist so the block does not look
-broken; `<w:updateFields/>` is what replaces them. A reader who opens the file in
-something that ignores `updateFields` sees page `1` on every line.
+# Manual entries
+python3 "$DOCX_SCRIPTS/add_toc_placeholders.py" output.docx \
+  --entries '[{"level":1,"text":"Chapter 1","page":"1"},{"level":2,"text":"Section 1.1","page":"2"}]'
+```
 
-**`ElementTree` re-serialisation.** `word/document.xml` is rewritten through
-`xml.etree.ElementTree` with the `w` prefix explicitly registered, so prefixes stay
-stable, but attribute order within an element and the choice between self-closing and
-paired empty tags follow ElementTree's rules rather than the original file's. Run
-this script after any edit whose result you need to diff against the source.
+## Step C: User Opens in Word/WPS
 
-**It does not build the TOC field.** If the document has no field, this script does
-not create one; it only fills and refreshes a field that already exists.
+- **Word**: Detects `updateFields=true` → prompts "Update field?" → click Yes → real page numbers
+- **WPS**: May NOT auto-prompt. User must: right-click TOC → "Update Field" → "Update entire table"
 
-## 5. Relationship to `Document`
+The placeholder entries ensure TOC is **not blank** even without updating — users see heading titles with approximate page numbers.
 
-`Document.__init__` writes `<w:updateFields w:val="true"/>` into `word/settings.xml`
-on every construction, unless it is already there — so a document that has been
-through a `Document` session already satisfies step 4, and
-`add_toc_placeholders.py` reports `update_fields_ensured: False` for it. The two
-writers agree on the element and its value; they differ only in placement, because
-`Document` uses the full `CT_Settings` order table from `identifiers.py` while the
-script places after `defaultTabStop` / `hyphenationZone` when either exists.
+## Multi-Section Page Numbering
 
-## 6. Multi-section page numbering
+When a document has a TOC, the TOC MUST be in its own section so that body page numbering starts from 1. This applies to **all document types with a TOC** (reports, whitepapers, PRDs, academic papers, etc.) — not just academic papers.
 
-A document with front matter in roman numerals and a body in arabic needs the
-TOC to show both, correctly:
+**Mandatory 3-section architecture for documents with cover + TOC:**
 
-- The TOC field collects entries from **all sections**, and each entry carries
-  the page number as the section's own numbering renders it — roman for front
-  matter, arabic for the body.
-- The switch is a property of each section's `pgNumType` (`w:fmt="lowerRoman"`
-  vs `w:fmt="decimal"`, and `w:start` for the restart). Editing the first
-  page's number by hand is what breaks when a page is inserted later.
-- `add_toc_placeholders.py` writes the placeholders; the **page numbers are
-  filled by Word/WPS on open**, which is why the refresh hint (§7) is
-  mandatory and not optional.
-- A TOC that shows arabic numbers in the front matter, or roman in the body,
-  is a numbering-scheme bug, not a TOC bug — check the section properties
-  first.
+```js
+sections: [
+  { /* Section 1: Cover — no page number, no footer */
+    properties: {
+      page: { size: pgSize, margin: pgMargin },
+      // ⚠️ Do NOT set page.pageNumbers here — docx-js emits empty <pgNumType/> which confuses WPS
+    },
+  },
+  { /* Section 2: Front matter (abstract, TOC) — Roman numerals */
+    properties: {
+      type: SectionType.NEXT_PAGE,
+      page: {
+        size: pgSize, margin: pgMargin,
+        pageNumbers: { start: 1, formatType: NumberFormat.UPPER_ROMAN },  // I, II, III...
+      },
+    },
+    footers: { default: pageNumFooter() },  // see footer rules below
+    children: [/* abstract + TOC title + TableOfContents + PageBreak */]
+  },
+  { /* Section 3: Body — Arabic numerals starting from 1 */
+    properties: {
+      type: SectionType.NEXT_PAGE,
+      page: {
+        size: pgSize, margin: pgMargin,
+        pageNumbers: { start: 1, formatType: NumberFormat.DECIMAL },  // 1, 2, 3...
+      },
+    },
+    footers: { default: pageNumFooter() },
+    children: [/* body content */]
+  },
+]
+```
 
-## 7. The refresh hint is mandatory
+### ⚠️ Page Number API — Correct Nesting (CRITICAL)
 
-The TOC's page numbers are computed by the consumer, not by us. Every document
-that ships with a TOC must tell the reader to refresh it:
+Page number settings MUST be nested inside `page.pageNumbers`, NOT at properties top level:
 
-- The hint is a short line after the TOC (or in the delivery note), naming the
-  action: in Word/WPS, select the TOC and press F9, or right-click → Update
-  Field → Update entire table.
-- Without the hint, the reader sees the placeholder page numbers — or stale
-  ones from before an edit — and concludes the document is broken.
-- The hint is also the honest statement of what we did: we placed the entries;
-  the consumer computed the pages.
+```js
+// ❌ WRONG — docx-js ignores these, pgNumType will be empty
+properties: {
+  pageNumberStart: 1,
+  pageNumberFormatType: NumberFormat.DECIMAL,
+}
 
-## 8. The five common TOC bugs
+// ✅ CORRECT — docx-js writes start= and fmt= attributes
+properties: {
+  page: {
+    pageNumbers: { start: 1, formatType: NumberFormat.DECIMAL },
+  },
+}
+```
 
-1. **Empty TOC**: the field was inserted but never refreshed, and no
-   placeholder text was written — the reader sees nothing. `add_toc_placeholders.py`
-   exists to prevent exactly this.
-2. **Placeholder numbers shipped as final**: the document was delivered
-   without the refresh hint, so `1`, `2`, `3` read as real page numbers.
-3. **Entries missing**: the heading style was applied as direct formatting
-   instead of a real style, so the field has nothing to collect. The TOC is
-   only as complete as the style usage.
-4. **Wrong levels**: the field's `\o "1-3"` switch does not match the
-   document's actual heading depth — too many levels produces a TOC longer
-   than its chapters, too few hides the structure.
-5. **Page numbers off by one**: the section's `pgNumType` start is wrong (a
-   restart that should not be, or a missing one that should) — check §6 before
-   blaming the field.
+### ⚠️ Footer Field Instruction — WPS Compatibility (CRITICAL)
+
+WPS may ignore `pgNumType fmt` in the section properties. To ensure correct display, the footer PAGE field **MUST** include an explicit format switch via **post-processing**:
+
+After generating the docx, unzip and patch each footer XML:
+- **Roman numeral footer**: replace `PAGE` with `PAGE \* ROMAN \\** MERGEFORMAT`
+- **Arabic numeral footer**: replace `PAGE \* arabic \* MERGEFORMAT`
+
+**⚠️ NEVER use `\* decimal` in instrText** — `decimal` is a docx-js API enum value (`NumberFormat.DECIMAL` for `pgNumType` XML attribute), NOT a valid Word field format switch. Using it causes page numbers to render as "1decimal", "2decimal". The correct Word field switch for Arabic numerals is always `\* arabic`.
+
+```js
+// Post-process footer XML:
+footerXml = footerXml.replace(
+  /(<w:instrText[^>]*>)\s*PAGE\s*(<\/w:instrText>)/g,
+  '$1 PAGE \\* ROMAN \\** MERGEFORMAT $2'  // or "arabic" for body section
+);
+```
+
+Also remove any empty `<w:pgNumType/>` from the cover section (docx-js emits these even when no pageNumbers is set):
+```js
+docXml = docXml.replace(/<w:pgNumType\/>/g, "");
+```
+
+### Page Numbering Rules
+
+| Section | Content | Format | Start | Footer |
+|---------|---------|--------|-------|--------|
+| Cover | Title page | None | — | No footer |
+| Front matter | Abstract, TOC | Roman (I, II, III) | 1 | `PAGE \* ROMAN` |
+| Body | Main content | Arabic (1, 2, 3) | 1 | `PAGE \* arabic` |
+
+⚠️ **The body section MUST set `pageNumbers: { start: 1 }`** — otherwise page numbers continue from the front matter pages, causing TOC page references to be offset. This is the #1 cause of "TOC page numbers are wrong".
+
+### Common Causes of Incorrect Page Numbers
+
+| Cause | Fix |
+|-------|-----|
+| `pageNumberStart` at properties top level | Move to `page: { pageNumbers: { start: 1 } }` |
+| Cover section emits empty `<pgNumType/>` | Post-process to remove it |
+| Footer uses bare `PAGE` without format switch | Post-process to add `\* roman` or `\* arabic` |
+| Cover and body in same section | Separate cover into its own section |
+| Multiple sections without pageNumbers.start | Explicitly set on each section needing independent counting |
+| headingStyleRange doesn't match headings | Ensure `headingStyleRange: "1-3"` covers all HeadingLevel values used |
+| Cover section has header/footer | Don't set header/footer on cover section |
+
+## TOC Refresh Hint (MANDATORY)
+
+**⚠️ When the document contains a TOC, you MUST add the following hint paragraph between the `TableOfContents` element and the PageBreak (so it appears on the TOC page, not the body page).** This ensures users know how to refresh page numbers after editing.
+
+```js
+new Paragraph({
+  spacing: { before: 200 },
+  children: [new TextRun({
+    text: "Note: This Table of Contents is generated via field codes. To ensure page number accuracy after editing, please right-click the TOC and select \"Update Field.\"",
+    italics: true, size: 18, color: "888888"
+  })]
+}),
+```
+
+## 5 Common TOC Bugs
+
+| # | Bug | Symptom | Fix |
+|---|-----|---------|-----|
+| 1 | "目录" heading uses `HeadingLevel.HEADING_1` | TOC includes "目录" as an entry | Remove `heading:` from TOC title paragraph |
+| 2 | No `PageBreak` after `TableOfContents` | TOC and body text on same page | Add `new Paragraph({ children: [new PageBreak()] })` after TOC |
+| 3 | Missing `TableOfContents` element | Script cannot inject placeholders, TOC is empty | Always include `new TableOfContents(...)` in code |
+| 4 | Headings use bold+large instead of `HeadingLevel` | TOC is empty even after running script | Change all body headings to `heading: HeadingLevel.HEADING_X` |
+| 5 | Script not run or exit code ignored | TOC page shows only title + blank space | Always run script; if exit code = 1, fix code and regenerate |
+
+## Checklist (for self-check during generation)
+
+- [ ] Document has 3+ H1 → TOC is included
+- [ ] "目录" heading does NOT use `HeadingLevel` (prevents self-indexing)
+- [ ] `new TableOfContents(...)` element present (not just plain text)
+- [ ] `PageBreak` exists after TOC element (prevents merging with body)
+- [ ] All body chapter headings use `heading: HeadingLevel.HEADING_X`
+- [ ] `add_toc_placeholders.py --auto` runs after generation
+- [ ] Script exit code checked — if 1, fix code and regenerate
+- [ ] TOC page has visible placeholder content (not empty)
+- [ ] **TOC Refresh Hint present** — italic gray note after TOC PageBreak telling user to right-click → "Update Field"
+- [ ] `outlineLevel: 0` for H1, `1` for H2, etc. (needed for TOC field update)

@@ -1,247 +1,411 @@
-# Brief — Chinese official documents (公文)
+# Scene: Official Document (Government Notice / Letter / Reply / Minutes)
 
-Applies to a 党政机关公文, an administrative notice, a formal letter of reply, and
-any document whose shape is fixed by GB/T 9704. The standard is the authority here;
-where this brief and the standard disagree, the standard wins.
+## Goal
 
-## 1. Page geometry
+Generate a complete, formal, properly structured official document ready for Word delivery. Must simultaneously meet:
+- Correct document type, complete structure, clear elements
+- Formal government register, stable hierarchy, reliable layout
+- Ready for approval, circulation, filing, issuance, or formal internal communication
 
-- A4, and the margins are not a taste decision:
+**Forbidden:** Producing outlines-only / sample paragraphs / writing advice / half-finished drafts; outputting chat-style explanations.
 
-| edge           | distance |
-| -------------- | -------- |
-| top            | 3.7 cm   |
-| bottom         | 3.5 cm   |
-| left (binding) | 2.8 cm   |
-| right          | 2.6 cm   |
+→ Placeholder convention & universal prohibitions — see `references/common-rules.md`
+→ **Note:** This scene uses its OWN font and layout specs (not Profile A defaults), because official documents follow GB/T 9704 standards.
 
-That leaves a text block of about 156 × 225 mm, which is what makes the line and
-character counts below come out right. Change the margins and the 22-lines-per-page
-convention stops holding.
+---
 
-In OOXML the margins live in the section's `w:pgMar` as twips (1 cm = 567 twips) and
-the paper size in `w:pgSz`. `image-overflow` derives the usable column from those
-numbers, so an image sized by eye against the wrong margins fails the gate.
+## Scope & Document Type Boundaries
 
-## 2. The 版头 — document head
+This scene covers:
+1. **Notice** — assigning work, communicating requirements, forwarding documents
+2. **Official Letter** — between non-subordinate organizations: negotiation, inquiry, assistance requests, replies
+3. **Reply (to Request)** — superior authority answering a subordinate's formal request
+4. **Meeting Minutes** — recording key outcomes and agreed items
 
-Top to bottom, before the title:
+**Important boundaries:**
+- "Red header" is a format/layout, not a document type — it typically carries notices, letters, or replies
+- **Not all official documents need red headers / document numbers / colophons** — only enable when user explicitly requests "red header format", "GB/T 9704 format", or "formal issuance format"
+- Internal enterprise notices, business letters, meeting minutes often do NOT use full GB/T standard format
+- This scene does NOT cover: speeches, press releases, promotional materials, papers, summary reports, contracts, or legal opinions
 
-| element        | convention                                                                  |
-| -------------- | --------------------------------------------------------------------------- |
-| 份号           | serial number, top left, only when the document is numbered                 |
-| 密级和保密期限 | e.g. `秘密★1年`, below 份号                                                 |
-| 紧急程度       | `特急` or `加急`, below the classification                                  |
-| 发文机关标志   | the issuing body's name, red, centred, large                                |
-| 发文字号       | e.g. `×政发〔2026〕12号`, centred below the emblem                          |
-| 签发人         | the signer's name, right-aligned on the same line as 发文字号, on an 上行文 |
-| 分隔线         | a full-width red rule under the 发文字号                                    |
+---
 
-The red rule is a paragraph bottom border (`w:pBdr/w:bottom`) on the 发文字号
-paragraph, with the colour and width set in `w:bottom/@w:color` and `@w:sz`. Not a
-drawn line, not an image, not a typed rule.
+## Document Type Routing
 
-The 份号, classification and urgency are ordinary paragraphs at body size, left
-aligned, with no first-line indent. They are short, so the indent rule does not
-apply to them (see §5).
-
-## 3. The 主体 — body
-
-- **标题** — the document title, 2 号 小标宋体, centred, one or two lines. It may
-  break across lines but must break at a phrase boundary, never mid-word.
-- **主送机关** — the recipient body, 3 号 仿宋, flush left at the top of the text
-  block, followed by a colon.
-- **正文** — 3 号 仿宋\_GB2312, first line indented two characters, about 22 lines to
-  a page and 28 characters to a line.
-- **附件说明** — `附件：1. …` at the left margin after the body, before the signature.
-- **发文机关署名** and **成文日期** — right aligned, the date in Arabic numerals
-  (`2026年9月22日`), with the seal over the date.
-- **附注** — `（联系人：…；电话：…）` in parentheses, left aligned, below the date.
-- **附件** — the attachments themselves, each starting on a new page with
-  `附件` at the top left and its own number.
-
-## 4. Structural levels
-
-The convention is fixed, and it is a font convention rather than a numbering one:
-
-| level | form                 | face                 |
-| ----- | -------------------- | -------------------- |
-| 1     | `一、` `二、` `三、` | 黑体                 |
-| 2     | `（一）` `（二）`    | 楷体                 |
-| 3     | `1.` `2.`            | 仿宋 (bold optional) |
-| 4     | `（1）` `（2）`      | 仿宋                 |
-
-The level marker is part of the heading text at levels 1 and 2, and a real numbered
-list at levels 3 and 4 — where `w:numPr` renumbers correctly. A typed `1.` at level
-3 does not.
-
-## 5. Body text mechanics
-
-- First-line indent of two characters. 3 号 is 16 pt, so two characters is 640 twips
-  — inside the 200–800 range the rule accepts.
-- **The indent must be `w:ind/@w:firstLine`.** Word writes
-  `w:firstLineChars="200"` for a two-character indent, it renders identically, and it
-  is not what `cjk-indent` reads. A 公文 built the Word way is reported as unindented
-  throughout.
-- Line spacing: one fixed value for the whole body, so that a page holds 22 lines. At
-  a 225 mm text block that is about 28.9 pt — `w:spacing/@w:line="580"` with
-  `w:lineRule="exact"`. Use `atLeast` rather than `exact` if the document contains
-  anything taller than a line of 3 号 text, because `exact` clips it.
-- One value, everywhere, outside tables and lists. `line-spacing` counts distinct
-  values in body paragraphs; two of them fail the rule.
-- The head elements (份号, 密级, 紧急程度) and the 附注 are exempt: they are under
-  twenty characters, and the rule treats a short paragraph as a label rather than as
-  body text.
-
-## 6. The 版记 — document tail
-
-- 抄送机关 and 印发机关和印发日期 sit at the bottom of the last page, separated from
-  the body by rules.
-- The rules are paragraph borders again: a `w:pBdr/w:top` on the first 版记 paragraph
-  and a `w:pBdr/w:bottom` on the last.
-- 版记 is 4 号 仿宋, one step below body size.
-- A 版记 that lands mid-page is acceptable; one that lands on a page of its own is
-  not. Keep it with the last body paragraph (`w:keepNext`) if it is at risk.
-
-## 7. Page numbers
-
-- 4 号 宋体 Arabic numerals, with a thin rule on each side of the digits —
-  `— 1 —`, not `1`.
-- Odd pages: the number sits at the right margin, one character in from the edge.
-  Even pages: at the left margin, one character in. That needs
-  `<w:evenAndOddHeaders/>` in `word/settings.xml`, plus a default (odd) footer and a
-  separate even footer referenced with `w:type="even"`.
-- No page number on the first page of the document: `<w:titlePg/>` in the section
-  properties with an empty first-page footer. Do not express this by restarting
-  numbering.
-- Numbering is one continuous sequence. A section's `<w:pgNumType w:fmt="decimal"/>`
-  with no `w:start` continues from the previous section.
-- **Never leave an empty `<w:pgNumType/>` on a section.** `fix_footer_fields.py`
-  drops those, because WPS reads an empty one as an instruction to restart numbering.
-  Run `python3 fix_footer_fields.py notice.docx` before delivering.
-- The page number is a `PAGE` field. A freshly built footer often carries the bare
-  keyword with no format switch, and WPS prints
-  `PAGE \* arabic \* MERGEFORMAT` where the number belongs — `routes/format.md` §1 is
-  the repair.
-
-## 8. Attachments and multiple documents
-
-- A document with attachments is one section per attachment when an attachment has
-  its own numbering, and one section when it does not.
-- Attachments restart their own structural numbering but not the page numbering.
-- The main document is a single section in the common case, so `cover-separation`
-  reports `only one section`. That is the rule working as designed; scope the run
-  with `--only`.
-
-## 9. Fonts
-
-- 小标宋, 黑体, 楷体, 仿宋 and 宋体 are the five faces the standard names, and none
-  of them is in the fallback-risk list.
-- `font-fallback` flags Noto Sans SC, Noto Serif SC, Source Han Sans, Source Han
-  Serif, LXGW WenKai and 霞鹜文楷 — fonts that exist on the build machine and
-  substitute silently on the reader's. If a machine only has the Noto family, the
-  document has to be re-pointed at a font the recipient has, or the font has to be
-  embedded.
-- Declare the font for the Latin run and the East Asian run separately
-  (`w:rFonts/@w:ascii` and `@w:eastAsia`). One attribute does not cover both, and a
-  Latin-only declaration leaves the Chinese characters to whatever the reader has.
-
-## 10. Self-check before handing this over
-
-- Margins 3.7 / 3.5 / 2.8 / 2.6 cm; A4; about 22 lines and 28 characters per page.
-- Title 2 号 小标宋 centred; body 3 号 仿宋 with a two-character first-line indent.
-- Level 1 黑体, level 2 楷体, levels 3 and 4 仿宋.
-- One `w:spacing/@w:line` value across every body paragraph.
-- Every Chinese body paragraph of twenty or more characters carrying
-  `w:ind/@w:firstLine` in 200–800 twips.
-- Page numbers as `— N —`, odd right and even left, continuous, none on page 1.
-- No empty `<w:pgNumType/>`; `fix_footer_fields.py` run and clean.
-- `postcheck.py notice.docx --only line-spacing,cjk-indent,heading-continuity,numbering-continuity,font-fallback,blank-pages,image-overflow`
-
-## 11. Document type routing
-
-Four types, each a different template. The type decides the 版头, the closing
-formula, and whether a 主送机关 line exists at all.
-
-| type | 版头 | closing | 主送 |
-| --- | --- | --- | --- |
-| **Notice (通知)** | full red header | 特此通知 | yes |
-| **Official letter (函)** | red header, no 发文机关标志 beyond the letterhead | 特此函复 / 盼复 | yes |
-| **Reply (批复)** | red header | 此复 | yes |
-| **Meeting minutes (纪要)** | header without the red rule | none (the minutes end with the record) | no |
-
-Routing on the wrong template produces a document that a 机关 reader rejects
-on sight — the closing formula is the fastest tell.
-
-## 12. Template structures
-
-### Notice
-
-```
-标题（发文机关 + 事由 + 文种）
-主送机关：
-正文……（缘由 → 事项 → 要求）
-特此通知。
-发文机关署名
-成文日期
-（附件说明）
+```js
+function selectOfficialType(keywords, purpose) {
+  if (/minutes|meeting/.test(keywords)) return "minutes";
+  if (/reply|respond to request/.test(keywords)) return "reply";
+  if (/letter|inquiry|negotiation/.test(keywords)) return "letter";
+  return "notice"; // default
+}
 ```
 
-### Official letter
+### Red Header Activation
 
-```
-标题（发文机关 + 事由 + 函）
-主送机关：
-正文……（缘由 → 商洽/询问/答复事项 → 结尾语）
-特此函复 / 盼复。
-发文机关署名
-成文日期
+```js
+function needsRedHeader(userRequest) {
+  // Only activate when explicitly requested
+  return /red header|GB\/T 9704|formal issuance|official format/.test(userRequest);
+}
 ```
 
-### Reply
+**Rules:**
+- `needsRedHeader = true` → Enable red header, document number, colophon (full formal elements)
+- `needsRedHeader = false` → Maintain formal style but no mandatory red header; keep only title + addressee + body + signature
+
+---
+
+## Standard Template Structures
+
+### Template A: Notice
+1. Red header area (if applicable)
+2. Document number (if applicable)
+3. Title
+4. Addressee
+5. Reason for issuance
+6. "The relevant matters are hereby notified as follows:"
+7. Notice items (expanded by hierarchy)
+8. Requirements
+9. Attachment notes (if any)
+10. Signature (if applicable)
+11. Date (if applicable)
+12. Colophon (if applicable)
+
+**Closing phrase:** "This notice is hereby given." or "Please implement accordingly."
+
+### Template B: Official Letter
+1. Red header area (if applicable)
+2. Document number (if applicable)
+3. Title
+4. Addressee
+5. Reason / reference to incoming letter
+6. Negotiation / inquiry / reply items
+7. Closing
+8. Signature (if applicable)
+9. Date (if applicable)
+10. Colophon (if applicable)
+
+**Closing phrases:** "Please reply by letter." / "This letter is hereby sent." / "This is in reply."
+
+### Template C: Reply
+1–11. Similar to Notice structure
+- Addressee is typically the single requesting organization
+- Must reference the incoming request document
+- "After review, the reply is as follows:"
+- Closing: "This is the reply."
+
+### Template D: Meeting Minutes
+1. Title (meeting name + "Minutes")
+2. Meeting overview (time, place, chair, attendees)
+3. Agreed items
+4. Responsibility assignments / follow-up requirements (if applicable)
+5. Distribution scope (if applicable)
+
+**Notes:**
+- Minutes record "agreed items", not a transcript of speeches
+- Minutes generally do NOT follow standard red header format
+- Unless user explicitly requests organizational template compliance
+
+---
+
+## Input Recognition & Completion
+
+### Processing Rules
+1. If user provides a template, historical document, or organizational standard → **always follow it first**
+2. If information is incomplete → fill conservatively, formally, and appropriately for the government context
+3. **Never fabricate** policy bases, incoming document numbers, leadership directives, meeting decisions, or official organization names
+4. If critical info is missing → use standardized placeholders
+5. Never present a draft as if it were already formally issued
+
+---
+
+## Title Drafting Rules
+
+The title is the most critical identifying element — must accurately, concisely reflect the issuing body, subject matter, and document type.
+
+| Type | Format | Example |
+|------|--------|---------|
+| Notice | Issuing body + "regarding" + subject + "notice" | XX Municipal Government Notice on Issuing the XX Management Measures |
+| Letter | Issuing body + "regarding" + subject + "letter" | XX Company Letter Regarding Land Use for XX Project |
+| Reply | Issuing body + "regarding" + subject + "reply" | XX Bureau Reply on Approving Establishment of XX Branch |
+| Minutes | Meeting name + "minutes" | XX Company Third General Manager Meeting Minutes |
+
+**Rules:**
+1. Title must specify the subject — no vague titles ("Notice on Relevant Matters")
+2. Titles generally do not use periods
+3. Title length should be moderate — avoid excessive length
+
+---
+
+## Addressee & CC
+
+### Addressee
+1. The primary recipient of the document
+2. On its own line, between title and body
+3. Followed by full-width colon
+4. Replies typically address only one requesting organization
+5. Meeting minutes generally do not have a standard addressee
+
+### CC (Carbon Copy)
+1. CC recipients are NOT addressees — do not mix them
+2. CC information typically appears in the colophon area
+3. Non-red-header documents should not mechanically add "CC:" lines
+
+---
+
+## Writing Style & Register
+
+### Language Style
+1. Must be **solemn, plain, precise, rigorous, concise**
+2. **Forbidden:** Literary devices (metaphor, personification, hyperbole, rhetorical questions, exclamations)
+3. **Forbidden:** Vague expressions ("approximately", "recently", "relevant departments", "as soon as possible") — unless user explicitly requires vague wording
+4. Time, location, organization, scope, milestones should be as specific as possible
+5. No sloganeering filler or obvious "AI boilerplate" feel
+
+### Common Phrase Patterns
+
+**Purpose phrases:**
+- "In order to implement..."
+- "To further standardize..."
+- "To effectively carry out..."
+
+**Basis phrases:**
+- "In accordance with the provisions of..."
+- "As required by..."
+- "Pursuant to relevant regulations"
+
+**Transition phrases:**
+- Notice: "The relevant matters are hereby notified as follows:"
+- Letter: "The following is hereby communicated:"
+- Reply: "After review, the reply is as follows:"
+- Minutes: "The agreed items of the meeting are recorded as follows:"
+
+**Closing phrases (must match document type):**
+- Notice: "This notice is hereby given."
+- Letter: "Please reply." / "This is hereby communicated." / "This is in reply."
+- Reply: "This is the reply."
+- Minutes: generally no fixed closing phrase
+
+### Conciseness
+1. Use "because" not "due to the reason that..."
+2. Use "to" not "for the purpose of..."
+3. Name specific entities — not "relevant parties" or "related departments"
+4. Name responsible units — not "all units should ensure implementation" (vague ending)
+
+---
+
+## Body Hierarchy & Numbering
+
+Official document body must strictly follow the standard Chinese government numbering system:
 
 ```
-标题（发文机关 + 事由 + 批复）
-主送机关：
-正文……（引叙来文 → 批复意见 → 执行要求）
-此复。
-发文机关署名
-成文日期
+I. General matters
+  (1) Sub-items
+    1. Specific points
+      (1) Detail supplements
 ```
 
-### Meeting minutes
-
+Original Chinese numbering:
 ```
-标题（会议名称 + 纪要）
-时间、地点、主持人、出席人员、记录人
-正文……（会议概况 → 议定事项 → 执行分工）
-（无结束语）
+一、General matters
+  （一）Sub-items
+    1. Specific points
+      （1）Detail supplements
 ```
 
-## 13. Input recognition and completion
+**Rules:**
+1. No level-skipping
+2. **Forbidden:** Markdown list markers (`-` `*`)
+3. No switching between numbering styles at the same level
+4. Level 1: major tasks; Level 2: sub-items; Levels 3–4: only when truly necessary
 
-- **The 发文机关 is the one that issues, not the one that drafts.** A document
-  drafted by an office on behalf of a bureau carries the bureau's name.
-- **成文日期 is the date of signature or issuance**, not the date of drafting.
-  When only a drafting date is supplied, the field renders as an explicit gap
-  rather than a guess.
-- **主送机关 is a list, comma-separated, ending in a full-width colon.** The
-  order follows the document's own convention (主管部门 first), never
-  alphabetical.
-- **Attachments are listed after the body, before the signature**, in the
-  `附件：1. XXX 2. XXX` form, and the attachments themselves follow the 版记
-  on their own pages.
+---
 
-## 14. Title drafting rules
+## Truthfulness & Caution
+1. **Never fabricate** issuing bodies, incoming organizations, document numbers, leadership directives, meeting decisions, or policy bases
+2. **Never** write "per the spirit of XX meeting" or "per XX directive" unless user explicitly provides these
+3. **Never** fabricate titles and numbers of referenced documents in replies or letters
+4. **Never** present a draft as already formally issued
+5. When information is insufficient → use placeholders, never pretend elements are complete
 
-The title is `发文机关 + 事由 + 文种`, and each part has rules:
+---
 
-- **事由 states the matter, not the intent**: `关于加强汛期值班值守的通知`,
-  not `关于做好防汛工作的通知` when the matter is 值班值守.
-- **The 文种 matches the routing** (§11): a 函 is not a 通知, and a document
-  that asks a question of another organ is a 函.
-- **No punctuation inside the title** except the书名号 for a cited document.
-- **The title wraps at the phrase boundary**, centred, and never splits a
-  word. A two-line title breaks after 事由, not mid-word.
-- **The 发文机关 prefix is omitted** when the letterhead already carries it —
-  repeating it is the defect a reviewer flags first.
+## Attachment Notes
+1. Placed after body text, before signature
+2. "Attachment:" followed by attachment name
+3. Multiple attachments: numbered sequentially (Attachment 1, Attachment 2...)
+4. Attachment names must be clear and specific — never fabricate unknown attachments
+
+---
+
+## Signature & Date
+
+1. Document types requiring signatures should have issuing body name and date
+2. Not all types mechanically require signatures (minutes typically do not)
+3. Formal document dates must use Chinese numeral format with proper "〇" character
+   - Example: March 31, 2026 → 二〇二六年三月三十一日
+4. Document numbers use tortoiseshell brackets "〔〕" (not square brackets "[]")
+   - Example: X政发〔2026〕1号
+5. Date format must be consistent throughout
+
+---
+
+## Palette
+
+**NO decorative colors.** Pure black text on white background. The only color is red header text.
+
+```js
+const palette = { primary:"#000000", body:"#000000", accent:"#000000", surface:"#FFFFFF" };
+const RED_HEADER = "FF0000"; // Only for red header text
+```
+
+---
+
+## Page Layout (GB/T 9704-2012 Standard)
+
+**Only for formal GB/T red-header documents.** Non-GB/T scenarios may use standard margins.
+
+| Property | Value | Twips |
+|----------|-------|-------|
+| Top margin | 3.7 cm | 2098 |
+| Bottom margin | 3.5 cm | 1984 |
+| Left margin | 2.8 cm | 1588 |
+| Right margin | 2.6 cm | 1474 |
+
+```js
+// GB/T red header layout
+page: { size: { width: 11906, height: 16838 }, margin: { top: 2098, bottom: 1984, left: 1588, right: 1474 } }
+// Non-GB/T formal documents may use standard margins:
+// margin: { top: 1440, bottom: 1440, left: 1701, right: 1417 }
+```
+
+---
+
+## Font Specifications (GB/T 9704)
+
+| Element | Font | Size | Style |
+|---------|------|------|-------|
+| Red header org name | STXiaoBiaoSong / SimSun Bold | As determined by org | Red (#FF0000), centered |
+| Document title | STXiaoBiaoSong / SimSun Bold | Er Hao 22pt (size: 44) | Centered |
+
+**Font fallback for STXiaoBiaoSong:** This font is not installed by default on all systems. WPS ships FZXiaoBiaoSong-S13 instead. Use this fallback chain:
+- Preferred: `STXiaoBiaoSong` (华文小标宋)
+- Fallback 1: `FZXiaoBiaoSong-S13` (方正小标宋, available in WPS)
+- Fallback 2: `SimSun` with Bold (宋体加粗, universally available)
+
+In code, set primary font and note the fallback:
+```js
+font: { eastAsia: "STXiaoBiaoSong" }
+// Fallback: FZXiaoBiaoSong-S13 → SimSun Bold. User may need to install STXiaoBiaoSong for exact rendering.
+```
+| Addressee | FangSong | San Hao 16pt (size: 32) | Left-aligned |
+| Body | FangSong | San Hao 16pt (size: 32) | Justified, indent 640 |
+| Level 1 heading | SimHei | San Hao 16pt (size: 32) | Bold |
+| Level 2 heading | KaiTi | San Hao 16pt (size: 32) | Normal |
+| Level 3 heading | FangSong | San Hao 16pt (size: 32) | Bold |
+| Attachment notes | FangSong | San Hao 16pt (size: 32) | Left-aligned |
+| Signature/date | FangSong | San Hao 16pt (size: 32) | Right-aligned |
+| Page number | FangSong | Si Hao 14pt (size: 28) | Centered, "— X —" |
+
+```js
+styles: {
+  default: {
+    document: {
+      run: { font: { ascii: "Times New Roman", eastAsia: "FangSong" }, size: 32, color: "000000" },
+      paragraph: { spacing: { line: 560 } }, // Fixed 28pt line spacing
+    },
+    heading1: {
+      run: { font: { eastAsia: "SimHei" }, size: 32, bold: true, color: "000000" },
+    },
+    heading2: {
+      run: { font: { eastAsia: "KaiTi" }, size: 32, color: "000000" },
+    },
+  },
+}
+```
+
+**Note:** For "formal administrative style" (not strict GB/T), retain the style logic but do not rigidly require every GB/T element.
+
+---
+
+## Code Examples
+
+### Red Header (red-header documents only)
+
+```js
+new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200, line: Math.ceil(26 * 23), lineRule: "atLeast" },
+  children: [new TextRun({ text: "XX Municipal Government", font: { eastAsia: "SimSun" },
+    size: 52, bold: true, color: "FF0000" })] })
+new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "FF0000" } },
+  spacing: { after: 40 }, children: [] })
+```
+
+### Page Number Footer
+
+```js
+footers: { default: new Footer({ children: [new Paragraph({
+  alignment: AlignmentType.CENTER,
+  children: [
+    new TextRun({ text: "\u2014 ", size: 28 }),
+    new TextRun({ children: [PageNumber.CURRENT], size: 28 }),
+    new TextRun({ text: " \u2014", size: 28 }),
+  ],
+})] }) }
+```
+
+---
+
+## Style Rules
+
+1. **Strictly follow official document format — no decorative elements**
+2. NO cover page
+3. NO TOC
+4. NO headers (only page numbers in footer)
+5. NO colors except red header (red-header documents only)
+6. NO images or charts (unless integral to document content)
+7. NO fancy fonts — only FangSong, SimHei, KaiTi, STXiaoBiaoSong
+8. Line spacing: fixed 28pt (`line: 560`) — **NOT** the default 1.5x
+
+---
+
+## Scene-Specific Prohibitions
+
+In addition to universal prohibitions (see `references/common-rules.md`):
+
+1. Must not write official documents as chat replies, promotional copy, speeches, or papers
+2. Must not use Markdown headings/lists/bold/italic for document hierarchy
+3. Must not apply red header/document number/colophon to all document types indiscriminately
+4. Must not format meeting minutes as a standard red-header notice
+5. Must not use literary rhetoric, colloquial expressions, or strongly emotional language
+6. Must not fabricate incoming documents, policies, document numbers, meeting decisions, or superior directives
+7. Must not use excessive blank lines to create "formal appearance"
+8. Must not let the document read like a report, paper, or marketing copy
+
+---
+
+## Scene-Specific Quality Checks
+
+In addition to universal checks (see `references/common-rules.md`):
+
+### Format
+- [ ] Red header text is #FF0000 and only red header uses color (red-header scenarios)
+- [ ] Line spacing fixed at 28pt (line: 560)
+- [ ] FangSong / SimHei / KaiTi correctly applied
+- [ ] Signature right-aligned, date format correct
+- [ ] No cover page, no TOC, no header
+- [ ] Page number format "— X —"
+- [ ] Red header / document number / colophon only where appropriate
+
+### Content
+- [ ] Document type correctly identified, structure matches
+- [ ] Title is accurate, specific, document type clear (not vague)
+- [ ] Addressee, attachments, signature, colophon used appropriately
+- [ ] Closing phrase matches document type
+- [ ] Body hierarchy strictly follows: 一、(Level 1) →（一）(Level 2) → 1. (Level 3) →（1）(Level 4)
+- [ ] No Markdown headings/lists/bold/italic mixed in
+- [ ] Meeting minutes not incorrectly given standard document signature and colophon
+- [ ] Date uses Chinese numerals with proper "〇" character
+- [ ] Document number uses tortoiseshell brackets "〔〕"
+- [ ] No fabricated incoming documents / policy bases / organizational elements
+- [ ] Register is solemn and plain — no colloquial / literary / promotional tone

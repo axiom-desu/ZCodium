@@ -69,21 +69,16 @@ AI 生成的代码、命令、解释、文件和建议可能存在错误、遗�
 
 本仓库第一方代码依照根 [LICENSE](LICENSE) 采用 Apache-2.0；该许可不替其他权利人新增授权，也不覆盖第三方软件、复制代码、原生二进制、字体、图标、网页素材及其他资源的独立条款。具体依赖包详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。受第三方版权、许可及再分发条件等约束，不承诺提供官方产品的全部功能及活动政策，具体以实际发布的源码和构建产物为准。
 
-### 内置插件技能层的派生来源（Plugin skill bases）
+### 内置插件技能层的来源
 
-以下宽松许可项目是本仓库内置插件技能层的派生基座。每处的 MIT 版权与许可声明都
-在派生文件头部与该插件的 `NOTICE.md` 中完整重现，delta 逐条列明；许可文本按 revision
-钉住并存放于 `third-party/upstream/`，同时登记在 `third-party/copied-components.json`。
+内置插件技能层目前**直接采用上游 zai-org/ZCode 的实现**（Apache-2.0，版权 Z.ai）：
+每个技能目录随包携带自己的 `LICENSE.txt`，因此署名随内容一起分发。
 
-| 项目                                                                           | 许可 | 钉住 revision  | 派生位置                                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------ | ---- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`document-SKILLs`](https://github.com/appautomaton/document-SKILLs)           | MIT  | `ec542a6121c1` | `apps/zcode-cli/packages/documents-plugin/skills/docx/scripts/document.py`、`apps/zcode-cli/packages/documents-plugin/skills/docx/scripts/utilities.py`、`apps/zcode-cli/packages/documents-plugin/skills/docx/scripts/templates` 等 12 处 |
-| [`html2pdf.js`](https://github.com/eKoopmans/html2pdf.js)                      | MIT  | `6ebca2f761b8` | `apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2pdf.py`、`apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2pdf_render.py`                                                                                            |
-| [`resume`](https://github.com/billryan/resume)                                 | MIT  | `eadc3955cf00` | `apps/zcode-cli/packages/documents-plugin/skills/docx/scenes/resume.md`                                                                                                                                                                    |
-| [`latex-paper`](https://github.com/pmichaillat/latex-paper)                    | MIT  | `9235e6d01550` | `apps/zcode-cli/packages/documents-plugin/skills/docx/scenes/academic.md`                                                                                                                                                                  |
-| [`SJTU-Thesis-Proposal`](https://github.com/NemoYuan2008/SJTU-Thesis-Proposal) | MIT  | `5c605d4b0990` | `apps/zcode-cli/packages/documents-plugin/skills/docx/scenes/report.md`                                                                                                                                                                    |
-| [`chitshit`](https://github.com/Purestone/chitshit)                            | MIT  | `2b6b186744b8` | `apps/zcode-cli/packages/documents-plugin/skills/docx/scenes/exam.md`                                                                                                                                                                      |
-| [`awesome-latex-drawing`](https://github.com/xinychen/awesome-latex-drawing)   | MIT  | `a11dbbb3796f` | `apps/zcode-cli/packages/documents-plugin/skills/docx/references/chart-templates.md`、`apps/zcode-cli/packages/documents-plugin/skills/docx/references/decorations.md`                                                                     |
+本仓库此前为其中一部分插件写了 clean-room 派生实现（基座见
+`plugin-backfill-openbase-survey.md`）。那批实现连同它们的派生基座已在换成上游实现时退休：
+`third-party/copied-components.json` 与 `third-party/upstream/` 里对应的 7 条登记与许可原文
+已删除（`document-SKILLs`、`html2pdf.js`、`resume`、`latex-paper`、`SJTU-Thesis-Proposal`、
+`chitshit`、`awesome-latex-drawing`）。剩下的 copied-components 条目与技能层无关。
 
 `THIRD-PARTY-NOTICES.md` 由 `node scripts/licenses.mjs notices` 从工作区生产依赖图、
-复制来源与原生搜索工具生成；本表覆盖的是技能层的内容派生，两者互补。
+复制来源与原生搜索工具生成；两者互补。

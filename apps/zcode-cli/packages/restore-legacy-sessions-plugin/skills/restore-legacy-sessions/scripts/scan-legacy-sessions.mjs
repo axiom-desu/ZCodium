@@ -1,71 +1,56 @@
 #!/usr/bin/env node
-/**
- * 扫描旧 ACP 会话快照与目的地库状态。
- *
- * 用法：
- *   scan-legacy-sessions.mjs summary [--json]
- *   scan-legacy-sessions.mjs agents [--json]
- *   scan-legacy-sessions.mjs workspaces --agent <provider> [--json]
- *   scan-legacy-sessions.mjs conversations --agent <provider> --workspace <path> [--query <text>] [--limit <n>] [--json]
- *
- * 选项：
- *   --legacy-dir <path>   旧快照根目录。默认 ~/.zcodium-exp/v2/sessions
- *   --task-index <path>   任务索引 sqlite。默认 ~/.zcodium-exp/v2/tasks-index.sqlite
- *   --cli-db <path>       新 ZCode 会话 sqlite。默认 ~/.zcodium-exp/cli/db/db.sqlite
- *   --agent <provider>    按 provider 过滤，如 glm、claude、codex、opencode
- *   --workspace <path>    按 workspace 路径精确过滤
- *   --query <text>        按标题、ID 或可见正文过滤会话
- *   --conversation <id>   按 restoredTaskId / legacyTaskId / ACP session id 过滤
- *   --limit <n>           会话行数上限。默认 30
- *   --json                输出 JSON 而非 Markdown 表格
- */
-
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
 import { homedir } from "node:os";
-import { join } from "node:path";
 
-import { runScan } from "./legacy-scan.mjs";
+const originalEmitWarning = process.emitWarning;
+process.emitWarning = function filterSqliteExperimentalWarning(warning, ...args) {
+  // 只读扫描依赖 node:sqlite 访问本地 DB；过滤该实验提示，避免污染给用户选择用的表格。
+  if (String(warning).includes("SQLite is an experimental feature")) return;
+  return originalEmitWarning.call(process, warning, ...args);
+};
+const { DatabaseSync } = await import("node:sqlite");
+process.emitWarning = originalEmitWarning;
 
-// 技能脚本由 agent 直接以 node 执行，没有打包/依赖注入，无法 import @zcode/shared 的
-// 常量，只能在这里写字面量。Bugfix：用户级数据根从 `.zcodium` 让位给 `.zcodium-exp`
-// （ZCodium-project/ZCodium 的 #13/#17 要占 `~/.zcodium`），默认值必须跟着走，
-// 否则扫到的是迁移后的空树。改这里的字符串时同步
-// packages/shared/src/appDirNames.ts 的 ZCODE_USER_DATA_DIR_NAME。
-// 基目录沿用 ZCODE_DATA_BASE_DIR，与 packages/services/src/paths.ts 的优先级一致。
-const DATA_ROOT = process.env.ZCODE_DATA_BASE_DIR?.trim() || homedir();
-const DEFAULT_LEGACY_DIR = join(DATA_ROOT, ".zcodium-exp", "v2", "sessions");
-const DEFAULT_TASK_INDEX_PATH = join(DATA_ROOT, ".zcodium-exp", "v2", "tasks-index.sqlite");
-const DEFAULT_CLI_DB_PATH = join(DATA_ROOT, ".zcodium-exp", "cli", "db", "db.sqlite");
+// 目录分工（不要合并成同一个根）：
+// - 源：`~/.zcode/v2/sessions` —— ACP 时代的 ZCode 数据，是上游那代的用户级数据根，
+//   本仓库不改写它，只读。
+// - 目标：`~/.zcodium-exp/{v2,cli}` —— 本仓库自己的用户级数据根
+//   （packages/shared/src/appDirNames.ts 的 ZCODE_USER_DATA_DIR_NAME）。
+// 两个根不同名是刻意的：改名是为了与上游/其它 fork 隔离，不是迁移。
+const defaultLegacyDir = join(homedir(), ".zcode", "v2", "sessions");
+const defaultTaskIndexPath = join(homedir(), ".zcodium-exp", "v2", "tasks-index.sqlite");
+const defaultCliDbPath = join(homedir(), ".zcodium-exp", "cli", "db", "db.sqlite");
 
-const USAGE = `Usage:
+function printUsage() {
+  console.log(`Usage:
   scan-legacy-sessions.mjs summary [--json]
   scan-legacy-sessions.mjs agents [--json]
   scan-legacy-sessions.mjs workspaces --agent <provider> [--json]
   scan-legacy-sessions.mjs conversations --agent <provider> --workspace <path> [--query <text>] [--limit <n>] [--json]
 
 Options:
-  --legacy-dir <path>   Legacy snapshot root. Default: ${DEFAULT_LEGACY_DIR}
-  --task-index <path>   Task index sqlite path. Default: ${DEFAULT_TASK_INDEX_PATH}
-  --cli-db <path>       New ZCode session sqlite path. Default: ${DEFAULT_CLI_DB_PATH}
+  --legacy-dir <path>   Legacy snapshot root. Default: ${defaultLegacyDir}
+  --task-index <path>   Task index sqlite path. Default: ${defaultTaskIndexPath}
+  --cli-db <path>       New ZCode session sqlite path. Default: ${defaultCliDbPath}
   --agent <provider>    Filter by provider, such as glm, claude, codex, opencode.
   --workspace <path>    Filter by exact workspace path.
   --query <text>        Filter conversations by title, ids, or visible message text.
   --conversation <id>   Filter by restored task id, legacy task id, or ACP session id.
   --limit <n>           Conversation row limit. Default: 30.
   --json                Print JSON instead of Markdown tables.
-`;
+`);
+}
 
-/** 解析参数。`--json` / `--help` 不带值，其余都必须跟一个值。 */
 function parseArgs(argv) {
   const args = {
     command: argv[0] ?? "summary",
-    legacyDir: DEFAULT_LEGACY_DIR,
-    taskIndexPath: DEFAULT_TASK_INDEX_PATH,
-    cliDbPath: DEFAULT_CLI_DB_PATH,
+    legacyDir: defaultLegacyDir,
+    taskIndexPath: defaultTaskIndexPath,
+    cliDbPath: defaultCliDbPath,
     json: false,
-    help: false,
     limit: 30,
   };
-
   for (let index = 1; index < argv.length; index += 1) {
     const item = argv[index];
     if (item === "--json") {
@@ -77,7 +62,9 @@ function parseArgs(argv) {
       continue;
     }
     const next = argv[index + 1];
-    if (!next) throw new Error(`Missing value for ${item}`);
+    if (!next) {
+      throw new Error(`Missing value for ${item}`);
+    }
     index += 1;
     if (item === "--legacy-dir") args.legacyDir = next;
     else if (item === "--task-index") args.taskIndexPath = next;
@@ -89,21 +76,353 @@ function parseArgs(argv) {
     else if (item === "--limit") args.limit = Number.parseInt(next, 10);
     else throw new Error(`Unknown option: ${item}`);
   }
-
-  // limit 解析失败或非正数时回落默认值：传个 --limit abc 不该让整轮扫描挂掉。
   if (!Number.isFinite(args.limit) || args.limit <= 0) args.limit = 30;
   return args;
 }
 
-try {
+function collectJsonFiles(root) {
+  if (!existsSync(root)) return [];
+  const files = [];
+  for (const workspaceDir of readdirSync(root)) {
+    const dirPath = join(root, workspaceDir);
+    if (!statSync(dirPath).isDirectory()) continue;
+    for (const fileName of readdirSync(dirPath)) {
+      if (!fileName.endsWith(".json") || fileName.endsWith(".deleted.json")) continue;
+      files.push(join(dirPath, fileName));
+    }
+  }
+  return files;
+}
+
+function readSnapshot(filePath) {
+  try {
+    const raw = JSON.parse(readFileSync(filePath, "utf8"));
+    const meta = raw.meta && typeof raw.meta === "object" ? raw.meta : {};
+    const messages = Array.isArray(raw.messages) ? raw.messages : [];
+    const legacyTaskId = String(meta.taskId || basename(filePath, ".json"));
+    const acpSessionId = typeof meta.acpSessionId === "string" ? meta.acpSessionId : "";
+    const restoredTaskId = acpSessionId || legacyTaskId;
+    const workspacePath = typeof meta.workspacePath === "string" ? meta.workspacePath : "";
+    const provider = typeof meta.provider === "string" ? meta.provider : "unknown";
+    const firstUser = messages.find((message) => message?.role === "user");
+    const title =
+      typeof meta.title === "string" && meta.title.trim()
+        ? meta.title.trim()
+        : summarizeText(firstUser?.content) || "Untitled session";
+    const createdAt = finiteNumber(meta.createdAt) ?? firstTimestamp(messages) ?? 0;
+    const updatedAt = finiteNumber(meta.updatedAt) ?? lastTimestamp(messages) ?? createdAt;
+    const visibleText = messages.map((message) => String(message?.content ?? "")).join("\n");
+    return {
+      filePath,
+      workspaceHash: basename(join(filePath, "..")),
+      legacyTaskId,
+      acpSessionId,
+      restoredTaskId,
+      workspacePath,
+      workspaceIdentity:
+        typeof meta.workspaceIdentity === "string" ? meta.workspaceIdentity : undefined,
+      provider,
+      model: typeof meta.model === "string" ? meta.model : undefined,
+      title,
+      createdAt,
+      updatedAt,
+      messageCount: messages.length,
+      userMessageCount: messages.filter((message) => message?.role === "user").length,
+      assistantMessageCount: messages.filter((message) => message?.role === "assistant").length,
+      visibleText,
+    };
+  } catch (error) {
+    return {
+      filePath,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function finiteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function firstTimestamp(messages) {
+  for (const message of messages) {
+    const timestamp = finiteNumber(message?.timestamp);
+    if (timestamp !== undefined) return timestamp;
+  }
+  return undefined;
+}
+
+function lastTimestamp(messages) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const timestamp = finiteNumber(messages[index]?.timestamp);
+    if (timestamp !== undefined) return timestamp;
+  }
+  return undefined;
+}
+
+function summarizeText(value) {
+  const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+}
+
+function openDatabase(path) {
+  if (!existsSync(path)) return null;
+  if (statSync(path).size === 0) return null;
+  try {
+    return new DatabaseSync(path, { readOnly: true });
+  } catch {
+    return null;
+  }
+}
+
+function attachStoreStatus(candidates, taskIndexPath, cliDbPath) {
+  const taskIndexDb = openDatabase(taskIndexPath);
+  const cliDb = openDatabase(cliDbPath);
+  const taskByRestored = prepareOrNull(
+    taskIndexDb,
+    "select count(*) as count from tasks where workspace_path = ? and task_id = ?",
+  );
+  const taskByLegacy = prepareOrNull(
+    taskIndexDb,
+    "select count(*) as count from tasks where workspace_path = ? and task_id = ?",
+  );
+  const cliBySession = prepareOrNull(cliDb, "select count(*) as count from session where id = ?");
+
+  for (const candidate of candidates) {
+    if (candidate.error) continue;
+    const taskIndexRestored = countResult(
+      taskByRestored?.get(candidate.workspacePath, candidate.restoredTaskId),
+    );
+    const taskIndexLegacy = countResult(
+      taskByLegacy?.get(candidate.workspacePath, candidate.legacyTaskId),
+    );
+    const cliSession = countResult(cliBySession?.get(candidate.restoredTaskId));
+    candidate.store = {
+      cliDb: cliSession > 0 ? "present" : "missing",
+      taskIndex:
+        taskIndexRestored > 0 ? "present" : taskIndexLegacy > 0 ? "legacy-task-id" : "missing",
+    };
+    candidate.restoreState = restoreState(candidate.store);
+  }
+
+  taskIndexDb?.close();
+  cliDb?.close();
+}
+
+function prepareOrNull(db, sql) {
+  if (!db) return null;
+  try {
+    return db.prepare(sql);
+  } catch {
+    // 目的地 DB 可能刚被备份/清空；扫描阶段只把缺表视为 missing，不能创建或修复。
+    return null;
+  }
+}
+
+function countResult(row) {
+  return typeof row?.count === "number" ? row.count : 0;
+}
+
+function restoreState(store) {
+  const cliPresent = store.cliDb === "present";
+  const taskPresent = store.taskIndex === "present";
+  if (cliPresent && taskPresent) return "ready";
+  if (!cliPresent && taskPresent) return "needs-cli-db";
+  if (cliPresent && !taskPresent) return "needs-task-index";
+  return "needs-full-import";
+}
+
+function filterCandidates(candidates, args) {
+  const query = args.query?.toLowerCase();
+  const conversation = args.conversation?.toLowerCase();
+  return candidates.filter((candidate) => {
+    if (candidate.error) return false;
+    if (args.agent && args.agent !== "all" && candidate.provider !== args.agent) return false;
+    if (args.workspace && candidate.workspacePath !== args.workspace) return false;
+    if (
+      conversation &&
+      ![candidate.restoredTaskId, candidate.legacyTaskId, candidate.acpSessionId]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase() === conversation)
+    ) {
+      return false;
+    }
+    if (!query) return true;
+    const haystack = [
+      candidate.provider,
+      candidate.workspacePath,
+      candidate.title,
+      candidate.restoredTaskId,
+      candidate.legacyTaskId,
+      candidate.acpSessionId,
+      candidate.visibleText,
+    ]
+      .join("\n")
+      .toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
+function groupBy(items, keyFn) {
+  const map = new Map();
+  for (const item of items) {
+    const key = keyFn(item);
+    const existing = map.get(key) ?? [];
+    existing.push(item);
+    map.set(key, existing);
+  }
+  return map;
+}
+
+function summarizeGroups(candidates, keyFn) {
+  return [...groupBy(candidates, keyFn).entries()]
+    .map(([key, items]) => ({
+      key,
+      count: items.length,
+      workspaces: new Set(items.map((item) => item.workspacePath)).size,
+      ready: items.filter((item) => item.restoreState === "ready").length,
+      needsCliDb: items.filter((item) => item.restoreState === "needs-cli-db").length,
+      needsTaskIndex: items.filter((item) => item.restoreState === "needs-task-index").length,
+      needsFullImport: items.filter((item) => item.restoreState === "needs-full-import").length,
+      latestUpdatedAt: Math.max(...items.map((item) => item.updatedAt || 0)),
+    }))
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+}
+
+function escapeCell(value) {
+  return String(value ?? "")
+    .replace(/\|/g, "\\|")
+    .replace(/\n/g, " ")
+    .trim();
+}
+
+function markdownTable(headers, rows) {
+  const header = `| ${headers.map(escapeCell).join(" | ")} |`;
+  const divider = `| ${headers.map(() => "---").join(" | ")} |`;
+  const body = rows.map((row) => `| ${row.map(escapeCell).join(" | ")} |`);
+  return [header, divider, ...body].join("\n");
+}
+
+function formatTime(ms) {
+  if (!ms) return "";
+  return new Date(ms).toISOString().replace("T", " ").replace(".000Z", "Z");
+}
+
+function printAgents(candidates, json) {
+  const rows = summarizeGroups(candidates, (item) => item.provider);
+  if (json) return printJson(rows);
+  console.log(
+    markdownTable(
+      ["agent", "conversations", "workspaces", "ready", "needs-cli-db", "needs-task-index", "needs-full-import"],
+      rows.map((row) => [
+        row.key,
+        row.count,
+        row.workspaces,
+        row.ready,
+        row.needsCliDb,
+        row.needsTaskIndex,
+        row.needsFullImport,
+      ]),
+    ),
+  );
+}
+
+function printWorkspaces(candidates, json) {
+  const rows = summarizeGroups(candidates, (item) => item.workspacePath);
+  if (json) return printJson(rows);
+  console.log(
+    markdownTable(
+      ["workspace", "conversations", "ready", "needs-cli-db", "needs-task-index", "needs-full-import", "latest"],
+      rows.map((row) => [
+        row.key,
+        row.count,
+        row.ready,
+        row.needsCliDb,
+        row.needsTaskIndex,
+        row.needsFullImport,
+        formatTime(row.latestUpdatedAt),
+      ]),
+    ),
+  );
+}
+
+function printConversations(candidates, args) {
+  const rows = [...candidates]
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, args.limit);
+  if (args.json) return printJson(rows.map(stripVisibleText));
+  console.log(
+    markdownTable(
+      ["#", "state", "agent", "title", "messages", "updated", "restoredTaskId", "legacyTaskId"],
+      rows.map((row, index) => [
+        index + 1,
+        row.restoreState,
+        row.provider,
+        row.title,
+        row.messageCount,
+        formatTime(row.updatedAt),
+        row.restoredTaskId,
+        row.legacyTaskId,
+      ]),
+    ),
+  );
+}
+
+function printSummary(candidates, invalid, json) {
+  const payload = {
+    total: candidates.length,
+    invalid: invalid.length,
+    byAgent: summarizeGroups(candidates, (item) => item.provider),
+    byState: summarizeGroups(candidates, (item) => item.restoreState),
+  };
+  if (json) return printJson(payload);
+  console.log(`Total legacy conversations: ${payload.total}`);
+  if (payload.invalid > 0) console.log(`Invalid snapshots: ${payload.invalid}`);
+  console.log("\nBy agent:");
+  printAgents(candidates, false);
+  console.log("\nBy restore state:");
+  console.log(
+    markdownTable(
+      ["state", "conversations", "workspaces"],
+      payload.byState.map((row) => [row.key, row.count, row.workspaces]),
+    ),
+  );
+}
+
+function stripVisibleText(candidate) {
+  const { visibleText, ...rest } = candidate;
+  return rest;
+}
+
+function printJson(value) {
+  console.log(JSON.stringify(value, null, 2));
+}
+
+function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
-    console.log(USAGE);
-  } else {
-    runScan(args);
+    printUsage();
+    return;
   }
+
+  const raw = collectJsonFiles(args.legacyDir).map(readSnapshot);
+  const invalid = raw.filter((candidate) => candidate.error);
+  const valid = raw.filter((candidate) => !candidate.error);
+  attachStoreStatus(valid, args.taskIndexPath, args.cliDbPath);
+  const filtered = filterCandidates(valid, args);
+
+  if (args.command === "summary") printSummary(filtered, invalid, args.json);
+  else if (args.command === "agents") printAgents(filtered, args.json);
+  else if (args.command === "workspaces") printWorkspaces(filtered, args.json);
+  else if (args.command === "conversations") printConversations(filtered, args);
+  else {
+    throw new Error(`Unknown command: ${args.command}`);
+  }
+}
+
+try {
+  main();
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
-  console.log(USAGE);
+  printUsage();
   process.exitCode = 1;
 }

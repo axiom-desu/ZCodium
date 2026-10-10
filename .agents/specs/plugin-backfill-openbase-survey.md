@@ -24,6 +24,16 @@ TypeScript 编译产物目录，而由 plugin.json 的 `mcpServers` 声明直接
 传输契约为标准 MCP over stdio（换行分隔的 JSON-RPC 2.0，initialize /
 tools/list / tools/call / ping）。
 
+## Android emulator 插件 3.15.1 上游同步
+
+同步基线为 `zai-org/ZCode` 提交 `aac47556`。插件从原先直接运行的 `.mjs`
+MCP server 切换为 TypeScript 源码，并在插件构建时由 `tsc` 类型检查、esbuild
+将 `src/mcp/server.ts` 打包到 `dist/mcp/server.js`；内置插件 seed 仅分发此运行时
+入口及 skills、commands、hooks、templates、`.mcp.json` 内容。插件清单固定放在
+`.zcodium-plugin/plugin.json`，用户目录与工作区配置示例按 fork 的
+`~/.zcodium-exp/`、`.zcodium/` 约定书写。测试保持上游全部用例与断言，运行器采用
+Node test runner + tsx，避免向嵌套 workspace 引入 vitest。
+
 ## 实施结果（2026-09-23）
 
 三个插件均已补齐并通过验证：

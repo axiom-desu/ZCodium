@@ -16,7 +16,10 @@ export const NODE_REPL_DEFAULT_TIMEOUT_MS = 60_000;
 // 是把宿主职责推给模型——模型无法自行知道该传哪个 node_modules，能告诉它的只有 skill 文档，
 // 而文档知道的路径宿主自己就能注入。两者实测调用量均为 0。宿主协议变了就得让 serverInfo 能被
 // 据此识别，否则宿主无法区分自己连上的是哪一代工具面。
-export const NODE_REPL_SERVER_VERSION = "0.6.0";
+// 升到 0.6.1：browser bridge 不再按 runtime_scope 拒绝 subagent，subagent 也能使用 Browser Use
+// （改由 BrowserControlPort 的 requireSession 按「子会话是否经父 runtime 登记」判定，见
+// .agents/specs/browser-subagent-shared-tabs.md）；已装用户必须换到新缓存目录才能拿到新 server.js。
+export const NODE_REPL_SERVER_VERSION = "0.6.1";
 
 // node_repl 的底层能力是通用 JS，旧文案却没有声明模型路由边界，导致非浏览器任务
 // 也会误选这个高权限工具。Browser Use 与 Computer Use 是合法入口，因此 server 与 tool 文案都要显式限域。

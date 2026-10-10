@@ -1,128 +1,190 @@
-% AltaCV-style resume — original work for this repository.
-%
-% A two-column sidebar CV in the AltaCV tradition: photo/contact/ skills in the
-% left rail, experience and education in the main column, with a coloured
-% accent carried through the section rules. Written from public LaTeX
-% knowledge; no third-party template is vendored.
-%
-% Build:  latexmk -pdf resume-altacv.tex
-% Page:   A4; switch via the geometry options below.
-
+% ═══════════════════════════════════════════════════════════
+% AltaCV-Style Creative Resume Template
+% Based on AltaCV by LianTze Lim, adapted for Tectonic
+% ═══════════════════════════════════════════════════════════
 \documentclass[10pt,a4paper]{article}
 
-% ---------------------------------------------------------------- geometry
-\usepackage[a4paper,left=1.6cm,right=1.6cm,top=1.4cm,bottom=1.4cm]{geometry}
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage{microtype}
-\usepackage{enumitem}
-\usepackage{fancyhdr}
+% ── Packages ──
+\usepackage[margin=1.25cm,columnsep=1.2cm]{geometry}
+\usepackage{paracol}          % dual-column that breaks across pages
+\usepackage[fixed]{fontawesome5}
+\usepackage{tikz}
 \usepackage{xcolor}
-\usepackage{tabularx}
-\usepackage{fontawesome5}          % icons; drop with the rail if unavailable
-\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{dashrule}
+\usepackage[colorlinks=true,urlcolor=accent,linkcolor=accent,bookmarks=false]{hyperref}
 
-% ---------------------------------------------------------------- palette
-\definecolor{accent}{HTML}{1F6FEB}   % one accent, used for every rule
-\definecolor{ink}{HTML}{1A1A1A}
-\definecolor{muted}{HTML}{5A6472}
-\color{ink}
+% ── Colour System (change these to retheme) ──
+\definecolor{accent}{HTML}{3B82F6}       % blue — primary accent
+\definecolor{emphasis}{HTML}{2E2E2E}     % near-black — job titles, strong text
+\definecolor{heading}{HTML}{1E293B}      % dark slate — section headings
+\definecolor{headingrule}{HTML}{3B82F6}  % matches accent
+\definecolor{body}{HTML}{4B5563}         % gray-600 — body text
+\definecolor{tagbg}{HTML}{EFF6FF}        % light blue — tag background
+\definecolor{subheading}{HTML}{3B82F6}   % matches accent
 
-% ---------------------------------------------------------------- type
-\renewcommand{\familydefault}{\sfdefault}   % sans: the AltaCV register
+% ── Fonts ──
+\usepackage[rm]{roboto}
+\usepackage[defaultsans]{lato}
+\renewcommand{\familydefault}{\sfdefault}
+
+% ── List Settings ──
+\setlist{leftmargin=*,labelsep=0.5em,nosep,itemsep=0.25\baselineskip,after=\vspace{0.25\baselineskip}}
+\setlist[itemize]{label={\small\textbullet}}
+
 \setlength{\parindent}{0pt}
-\setlist[itemize]{leftmargin=1.2em, itemsep=1pt, parsep=0pt, topsep=1pt}
-\newcommand{\railhead}[1]{{\color{accent}\bfseries\small\MakeUppercase{#1}}}
+
+% ── Custom Commands ──
+
+% Divider (dashed line between entries)
+\newcommand{\divider}{\textcolor{body!30}{\hdashrule{\linewidth}{0.6pt}{0.5ex}}\medskip}
+
+% Section heading with rule
 \newcommand{\cvsection}[1]{%
-  \par\vspace{8pt}{\color{accent}\large\bfseries\MakeUppercase{#1}}\par
-  {\color{accent}\rule{\linewidth}{0.8pt}}\par\vspace{4pt}%
+  \nointerlineskip\bigskip%
+  {\color{heading}\Large\bfseries\MakeUppercase{#1}}\\[-1ex]%
+  {\color{headingrule}\rule{\linewidth}{2pt}\par}\medskip
 }
-% One dated position: bold role / org, right-aligned dates, then the bullets.
-\newcommand{\role}[3]{%
-  \par\noindent\textbf{#1} --- #2\hfill{\small\color{muted}#3}\par\vspace{1pt}%
-}
-\newcommand{\railitem}[2]{\item \textbf{#1:} #2}
 
+% Experience entry: {title}{company}{dates}{location}
+\newcommand{\cvevent}[4]{%
+  {\large\color{emphasis}\bfseries #1\par}%
+  \smallskip\normalsize
+  \ifx&#2&\else{\textbf{\color{accent}#2}\par\smallskip}\fi%
+  \ifx&#3&\else{%
+    \small\makebox[0.5\linewidth][l]{\faCalendar[regular]~#3}%
+  }\fi%
+  \ifx&#4&\else{%
+    \small\makebox[0.5\linewidth][l]{\faMapMarker~#4}%
+  }\fi\par%
+  \medskip\normalsize
+}
+
+% Skill rating dots: {name}{level 1-5, supports X.5}
+\newcommand{\cvskill}[2]{%
+  \textcolor{emphasis}{\textbf{#1}}\hfill
+  \foreach \x in {1,...,5}{%
+    \ifdimgreater{\x pt}{#2 pt}{\color{body!30}}{\color{accent}}\faCircle
+  }\par%
+}
+
+% Tag label (rounded rectangle)
+\newcommand{\cvtag}[1]{%
+  \tikz[baseline]\node[anchor=base,draw=body!30,rounded corners,inner xsep=1ex,inner ysep=0.75ex,text height=1.5ex,text depth=.25ex]{#1};%
+}
+
+% Achievement: {icon}{title}{description}
+\newcommand{\cvachievement}[3]{%
+  \begin{tabular}{@{}p{2em} @{\hspace{1ex}} p{\dimexpr\linewidth-3em}@{}}
+  {\Large\color{accent}#1} & \textbf{\color{emphasis}#2}\\
+  & {\small #3}
+  \end{tabular}%
+  \smallskip
+}
+
+% ═══════════════════════════════════════════════════════════
 \begin{document}
-\pagestyle{empty}
 
-% ================================================================ header
+% ── Header ──
 \begin{center}
-  {\Huge\bfseries FIRST M. LAST}\\[3pt]
-  {\large\color{muted} The Position or Field Being Applied For}\\[6pt]
-  {\small
-    \faEnvelope\ \href{mailto:first.last@example.com}{first.last@example.com}
-    \quad \faPhone\ +00 000 000 000
-    \quad \faMapMarker*\ City, Country
-    \quad \faGithub\ \href{https://github.com/handle}{handle}
-    \quad \faLinkedin\ \href{https://linkedin.com/in/handle}{handle}}
+{\Huge\bfseries\color{heading} YOUR NAME}\par\medskip
+{\large\bfseries\color{accent} Full-Stack Engineer | Open Source Contributor}\par\medskip
+{\footnotesize\bfseries
+\faAt~\href{mailto:name@email.com}{name@email.com}\hspace{2em}
+\faPhone~+86 138-0000-0000\hspace{2em}
+\faGithub~\href{https://github.com/username}{username}\hspace{2em}
+\faLinkedin~\href{https://linkedin.com/in/username}{username}\hspace{2em}
+\faMapMarker~Shanghai, China
+}\par
 \end{center}
-\vspace{4pt}
-{\color{accent}\rule{\linewidth}{1.2pt}}
 
-% ================================================================ two columns
-\noindent\begin{minipage}[t]{0.32\textwidth}
-  \vspace{0pt}
+\medskip
 
-  \railhead{Profile}\par\vspace{2pt}
-  {\small Two or three sentences: what you do, the domain you do it in, and the
-  result you are known for. Written for the role, not for a search engine.}
-  \par\vspace{8pt}
+% ── Two Columns ──
+\columnratio{0.62}
+\begin{paracol}{2}
 
-  \railhead{Skills}\par\vspace{2pt}
-  {\small
-  \begin{itemize}
-    \railitem{Languages}{Python, TypeScript, SQL, \LaTeX}
-    \railitem{Frameworks}{React, Node, pytest}
-    \railitem{Tooling}{git, Docker, CI/CD}
-    \railitem{Languages spoken}{English (native), Mandarin (fluent)}
-  \end{itemize}}
-  \par\vspace{8pt}
+% ════════ LEFT COLUMN (Experience + Projects) ════════
+\cvsection{Experience}
 
-  \railhead{Certifications}\par\vspace{2pt}
-  {\small
-  \begin{itemize}
-    \item Certification Name --- Issuer, Year
-  \end{itemize}}
-  \par\vspace{8pt}
+\cvevent{Senior Software Engineer}{Zhipu AI}{Jan 2022 -- Present}{Beijing}
+\begin{itemize}
+\item Architected real-time inference pipeline serving 10M+ daily requests with p99 latency < 50ms
+\item Led migration from monolith to microservices, reducing deployment cycle from weekly to hourly
+\item Designed A/B testing framework enabling 30\% faster feature iteration across 5 product teams
+\end{itemize}
 
-  \railhead{Interests}\par\vspace{2pt}
-  {\small Open-source maintenance; typesetting; distance running.}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.65\textwidth}
-  \vspace{0pt}
+\divider
 
-  \cvsection{Experience}
-  \role{Senior Engineer}{Company Name, City}{2022--present}
-  \begin{itemize}
-    \item Led the rewrite of the core pipeline, cutting end-to-end latency by
-          40\%; owned the design doc, the rollout and the on-call runbook.
-    \item Mentored four engineers; two were promoted during the period.
-  \end{itemize}
-  \vspace{4pt}
-  \role{Engineer}{Earlier Company, City}{2019--2022}
-  \begin{itemize}
-    \item Built the reporting service behind the customer dashboard; 99.95\%
-          availability over two years.
-  \end{itemize}
+\cvevent{Software Engineer}{Acme Tech}{Jul 2019 -- Dec 2021}{Beijing}
+\begin{itemize}
+\item Built recommendation engine (collaborative filtering + deep learning) improving CTR by 25\%
+\item Implemented distributed training pipeline on 64-GPU cluster, reducing training time by 60\%
+\end{itemize}
 
-  \cvsection{Projects}
-  \role{Project Name}{Personal / open source}{2021--present}
-  \begin{itemize}
-    \item One line on what it is, one on the result, with the link in the text.
-  \end{itemize}
+\cvsection{Projects}
 
-  \cvsection{Education}
-  \role{M.Sc., Computer Science}{University Name}{2017--2019}
-  {\small Thesis: \emph{Title}. Advisor: Prof. Name.}
-  \vspace{3pt}
-  \role{B.Sc., Computer Science}{University Name}{2013--2017}
+\cvevent{Open Source Project}{\href{https://github.com/user/project}{github.com/user/project}}{}{}
+\begin{itemize}
+\item High-performance async HTTP framework — 5,000+ GitHub stars
+\item Featured in Awesome-Go and HackerNews front page
+\end{itemize}
 
-  \cvsection{Selected writing}
-  \begin{itemize}
-    \item \textbf{Title of the piece} --- venue, year. One line on what it
-          argues.
-  \end{itemize}
-\end{minipage}
+% ════════ RIGHT COLUMN (Education + Skills + Languages) ════════
+\switchcolumn
+
+\cvsection{Education}
+
+\cvevent{M.Sc. Computer Science}{Tsinghua University}{2017 -- 2019}{}
+Thesis: Distributed Graph Processing\\
+GPA: 3.8/4.0
+
+\divider
+
+\cvevent{B.Eng. Software Engineering}{Zhejiang University}{2013 -- 2017}{}
+
+\cvsection{Skills}
+
+\cvskill{Python}{5}
+\divider
+\cvskill{Go / Rust}{4}
+\divider
+\cvskill{System Design}{4.5}
+\divider
+\cvskill{Machine Learning}{3.5}
+
+\medskip
+
+\cvtag{Kubernetes}
+\cvtag{Docker}
+\cvtag{Kafka}\\
+\cvtag{PostgreSQL}
+\cvtag{Redis}
+\cvtag{gRPC}\\
+\cvtag{React}
+\cvtag{TypeScript}
+\cvtag{Terraform}
+
+\cvsection{Languages}
+
+\cvskill{English}{4.5}
+\divider
+\cvskill{Chinese (Native)}{5}
+
+\cvsection{Highlights}
+
+\cvachievement{\faTrophy}{ACM ICPC Regional Gold}{2016 Asia Regional Contest}
+\divider
+\cvachievement{\faGithub}{5,000+ Stars OSS}{Maintainer of popular async framework}
+
+\end{paracol}
+
+% ── PDF Metadata ──
+\hypersetup{
+    pdftitle={Resume - Your Name},
+    pdfauthor={Z.ai},
+    pdfsubject={Professional Resume},
+}
 
 \end{document}

@@ -1,225 +1,207 @@
-# Route: create
+# Route: Create New Document
 
-Bring a document that does not exist yet into a state this plugin can edit, and pack
-it back into a `.docx`.
+## Workflow
 
-**Read this first: there is no content generator in this plugin.** Nothing here
-writes a sentence, picks a style sheet, or lays out a page. What this route builds is
-the _package_ — the unpacked directory tree — and the _session_ — the `Document`
-object that owns the edits. The words come from whatever produced the request; the
-`.docx` skeleton comes from here.
+```
+0. Check if user provided a reference template (PDF/docx) → if yes, use Template-Following Mode below
+1. Load `references/design-system.md` → select palette and cover recipe
+2. Load `references/common-rules.md` → shared layout, font, placeholder rules
+3. Check user keywords → load scene file if applicable
+4. Load `references/docx-js-core.md`
+5. If complex → also load `references/docx-js-advanced.md`
+6. Plan document structure (outline)
+7. Write JS/TS using docx library
+   ⚠️ **BEFORE writing any string**: scan ALL Chinese text for curly quotes `""''` and replace with `\u201c \u201d \u2018 \u2019` — bare curly quotes break JS syntax (see docx-js-advanced.md § Quotes Escaping)
+8. Run with `bun run generate.js` (or `node generate.js`)
+9. If TOC → run `python3 "$DOCX_SCRIPTS/add_toc_placeholders.py" output.docx --auto`
+10. Run post-generation checklist (see SKILL.md)
+```
 
-Two origins, one destination:
+## Template-Following Mode
 
-- a `.docx` that another build path already produced (the common case — this plugin
-  finishes and reviews documents, it does not author them);
-- a minimal package you assemble by hand, when nothing has produced a file yet.
+When the user provides a reference document (PDF/docx) as a **formatting template** (e.g., "generate following this template format", "refer to this sample"), switch to template-following mode instead of the standard recipe-based workflow:
 
-Both end in the same place: an unpacked directory, a `Document` on it, and a
-repacked `.docx`.
+1. **Extract the template's structure** — cover layout, section order, heading hierarchy, page breaks, special pages (e.g., advisor comments page, approval form)
+2. **Replicate structure exactly** — every major structural unit becomes a **separate section** (cover, body, appendix/form pages) with appropriate margins and page breaks
+3. **Fill content** from the user's content source, or generate per user instructions
+4. **Preserve template-specific elements** — school-specific forms, signature areas, stamp placeholders, advisor comment blocks → reproduce as-is with placeholder text (e.g., "Advisor (signature):")
+5. **Maintain formatting fidelity** — font choices, table layouts, spacing, and alignment should match the template, not the standard design-system palettes
 
-## 1. Unpack an existing `.docx`
+⚠️ **Do NOT apply standard cover recipes (R1–R7) when a user-provided template defines its own cover format.** Follow the template's cover layout instead. Standard `common-rules.md` constraints (e.g., `WidthType.PERCENTAGE`, `allNoBorders` for cover wrapper, `Rule 8` line spacing) still apply for cross-engine compatibility.
+
+⚠️ **Each distinct page type = separate section.** Cover section (margin: 0), body section (standard margins), appendix/form pages (may need different margins or orientation). Never place cover + body + appendix in a single section.
+
+---
+
+## Decision Tree
+
+### Cover Page?
+- **YES**: Reports, theses, proposals, plans, or 3+ page docs with clear title/author
+- **NO**: Resumes, contracts, official documents, exam papers, short memos
+
+### Cover Style Selector — Recipe Router
+
+Covers use **7 validated layout recipes (R1–R7)**, auto-selected by `selectCoverRecipe()` in `references/design-system.md` (the **authoritative source** — do NOT duplicate the function).
+
+**Quick Reference:**
+
+| docType | Recipe | Default Palette |
+|---------|--------|-----------------|
+| contract / official / exam / resume | null (no cover) | — |
+| academic | R5 (Clean White) | ACADEMIC |
+| proposal_report (thesis proposal) | R5 (Clean White) | ACADEMIC |
+| lesson_plan (STEM) | R4 (Top Color Block) | DM-1 |
+| lesson_plan (arts/general) | R6 (Editorial Warm) | ED-1 |
+| creative / branding / design | R3 (Centered Card Frame) | SN-2 |
+| cultural / newsletter / internal | R6 (Editorial Warm) | ED-1 |
+| activity / event | R6 (Editorial Warm) | ED-1 |
+| trend/research (cultural/creative/brand) | R7 (Swiss Tech) | ST-1 |
+| whitepaper | R2 (Double-Rule Frame) | IG-1 / CM-2 |
+| consulting | R2 (Double-Rule Frame) | MIN-1 |
+| proposal / plan | R4 (Top Color Block) | GO-1 |
+| report | R1 (Pure Paragraph Left) | by industry |
+| default | R1 (Pure Paragraph Left) | DS-1 |
+
+⚠️ **Long title routing:** After selecting recipe, apply `applyLongTitleOverride(result, titleLength)`. Titles >20 chars on R3/R4/R6 → fall back to R1. Titles >30 chars on R2 → fall back to R1. R5 is never overridden.
+
+⚠️ **Academic thesis cover:** Use `buildAcademicCover()` from `scenes/academic.md`.
+
+⚠️ **Thesis proposal report (开题报告):** Use `buildProposalCover()` from `scenes/academic.md`. Cover MUST be an independent section. Keywords: "开题报告" (Chinese), "thesis proposal", "research proposal" — NOT the same as business proposals (which use R4).
+
+### Table of Contents?
+- **YES**: 3+ major sections (H1 headings)
+- **NO**: Resumes, exam papers, short docs, contracts (<20 clauses)
+
+→ See `references/toc.md` for the complete TOC reference (3-step process, code examples, common bugs).
+
+### Headers/Footers?
+- **YES** by default (page numbers minimum)
+- **NO**: cover page section, official docs (special format)
+
+### Load Math Formulas?
+When: exam papers, academic papers, physics/math/chemistry → load `references/math-formulas.md`
+
+### Load Chart Templates?
+When: data visualization, reports with charts → load `references/chart-templates.md`
+
+## Outline Rules
+
+**User provides outline** → Follow EXACTLY. No additions, deletions, or reordering.
+
+**No outline** → Create from scene template:
+- **Academic:** Abstract → TOC → Body → References
+- **Report:** Use `selectReportType()` to determine type, then follow template A–F:
+  - analysis → Template A (Executive Summary → Background → Scope & Method → Findings → Diagnosis → Conclusions)
+  - experiment → Template B (Abstract → Objective & Hypothesis → Environment → Procedure → Results → Error Analysis → Conclusions)
+  - testing → Template C (Overview → Scope & Environment → Test Plan → Results → Defects → Risks → Conclusions)
+  - research → Template D (Summary → Background → Subjects & Method → Sample → Findings → Synthesis → Recommendations)
+  - review → Template E (Overview → Goals → Review → Results → Issues → Lessons → Action Plan)
+  - proposal → Template F (Summary → Status → Goals → Solution → Roadmap → Resources → Risks → Benefits)
+- **Contract:** Use `selectContractType()` then follow template A–E:
+  - bilateral → Template A (Header → Parties → Recitals → Definitions → Subject → Price → Rights → Delivery → Tax → IP → Breach → Force Majeure → Termination → Notices → Dispute → Miscellaneous → Signature)
+  - transfer → Template B (Header → Recitals → Definitions → Subject → Consideration → Closing → Representations → Tax → Breach → Dispute → Signature)
+  - nda → Template C (Header → Recitals → Definition → Obligations → Use Restrictions → Return/Destroy → Exceptions → Duration → Breach → Dispute → Signature)
+  - framework → Template D (Header → Recitals → Purpose → Scope → Division → Mechanism → Commercial → Confidentiality → Term → Breach → Dispute → Signature)
+  - terms → Template E (Title → Definitions → Services → Rights → Liability → Fees → IP → Termination → Notices → Dispute → Miscellaneous)
+- **Official:** Use `selectOfficialType()` + `needsRedHeader()`:
+  - notice → Template A ([Red header] → [Doc number] → Title → Addressee → Reason → Items → Requirements → [Attachments] → [Signature] → [Date] → [Colophon])
+  - letter → Template B ([Red header] → [Doc number] → Title → Addressee → Reason → Negotiation/Reply → Closing → [Signature] → [Date])
+  - reply → Template C ([Red header] → [Doc number] → Title → Addressee → Reference → Reply → "This is the reply." → Signature → Date)
+  - minutes → Template D (Title → Meeting Overview → Agreed Items → Responsibilities → [Distribution]) — typically no red header
+- Present outline to user before generating when possible
+
+## Scene Completeness
+
+Include ALL elements a scene specifies:
+- **Academic thesis:** Cover (`buildAcademicCover()` in its own section), abstract, TOC, references
+- **Thesis proposal report (thesis proposal / 开题报告):** Cover (`buildProposalCover()` in its own section), body sections per proposal template. Cover MUST be a separate section.
+- **Report:** Cover, executive summary, conclusions
+- **Contract:** Party info, recitals, complete clause closure, signature block, uniform `【】` placeholders
+- **Official:** Correct document type, specific title, closing phrase matching type, proper numbering hierarchy, red header only when requested
+- **Exam:** Student info area, scoring criteria
+
+Generate complete, substantive content — not skeletons.
+
+## Content Guidelines
+
+- **Length**: "detailed report" = 3000+ words. "brief summary" = 500–1000.
+- **Data**: Use user's data, or generate realistic placeholders
+- **Charts**: Use `references/chart-templates.md` matplotlib templates → PNG → embed
+- **Math**: Use `references/math-formulas.md` LaTeX → docx-js Math mapping
+- **Tables**: For structured data, not layout
+- **Numbering**: Figures, tables numbered sequentially with cross-references
+
+## Code Architecture
+
+### Heading Style Rule (Mandatory)
+
+**All body chapter headings MUST use `heading: HeadingLevel.HEADING_X`** — never simulate with bold + large font (TOC cannot detect simulated headings).
+
+**Exception:** Cover title and TOC title ("目录") heading MUST NOT use Heading style.
+
+### Blank Page Prevention
+
+→ See SKILL.md § Post-Generation checklist for the full set of rules.
+
+Key rules:
+1. No double page breaks (SectionType.NEXT_PAGE + PageBreak = blank page)
+2. PageBreak paragraphs should have visible text content
+3. No more than 3 consecutive empty paragraphs
+4. Cover section: ≤2 trailing empty paragraphs, no trailing PageBreak
+
+### Builder Pattern Example
+
+```js
+const { Document, Packer, Paragraph, TextRun, Header, Footer,
+        AlignmentType, HeadingLevel, PageNumber } = require("docx");
+const fs = require("fs");
+
+// 1. Palette
+const P = { primary: "#101820", body: "#182030", secondary: "#506070", accent: "#8090A0" };
+const c = (hex) => hex.replace("#", "");
+
+// 2. Component builders
+function heading(text, level = HeadingLevel.HEADING_1) {
+  return new Paragraph({
+    heading: level,
+    spacing: { before: level === HeadingLevel.HEADING_1 ? 360 : 240, after: 120 },
+    children: [new TextRun({ text, bold: true, color: c(P.primary), font: { ascii: "Calibri", eastAsia: "SimHei" } })]
+  });
+}
+
+function body(text) {
+  return new Paragraph({
+    alignment: AlignmentType.JUSTIFIED,
+    indent: { firstLine: 480 },
+    spacing: { line: 312 },
+    children: [new TextRun({ text, size: 24, color: c(P.body) })],
+  });
+}
+
+// 3. Assembly — cover + body in separate sections
+const doc = new Document({
+  styles: { default: { document: {
+    run: { font: { ascii: "Calibri", eastAsia: "Microsoft YaHei" }, size: 24, color: c(P.body) },
+    paragraph: { spacing: { line: 312 } },
+  }}},
+  sections: [
+    { properties: { page: { margin: { top: 0, bottom: 0, left: 0, right: 0 } } },
+      children: buildCoverR1(config) },  // ← use recipe from design-system.md
+    { properties: { page: { margin: { top: 1440, bottom: 1440, left: 1701, right: 1417 } } },
+      footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER,
+        children: [new TextRun({ children: [PageNumber.CURRENT], size: 18 })] })] }) },
+      children: [heading("Chapter 1"), body("Content...")] },
+  ],
+});
+
+Packer.toBuffer(doc).then(buf => { fs.writeFileSync("output.docx", buf); });
+```
+
+## Post-Generation
+
+→ See SKILL.md § Post-Generation for the complete two-layer verification checklist.
 
 ```bash
-unzip report.docx -d unpacked/
+python3 "$DOCX_SCRIPTS/postcheck.py" output.docx
 ```
-
-Keep the layout intact: `[Content_Types].xml`, `_rels/.rels`, `word/document.xml`,
-and whatever else the archive carried. `Document` copies this tree into a temp
-directory and edits the copy, so the directory you hand it is only read — but do not
-rearrange it, because every part path below is a literal lookup.
-
-## 2. Or assemble the minimal package by hand
-
-`Document.__init__` touches four parts unconditionally. A package that carries
-exactly these constructs cleanly; every other part this plugin needs it creates on
-demand.
-
-```
-[Content_Types].xml
-_rels/.rels
-word/document.xml
-word/_rels/document.xml.rels
-word/settings.xml
-```
-
-What each one is for, and what breaks without it:
-
-| part                           | why `__init__` needs it                   | symptom when absent                                                                              |
-| ------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `[Content_Types].xml`          | receives an `Override` for `people.xml`   | — (always present in a real package)                                                             |
-| `_rels/.rels`                  | not read by this plugin                   | the archive is not a valid OOXML package; `postcheck.py` still runs, Word does not open the file |
-| `word/document.xml`            | opened by the constructor itself          | `ValueError: XML file not found: word/document.xml`, raised from `Document(...)`                 |
-| `word/_rels/document.xml.rels` | receives the `people.xml` relationship    | `ValueError: XML file not found: word/_rels/document.xml.rels`                                   |
-| `word/settings.xml`            | receives the RSID and `<w:updateFields/>` | `ValueError: XML file not found: word/settings.xml`                                              |
-
-A working skeleton, one body paragraph long:
-
-```bash
-mkdir -p unpacked/_rels unpacked/word/_rels
-
-cat > unpacked/\[Content_Types\].xml <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-</Types>
-XML
-
-cat > unpacked/_rels/.rels <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>
-XML
-
-cat > unpacked/word/_rels/document.xml.rels <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>
-XML
-
-cat > unpacked/word/settings.xml <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>
-XML
-
-cat > unpacked/word/document.xml <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p><w:r><w:t>Body text goes here.</w:t></w:r></w:p>
-    <w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>
-  </w:body>
-</w:document>
-XML
-```
-
-Note what the skeleton does _not_ declare: `word/styles.xml`, `word/numbering.xml`,
-footers, images. Add them as the content needs them, each with a relationship in
-`word/_rels/document.xml.rels` and a content type in `[Content_Types].xml`. The
-skeleton above references `styles.xml` in its rels; drop that relationship if you
-do not create the part, because Word fails on a relationship whose target is
-missing.
-
-## 3. Construct the session
-
-```python
-import sys
-
-sys.path.insert(0, "<plugin>/skills/docx")  # document.py uses a relative import
-from scripts.document import Document
-
-doc = Document("unpacked", track_revisions=False, author="ZCodium", initials="C")
-```
-
-`unpacked_dir` must exist and be a directory; anything else raises
-`ValueError: Directory not found: …`. The constructor prints the RSID it chose —
-that line is expected output, not an error.
-
-Construction is where the comment infrastructure appears. On a bare skeleton it
-writes all of this, and none of it needs a second call from you:
-
-- `word/people.xml`, copied from `scripts/templates/people.xml` when absent, with
-  this session's author appended as a `w15:person` and an `html.escape`d
-  `w15:presenceInfo`;
-- the `/word/people.xml` `Override` in `[Content_Types].xml` and the `people.xml`
-  relationship in `word/_rels/document.xml.rels`, each added only when missing;
-- this session's RSID into `word/settings.xml`, creating the `<w:rsids>` section
-  when the file has none;
-- `<w:updateFields w:val="true"/>`, unless the file already carries it.
-
-`track_revisions=True` additionally writes `<w:trackRevisions/>`, which is what makes
-Word record later edits as revisions rather than apply them silently.
-
-New settings elements land at their schema-valid position — `trackRevisions` before
-`defaultTabStop`, `updateFields` after it, `rsids` after `compat` — per the
-`CT_Settings` child-order table in `scripts/identifiers.py`. That matters on a real
-`settings.xml` with dozens of children: appending blindly produces a file Word
-refuses to open.
-
-## 4. Validate the precondition
-
-```python
-doc.validate()
-```
-
-`validate()` is a presence check, not a schema check. It raises
-`ValueError: Validation failed: word/document.xml not found` when that part is
-missing and returns `None` otherwise. A package that never had the part does not
-reach this point — the constructor already refused it (§3) — so in practice this
-fires when the part disappears between construction and the call, which is what
-makes it the last check before `save()` writes. A document that passes it can still
-be malformed OOXML; `postcheck.py` catches a different class of problem, and neither
-substitutes for opening the file.
-
-## 5. Save
-
-```python
-doc.save("out")            # writes the whole tree to a fresh directory
-doc.save()                 # writes it back over the input directory
-doc.save("out", validate=False)   # skips the precondition check
-```
-
-`save()` does four things in order: ensures comment relationships and content types
-when comment parts exist, writes every part touched through an editor, runs
-`validate()` unless disabled, then copies the whole unpacked tree to `destination`
-(`dirs_exist_ok=True`, so an existing target is merged into). Omit the destination
-and it copies back over the input directory — pass one whenever the original must
-survive.
-
-Nothing is persisted until `save()`. `add_comment`, `suggest_deletion` and the
-`insert_*` family all mutate the in-memory DOM.
-
-## 6. Pack
-
-```python
-import sys
-
-sys.path.insert(0, "<plugin>/skills/docx")
-from scripts.document import _pack_document
-
-_pack_document("out", "report.docx")
-```
-
-`_pack_document(input_dir, output_file)` stages a copy of the tree in a temp
-directory — the input directory is never modified — strips inter-element whitespace
-and comments from every `*.xml` and `*.rels` part, and writes a DEFLATED archive.
-The stripping is a correctness requirement, not a tidy-up: pretty-printed XML leaves
-text nodes between elements, and Word is order-sensitive about the children of
-`settings.xml`. `*:t` elements are skipped, because there the whitespace is content.
-
-The shell equivalent, when you would rather not import a private name:
-
-```bash
-cd out && zip -r ../report.docx .
-```
-
-The two are not identical — `zip` keeps whatever whitespace the files already
-carry — so prefer `_pack_document` when the tree has ever been pretty-printed.
-
-## 7. Gate the result
-
-```bash
-python3 <plugin>/skills/docx/scripts/postcheck.py report.docx
-```
-
-A freshly created document fails `cover-separation` by design when it has a single
-section, which a one-page memo always does. That is the rule working, not a defect
-in the file — scope the run with `--only` when the document genuinely has no cover
-(see `routes/read.md`).
-
-## Failure modes
-
-| symptom                                                        | cause                                                                           |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `ValueError: Directory not found: …`                           | the path does not exist, or is a file                                           |
-| `ValueError: XML file not found: word/settings.xml`            | the package has no settings part; create it before constructing                 |
-| `ValueError: XML file not found: word/_rels/document.xml.rels` | the package has no document rels; create it before constructing                 |
-| `ValueError: XML file not found: word/document.xml`            | the package has no document part; the constructor opens it before anything else |
-| `ValueError: Validation failed: word/document.xml not found`   | the part disappeared between construction and `validate()` / `save()`           |
-| `Using RSID: …` on stdout                                      | expected; the chosen RSID is printed once per construction                      |
-| the input directory changed after `save()`                     | `save()` was called without a destination                                       |
-| Word reports the file is corrupt                               | a part is referenced in `[Content_Types].xml` or a `.rels` but missing on disk  |
+⚠️ **Running postcheck.py is MANDATORY.** Fix all ❌ errors before delivering.

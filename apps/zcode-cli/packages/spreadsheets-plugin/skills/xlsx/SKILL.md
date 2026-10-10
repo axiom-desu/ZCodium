@@ -1,296 +1,349 @@
 ---
 name: xlsx
-description: Use whenever a spreadsheet (.xlsx, .xlsm, .csv, .tsv) is the artifact being produced, edited, or reviewed — a financial model, budget, forecast, schedule, invoice, data table, reconciliation or dashboard sheet. Covers zero-error formula construction, reading and writing through openpyxl (formulas, fonts, fills, number formats, column widths), and formula recalculation plus error scanning with `skills/xlsx/scripts/recalc.py`, which drives LibreOffice headless. Use it when the user asks to build, fill, fix, merge or audit a workbook, or reports symptoms such as #REF!, #DIV/0!, #VALUE! or #NAME? errors, a total that stops updating when a row is inserted, formulas that show nothing until the file is opened in Excel, `####` in a column, a flattened template whose formatting conventions were overwritten, or a wide sheet that gets split across several printed pages. Does not cover .docx / .pptx / PDF authoring, GUI spreadsheet applications, or native Excel charts and VBA macros.
+metadata:
+  author: Z.AI
+  version: "1.1"
+description: "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .csv, or .tsv file; create a new spreadsheet from scratch or from other data sources; analyze data and output results as an Excel file with charts; convert between tabular file formats (CSV/TSV/JSON/PDF-table → XLSX, or XLSX → CSV/JSON); clean, merge, pivot, or transform tabular data. Trigger especially when the user references a spreadsheet file by name or path, says 'make a table/report/model', mentions Excel/CSV/数据分析/报表/汇总, asks to convert or export a spreadsheet (e.g. 'csv转excel', 'json转表格', 'export as CSV'), or wants data visualization inside a spreadsheet."
+license: Proprietary. LICENSE.txt has complete terms
 ---
 
-# XLSX Spreadsheet Production
+# XLSX — Scene-Driven Spreadsheet Workbench
 
-Build, edit and verify `.xlsx` workbooks through `openpyxl`, and gate every result on a real recalculation rather than on the formula strings. The deliverable is a workbook that opens with values already in it and zero formula errors.
+## Environment Setup
 
-## 1. What this skill covers
-
-- creating and editing workbooks — cells, formulas, fonts, fills, borders, number formats, column widths, merged cells, multiple sheets;
-- reading existing workbooks without losing their formulas or formatting;
-- recalculating formulas and scanning every cell for Excel error values, through one script: `skills/xlsx/scripts/recalc.py`;
-- the verification checklist that has to pass before a workbook with formulas is handed over.
-
-It does **not**:
-
-- produce native Excel chart objects, conditional-formatting rules, data validation, pivot tables or VBA macros — none of that is written by this skill, and openpyxl's support for it ranges from absent to partial;
-- author `.docx`, `.pptx` or PDF files — those are the `docx`, `pptx` and `pdf` skills;
-- drive a spreadsheet GUI. Everything here is a file-level operation.
-
-## 2. Environment prerequisites
-
-Two external dependencies, neither optional for their own step. Check before promising a recalculated file.
-
-| Need                                          | What satisfies it                                                 | Missing behaviour                                                                                                           |
-| --------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `openpyxl` in the Python that runs the script | `pip install openpyxl`, or `apt-get install python3-openpyxl`     | the script dies at import: `ModuleNotFoundError: No module named 'openpyxl'`. Nothing else in this skill works              |
-| LibreOffice `soffice` on `PATH`               | `apt-get install libreoffice` / `brew install --cask libreoffice` | `recalc()` returns `{"error": "LibreOffice ('soffice') not found on PATH…"}`, and the script prints that JSON and exits `0` |
-| `pandas`                                      | `pip install pandas`                                              | only §9 is unavailable; the openpyxl paths are unaffected                                                                   |
-| `gtimeout` (coreutils), macOS only | not needed | no longer used — the timeout is enforced in-process |
-
-The timeout argument is enforced in-process. `soffice` is started in its own process group and, on expiry, the whole group is killed — the `soffice` launcher spawns `soffice.bin` to do the work, and killing only the launcher used to leave `soffice.bin` orphaned while it kept the pipes open, which hung the script forever.
-
-The script declares `requires-python = ">=3.10"` and `dependencies = ["openpyxl"]` in its PEP 723 header; it runs on the 3.10 the CLI already assumes.
-
-Confirm rather than assume:
+**Quick check** — run this first. If it exits 0, skip to [Pre-Flight](#pre-flight-intent-gate):
 
 ```bash
-python3 -c "import openpyxl; print('openpyxl', openpyxl.__version__)"
-command -v soffice || echo "soffice missing — recalculation unavailable"
-python3 -c "import pandas" 2>/dev/null && echo "pandas present" || echo "pandas missing (optional)"
+source "<skill_directory>/env_setup/env_check.sh"
 ```
 
-## 3. Rules every workbook must satisfy
+This auto-detects and exports `XLSX_SKILL_DIR` and `FONT_DIR`. No manual variable setup needed.
 
-### Zero formula errors
+**Only if the check fails**, read [`env_setup/setup.md`](env_setup/setup.md) for full platform-specific installation instructions (dependencies, fonts, China mirrors).
 
-Every workbook leaves your hands with zero formula errors — `#REF!`, `#DIV/0!`, `#VALUE!`, `#NAME?`, `#NULL!`, `#NUM!`, `#N/A`. An error that survives into the delivered file is a broken deliverable, not a cosmetic problem, and a printout of one reads as a defect.
+> 🔴 **LibreOffice is install-on-demand and NOT substitutable.** `env_check.sh` reports it as
+> `on-demand MISSING` without failing, so a passing check does **not** mean it is present. The moment
+> a task needs `recalc`, `.xlsx`→PDF, or `.csv`→`.xlsx`, you **MUST install it** — using the user's
+> Excel/WPS/Numbers instead is forbidden, and a large download is not a reason to skip.
+> See [HARD REQUIREMENT](#-hard-requirement--libreoffice-is-missing) under Quality Gate.
 
-### Respect the existing template
+| Variable | Auto-set by env_check.sh | Description |
+|----------|--------------------------|-------------|
+| `XLSX_SKILL_DIR` | skill root directory | Parent of this file |
+| `FONT_DIR` | macOS: `~/Library/Fonts`, Linux: `/usr/share/fonts` | Font base directory |
 
-When modifying a workbook that already has conventions, study them and match them exactly:
+> **Local-font-first.** Inspect fonts available in the user's local environment and prefer a suitable
+> installed font. Use bundled or downloaded fonts only as fallbacks; do not install fonts without the
+> user's confirmation.
 
-- keep the existing number formats, fonts, fills, column widths, freeze panes, sheet names, print setup and header rows;
-- never impose a standardised layout on a file with an established pattern — a "cleaner" rewrite that drops the template's conventions destroys the thing the reader relies on;
-- if the template already puts assumptions in a dedicated block, keep putting them there. Existing conventions always outrank anything in this document.
+---
+## Pre-Flight: Intent Gate
 
-### Financial-model conventions
+Before touching any code, confirm the user actually needs a spreadsheet:
 
-Unless the workbook's own conventions or the user say otherwise (full working detail in `engines/design.md` and `scenes/finance.md`):
+- Report / analysis summary (述职, 调研报告) → **docx skill**
+- Presentation (汇报, 演示, pitch deck) → **pptx skill**
+- Formal print document (合同, 证书, "PDF") → **pdf skill**
+- Charts only, no data table needed → **charts skill**
+- User explicitly says a format → respect it
 
-- **Blue** text (RGB `0,0,255`, openpyxl `FF0000FF`) — hardcoded inputs and scenario drivers;
-- **Black** text (RGB `0,0,0`, openpyxl `FF000000`) — every formula and calculation;
-- **Green** text (RGB `0,128,0`, openpyxl `FF008000`) — references into other sheets of the same workbook;
-- **Red** text (RGB `255,0,0`, openpyxl `FFFF0000`) — links to other files;
-- **Yellow** fill (RGB `255,255,0`, openpyxl `FFFFFF00`) — key assumptions that need attention.
+If confirmed xlsx → proceed to Scene Router below.
 
-Number formats:
+**Request Decomposition** (do this every time):
+- **Explicit needs**: sheets, columns, formulas, metrics the user stated
+- **Implicit needs**: business context, downstream use (filter? sort? input?)
+- **Multi-part requests**: generate ALL parts — never silently drop a component
 
-- years as text (`"2024"`, not `2,024`);
-- currency `$#,##0`, with the unit stated in the header (`Revenue ($mm)`);
-- zeros rendered as `-`: `$#,##0;($#,##0);-`;
-- percentages at one decimal (`0.0%`);
-- multiples as `0.0x`;
-- negatives in parentheses, `(123)` rather than `-123`.
+**Multi-Intent Detection** — some requests combine multiple scenes:
 
-## 4. Use formulas, not hardcoded values
+```
+"Create a financial model with charts and export a PDF summary"
+ → scenes/finance.md + engines/chart.md + (hand off PDF to pdf skill)
 
-A computation that Excel could perform belongs in a cell as a formula, never as a value computed in Python. Hardcoding freezes the workbook: the moment a source row changes, every downstream number silently goes stale, and no reader can tell which cells were meant to move.
+"Analyze this CSV, build a dashboard, and make it look professional"
+ → scenes/analyze.md + engines/chart.md + engines/design.md
 
-```python
-sheet['B10'] = '=SUM(B2:B9)'        # not: sheet['B10'] = 5000
-sheet['C5'] = '=(C4-C2)/C2'         # not: sheet['C5'] = 0.15
-sheet['D20'] = '=AVERAGE(D2:D19)'   # not: sheet['D20'] = 42.5
+"Edit this budget file, add a new quarter column, and create a pivot"
+ → scenes/edit.md + quality/pipeline.md (pivot command)
+
+"Convert these 5 CSVs into one xlsx with a summary sheet"
+ → scenes/convert.md + scenes/create.md (for summary)
 ```
 
-This covers totals, subtotals, growth rates, margins, ratios, variances, differences — every numeric relationship in the workbook. Assumptions go into their own cells and get referenced:
+When multiple intents detected, load all matching files and execute in logical order: data preparation → analysis → visualization → styling → QA.
 
-```python
-# growth rate lives in B6 as an input; every period references it
-sheet['C7'] = '=B5*(1+$B$6)'
+---
+
+## File Loading Rules (MANDATORY)
+
+**Always load ALL matched files. No shortcuts, no lazy loading, no "on demand".**
+
+```
+User Request
+│
+├─ 1. Read SKILL.md (this file) — always
+├─ 2. Route to scene file(s) via Scene Router below — read COMPLETELY
+├─ 3. If scene involves charts → ALSO read engines/chart.md
+├─ 4. If scene produces styled output → ALSO read engines/design.md
+├─ 5. If scene is analyze → ALSO read scenes/analyze-recipes.md
+├─ 6. If scene is edit → ALSO read scenes/edit-patterns.md
+├─ 7. If scene is VBA → ALSO read engines/vba-templates.md
+└─ 8. QA: always run full pipeline (quality/pipeline.md)
 ```
 
-A hardcoded value that cannot come from a formula (a figure transcribed from a filing) is an input, and it needs a source note in an adjacent cell or a cell comment: `Source: <system or document>, <date>, <specific reference>, <URL if applicable>`.
+**Rule: when in doubt, read the file.** The cost of reading an extra file is a few hundred tokens. The cost of NOT reading it is a broken output that needs to be redone.
 
-## 5. openpyxl workflow
+**Chart + Design engines are loaded by default** unless the task is purely read-only (inspect/validate with no output file). If you are creating or editing an xlsx, you MUST read `engines/design.md`.
 
-### 5.1 Creating a workbook
+---
 
-```python
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+## Scene Router
 
-wb = Workbook()
-sheet = wb.active
-sheet['A1'] = 'Quarter'
-sheet['B1'] = 'Revenue'
-sheet['A2'] = 'Q1'
-sheet['B2'] = 1200
-
-# Assumption cells first, formulas reference them
-sheet['D1'] = 'Growth'
-sheet['D2'] = 0.08
-sheet['B3'] = '=B2*(1+$D$2)'
-
-sheet['B2'].font = Font(color='FF0000FF')                 # blue input
-sheet['B3'].font = Font(color='FF000000')                 # black formula
-sheet['B2'].number_format = '$#,##0;($#,##0);-'
-sheet['D2'].fill = PatternFill('solid', start_color='FFFFFF00')
-for cell in sheet[1]:
-    cell.font = Font(bold=True)
-sheet.column_dimensions['A'].width = 20
-sheet.freeze_panes = 'A2'
-
-wb.save('model.xlsx')
+```
+User Request
+│
+├─ Involves an existing file?
+│  ├─ Yes → Modify content or structure?
+│  │         ├─ Yes ──────────────────── → scenes/edit.md
+│  │         └─ No (read/analyze only) ─ → scenes/analyze.md
+│  │
+│  └─ Format conversion (CSV↔XLSX, JSON, PDF tables)?
+│     └─ Yes ────────────────────────── → scenes/convert.md
+│
+├─ Create from scratch?
+│  ├─ Financial / budget / forecast / cost tracking?
+│  │  ├─ Complex (DCF / LBO / three-statement linkage (三表联动) / sensitivity / IB model)?
+│  │  │  └─ Yes ─────────────────────── → scenes/finance.md
+│  │  └─ Simple (budget table (预算表) / expense report (费用报表) / revenue vs cost (收支对比) / project cost (项目成本) / personal finance (个人记账))?
+│  │     └─ Yes ─────────────────────── → scenes/finance_lite.md
+│  └─ General table / report / template
+│     └─ ──────────────────────────── → scenes/create.md
+│
+├─ Batch processing / large files / protection / validation?
+│  └─ Yes ───────────────────────────── → scenes/advanced.md
+│
+├─ VBA / macros / automation inside Excel?
+│  └─ Yes ───────────────────────────── → scenes/vba.md + engines/vba-templates.md
+│
+├─ Needs charts or data visualization?
+│  └─ Yes ───────────── append ────────→ engines/chart.md
+│
+└─ Needs styling / design system?
+   └─ Yes ───────────── append ────────→ engines/design.md
 ```
 
-Two openpyxl colour rules that bite: colour strings are `AARRGGBB` eight-digit hex, not the web `#RRGGBB` — `Font(color='0000FF')` is a _transparent_ blue; and `fill_type='solid'` is required for a fill to render at all. Where the file is created rather than edited, set every property you care about on the cell: openpyxl writes only what you set.
+**Mixed requests**: load all matching files. Engine files always **append** to a scene.
 
-### 5.2 Editing an existing workbook
+**Finance detection**:
+- **finance.md** (complex): DCF, LBO, P&L, 利润表, 资产负债, valuation, 估值, IRR, 三表联动, sensitivity, scenario
+- **finance_lite.md** (simple): 预算, budget, 费用, expense, 收支, 记账, 项目成本, cost tracking, 报销, ROI
 
-```python
-from openpyxl import load_workbook
+**VBA detection**: 宏, macro, VBA, 自动化, automation, .xlsm, 按钮, button, auto-run, 批量处理脚本
 
-wb = load_workbook('report.xlsx')        # default: formulas preserved
-wb.active                               # first sheet
-wb['Summary']                           # by name
-for name in wb.sheetnames:
-    print(name, wb[name].max_row, wb[name].max_column)
+---
 
-ws = wb['Summary']
-ws['A1'] = 'Total'
-ws['B1'] = '=SUM(B2:B9)'
+## Design Principles
 
-new = wb.create_sheet('Assumptions')
-new['A1'] = 'Growth'
-new['B1'] = 0.08
+### 1. Live Formula Guarantee
+Every derived value SHOULD be an Excel formula so the spreadsheet stays dynamic.
 
-wb.save('report.xlsx')
-```
+**Exception — Programmatic Verification**: When the output file will be verified by Python (not opened in Excel), TOTAL/SUM rows should write **computed values** instead of formulas, because openpyxl cannot evaluate formulas and `data_only=True` returns `None` for newly-written formulas. Optionally add the formula as a cell comment for reference.
 
-**Loading with `data_only=True` reads cached values and destroys formulas on save.** If the file was last written by openpyxl, the cache is empty and every formula cell reads back `None` — which is exactly the gap §6 closes. Pass `data_only=True` only to read results, and never save from such a handle.
+### 2. Zero Error Tolerance
+Deliverables must have zero formula errors. All divisions wrapped with `IFERROR` or `IF(denom=0,...)`. Absolute references (`$C$42`) for shared denominators.
 
-## 6. Recalculating formulas
+### 3. Compatibility First
+No dynamic array functions (`FILTER`, `UNIQUE`, `XLOOKUP`, `SORT`, `SORTBY`, `XMATCH`, `SEQUENCE`, `LET`, `LAMBDA`, `RANDARRAY`). No implicit array formulas — use `SUMPRODUCT` alternatives.
 
-`openpyxl` stores a formula as a string and never evaluates it. A workbook written by openpyxl therefore has no cached values: Excel, WPS and LibreOffice compute them on open, but any downstream reader — a script, a CSV export, a preview renderer — sees blanks. The recalculation script is what makes the file self-describing.
+### 4. Preserve & Match
+When editing existing files: study and exactly match format, style, conventions. Existing patterns always override defaults. Text starting with `=` must be prefixed with `'`.
+
+### 5. Language Mirror
+Output language (sheet names, headers, labels) matches user's input language.
+
+### 6. Data Consistency Over Instructions
+When user instructions conflict with the actual data patterns in the existing file:
+- **First priority**: match the existing data pattern (e.g., if existing data uses `0` for empty, don't switch to `-`)
+- **Second priority**: follow user instructions literally
+- Always flag the conflict to the user
+
+Example: User says "show hyphen for zero" but existing data and answer key use numeric `0` → Use `0` and notify user of the discrepancy.
+
+### 7. Original File Preserved
+User-provided input files are read-only by default. Deliverables go to new
+files; edit an original in place only when the user explicitly asks.
+
+---
+
+## Toolchain
+
+### Script Path Setup (MANDATORY before any script call)
+
+All CLI tools live relative to this skill's directory. Before calling any script, resolve the absolute path once:
 
 ```bash
-python3 <plugin>/skills/xlsx/scripts/recalc.py <excel_file> [timeout_seconds]
+XLSX_SKILL_DIR="<skill_directory>"   # ← parent directory of this SKILL.md
+
+# Then all commands use absolute paths:
+python3 "$XLSX_SKILL_DIR/xlsx.py" inspect data.xlsx --pretty
+python3 "$XLSX_SKILL_DIR/xlsx.py" pivot data.xlsx output.xlsx --rows Region --values Revenue
+python3 "$XLSX_SKILL_DIR/xlsx.py" validate output.xlsx
 ```
 
-`<plugin>` is the plugin root that carries this skill, so the real path is
-`skills/xlsx/scripts/recalc.py` inside this plugin. The timeout defaults to 30
-seconds and is enforced in-process, so it needs no external `timeout` or
-`gtimeout` binary on any platform.
-
-What the script does, in order:
-
-1. refuses a path that does not exist, returning `{"error": "File … does not exist"}`;
-2. refuses to continue when `soffice` is not on `PATH`, returning the install hint above — a missing LibreOffice is reported, not crashed on;
-3. writes a `RecalculateAndSave` Basic macro into the LibreOffice user profile on first run (idempotent — a profile that already has it is left alone), so no manual macro setup is needed;
-4. runs `soffice --headless --norestore` over the file, under a timeout wrapper where one exists;
-5. reopens the file with `data_only=True` and scans **every cell of every sheet** for the seven error values — no row or column limit;
-6. reopens it with `data_only=False` and counts cells whose value starts with `=`, for the `total_formulas` figure.
-
-The file is modified in place: LibreOffice's `store()` writes the recalculated values back through the same path. Point it at a copy when the original has to survive.
-
-### Reading the result
-
-```json
-{
-  "status": "success",
-  "total_errors": 0,
-  "error_summary": {},
-  "total_formulas": 2
-}
-```
-
-```json
-{
-  "status": "errors_found",
-  "total_errors": 2,
-  "error_summary": {
-    "#DIV/0!": { "count": 1, "locations": ["Sheet!A3"] },
-    "#REF!": { "count": 1, "locations": ["Sheet!A2"] }
-  },
-  "total_formulas": 2
-}
-```
-
-- `status` — `success` or `errors_found`;
-- `total_errors` — error cells found across all sheets;
-- `total_formulas` — cells whose content starts with `=` (a context figure, not a check);
-- `error_summary` — present only when `total_errors > 0`; each key lists at most the first 20 locations;
-- a single `error` key instead means the run never got to the scan, and its text is the reason.
-
-`errors_found` is not a tail: fix, re-run, repeat until `status` is `success`.
-
-Re-run it after **every** change that touches a formula — including a fix — because a repair routinely moves a reference and creates a fresh `#REF!`. Run it again after adding rows or deleting columns, and run it once on the final file as the last action before delivery.
-
-## 7. Formula verification checklist
-
-Essential checks:
-
-- test two or three references before building the full model — verify what they pull;
-- column letters map as expected (column 64 is `BL`, not `BK`);
-- rows are 1-indexed: DataFrame row 5 is Excel row 6;
-- every formula is consistent across all projection periods — one divergent cell in a row of 120 is invisible to the eye and wrong in the total.
-
-Pitfalls that produce errors:
-
-- `#DIV/0!` — check the denominator, and prefer `IFERROR(x/y,"")` where an empty period is legitimate;
-- `#REF!` — the reference points at a deleted cell, row or column;
-- `#VALUE!` — the operand type is wrong (text where a number belongs);
-- `#NAME?` — the function name is misspelled, or missing quotes around a literal;
-- cross-sheet references use `Sheet1!A1`, and a sheet name with a space needs `'My Sheet'!A1`;
-- no unintended circular reference;
-- edge cases: zero, negative, and very large values.
-
-Two properties of the scanner itself, so its output is read correctly:
-
-- it matches by substring, so a **text** cell that contains the literal characters `#N/A` is counted as an error. Confirm whether a hit is a label before treating it as a broken formula;
-- `locations` is capped at 20 entries per error type, while `count` is the real total. When `count` exceeds the list, the list is the first 20 only.
-
-## 8. Workflow
-
-1. Check the environment (§2) — `openpyxl` for every path, `soffice` for the recalculation step.
-2. Load the workbook if it exists (§3) and record its conventions before touching anything.
-3. Choose the library: `openpyxl` for formulas and formatting, `pandas` for bulk data (optional, §9).
-4. Put assumptions in their own cells, blue and labelled, then write formulas against them (§4).
-5. Format: number formats, column widths, freeze panes (§5.1).
-6. `wb.save(...)`, then `python3 …/skills/xlsx/scripts/recalc.py <file>` (§6).
-7. Read `status`; act on `error_summary` until `status` is `success`; run the §7 checks against anything still doubtful.
-8. Run the delivery gate in `quality/pipeline.md` — recalculate, zero errors, structural, convention and spot-checks — then hand the file over.
-
-## 9. Optional: data analysis with pandas
-
-`pandas` is a convenience for bulk data work, not a dependency of this skill — it is absent from this environment, and the openpyxl paths above are unaffected when it is missing. Install it when the task is genuinely tabular: multi-sheet reads, pivots, joins, cleaning.
+**For Python imports** (when generation code needs to import skill modules):
 
 ```python
-import pandas as pd
-
-df = pd.read_excel('file.xlsx')                          # first sheet
-all_sheets = pd.read_excel('file.xlsx', sheet_name=None)  # dict of frames
-df.head(); df.info(); df.describe()
-
-# Pivot, aggregate, merge
-pd.pivot_table(df, values='sales', index='region', columns='product', aggfunc='sum', fill_value=0)
-df.groupby('region')['sales'].sum()
-df1.merge(df2, on='customer_id', how='left')
+import sys, os
+XLSX_SKILL_DIR = "<skill_directory>"
+for sub in [XLSX_SKILL_DIR, os.path.join(XLSX_SKILL_DIR, "templates")]:
+    if sub not in sys.path:
+        sys.path.insert(0, sub)
 ```
 
-Performance and correctness notes:
+**⚠️ NEVER use bare `python3 xlsx.py ...`** — it only works if cwd happens to be the skill directory. Always use the absolute path.
 
-- specify dtypes (`pd.read_excel('f.xlsx', dtype={'id': str})`) instead of letting inference decide;
-- read only the columns needed (`usecols=['A', 'C']`) and chunk very large files (`chunksize=10000`);
-- cast dates yourself (`parse_dates=['d']`) — Excel serial dates otherwise arrive as floats;
-- a frame written with `to_excel` is plain data. Any formula still has to be added through openpyxl, and the file still needs recalculation (§6) exactly as an openpyxl-written file does.
+### Tool Reference
 
-## 10. Best practices and performance
+| Tool | Use |
+|------|-----|
+| **openpyxl** | Formulas, formatting, charts, cell-level control |
+| **pandas** | Data analysis, bulk operations, CSV/TSV |
+| `load_workbook(read_only=True)` | Large file reads |
+| `Workbook(write_only=True)` | Large file writes |
+| **templates/base.py** | Design tokens, font resolution, style factories, utilities (single source of truth) |
+| **xlsx.py** | QA commands (see `quality/pipeline.md`) |
 
-- keep generated code minimal: no comments that restate the line, no redundant temporaries, no prints left in a script that writes a workbook;
-- annotate the workbook itself — cell comments on complex formulas, a source note beside every hardcode, section labels on long sheets;
-- for large files use `load_workbook(path, read_only=True)` when reading and `Workbook(write_only=True)` when writing; both stream and neither keeps the whole tree in memory;
-- set `column_dimensions` explicitly. Width matters more than font size for legibility: a column too narrow for its content prints `####`, and no number format rescues that;
-- freeze panes below the header row on any sheet whose header scrolls away;
-- set print setup on a wide sheet before delivery — `ws.page_setup.orientation`, `ws.sheet_properties.pageSetUpPr.fitToPage`, `ws.print_title_rows` — otherwise a 40-column model arrives as eight portrait pages of orphan columns;
-- prefer `iter_rows()` over random `ws.cell()` access when scanning, and avoid re-opening the workbook inside a loop.
+Workbook metadata: `wb.properties.creator = "Z.ai"`
 
-## 11. Pitfalls
+> **All code MUST import from `templates/base.py`** for colors, fonts, and style helpers. Never hardcode hex values or font names.
 
-- **Saving from openpyxl discards cached values.** Every formula in the saved file has no result until something recalculates it — run §6.
-- **`recalc.py` modifies its input in place.** LibreOffice stores back through the same path; work on a copy when the original is read-only or shared.
-- **`soffice` missing is a reported error, not a crash** — `{"error": …}` and exit `0`. Check for that key before reading `status`.
-- **The script does not own the file.** It only runs LibreOffice over a path it is given; it never reads a directory, never writes a second file, and never touches anything else in the tree.
-- **`total_formulas` is not a validation.** It counts text starting with `=`, including cells that are not meant to be formulas — a leading `=` in a note is counted.
-- **openpyxl is not Excel.** It does not evaluate, so a formula that is syntactically valid can still be semantically wrong; the scan finds error _values_, not intent. A wrong `SUM` range that picks up an empty row returns `0`, not an error.
-- **A stale document lock can wedge LibreOffice, but the timeout now breaks it.** LibreOffice signals an open workbook with a `.~lock.<file>#` file beside it, and headless LibreOffice sometimes blocks outright on such a lock. When it does, the script kills the whole process group after the timeout and returns `{"error": "LibreOffice did not finish within <N>s. A stale document lock (.~lock.<name>#) beside the file leaves soffice.bin blocked; remove it and retry."}` instead of hanging. The condition is intermittent — a lock that wedges one run may not wedge the next — so the reliable move is still to close the workbook in Excel, WPS or LibreOffice before running.
-- **`Font(color=...)` takes `AARRGGBB`**, and `PatternFill` needs `fill_type='solid'` to render.
-- **Merged cells hide the data under them.** Write to the top-left anchor only; the rest read back `None`.
+---
 
-## 12. Environment
+## Quality Gate
 
-Python 3.10 or later with `openpyxl` installed (the only hard third-party dependency; `pandas` is optional), plus LibreOffice `soffice` on `PATH` for recalculation. No external `timeout` or `gtimeout` binary is needed — the timeout is enforced in-process.
+Every deliverable must pass the full integrity pipeline before delivery.
+
+→ **Load `quality/pipeline.md` for the role-based integrity workflow.**
+
+Quick reference:
+```
+Blueprint → Build & Self-check (per-sheet) → Inspect → Pivot (if needed) → Release
+```
+
+### 🔴 HARD REQUIREMENT — LibreOffice is missing
+
+`recalc` (formula recalculation), `.xlsx` → PDF, and `.csv` → `.xlsx` all run through
+LibreOffice/`soffice`. It is *install-on-demand* only in the sense that it is installed the moment a
+task needs it.
+
+**If LibreOffice is not installed, you MUST install it. This is not a choice.**
+
+**FORBIDDEN — do not do any of these:**
+- ❌ Using Microsoft Excel, WPS Office, Numbers, or any other program already on the user's machine
+  *instead of* installing LibreOffice.
+- ❌ Deciding on the user's behalf that the download is "too large", "too slow", or "not worth it".
+  **The package being large is NOT a reason to skip the install.** It is expected to be large.
+- ❌ Asking the user "should I just use Excel instead to save time?" — that is the same violation
+  dressed up as a question. Do not offer the substitution.
+- ❌ Skipping recalculation or the release gate altogether to avoid installing.
+
+**REQUIRED sequence — no steps skipped, in this order:**
+
+1. **Explain the necessity to the user.** LibreOffice is what actually recalculates the formulas so
+   errors (`#REF!`, `#DIV/0!`, `#VALUE!`) surface before delivery — without it, formula results are
+   unverified and the Live Formula Guarantee cannot be honored.
+2. **Tell them the download is large** (roughly several hundred MB) and may take a while. This is
+   information for the user, **not** a decision point for you — state it and proceed to install.
+3. **Install it now.** **Preferred source — Tsinghua TUNA mirror:**
+   `https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/` — pick the
+   subdirectory for the platform/arch (`deb/x86_64`, `deb/aarch64`, `rpm/x86_64`, `mac/aarch64`,
+   `mac/x86_64`, `win/x86_64`, `win/aarch64`) and install the main package from it. If 26.8.0 is
+   gone, use the newest version under `.../libreoffice/stable/`. Full per-platform commands:
+   [`env_setup/setup.md`](env_setup/setup.md) → *"LibreOffice — Recommended Download Source"*.
+   Package-manager fallback, only if the mirror is unreachable: macOS
+   `brew install --cask libreoffice`; Linux (Debian/Ubuntu) `sudo apt install libreoffice-core`;
+   Windows `winget install TheDocumentFoundation.LibreOffice`.
+4. **Register the binary on `PATH`, then re-verify.** An install that leaves `soffice` off the
+   executable search path looks identical to "not installed" on the next probe — that is what causes
+   the same several-hundred-MB package to be downloaded twice. **The mechanism differs per OS**
+   (Linux/macOS: symlink into `/usr/local/bin`; Windows: append the program dir to the user `PATH`
+   with `setx`). Full per-OS commands: [`env_setup/setup.md`](env_setup/setup.md) → *"Register the
+   binary on PATH"*. Re-run `soffice --version` and only continue once it prints a version.
+   Corollary: **probe before installing** — if the binary already exists on disk but off-`PATH`,
+   register it instead of reinstalling.
+5. **Only after that install has actually been attempted AND failed** may you use software already
+   on the user's machine (Excel, WPS, Numbers). Report the install failure and which verification
+   steps were skipped.
+
+> **The gate is simple: no install attempt = no substitute program.** If you have not run the
+> install command and seen it fail, using Excel/WPS/Numbers is a violation of this skill.
+
+---
+
+## Capability Matrix
+
+| Capability | Supported | Scene/Engine |
+|-----------|-----------|-------------|
+| Create from scratch | ✅ | scenes/create |
+| Edit existing file | ✅ | scenes/edit |
+| Data analysis & EDA | ✅ | scenes/analyze |
+| Format conversion | ✅ | scenes/convert |
+| Financial models (DCF/LBO/P&L) | ✅ | scenes/finance |
+| Simple budgets & expenses | ✅ | scenes/finance_lite |
+| VBA macros & automation | ✅ | scenes/vba + engines/vba-templates |
+| Batch processing | ✅ | scenes/advanced |
+| Embedded charts | ✅ | engines/chart |
+| Smart chart recommendation | ✅ | engines/chart |
+| Design system & styling | ✅ | engines/design |
+| PivotTable creation | ✅ | quality/pipeline (pivot cmd) |
+| Formula validation | ✅ | quality/pipeline |
+| Structural validation | ✅ | quality/pipeline |
+| Data provenance tracking | ✅ | scenes/analyze |
+| Large file handling | ✅ | scenes/advanced |
+| Data protection & locking | ✅ | scenes/advanced |
+
+## Final response citations
+
+Place `::zcode-file-citation{...}` inline in prose, not in a trailing list. Use `purpose="source"` for Q&A/no-op and `purpose="output"` for create/edit.
+
+- [HARD REQUIREMENT] Create/edit: cite each final file exactly once with a plain output citation. Summarize representative changes; do not cite every section/page or add a separate filename, path, or Markdown link. Example: `Created ::zcode-file-citation{path="/abs/path/launch-plan.docx" purpose="output"}, highlighting the rollout and owners.`
+- Q&A: do not edit/re-export.
+
+### Document
+
+For page-specific evidence, use a page number verified against the latest render/inspection.
+
+Locators support only `page_number`; otherwise use a plain citation. Do not guess or add object, label, paragraph, table, or cell IDs. Do not cite intermediates unless asked. Inspect complete relevant pages and preserve material headings, question/table labels, footnotes, sources, and sample sizes; cite each needed page once.
+
+```text
+::zcode-file-citation{path="/abs/path/file.docx" purpose="source" artifact_kind="document" page_number=4}
+```
+
+### PDF
+Citations currently support only plain file citations. Do not add `artifact_kind`, `page_number`, or other locators. Never cite rendered PNGs, scratch files, builders, or QA intermediates unless asked. Inspect the complete relevant pages, preserve material headings, table/figure labels, footnotes, sources, and sample sizes, and cite each source PDF once with a plain source citation.
+
+### Presentation 
+
+inspect the complete relevant slide, including callouts, question wording, chart/table titles, totals/sample sizes, and source/methodology footers. Answer directly, group same-slide claims, and cite that slide once. For concrete chart/table/image/diagram/callout evidence, include exact inspected `slide_id`, `object_id`, and a useful label when available.
+
+For non-in-place edits, preserve the source and export a copy; if unchanged, cite the source plainly.
+
+Use only locators verified against the latest render/inspection:
+
+```text
+::zcode-file-citation{path="/abs/path/deck.pptx" purpose="source" artifact_kind="presentation" slide_number=3}
+::zcode-file-citation{path="/abs/path/deck.pptx" purpose="source" artifact_kind="presentation" slide_number=1 slide_id="sl/gs5z1kshq0xv" object_id="ch/pz9t1r3ka8vn" label="ARR by segment chart"}
+```
+
+If IDs are not exact, stop at `slide_number`; never guess or cite intermediates unless asked.
+
+### Spreadsheets
+
+- Cite whole-workbook claims plainly; otherwise use the narrowest reliable `sheet` + `range` (the exact cell for a discrete value). Cite discontiguous cells separately. For objects, use `sheet` + exact inspected `object_id`; add `object_kind`/`label` only when useful. Never cite a sheet alone or guess locators.
+- Calculations: cite only distinct inputs, drivers, formulas, or results the answer needs.
+
+```text
+::zcode-file-citation{path="/abs/path/book.xlsx" purpose="source" artifact_kind="workbook" sheet="Revenue Model" range="C27"}
+```
+
+Never cite intermediates unless asked.
