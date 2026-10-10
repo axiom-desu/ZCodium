@@ -8,27 +8,30 @@
 import { readdir, readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 
-const root = resolve(import.meta.dirname, "../apps/zcode-cli-rust/crates");
+const rustRoot = resolve(import.meta.dirname, "../apps/zcode-cli-rust");
+const root = resolve(rustRoot, "crates");
 
 /**
  * 允许的依赖方向。key 依赖 value 里的全部；未列出的 crate 之间不允许有边。
  *
- *   protocol / domain → core-api → core
- *                            ↑
- *               state / model / tools / host / net / bash / plugins
- *                            ↓
- *                 app-server / tui / headless → cli binary
+ *   schema ← protocol / domain → core-api → core
+ *                                      ↑
+ *                state / model / tools / host / net / bash / plugins
+ *                                      ↓
+ *                       app-server / tui / headless → cli binary
+ *   tools → net is an explicit adapter edge: net owns shared WebFetch/Search policy.
  */
 const ALLOWED_DEPS = {
-  protocol: [],
-  domain: [],
+  schema: [],
+  protocol: ["schema"],
+  domain: ["schema"],
   "core-api": ["protocol", "domain"],
   core: ["protocol", "domain", "core-api"],
   net: ["protocol", "domain", "core-api"],
   host: ["protocol", "domain", "core-api"],
   state: ["protocol", "domain", "core-api", "host"],
   model: ["protocol", "domain", "core-api", "host", "net"],
-  tools: ["protocol", "domain", "core-api", "host", "bash-parse", "bash", "plugins"],
+  tools: ["protocol", "domain", "core-api", "host", "net", "bash-parse", "bash", "plugins"],
   "bash-parse": [],
   bash: ["protocol", "domain", "core-api", "bash-parse"],
   plugins: ["protocol", "domain", "core-api"],
@@ -38,7 +41,7 @@ const ALLOWED_DEPS = {
 };
 
 /** application 层 crate：不得 import adapter，不得做文件/网络/进程 IO。 */
-const APPLICATION_CRATES = ["protocol", "domain", "core-api", "core"];
+const APPLICATION_CRATES = ["schema", "protocol", "domain", "core-api", "core"];
 
 /** adapter 层 crate：不得被 application 层依赖（由 ALLOWED_DEPS 保证）。 */
 const ADAPTER_CRATES = ["state", "model", "tools", "host", "net", "bash", "bash-parse", "plugins"];
@@ -135,40 +138,56 @@ async function main() {
     }
   }
 
+  const sourceFiles = [];
   for (const crate of crateDirs) {
-    const crateRoot = resolve(root, crate);
-    for (const filePath of await walk(crateRoot)) {
-      const rel = relative(root, filePath).replaceAll("\\", "/");
-      const source = await readFile(filePath, "utf-8");
-      // 去掉注释与字符串，避免注释里的示例触发误报。
-      const code = source
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/\/\/[^\n]*/g, "")
-        .replace(/"(?:[^"\\]|\\.)*"/g, '""');
+    sourceFiles.push(
+      ...(await walk(resolve(root, crate))).map((filePath) => ({ filePath, crate })),
+    );
+  }
+  for (const directory of ["src", "tests", "examples"]) {
+    try {
+      sourceFiles.push(
+        ...(await walk(resolve(rustRoot, directory))).map((filePath) => ({
+          filePath,
+          crate: null,
+        })),
+      );
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
 
-      const lineCount = source.split("\n").length;
-      if (lineCount > MAX_FILE_LINES) {
-        fail(`${rel}: ${lineCount} 行，超过 ${MAX_FILE_LINES} 行上限（拆文件，别堆）`);
-      }
+  for (const { filePath, crate } of sourceFiles) {
+    const rel = relative(rustRoot, filePath).replaceAll("\\", "/");
+    const source = await readFile(filePath, "utf-8");
+    // 去掉注释与字符串，避免注释里的示例触发误报。
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "")
+      .replace(/"(?:[^"\\]|\\.)*"/g, '""');
 
-      if (APPLICATION_CRATES.includes(crate)) {
-        for (const forbidden of APPLICATION_FORBIDDEN_MODULES) {
-          if (code.includes(forbidden)) {
-            fail(`${rel}: application 层禁用的 IO 引用 ${forbidden}`);
-          }
+    const lineCount = source.split("\n").length;
+    if (lineCount > MAX_FILE_LINES) {
+      fail(`${rel}: ${lineCount} 行，超过 ${MAX_FILE_LINES} 行上限（拆文件，别堆）`);
+    }
+
+    if (crate && APPLICATION_CRATES.includes(crate)) {
+      for (const forbidden of APPLICATION_FORBIDDEN_MODULES) {
+        if (code.includes(forbidden)) {
+          fail(`${rel}: application 层禁用的 IO 引用 ${forbidden}`);
         }
-        for (const adapter of ADAPTER_CRATES) {
-          if (code.includes(`zcode_cli_${adapter.replace(/-/g, "_")}`)) {
-            fail(`${rel}: application 层不得引用 adapter crate ${adapter}`);
-          }
+      }
+      for (const adapter of ADAPTER_CRATES) {
+        if (code.includes(`zcode_cli_${adapter.replace(/-/g, "_")}`)) {
+          fail(`${rel}: application 层不得引用 adapter crate ${adapter}`);
         }
       }
+    }
 
-      if (crate === "domain") {
-        for (const forbidden of DOMAIN_FORBIDDEN_CRATES) {
-          if (code.includes(forbidden)) {
-            fail(`${rel}: domain 禁用的依赖 ${forbidden}（domain 必须是无 IO 的纯领域层）`);
-          }
+    if (crate === "domain") {
+      for (const forbidden of DOMAIN_FORBIDDEN_CRATES) {
+        if (code.includes(forbidden)) {
+          fail(`${rel}: domain 禁用的依赖 ${forbidden}（domain 必须是无 IO 的纯领域层）`);
         }
       }
     }

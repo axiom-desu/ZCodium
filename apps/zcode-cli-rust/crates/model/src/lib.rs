@@ -1,4 +1,20 @@
-//! OpenAI/Anthropic provider、SSE、retry、registry 与请求期鉴权。
-//!
-//! crate 边界与依赖方向见 .agents/specs/cli-rust-runtime.md；边界由
-//! scripts/check-zcode-cli-rust-boundaries.mjs 在 CI 中强制。
+use zcode_cli_core_api as contract;
+use zcode_cli_domain as domain;
+mod anthropic_stream;
+pub mod config;
+mod media_budget;
+mod model_failure;
+mod model_media;
+mod model_policy;
+pub mod model_protocol;
+mod model_stream;
+mod network_status;
+pub mod provider;
+pub mod registry;
+mod registry_config;
+mod registry_rules;
+mod request_attachments;
+mod responses_stream;
+mod sse;
+mod tool_media;
+use zcode_cli_host::id;
