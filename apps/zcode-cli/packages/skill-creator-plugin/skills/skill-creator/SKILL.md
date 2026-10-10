@@ -7,19 +7,19 @@ description: Create new skills, edit existing skills, and iterate wording. Use w
 
 A skill for authoring and iteratively improving local ZCode skills.
 
-The loop, in outline:
+At a high level, the loop is:
 
-- Decide what the skill should do and roughly how
-- Write a draft
-- Run it against 2–3 realistic test prompts
-- Read the results with the user and revise
-- Repeat until it's good enough
+- Figure out what the skill should do and roughly how it should do it
+- Write a draft of the skill
+- Try the skill on 2–3 realistic test prompts
+- Read the outputs with the user and revise
+- Repeat until the skill is good enough
 
-When this skill loads, your first job is to work out where the user already is in that loop and help them move forward. "I want a skill for X" means start at the top; a draft in hand means jump to evaluation. Follow their lead — if they say "just vibe with me, no formal evaluation," do exactly that.
+Your job when this skill is loaded is to figure out where the user is in this loop and help them progress. They might say "I want a skill for X" (start at the top), or they might already have a draft (jump to evaluate/iterate). Be flexible — if the user says "just vibe with me, no formal evaluation," do that.
 
-## Talking to the user
+## Communicating with the user
 
-Skill authors here range from people who have written dozens to people writing their first. Watch for context cues. When unsure, define the term inline ("an *eval prompt* is just a test message you send the model to see how the skill behaves") instead of assuming it's known.
+People using this skill range from seasoned skill authors to first-timers. Pay attention to context cues. In doubt, briefly explain a term ("an *eval prompt* is just a test message you'd send the model to see how the skill behaves") rather than assuming familiarity.
 
 ---
 
@@ -27,29 +27,29 @@ Skill authors here range from people who have written dozens to people writing t
 
 ### Capture intent
 
-Work out what the user actually wants before writing anything. If the current conversation already contains a workflow worth capturing — they've done the same thing manually three times and now say "turn this into a skill" — mine the history first: which tools, in what order, what corrections they made, what the inputs and outputs looked like. Fill remaining gaps by asking.
+Start by understanding what the user wants. If the current conversation already shows a workflow worth capturing (e.g., the user has been doing the same thing manually a few times and says "turn this into a skill"), extract answers from the conversation history first — the tools they used, the order of steps, corrections they made, input/output formats. Confirm gaps with the user before drafting.
 
-Questions worth asking:
+Useful questions:
 
-1. What should this skill let the model do?
-2. When should it fire? Which phrasings or situations?
-3. What shape should the output take?
-4. Are there example inputs/outputs that pin the behavior down?
+1. What should this skill enable the model to do?
+2. When should it trigger? What user phrasings or contexts?
+3. What's the expected output format?
+4. Are there example inputs/outputs to lock the behavior down?
 
 ### Where skills live
 
-ZCode discovers skills here, highest priority first:
+ZCode discovers skills in these directories (highest priority first):
 
 - `<project>/.zcodium/skills/<name>/SKILL.md`
 - `<project>/.agents/skills/<name>/SKILL.md`
 - `~/.zcodium/skills/<name>/SKILL.md`
 - `~/.agents/skills/<name>/SKILL.md`
 
-**Put new skills under `.agents/skills/`** — it's the standard, cross-tool location. Keep in mind that `.zcodium/skills` still wins during discovery: when the same name exists in both, the `.zcodium/skills` copy is the one used, which makes `.zcodium/skills` the place to *override* a skill. Use the `<project>` path for skills that only make sense in this repo, and `~/` for personal ones you want everywhere.
+**Default to creating new skills under `.agents/skills/`** — it's the standard, cross-tool location for new skills. Note that `.zcodium/skills` still takes priority during discovery: if the same skill name exists in both, the `.zcodium/skills` copy wins, so `.zcodium/skills` is the place to *override* a skill. Pick the `<project>` path for skills that only make sense in this repo; pick the `~/` (user) path for personal skills you want everywhere.
 
 ### Write the SKILL.md
 
-A skill is a directory holding a `SKILL.md` — YAML frontmatter plus a markdown body:
+Every skill is a directory containing a `SKILL.md` with YAML frontmatter and markdown body:
 
 ```text
 my-skill/
@@ -60,22 +60,22 @@ my-skill/
     └── assets/       (templates, fixtures, etc.)
 ```
 
-Two frontmatter fields are required:
+Required frontmatter:
 
-- `name` — the skill's identifier. Lowercase kebab-case, 1–64 chars, and it must match the directory name.
-- `description` — when to trigger and what it does. This is the main triggering signal, so both the *what* and the *when* belong here rather than in the body. Models under-trigger skills, so lean pushy: not "How to build a dashboard for internal data," but "How to build a fast dashboard for internal data. Use whenever the user mentions dashboards, data visualization, internal metrics, or wants to display any company data — even if they don't explicitly say 'dashboard'."
+- `name` — the skill's identifier. Lowercase kebab-case, 1–64 chars. Must match the directory name.
+- `description` — when this skill should trigger and what it does. This is the primary triggering signal — both *what* the skill does and *in what contexts* belong here, not in the body. Models tend to *under*-trigger skills, so write descriptions a little bit pushy: instead of "How to build a dashboard for internal data," write "How to build a fast dashboard for internal data. Use whenever the user mentions dashboards, data visualization, internal metrics, or wants to display any company data — even if they don't explicitly say 'dashboard'."
 
-The ZCode skill spec lists the reserved optional fields; `name` and `description` are enough for most skills.
+Optional (reserved) frontmatter fields are listed in the ZCode skill spec; for most skills you only need `name` and `description`.
 
 ### Progressive disclosure
 
-Skills load in three layers:
+ZCode loads skills in three layers:
 
-1. **Metadata** (name + description) is always in context. Keep it tight.
-2. **SKILL.md body** loads only once the skill triggers. Aim for under 500 lines.
-3. **Bundled files** (`references/`, `scripts/`, `assets/`) load on demand, with no practical size limit.
+1. **Metadata** (name + description) is always in context. Keep it short.
+2. **SKILL.md body** is loaded only when the skill triggers. Target under 500 lines.
+3. **Bundled files** (under `references/`, `scripts/`, `assets/`) are read on demand. Unlimited size in principle.
 
-When the body starts running long, move domain detail into reference files and tell the model in SKILL.md when to reach for each one:
+If the body is getting long, split domain-specific detail into reference files and have the SKILL.md tell the model when to read them. For example:
 
 ```text
 cloud-deploy/
@@ -86,74 +86,74 @@ cloud-deploy/
     └── azure.md
 ```
 
-SKILL.md then carries a line like "if the target is AWS, read references/aws.md before proceeding."
+The SKILL.md then says "if the target is AWS, read references/aws.md before proceeding."
 
 ### Writing style
 
-Use the imperative ("Read the file before editing"). When a rule isn't self-evident, say *why* it exists — current models follow guidance far better when they have the reason. If you notice yourself stacking all-caps MUSTs and NEVERs, that's a signal the rule needs explaining rather than shouting.
+Prefer the imperative form ("Read the file before editing"). Explain *why* something matters when the rule isn't obvious — modern models follow guidance better when they understand the reason. If you find yourself writing all-caps MUSTs and NEVERs, that's usually a sign the rule needs better explanation rather than louder enforcement.
 
-A concrete example beats an abstract rule. If the skill emits structured output, include a literal sample of that format. If a particular tool should be used, show the call.
+Examples beat rules. If the skill produces structured output, include a literal example of the format. If a specific tool should be used, show the call.
 
 ### Test prompts
 
-Once a draft exists, write 2–3 test prompts that look like real requests — concrete paths, real column names, casual wording, the odd typo. Show them to the user first: "Here are the cases I want to try. Anything to add or change?"
+After writing the draft, come up with 2–3 realistic test prompts — the kind of thing a user would actually type, with concrete file paths, column names, casual phrasing, even typos. Share them with the user: "Here are a few cases I want to try. Anything to add or change?"
 
-Then run them: load the draft skill, hand it the prompt, and watch what happens. ZCode doesn't spawn parallel evaluation subagents today, so run one prompt at a time and go through each result with the user.
+Then run them: load the draft skill, hand the model the test prompt, and inspect what happens. ZCode does not currently spawn parallel evaluation subagents, so do this one prompt at a time and look at each result with the user.
 
 ---
 
 ## Reviewing the draft
 
-For every test prompt:
+For each test prompt:
 
-1. Confirm the draft sits where ZCode can discover it (one of the paths above).
-2. In a fresh turn, give the prompt to the model. Let the description trigger the skill, or force it with `/skill <name> <prompt>`.
-3. Go through the result *with the user*. Did it trigger? Was the output what they wanted? Where did it drift?
+1. Make sure the draft skill is on disk where ZCode can discover it (one of the directories listed above).
+2. In a fresh ZCode turn, give the test prompt to the model. Either let the description trigger the skill, or use `/skill <name> <prompt>` to force-load it.
+3. Look at the result *with the user*. Did the skill trigger? Did the output match what they wanted? Where did it go off the rails?
 
-Look at the result *and* the trace. If the skill sent the model into busywork — re-reading the same files, writing a throwaway script, circling — it's probably over-prescribing or ambiguous. That's a reason to cut, not to add rules.
+Note both the *result* and the *trace*: if the skill caused the model to do a bunch of busywork (re-reading the same files, writing a throwaway script, going in circles), the skill is probably over-prescribing or unclear. That's a signal to cut, not to add more rules.
 
 ---
 
 ## Improving the skill
 
-This is where the loop earns its name. You have test results and user feedback; now make the skill better.
+This is the heart of the loop. You ran the test prompts, the user reviewed the outputs, now make the skill better.
 
-Four things to weigh:
+How to think about improvements:
 
-1. **Generalize from the feedback.** A handful of examples is enough to iterate quickly, but the skill has to work on inputs neither of you has seen. When a stubborn problem won't yield to targeted edits, change the framing rather than piling on constraints. Overfit rules and oppressive MUSTs degrade a skill over time.
+1. **Generalize from feedback.** You and the user are iterating on a handful of examples for speed, but the skill needs to work for inputs neither of you has seen. If a stubborn issue resists targeted edits, try a different framing or metaphor instead of layering more constraints. Fiddly overfit rules and oppressive MUSTs make the skill worse over time.
 
-2. **Keep it lean.** Delete anything that isn't earning its place. If the model burns tokens on busywork the skill invited, remove the guidance that invited it and see what happens.
+2. **Keep the prompt lean.** Remove things that aren't pulling their weight. If the model is wasting tokens on busywork the skill encouraged, delete the offending guidance and see what happens.
 
-3. **Explain the why.** Models reason well when given context. Even when feedback is terse or irritated, work out what's actually being asked for and put that understanding into the instructions. Reframing usually beats enforcement.
+3. **Explain the why.** Today's models reason well when given context. Even if the user's feedback is terse or frustrated, work out what they actually want and transmit that understanding into the instructions. Reframing usually beats more enforcement.
 
-4. **Watch for repeated work.** If every run independently wrote the same helper script or took the same multi-step route, move it under `scripts/` and point the skill at it. Write it once instead of making the model reinvent it each time.
+4. **Look for repeated work.** If every test run independently wrote the same helper script or took the same multi-step approach, bundle the script under `scripts/` and have the skill point at it. Write it once instead of having the model reinvent it every time.
 
-Then cycle:
+Then loop:
 
-1. Apply the changes.
+1. Apply the improvements.
 2. Rerun the test prompts.
 3. Show the user the new outputs.
-4. Continue until they're satisfied, or further edits stop helping.
+4. Keep going until they're happy or further changes stop helping.
 
 ---
 
 ## Updating an existing skill
 
-When the goal is to update an installed skill rather than create one:
+If the user wants to update an existing installed skill rather than create one:
 
-- Keep the original `name` and directory name. An installed `research-helper` stays `research-helper` — not `research-helper-v2`.
-- If the installed path is read-only (for example inside an official plugin cache), copy the skill somewhere writable such as `~/.agents/skills/<name>/`, edit it there, and let user-priority discovery shadow the original.
-- Same-name skills at different paths remain separate installed skills; the path is the installation identity.
+- Preserve the original `name` and directory name. If the installed skill is `research-helper`, the updated version is still `research-helper`, not `research-helper-v2`.
+- If the installed skill path is read-only (e.g., shipped under an official plugin cache), copy the skill to a writable user location like `~/.agents/skills/<name>/`, edit there, and let user-priority discovery override the original.
+- Same-name skills from different paths are kept as separate installed skills; path is the installation identity.
 
 ---
 
-## The core loop, once more
+## The core loop, one more time
 
-- Work out what the skill is for.
+- Figure out what the skill is about.
 - Draft it.
-- Run 2–3 realistic test prompts.
+- Try 2–3 realistic test prompts.
 - Read the results with the user.
 - Improve.
-- Repeat until they're happy or improvements stop landing.
+- Repeat until the user is happy or improvements stop landing.
 
 Good luck.

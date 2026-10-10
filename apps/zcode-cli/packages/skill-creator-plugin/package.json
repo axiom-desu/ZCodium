@@ -4,5 +4,5 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Ships the skill-authoring guidance that teaches the agent how to write and validate new skills."
+  "description": "Built-in skill-creator skills published as an official ZCode plugin."
 }
