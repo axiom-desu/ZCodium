@@ -16,6 +16,7 @@
   "scripts": {
     "build": "tsc && node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-isolation=none test/*.test.ts",
     "lint": "oxlint src --no-ignore"
   },
   "dependencies": {
@@ -30,6 +31,7 @@
     "@modelcontextprotocol/client": "2.0.0",
     "@types/node": "^24.0.0",
     "esbuild": "^0.25.0",
+    "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }
 }
