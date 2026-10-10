@@ -21,6 +21,7 @@
     "build:zcode": "node scripts/build-zcode.mjs",
     "build:bootstrap": "pnpm -r --filter \"./packages/*\" --filter \"!@zcode/desktop\" build && pnpm --filter @zcode/desktop build:no-runtime-assets",
     "build:zcode-cli-rust": "cargo build --locked --manifest-path apps/zcode-cli-rust/Cargo.toml",
+    "build:zcode-cli-rust-oracle-deps": "pnpm exec turbo --skip-infer --cwd apps/zcode-cli run build --filter=!@zcode/cli --force",
     "check:zcode-cli-rust": "node scripts/check-zcode-cli-rust-boundaries.mjs && cargo fmt --manifest-path apps/zcode-cli-rust/Cargo.toml --all --check && cargo clippy --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --workspace --all-targets -- -D warnings",
     "test:zcode-cli-rust": "cargo test --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --workspace",
     "test:zcode-cli-rust-drivers": "node --import tsx --test --test-isolation=none scripts/tests/*.test.mjs",

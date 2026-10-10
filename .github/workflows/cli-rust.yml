@@ -57,6 +57,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-workspace
+      - name: Build Node oracle dependencies
+        run: pnpm build:zcode-cli-rust-oracle-deps
       - name: Protocol contract drift
         run: pnpm check:zcode-cli-rust-protocol-schema
       - name: Contract asset drift
@@ -76,6 +78,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-workspace
       - uses: dtolnay/rust-toolchain@stable
+      - name: Build Node oracle dependencies
+        run: pnpm build:zcode-cli-rust-oracle-deps
       - name: Build Node CLI
         run: pnpm --dir apps/zcode-cli/packages/cli build
       - name: Build Rust CLI and Node reader
