@@ -378,7 +378,8 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     runtimeTopLevelPaths: [],
     // 这里的 version 追踪上游 zcode-cua runtime 版本，使插件 UI 展示、缓存路径、
     // marketplace 条目都对齐；具体版本由原子 producer bump 工作流维护。
-    version: "0.6.3",
+    // 0.6.4 = upstream/main aac47556（v3.15.1）的 zcode-cua-plugin/plugin.json。
+    version: "0.6.4",
   },
   {
     // Superpowers 方法论技能集（brainstorming / planning / TDD / debugging / review）。
