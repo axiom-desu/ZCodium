@@ -5,7 +5,7 @@
 - 上游仓库：`zai-org/ZCode`
 - 目标版本：`aac47556 feat: update to v3.15.1`（2026-10-10T10:57:01Z）
 - 基线版本：`29628c9 feat: update v3.14.3`（2026-09-23T09:36:31Z）
-- 本仓库基线：`main`（`7e4702b`）
+- 本仓库基线：`main`（撰写时 `7e4702b`；同步分支已变基到 `e3dce772`）
 
 ## 判定方法：上游是代码倾倒，只能看 scoped diff
 
@@ -63,6 +63,7 @@ git diff --stat 29628c9 upstream/main -- <关注的路径>
 | 文件                                          | 变化       |
 | --------------------------------------------- | ---------- |
 | `packages/shared/src/zcode-protocol/index.ts` | **691 行** |
+| `packages/shared/src/zcode-protocol/trace.ts` | **11 行**  |
 | `packages/shared/src/zcodeEndpoint.ts`        | **262 行** |
 
 新增的协议面（非重命名，是实质新增）：
@@ -110,6 +111,29 @@ git diff 29628c9 upstream/main -- \
 **不要动 `zcode-cua-plugin` 的运行时**——见工作项 3。
 
 ## 工作项 3：CUA 只取文本
+
+### 本轮实际结果：这条早已执行过，照原样做会倒退
+
+计划写的是「只取两份文本」。核查提交历史后，这件事**已经做过，而且被后续提交按实现改写过了**：
+
+```text
+5b728b64 2026-09-21  照搬上游插件（SKILL 297 行 / docs 464 行 / 单文件 1208 行 SDK）
+21918a5b 2026-09-22  按实现改写文档层 → SKILL 432 / docs 437
+35c39582 2026-09-24  对齐自带 driver       → SKILL 124 / docs 42
+```
+
+上游 3.15.1 那两份文本描述的是**闭源 Helper** 的能力：绑定即拉起、`selectText` / `performSecondaryAction` 可用、`paste` 支持 `md`/`html`、macOS 用 `cmd`、`HELPER_UNAVAILABLE` 路径。整篇取回等于撤销 35c39582 的对齐，并把模型引到本仓库不存在的实现上。
+
+所以本轮改成**按缺口补**，并给宿主层补守卫（三个提交）：
+
+| 提交       | 内容                                                                                                                                                                       |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `281596d1` | `docs/computer-use.md` 42 → 227 行，补成完整参考（含 `## Tool arguments` 等小节；它是 `agent.documentation.get("computer-use")` 的返回值）                                 |
+| `399c74a0` | SKILL 124 → 178 行，补七项已实现却未文档化的面（`app.elements()`、`getState`/`requestAccess`/`stop`、文档入口、错误码表、一栅格规则、应用名逐字符复制、禁 osascript 守卫） |
+| `25dcd165` | 宿主层测试 9 例（此前 node-repl-host **零测试**）                                                                                                                          |
+| `779e7fac` | 插件版本 0.6.3 → 0.6.4（package / manifest / 官方 seed 定义三处一致）                                                                                                      |
+
+判定依据来自上游自己的一条测试：`computer-use-onboarding.test.ts` 断言「按需取用的那份仍是完整参考」（必须含 `## Tool arguments`）。我们把它连同 `cua-bridge.test.ts` 一起移植过来——两者只依赖与上游逐字节相同的文件。
 
 ### 上游在 CUA 上做的是「接口开源、实现摘出去」
 
@@ -204,6 +228,18 @@ README 补充：`Computer Use runtime, broker RPC, Helper install/launch/verify,
 
 **待判断**：`dynamic-workflow` 那 2,058 个文件里是否存在本仓库确实需要的能力（注意文件数可能含生成的 fixture，需先看构成）。存在则单独取用，不存在则不动。
 
+## 工作项 5：Browser Use 放开 subagent（已定，本轮执行）
+
+**上游的事实**：3.15.1 移除了 `Browser is not available in subagent`。依据是上游设计变更记录（`docs/design/v2/tool/00-tool-change-chain.md`，2026-10-09）：工具定义、schema、权限与 node_repl MCP 进程都不变，只有两处拒绝被删——`node-repl-host` 的 browser bridge 与 bootstrap 的 node_repl broker。sessionId 的权威校验从「按 `runtime_scope` 一刀切」改成「子会话必须经父 runtime 登记」。
+
+**为什么跟**：这条属于白拿线——它不是新功能，是删掉一个把合法能力挡住的判断；放开后子代理与当前对话**共用 tab**，用户能在面板里看到子代理开的 tab，行为可观察、可回滚。
+
+**为什么 CUA 不跟**：CUA 拒绝 subagent 的理由是它会抢用户桌面焦点，且拦截在两层（`core/src/subagent/computer-use-policy.ts` 与 `node-repl-host/src/cua-bridge.ts`）。上游也只放开 Browser。
+
+**不跟的部分**：上游同一批改动里夹着与 subagent 无关的 3.15.1 内容（模型选择持久化、provider runtime headers、agent definitions 重构），与本工作项无关。
+
+设计、状态所有者与事件顺序见 [`browser-subagent-shared-tabs.md`](./browser-subagent-shared-tabs.md)。
+
 ## 迁移时必须同步修改的清单与契约
 
 换插件不是只换目录——下列位置枚举了插件名或插件清单路径，必须一起改。
@@ -263,6 +299,7 @@ CI 守护（会红，必须一起处理）：
 - 不做 `git merge` / `git rebase` 上游——上游是代码倾倒，合并只会制造无意义的冲突
 - 不换 `packages/zcode-cua/**`（占位包）
 - 不 vendor 那 23 份 macOS/Windows CUA 文档
+- 不放宽 CUA 的 subagent 限制（只放开 Browser Use，见工作项 5）
 - 不整包跟随 `dynamic-workflow` 等核心包
 - 不为了「保持新鲜」而同步
 
@@ -270,21 +307,23 @@ CI 守护（会红，必须一起处理）：
 
 1. **协议**：每个上游版本发布后执行 scoped diff，并明确记录「已核对」或「已跟进」；不得跳过。
 2. **插件**：换完之后 `node --test --test-isolation=none scripts/ci/*.test.mjs` 必须全绿，尤其是上列 5 个 bundled/plugin 守护测试。
-3. **CUA**：只取两份文本后，`packages/zcode-cua/test/**` 与 `scripts/ci/cua-driver-runtime-assets.test.mjs` 必须仍然通过；CUA 运行时与 `@trycua/cua-driver` 依赖不得变动。
+3. **CUA**：`packages/zcode-cua/test/**` 与 `scripts/ci/cua-driver-runtime-assets.test.mjs` 必须仍然通过；CUA 运行时与 `@trycua/cua-driver` 依赖不得变动。文档层可以补，但只能写本实现支持的面。
 4. **改名**：`.zcodium-plugin` → `.zcode-plugin` 完成后，`packages/desktop/bundled-remote-assets/manifest-linux-x64.json` 与 `plugin-creator-plugin` 三个脚本必须与之一致。
-5. **不回归**：`pnpm typecheck`、`pnpm lint` 与基线一致。
+5. **Browser 放开**：见 `browser-subagent-shared-tabs.md` 的验收场景；`node-repl-host` 的 package / manifest / serverInfo / 官方 seed 定义 / SEA 清单五处版本必须一致。
+6. **不回归**：`pnpm typecheck`、`pnpm lint` 与基线一致。
 
 ## 进度
 
-| 工作项                            | 状态 |
-| --------------------------------- | ---- |
-| 1. 协议 delta                     | 待做 |
-| 2. 插件换上游（含前置 diff 判断） | 待做 |
-| 3. CUA 取文本                     | 待做 |
-| 4. 核心包判断                     | 待做 |
-| 清单与契约同步                    | 待做 |
-| `.zcodium-plugin` 改名            | 待做 |
-| spec 标历史快照                   | 待做 |
+| 工作项                            | 状态                                                   |
+| --------------------------------- | ------------------------------------------------------ |
+| 1. 协议 delta                     | 待做（scoped diff 路径已补 `zcode-protocol/trace.ts`） |
+| 2. 插件换上游（含前置 diff 判断） | 待做                                                   |
+| 3. CUA 只取文本                   | **已做**（早已执行 + 本轮按缺口补，见工作项 3）        |
+| 4. 核心包判断                     | 待做                                                   |
+| 5. Browser 放开 subagent          | 进行中（本轮）                                         |
+| 清单与契约同步                    | 待做                                                   |
+| `.zcodium-plugin` 改名            | 待做                                                   |
+| spec 标历史快照                   | 待做                                                   |
 
 ## 附：测量口径
 
