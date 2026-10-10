@@ -342,7 +342,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../../zcode-guide-plugin",
       "../../../zcode-guide-plugin",
     ],
-    version: "0.2.0",
+    version: "0.3.0",
   },
   {
     // 产品决策：电脑控制回退为默认关闭，需用户在设置页显式开启。
