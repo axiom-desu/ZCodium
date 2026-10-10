@@ -4,12 +4,22 @@
 
 本次只收口 `.github/workflows/cli-rust.yml`、根 `package.json`、Rust CLI README 与本 spec 链接的 runtime/review 状态文档；不修改 Rust/schema/Interop helpers/source specs。CI 的职责是分别验证：Rust Linux 编译及静态/单测、TS 变换 driver、TS↔Rust 真实 Node interop、schema/contract drift，以及 Windows/macOS 原生目标编译。Rust 静态 lint 必须覆盖 Cargo workspace 的全部 crate 和 all targets（包括 tests），不能只 lint manifest root 的 targets；格式检查保留 `cargo fmt --all --check`，测试保留 `cargo test --workspace`。CI 结果不能扩展为未执行的产品 parity 或平台 runtime 结论。
 
+## 真实 CI 失败与修复契约（run 38042550013）
+
+本地 workspace freshness 只表示基线与分支关系满足检查，不代表 clean checkout；忽略的旧 `dist` 可能掩盖 Node workspace build prerequisite 缺失。真实 CI 的 clean checkout 证据：`protocol-schema` 的 Contract asset step 因 `@zcode/contracts/dist/index.js` 缺失而 `ERR_MODULE_NOT_FOUND`（`/tmp/cli-rust-ci-contract.log`）；Linux interop Node CLI build 缺少 contracts/adapters/core/i18n/bootstrap 的构建产物（`/tmp/cli-rust-ci-node-build.log`）。因此 Node jobs 在校验/CLI build 前必须通过同一个根脚本运行仓库已有依赖构建路线 `pnpm exec turbo --skip-infer --cwd apps/zcode-cli run build --filter=!@zcode/cli --force`，而后 CLI job 仍执行原 `pnpm --dir apps/zcode-cli/packages/cli build`。不得跳过 checks、将包外置、恢复模块、伪造单个 dist、增加上游 launcher 或模型数据库。
+
+CI stable Rust 1.99 对 `schema/schema_shape.rs` 报 `single_element_loop`（`/tmp/cli-rust-ci-clippy.log`）；保持 CI 工具链和 `-D warnings`，用等价简单条件检查代替单元素循环，并保留 fail-closed 形状约束。Rust 1.98 本地未触发该 lint 不是降级 CI 的理由。
+
+Native compile jobs 的真实证据来自 run 38042550013：macOS 与 Windows native compile 均 success，仅证明 native compile，runtime 仍未检查。不能将 native compile 失败改绿或降级。
+
+迁移 SQL 的 checksum/字节是契约：执行 `node --import tsx scripts/sync-zcode-cli-rust-node-migrations.mjs --check` 验证 22 个历史 SQL；不得改 SQL 内容/空白或全局关闭 whitespace 检查。先前 untracked SQL 造成“全 diff check 通过”的表述不准确，需明确验证边界。Root CI 使用 Node 24.14.0，当前本机 Node 24.19.0；版本差异需记录，不把 `mise.toml` 缺失当作阻断。
+
 新增根脚本入口：
 
 - `test:zcode-cli-rust-drivers`: `node --import tsx --test --test-isolation=none scripts/tests/*.test.mjs`，必须保留全量测试 glob 与 isolation 参数。
 - `test:zcode-cli-rust-interop`: `node --import tsx scripts/zcode-cli-rust-node-interop.mjs apps/zcode-cli/packages/cli/dist/zcode.cjs apps/zcode-cli-rust/target/debug/zcode-cli-rust apps/zcode-cli-rust/target/debug/examples/node_read`。
 
-依赖已安装的 `protocol-schema` job 同时运行 driver suite。新增 Linux interop job 安装 workspace dependencies 与 stable Rust，构建 Node CLI 和 Rust binary/reader，再执行上述脚本。不得依赖 TSX_TSCONFIG_PATH 或旧 tsconfig 路径；无仓库现成 cache action 时不引入/固定新第三方 action。Native compile matrix 仅在 `windows-latest`、`macos-latest` 执行 `cargo check --locked --workspace --all-targets`，Rust-only 环境不安装 Node dependencies，不执行 POSIX interop。
+依赖已安装的 `protocol-schema` job 在运行任何 contract checks 前先运行共享的 Node workspace dependency build，再同时运行 driver suite。Linux interop job 安装 workspace dependencies 与 stable Rust，先运行同一 dependency build，再构建 Node CLI 和 Rust binary/reader，最后执行上述脚本。不得依赖 TSX_TSCONFIG_PATH 或旧 tsconfig 路径；无仓库现成 cache action 时不引入/固定新第三方 action。Native compile matrix 仅在 `windows-latest`、`macos-latest` 执行 `cargo check --locked --workspace --all-targets`，Rust-only 环境不安装 Node dependencies，不执行 POSIX interop。
 
 ## 所有者、顺序与失败语义
 

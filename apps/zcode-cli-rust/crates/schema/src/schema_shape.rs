@@ -2,10 +2,12 @@ use serde_json::{Map, Value};
 
 /// Validate the shape of recognized keywords before compilation can treat them as absent.
 pub(super) fn validate(schema: &Map<String, Value>) -> Result<(), String> {
-    for key in ["properties"] {
-        if schema.get(key).is_some_and(|value| !value.is_object()) {
-            return Err(format!("{key} must be an object"));
-        }
+    // CI Rust 1.99 将单元素循环判为 lint 错误；保留 properties 形状不符时 fail-closed 的原约束。
+    if schema
+        .get("properties")
+        .is_some_and(|value| !value.is_object())
+    {
+        return Err("properties must be an object".into());
     }
     for key in ["required", "enum", "anyOf", "oneOf"] {
         if let Some(value) = schema.get(key) {
