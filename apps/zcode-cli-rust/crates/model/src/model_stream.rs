@@ -1,0 +1,273 @@
+use crate::{
+    contract::{Event, EventSink, ModelFailure, ModelOutput},
+    domain::MAX_TEXT_BYTES,
+};
+use serde_json::{Value, json};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    time::Duration,
+};
+use tokio::time::Instant;
+
+#[derive(Default)]
+struct Call {
+    id: String,
+    name: String,
+    arguments: String,
+}
+#[derive(Default)]
+pub struct Assembly {
+    text: String,
+    reasoning: String,
+    calls: BTreeMap<u64, Call>,
+    usage: Value,
+    finish: Option<String>,
+    /// The provider's finish reason before mapping (`_zcode_raw_finish` of a
+    /// translated protocol, else the Chat `finish_reason`).
+    raw_finish: Option<String>,
+    bytes: usize,
+    pub done: bool,
+}
+impl Assembly {
+    pub async fn consume(
+        &mut self,
+        data: &str,
+        output: &mut TextBuffer<'_>,
+    ) -> Result<(), ModelFailure> {
+        if data == "[DONE]" {
+            self.done = true;
+            return Ok(());
+        }
+        let value: Value = serde_json::from_str(data).map_err(|_| ModelFailure::invalid())?;
+        self.consume_value(&value, output).await
+    }
+    pub(super) async fn consume_value(
+        &mut self,
+        value: &Value,
+        output: &mut TextBuffer<'_>,
+    ) -> Result<(), ModelFailure> {
+        if value.get("error").is_some_and(|e| !e.is_null()) {
+            let mut failure =
+                super::model_failure::response(None, value, &reqwest::header::HeaderMap::new());
+            let detail = super::network_status::provider_detail(value, Default::default());
+            failure.detail = Some(Box::new(detail));
+            return Err(failure);
+        }
+        if value["usage"].is_object() {
+            self.usage = value["usage"].clone();
+        }
+        let choice = &value["choices"][0];
+        if let Some(reason) = choice["finish_reason"].as_str() {
+            self.finish = Some(reason.into());
+            self.raw_finish = choice
+                .get("_zcode_raw_finish")
+                .map_or(Some(reason), Value::as_str)
+                .map(str::to_owned);
+        }
+        let delta = &choice["delta"];
+        for (key, reasoning) in [("reasoning_content", true), ("content", false)] {
+            if let Some(part) = string(&delta[key])?
+                && !part.is_empty()
+            {
+                self.count(part.len())?;
+                if reasoning {
+                    self.reasoning.push_str(part);
+                } else {
+                    self.text.push_str(part);
+                }
+                output.push(part, reasoning).await?;
+            }
+        }
+        if let Some(parts) = delta.get("tool_calls").filter(|v| !v.is_null()) {
+            output.first_content.get_or_insert_with(Instant::now);
+            output.flush().await?;
+            for part in parts.as_array().ok_or_else(ModelFailure::invalid)? {
+                let index = part["index"]
+                    .as_u64()
+                    .filter(|n| *n < 128)
+                    .ok_or_else(ModelFailure::invalid)?;
+                if part
+                    .get("type")
+                    .is_some_and(|v| !v.is_null() && v != "function")
+                {
+                    return Err(ModelFailure::invalid());
+                }
+                let id = string(&part["id"])?.unwrap_or("");
+                let name = string(&part["function"]["name"])?.unwrap_or("");
+                let args = string(&part["function"]["arguments"])?.unwrap_or("");
+                self.count(id.len() + name.len() + args.len())?;
+                if !crate::domain::js_string::trim(args).is_empty() {
+                    output.tool().await?;
+                }
+                let call = self.calls.entry(index).or_default();
+                call.id.push_str(id);
+                call.name.push_str(name);
+                call.arguments.push_str(args);
+            }
+        }
+        Ok(())
+    }
+    /// A call with a name (Node's completed `tool_call` at the stream end).
+    pub(super) fn named_call(&self) -> bool {
+        self.calls.values().any(|c| !c.name.trim().is_empty())
+    }
+    pub(super) fn count(&mut self, bytes: usize) -> Result<(), ModelFailure> {
+        self.bytes = self.bytes.saturating_add(bytes);
+        if self.bytes > MAX_TEXT_BYTES {
+            Err(ModelFailure::invalid())
+        } else {
+            Ok(())
+        }
+    }
+    pub fn finish(self) -> Result<ModelOutput, ModelFailure> {
+        if !self.done {
+            return Err(ModelFailure::new("network_error", true));
+        }
+        let output_limit = matches!(
+            self.finish.as_deref(),
+            Some("length" | "max_tokens" | "max_output_tokens" | "model_context_window_exceeded")
+        );
+        if !output_limit && !matches!(self.finish.as_deref(), Some("stop" | "tool_calls")) {
+            return Err(ModelFailure::invalid());
+        }
+        if output_limit && !self.calls.is_empty() {
+            return Err(ModelFailure::invalid());
+        }
+        if self.finish.as_deref() == Some("tool_calls") && self.calls.is_empty() {
+            return Err(ModelFailure::invalid());
+        }
+        let mut ids = BTreeSet::new();
+        let mut calls = vec![];
+        for call in self.calls.into_values() {
+            if call.id.trim().is_empty()
+                || call.name.trim().is_empty()
+                || !ids.insert(call.id.clone())
+            {
+                return Err(ModelFailure::invalid());
+            }
+            calls.push(json!({"id":call.id,"type":"function","function":{"name":call.name,"arguments":call.arguments}}));
+        }
+        if !output_limit
+            && self.text.is_empty()
+            && calls.is_empty()
+            && self.usage.as_object().is_none_or(|m| m.is_empty())
+        {
+            return Err(ModelFailure::empty());
+        }
+        let mut message = json!({"role":"assistant","content":self.text});
+        if !self.reasoning.is_empty() {
+            message["reasoning_content"] = self.reasoning.into();
+        }
+        if !calls.is_empty() {
+            message["tool_calls"] = calls.clone().into();
+        }
+        Ok(ModelOutput {
+            message,
+            calls,
+            usage: self.usage,
+            output_limit,
+            raw_finish_reason: self.raw_finish,
+        })
+    }
+}
+fn string(value: &Value) -> Result<Option<&str>, ModelFailure> {
+    if value.is_null() {
+        Ok(None)
+    } else {
+        value.as_str().map(Some).ok_or_else(ModelFailure::invalid)
+    }
+}
+
+pub struct TextBuffer<'a> {
+    sink: &'a EventSink,
+    response: String,
+    pending: String,
+    reasoning: bool,
+    pub deadline: Option<Instant>,
+    pub committed: bool,
+    /// First text, reasoning or tool-call output (Node `timeToFirstContentMs`).
+    pub first_content: Option<Instant>,
+    /// First non-empty answer text (Node `timeToFirstTextMs`).
+    pub first_text: Option<Instant>,
+    tool_output: bool,
+}
+impl<'a> TextBuffer<'a> {
+    pub fn new(sink: &'a EventSink) -> Self {
+        Self {
+            sink,
+            response: super::id(),
+            pending: String::new(),
+            reasoning: false,
+            deadline: None,
+            committed: false,
+            first_content: None,
+            first_text: None,
+            tool_output: false,
+        }
+    }
+    /// The first tool-call output of the response, reported once.
+    pub async fn tool(&mut self) -> Result<(), ModelFailure> {
+        if std::mem::replace(&mut self.tool_output, true) {
+            return Ok(());
+        }
+        self.sink
+            .send(Event::ToolStreaming)
+            .await
+            .map_err(|_| ModelFailure::cancelled())
+    }
+    /// Reports one model network status to the run.
+    pub async fn status(&self, payload: serde_json::Value) -> Result<(), ModelFailure> {
+        self.sink
+            .send(Event::ModelStatus(payload))
+            .await
+            .map_err(|_| ModelFailure::cancelled())
+    }
+    /// Attribution of the run this output belongs to.
+    pub fn origin(&self) -> std::sync::Arc<crate::contract::RequestOrigin> {
+        self.sink.origin.clone()
+    }
+    async fn push(&mut self, mut text: &str, reasoning: bool) -> Result<(), ModelFailure> {
+        self.first_content.get_or_insert_with(Instant::now);
+        if !reasoning {
+            self.first_text.get_or_insert_with(Instant::now);
+        }
+        if self.reasoning != reasoning {
+            self.flush().await?;
+        }
+        self.reasoning = reasoning;
+        while !text.is_empty() {
+            let mut take = text.len().min(8192 - self.pending.len());
+            while !text.is_char_boundary(take) {
+                take -= 1;
+            }
+            if take == 0 {
+                self.flush().await?;
+                continue;
+            }
+            self.pending.push_str(&text[..take]);
+            text = &text[take..];
+            self.deadline
+                .get_or_insert_with(|| Instant::now() + Duration::from_millis(16));
+            if !self.committed || self.pending.len() >= 8192 || !text.is_empty() {
+                self.flush().await?;
+            }
+        }
+        Ok(())
+    }
+    pub async fn flush(&mut self) -> Result<(), ModelFailure> {
+        self.deadline = None;
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        self.sink
+            .send(Event::Text {
+                response_id: self.response.clone(),
+                text: std::mem::take(&mut self.pending),
+                reasoning: self.reasoning,
+            })
+            .await
+            .map_err(|_| ModelFailure::cancelled())?;
+        self.committed = true;
+        Ok(())
+    }
+}

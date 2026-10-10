@@ -1,0 +1,382 @@
+use super::mcp_config::Server;
+use super::mcp_telemetry::Tracker;
+use crate::contract::{ProcessCleanupFailure, ToolOutput};
+use anyhow::{Context, Result, bail, ensure};
+use futures_util::StreamExt;
+use rmcp::{
+    RoleClient,
+    model::{ClientConfig, ClientRequest, ProtocolVersion},
+    service::{
+        ClientLifecycleMode, Peer, PeerRequestOptions, RunningService,
+        serve_client_with_lifecycle_and_ct,
+    },
+};
+use serde_json::{Value, json};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::{collections::BTreeSet, process::Stdio, time::Duration};
+use tokio::{
+    process::{Child, Command},
+    sync::Mutex,
+};
+use tokio_util::{
+    codec::{FramedRead, FramedWrite},
+    sync::CancellationToken,
+};
+
+type Service = RunningService<RoleClient, ClientConfig>;
+/// How to reach one server: a child process environment or an HTTP client.
+pub(super) enum Transport {
+    Stdio(std::sync::Arc<[(String, String)]>),
+    Http(reqwest::Client),
+}
+pub(super) struct Connection {
+    pub peer: Peer<RoleClient>,
+    pub tools: Vec<Value>,
+    pub modern: bool,
+    timeout: Duration,
+    service: Mutex<Option<Service>>,
+    child: Arc<Mutex<Option<(Child, u32)>>>,
+    /// A `close` is under way: the process end that follows is not a crash.
+    closing: Arc<AtomicBool>,
+    /// The process telemetry of a stdio server (spec rust-m9-usage-logs §6).
+    process: Option<(Arc<Tracker>, String)>,
+}
+impl Connection {
+    /// `telemetry` is the tracker and this connection's key.
+    pub async fn open(
+        config: &Server,
+        transport: Transport,
+        auth: &std::sync::Arc<super::official_auth::OfficialAuth>,
+        cancel: &CancellationToken,
+        telemetry: (&Arc<Tracker>, &str),
+    ) -> Result<Self> {
+        let (env, http) = match transport {
+            Transport::Stdio(env) => (Some(env), None),
+            Transport::Http(client) => (None, Some(client)),
+        };
+        // 官方鉴权只接受插件解析器生成的 provenance；OAuth 仍无通道。
+        let official = super::official_auth::Official::from_config(&config.raw);
+        let auth = auth.clone();
+        ensure!(
+            config.raw.get("oauth").is_none()
+                && (config.raw.get("auth").is_none() || official.is_some()),
+            "not_authenticated"
+        );
+        let diagnostic = std::sync::Arc::new(std::sync::Mutex::new(
+            super::mcp_official_http::Diagnostic::default(),
+        ));
+        let mode = match config.raw["protocolVersion"].as_str() {
+            Some("2026-07-28") => ClientLifecycleMode::Discover {
+                preferred_versions: vec![ProtocolVersion::V_2026_07_28],
+            },
+            Some("auto") => ClientLifecycleMode::Auto {
+                preferred_versions: vec![ProtocolVersion::V_2026_07_28],
+                legacy_version: Some(ProtocolVersion::LATEST),
+            },
+            _ => ClientLifecycleMode::Initialize,
+        };
+        let mut client = ClientConfig::default();
+        client.client_info.name = "zcode-cli-rust".into();
+        client.client_info.version = env!("CARGO_PKG_VERSION").into();
+        let lifecycle = CancellationToken::new();
+        let mut owned = None;
+        let mut ended = None;
+        let init = async {
+            if config.transport == "stdio" {
+                let mut command = Command::new(config.raw["command"].as_str().unwrap());
+                // Node buildMcpStdioEnv：净化后的出口环境为底，服务器自身 env 覆盖其上。
+                command.env_clear().envs(
+                    env.as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|(k, v)| (k, v)),
+                );
+                command
+                    .args(super::extension_config::strings(&config.raw["args"]))
+                    .current_dir(&config.cwd)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::null())
+                    .kill_on_drop(true);
+                #[cfg(unix)]
+                command.process_group(0);
+                if let Some(env) = config.raw["env"].as_object() {
+                    command.envs(env.iter().map(|(k, v)| (k, v.as_str().unwrap())));
+                }
+                let mut child = command.spawn().context("process_start_failed")?;
+                let pid = child.id().context("process_start_failed")?;
+                let input = child.stdin.take().unwrap();
+                let output = child.stdout.take().unwrap();
+                owned = Some((child, pid));
+                // SDK 默认读行无界；使用有界 codec，坏帧立即断开而非无限缓存或跳过。
+                let reader = FramedRead::new(
+                    output,
+                    rmcp::transport::async_rw::JsonRpcMessageCodec::<
+                        rmcp::model::ServerJsonRpcMessage,
+                    >::new_with_max_length(8 * 1024 * 1024),
+                )
+                .take_while(|r| std::future::ready(r.is_ok()))
+                .filter_map(|r| std::future::ready(r.ok()));
+                let (reader, end) = super::mcp_process::EndSignal::new(Box::pin(reader));
+                ended = Some(end);
+                if let Some(official) = &official {
+                    // 官方 stdio server：每条出站请求与通知的 _meta 携带本次身份头。
+                    let writer =
+                        super::mcp_official::stdio_writer(input, auth.clone(), official.clone());
+                    return serve_client_with_lifecycle_and_ct(
+                        client,
+                        (writer, reader),
+                        mode,
+                        lifecycle.clone(),
+                    )
+                    .await
+                    .context("protocol_negotiation_failed");
+                }
+                let writer = FramedWrite::new(
+                    input,
+                    rmcp::transport::async_rw::JsonRpcMessageCodec::<
+                        rmcp::model::ClientJsonRpcMessage,
+                    >::new_with_max_length(8 * 1024 * 1024),
+                );
+                Ok::<Service, anyhow::Error>(
+                    serve_client_with_lifecycle_and_ct(
+                        client,
+                        (writer, reader),
+                        mode,
+                        lifecycle.clone(),
+                    )
+                    .await
+                    .context("protocol_negotiation_failed")?,
+                )
+            } else if config.transport == "sse" {
+                let transport = super::mcp_sse::Transport::open(
+                    config,
+                    http.context("HTTP client missing")?,
+                    cancel,
+                )
+                .await?;
+                Ok(
+                    serve_client_with_lifecycle_and_ct(client, transport, mode, lifecycle.clone())
+                        .await
+                        .context("protocol_negotiation_failed")?,
+                )
+            } else {
+                use rmcp::transport::{
+                    StreamableHttpClientTransport,
+                    streamable_http_client::StreamableHttpClientTransportConfig,
+                };
+                let mut options = StreamableHttpClientTransportConfig::with_uri(
+                    config.raw["url"].as_str().unwrap().to_owned(),
+                );
+                options.max_sse_event_size = 8 * 1024 * 1024;
+                options.reinit_on_expired_session = false;
+                options.max_concurrent_requests = 4;
+                options.control_request_timeout = Duration::from_secs(2);
+                if let Some(headers) = config.raw["headers"].as_object() {
+                    for (name, value) in headers {
+                        options.custom_headers.insert(
+                            name.parse().context("config_invalid")?,
+                            value.as_str().unwrap().parse().context("config_invalid")?,
+                        );
+                    }
+                }
+                let http = http.context("HTTP client missing")?;
+                if let Some(official) = &official {
+                    let url = config.raw["url"].as_str().unwrap_or_default();
+                    let mut client_http = super::mcp_official_http::OfficialHttp::new(
+                        http,
+                        url,
+                        official.clone(),
+                        &config.name,
+                        auth.clone(),
+                    );
+                    client_http.diagnostic = diagnostic.clone();
+                    let transport =
+                        StreamableHttpClientTransport::with_client(client_http, options);
+                    return serve_client_with_lifecycle_and_ct(
+                        client,
+                        transport,
+                        mode,
+                        lifecycle.clone(),
+                    )
+                    .await
+                    .context("protocol_negotiation_failed");
+                }
+                let transport = StreamableHttpClientTransport::with_client(http, options);
+                Ok(
+                    serve_client_with_lifecycle_and_ct(client, transport, mode, lifecycle.clone())
+                        .await
+                        .context("protocol_negotiation_failed")?,
+                )
+            }
+        };
+        let result = tokio::select! {biased; _=cancel.cancelled()=>Err(anyhow::anyhow!("Cancelled")), result=tokio::time::timeout(config.timeout,init)=>result.unwrap_or_else(|_|Err(anyhow::anyhow!("connection_timeout")))};
+        let service = match result {
+            Ok(service) => service,
+            Err(error) => {
+                lifecycle.cancel();
+                cleanup_child(&mut owned).await?;
+                let recorded = diagnostic.lock().expect("diagnostic").clone();
+                return Err(super::mcp_official::connect_failure(&recorded, error));
+            }
+        };
+        let modern = service
+            .peer_info()
+            .is_some_and(|i| i.protocol_version >= ProtocolVersion::V_2026_07_28);
+        let pid = owned.as_ref().map(|(_, pid)| *pid);
+        let mut connection = Self {
+            peer: service.peer().clone(),
+            tools: vec![],
+            modern,
+            timeout: config.timeout,
+            service: Mutex::new(Some(service)),
+            child: Arc::new(Mutex::new(owned)),
+            closing: Arc::default(),
+            process: None,
+        };
+        match connection.discover(cancel).await {
+            Ok(tools) => connection.tools = tools,
+            Err(error) => {
+                connection.close().await?;
+                return Err(error.context("tool_list_failed"));
+            }
+        }
+        // Node：stdio server 连接并列出工具后才记 process_start。
+        if let (Some(pid), Some(ended)) = (pid, ended) {
+            let (tracker, key) = telemetry;
+            let instance = tracker.started(key, config, pid);
+            super::mcp_process::Watch {
+                tracker: tracker.clone(),
+                instance: instance.clone(),
+                closing: connection.closing.clone(),
+            }
+            .spawn(ended, connection.child.clone());
+            connection.process = Some((tracker.clone(), instance));
+        }
+        Ok(connection)
+    }
+    async fn discover(&self, cancel: &CancellationToken) -> Result<Vec<Value>> {
+        let mut tools = vec![];
+        let mut cursor = Value::Null;
+        let mut seen = BTreeSet::new();
+        for _ in 0..128 {
+            let params = if cursor.is_null() {
+                json!({})
+            } else {
+                json!({"cursor":cursor})
+            };
+            let result = self.request("tools/list", params, cancel).await?;
+            tools.extend(
+                result["tools"]
+                    .as_array()
+                    .context("Invalid MCP tools list")?
+                    .iter()
+                    .cloned(),
+            );
+            ensure!(tools.len() <= 10_000, "MCP tool count exceeded");
+            cursor = result["nextCursor"].clone();
+            if cursor.is_null() {
+                return Ok(tools);
+            }
+            ensure!(
+                cursor.is_string() && seen.insert(cursor.to_string()),
+                "MCP pagination loop"
+            );
+        }
+        bail!("MCP tool pages exceeded")
+    }
+    async fn request(
+        &self,
+        method: &str,
+        params: Value,
+        cancel: &CancellationToken,
+    ) -> Result<Value> {
+        let request: ClientRequest =
+            serde_json::from_value(json!({"method":method,"params":params}))?;
+        let handle = tokio::select! {biased;_=cancel.cancelled()=>bail!("Cancelled"),result=self.peer.send_cancellable_request(request,PeerRequestOptions::with_timeout(self.timeout))=>result.context("MCP request dispatch failed")?};
+        let id = handle.id.clone();
+        let result = tokio::select! {biased;
+            _=cancel.cancelled()=>{
+                let _=tokio::time::timeout(Duration::from_secs(2),self.peer.notify_cancelled(rmcp::model::CancelledNotificationParam::new(Some(id),Some("Cancelled".into())))).await;
+                Err(anyhow::anyhow!("Cancelled"))
+            },
+            // Node：进程退出后 SDK 以 McpError(ConnectionClosed) 失败，工具错误为 SdkError/CONNECTION_CLOSED。
+            result=handle.await_response()=>result.map_err(|_| if self.peer.is_transport_closed() {
+                crate::contract::ToolError::Sdk { code: "CONNECTION_CLOSED", message: "Connection closed".into() }.into()
+            } else {
+                anyhow::anyhow!("MCP request failed or timed out")
+            }),
+        };
+        if result.is_err() && method == "tools/call" {
+            self.close().await?;
+        }
+        Ok(serde_json::to_value(result?)?)
+    }
+    pub async fn call(
+        &self,
+        name: &str,
+        args: &Value,
+        cancel: &CancellationToken,
+    ) -> Result<ToolOutput> {
+        let result = self
+            .request("tools/call", json!({"name":name,"arguments":args}), cancel)
+            .await?;
+        let mut content = vec![];
+        for part in result["content"].as_array().into_iter().flatten() {
+            if let Some(text) = part["text"]
+                .as_str()
+                .or_else(|| part["resource"]["text"].as_str())
+            {
+                content.push(text.to_owned());
+            } else {
+                content.push(serde_json::to_string(part)?);
+            }
+        }
+        if let Some(structured) = result.get("structuredContent") {
+            content.push(serde_json::to_string(structured)?);
+        }
+        let mut content = content.join("\n");
+        if content.len() > crate::domain::MAX_TOOL_BYTES {
+            super::tools::truncate_utf8(&mut content, crate::domain::MAX_TOOL_BYTES);
+            content.push_str("\n[MCP result truncated]");
+        }
+        let mut output = ToolOutput::text(content);
+        output.failed = result["isError"] == true;
+        Ok(output)
+    }
+    pub async fn close(&self) -> Result<()> {
+        // 进程先退出（传输已断）后的关闭是崩溃的收口（如调用失败后关闭）：Node 仍记 process_crash。
+        let crashed = self.peer.is_transport_closed() && !self.closing.swap(true, Ordering::SeqCst);
+        self.closing.store(true, Ordering::SeqCst);
+        if let Some((tracker, instance)) = &self.process {
+            if crashed && let Some((child, _)) = self.child.lock().await.as_mut() {
+                super::mcp_process::report_exit(tracker, instance, child).await;
+            }
+            tracker.closed(instance);
+        }
+        if let Some(mut service) = self.service.lock().await.take() {
+            // 先断协议再等待进程树；不能只 drop transport 后宣告停止完成。
+            let mut child = self.child.lock().await.take();
+            let (protocol, process) = tokio::join!(service.close(), cleanup_child(&mut child));
+            process?;
+            protocol.context(ProcessCleanupFailure)?;
+        }
+        Ok(())
+    }
+}
+async fn cleanup_child(child: &mut Option<(Child, u32)>) -> Result<()> {
+    if let Some((mut child, pid)) = child.take()
+        && let Err(error) = super::tool_process::terminate(&mut child, pid, true).await
+    {
+        use std::io::Write;
+        let _ = writeln!(
+            std::io::stderr().lock(),
+            "MCP process cleanup failed: {error:#}"
+        );
+        return Err(error.context(ProcessCleanupFailure));
+    }
+    Ok(())
+}

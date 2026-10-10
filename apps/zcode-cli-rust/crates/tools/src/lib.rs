@@ -1,4 +1,50 @@
-//! 文件工具、Shell、后台任务、MCP、Skills、checkpoint/rewind 与 process cleanup。
-//!
-//! crate 边界与依赖方向见 .agents/specs/cli-rust-runtime.md；边界由
-//! scripts/check-zcode-cli-rust-boundaries.mjs 在 CI 中强制。
+use zcode_cli_core_api as contract;
+use zcode_cli_domain as domain;
+mod agent_profiles;
+mod bash_output;
+mod bash_perf;
+mod bash_permission;
+mod checkpoint_blobs;
+mod extension_config;
+mod file_changes;
+mod file_checkpoints;
+mod file_result;
+mod file_rewind;
+mod file_write;
+mod git_safety;
+mod hook_process;
+mod mcp_config;
+mod mcp_connection;
+mod mcp_hub;
+mod mcp_official;
+mod mcp_official_http;
+mod mcp_official_transport;
+mod mcp_process;
+mod mcp_resources;
+mod mcp_sse;
+mod mcp_telemetry;
+mod official_auth;
+mod plan_file;
+mod plugin_admin;
+mod plugin_io;
+mod plugin_requests;
+mod plugin_suggested;
+#[cfg(unix)]
+mod process_tree;
+mod read_media;
+mod read_pdf;
+mod read_state;
+mod result_file;
+mod shell_background;
+mod tool_args;
+mod tool_definitions;
+mod tool_edit;
+mod tool_files;
+mod tool_process;
+mod tool_search;
+mod tool_shell;
+mod tool_skills;
+pub mod tools;
+mod web_fetch;
+pub use tools::WorkspaceTools;
+use zcode_cli_host::{id, now};

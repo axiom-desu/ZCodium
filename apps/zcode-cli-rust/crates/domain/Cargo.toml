@@ -10,3 +10,15 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+regex.workspace = true
+regress.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+sha2.workspace = true
+url.workspace = true
+zcode-cli-schema.workspace = true

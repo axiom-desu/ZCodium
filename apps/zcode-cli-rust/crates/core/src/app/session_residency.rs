@@ -1,0 +1,175 @@
+// ZCodium 下游修改，契约/存储/安全边界适配，来源及许可见 Rust 根 NOTICE.md
+use super::Engine;
+use crate::contract::StorageCommitFailure;
+use anyhow::{Context, Result, ensure};
+use serde_json::{Value, json};
+use std::collections::BTreeSet;
+
+impl Engine {
+    pub(super) fn touch_session(&mut self, id: &str) {
+        self.access_seq += 1;
+        self.session_access.insert(id.into(), self.access_seq);
+    }
+    pub(super) async fn cached_ack(&mut self, key: &str) -> Result<Option<Value>> {
+        if let Some(ack) = self.acks.get(key) {
+            return Ok(Some(ack.clone()));
+        }
+        let live = serde_json::from_str::<(Option<String>, String)>(key)
+            .ok()
+            .and_then(|(session, _)| session)
+            .is_some_and(|session| self.sessions.contains_key(&session));
+        let ack = self
+            .store
+            .lookup_ack_live(&self.workspace, key, live)
+            .await?;
+        if let Some(ack) = &ack {
+            self.acks.insert(key.into(), ack.clone());
+            self.durable_acks.insert(key.into());
+        }
+        Ok(ack)
+    }
+    pub(super) async fn query_acks(&mut self, p: &Value) -> Result<Value> {
+        // Node：时钟校准只是探测，不经过命令账本与工作区校验。
+        if let Some(clock) = self.ttft_clock_probe(p)? {
+            return Ok(clock);
+        }
+        self.validate_workspace(p)?;
+        let keys = p["commands"].as_array().context("Command keys required")?;
+        ensure!(
+            !keys.is_empty() && keys.len() <= 64,
+            "Invalid command query size"
+        );
+        let mut results = vec![];
+        for key in keys {
+            let encoded = serde_json::to_string(&(
+                key["sessionId"].as_str(),
+                key["commandId"].as_str().context("Command ID required")?,
+            ))?;
+            results.push(json!({"key":key,"result":self.cached_ack(&encoded).await?.unwrap_or(json!("unknown"))}));
+        }
+        Ok(json!({"results":results}))
+    }
+    pub(super) async fn read_cold_session(&self, p: &Value) -> Result<Value> {
+        self.validate_workspace(p)?;
+        let id = p["sessionId"].as_str().context("Session id required")?;
+        if self.sessions.contains_key(id) {
+            return self.read_session(p);
+        }
+        ensure!(!self.closed.contains(id), "Session unavailable");
+        let mut session = self
+            .store
+            .read_session(&self.workspace, id)
+            .await?
+            .context("Session unavailable")?;
+        ensure!(
+            session.workspace == self.workspace && session.context.offset <= session.messages.len(),
+            "Invalid persisted session boundary"
+        );
+        // 保留旧的临时投影恢复语义，但不提交；Node SQL 恢复仍仅由显式 load/activation 执行。
+        session.recover(self.clock.id(), self.clock.now());
+        session.validate_history()?;
+        self.read_session_snapshot(&session, p)
+    }
+    pub(super) async fn trim_resident(&mut self) -> Result<()> {
+        let mut pinned: BTreeSet<String> = self.pinned_topics().map(str::to_owned).collect();
+        pinned.extend(self.uploads.0.keys().map(|key| key.1.clone()));
+        pinned.extend(
+            self.sessions
+                .iter()
+                .filter(|(id, s)| {
+                    self.active.contains_key(*id)
+                        || s.phase == crate::domain::execution::Phase::Draft
+                        || !s.queue.is_empty()
+                        || !s.pending.is_empty()
+                        || !s.mailbox.is_empty()
+                        || s.children.values().any(|t| t.running() || !t.notified)
+                        || s.background.values().any(|t| t.status == "running")
+                        // Node hasLegacySubscriber：legacy 流订阅的会话不被淘汰。
+                        || s.runtime.legacy.kind().is_some()
+                })
+                .map(|(id, _)| id.clone()),
+        );
+        let mut idle = self
+            .sessions
+            .iter_mut()
+            .filter(|(id, _)| !pinned.contains(*id))
+            .map(|(id, session)| {
+                (
+                    self.session_access.get(id).copied().unwrap_or(0),
+                    id.clone(),
+                    session.estimated_resident_bytes(),
+                )
+            })
+            .collect::<Vec<_>>();
+        idle.sort();
+        let mut count = idle.len();
+        let mut bytes = idle
+            .iter()
+            .fold(0usize, |sum, (_, _, size)| sum.saturating_add(*size));
+        for (_, id, size) in idle {
+            if count <= 8 && bytes <= 16 * 1024 * 1024 {
+                break;
+            }
+            count -= 1;
+            bytes = bytes.saturating_sub(size);
+            self.tools.evict_session(&id).await?;
+            self.sessions.remove(&id);
+            self.hooks.sessions.remove(&id);
+            self.hooks.without.remove(&id);
+            self.hooks.plugins.remove(&id);
+            self.session_access.remove(&id);
+        }
+        if self.acks.len() > 1024 {
+            let queued = self
+                .sessions
+                .values()
+                .flat_map(|s| {
+                    s.queue.iter().filter_map(|q| {
+                        q["sourceCommandId"]
+                            .as_str()
+                            .map(|id| serde_json::to_string(&(Some(&s.id), id)).unwrap())
+                    })
+                })
+                .collect::<BTreeSet<_>>();
+            self.acks
+                .retain(|key, _| !self.durable_acks.contains(key) || queued.contains(key));
+            self.durable_acks.retain(|key| self.acks.contains_key(key));
+        }
+        self.child_updates
+            .retain(|_, watch| watch.receiver_count() > 0 || watch.borrow().running());
+        Ok(())
+    }
+    pub(super) async fn persist(&mut self, id: &str, ack: Option<(String, Value)>) -> Result<()> {
+        if let Some(session) = self.sessions.get_mut(id) {
+            session.resident_bytes = None;
+        }
+        // 目标行（session_target）随每次提交与内存中的目标对齐（spec §5.4）。
+        let now = self.clock.now();
+        self.node(id, |s, _| s.node_sync_goal(now));
+        // 导入候选还没有可见 row，但它已是 durable session；只有真正 draft 可以跳过提交。
+        if self
+            .sessions
+            .get(id)
+            .is_some_and(|s| s.phase == crate::domain::execution::Phase::Draft)
+        {
+            return Ok(());
+        }
+        let mut keys = self
+            .sessions
+            .get(id)
+            .map(|s| s.pending_acks.keys().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+        if let Some((key, _)) = &ack {
+            keys.push(key.clone());
+        }
+        if let Some((key, _)) = self.sessions.get(id).and_then(|s| s.creation_ack.as_ref()) {
+            keys.push(key.clone());
+        }
+        self.store
+            .commit_receipt(&self.workspace, self.sessions.get_mut(id), ack)
+            .await
+            .context(StorageCommitFailure)?;
+        self.durable_acks.extend(keys);
+        Ok(())
+    }
+}
