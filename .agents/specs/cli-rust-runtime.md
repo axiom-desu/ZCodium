@@ -53,6 +53,28 @@ Agent CLI 是重复成本最高的一块：
 | D5   | 会话库锁         | 每 workspace 一个 owner 锁，只用stdlib `File::try_lock`                          |
 | D6   | 工作目录         | `apps/zcode-cli-rust`，独立 Cargo workspace                                      |
 | D7   | 发布             | 不在本 spec 范围；先在开发开关下验证                                             |
+| D8   | 桌面分发口味     | **只在 Preview（`ZCodium Rust`）口味构建并随包分发**，生产口味不变               |
+
+### D8 依据：为什么挂 Preview 口味
+
+`packages/desktop/scripts/desktop-product-identity.mjs` 里 Preview 身份的产品名在 2026-10
+已从 `ZCodium Preview` 改名为 **`ZCodium Rust`**，appId 保持 `dev.zcodium.app.preview`。
+它的定位本来就是滚动更新模型里 preview 渠道的提前通道——让 Rust runtime 在这里随包分发，
+既能拿到真实安装包的验证，又不影响生产口味。
+
+接线（三处，全部以 `ZCODE_PREVIEW_IDENTITY=1` 为闸门）：
+
+1. `packages/desktop/scripts/prepare-cli-rust.mjs`：按 target triple `cargo build --release`
+   并把产物 stage 到 `bundled-agents/<platform-key>/rust/`（补执行位，copyFileSync 不保留）。
+2. `prepare-runtime-assets.mjs` 与 `electron-builder.config.js` 的 extraResources：
+   preview 才跑、才打包，落到 `resources/rust`。
+3. `zcodeAgentProcessManager.ts` 新增 `resolvePackagedZCodeCliRustCommand`，解析顺序为
+   env 显式覆盖 → monorepo dev 源码/dist → **随包 Rust CLI** → Electron Node 跑 zcode.cjs
+   → 远端已部署 native binary。
+
+Rust 排在 TS bundle 之前，因为 Preview 的目的就是提前验证它；没有该文件时（生产口味、
+dev 未构建）解析返回 null，自然落到 TS bundle，不需要额外开关。Rust 是独立可执行文件，
+不需要 `ELECTRON_RUN_AS_NODE`。
 
 ### D1 依据：为什么移植而不是从零写
 
