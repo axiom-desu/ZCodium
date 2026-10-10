@@ -43,14 +43,13 @@ jobs:
       - name: Cargo fmt
         run: cargo fmt --manifest-path apps/zcode-cli-rust/Cargo.toml --all --check
       - name: Cargo clippy
-        run: cargo clippy --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --workspace --all-targets -- -D warnings
       - name: Cargo test
         run: pnpm test:zcode-cli-rust
 
-  # 契约漂移检测与 Rust 构建分开：rust job 刻意不装 node_modules（Rust 构建不需要），
-  # 而这里必须跑 TS zod 契约，因此单独一个装了依赖的 job，互不拖慢。
+  # Schema、contract assets 与 domain fixtures 的 --check 均从当前 TS 契约生成；不检测 Rust DTO 全面漂移，也不替代 Node interop。
   protocol-schema:
-    name: Protocol contract drift
+    name: Protocol schema and oracle fixtures
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -60,3 +59,46 @@ jobs:
       - uses: ./.github/actions/setup-workspace
       - name: Protocol contract drift
         run: pnpm check:zcode-cli-rust-protocol-schema
+      - name: Contract asset drift
+        run: pnpm check:zcode-cli-rust-contract-assets
+      - name: Domain fixture drift
+        run: pnpm check:zcode-cli-rust-domain-fixtures
+      - name: Driver tests
+        run: pnpm test:zcode-cli-rust-drivers
+
+  linux-node-interop:
+    name: Linux Node/Rust interop
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Node CLI
+        run: pnpm --dir apps/zcode-cli/packages/cli build
+      - name: Build Rust CLI and Node reader
+        run: cargo build --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --bin zcode-cli-rust --example node_read
+      - name: Run real Node/Rust interop
+        run: pnpm test:zcode-cli-rust-interop
+
+  native-platform-check:
+    name: Native compile (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+        with:
+          install-dependencies: "false"
+          install-pnpm: "true"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Native Rust compile check
+        run: cargo check --locked --workspace --all-targets --manifest-path apps/zcode-cli-rust/Cargo.toml

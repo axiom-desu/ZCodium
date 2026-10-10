@@ -1,4 +1,9 @@
-//! TUI 输入与渲染，只通过 core-api 工作。
+//! Terminal UI frontend (reserved).
 //!
-//! crate 边界与依赖方向见 .agents/specs/cli-rust-runtime.md；边界由
-//! scripts/check-zcode-cli-rust-boundaries.mjs 在 CI 中强制。
+//! The TUI will connect to the runtime through the same transport contract as
+//! the App Server (`zcode_cli_core_api::{ClientMsg, ServerMsg}`) and must never
+//! own session, queue, model or tool facts. Until it is implemented, the
+//! `tui` subcommand exits with [`UNAVAILABLE_EXIT_CODE`].
+
+/// Exit code of the reserved `tui` entry point.
+pub const UNAVAILABLE_EXIT_CODE: i32 = 2;

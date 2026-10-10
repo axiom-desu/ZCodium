@@ -1,0 +1,172 @@
+use super::{Engine, engine::Call};
+use crate::contract::{Event, EventSink, ModelFailure, RunEvent, RuntimeError, ServerMsg};
+use anyhow::{Context, Result, ensure};
+use serde_json::{Value, json};
+use tokio_util::sync::CancellationToken;
+pub(super) struct Auxiliary {
+    /// Reply token of the originating request; the result is delivered when the job ends.
+    pub token: u64,
+    pub cancel: CancellationToken,
+    pub operation: Option<String>,
+    /// The plugin `operationId` this job is registered under (the latest
+    /// registration wins, Node `pluginOperationControllers`).
+    pub plugin_operation: Option<String>,
+    /// A generated title job: its result goes to the session, not a reply.
+    pub title: Option<Box<super::session_title::TitleJob>>,
+}
+impl Engine {
+    pub(super) fn start_auxiliary(&mut self, request: &Call) -> Result<()> {
+        self.validate_workspace(&request.params)?;
+        ensure!(self.auxiliary.len() < 16, "Too many workspace requests");
+        let p = &request.params;
+        let selected = self.select(&json!({"modelSelection":p["selection"]}), None)?;
+        let mut model = if let Some(registry) = &self.registry {
+            registry.resolve(&selected)?
+        } else {
+            self.model.clone().context("Model required")?
+        };
+        if let Some(max) = p["maxOutputTokens"].as_u64()
+            && let Some(bound) = model.with_max_output_tokens(max as usize)?
+        {
+            model = bound;
+        }
+        let connectivity = request.method == crate::contract::Method::ProviderTestModelConnectivity;
+        let mut messages = p["messages"].as_array().cloned().unwrap_or_default();
+        if let Some(prompt) = p["prompt"].as_str() {
+            messages.push(json!({"role":"user","content":prompt}));
+        }
+        if connectivity {
+            messages = vec![json!({"role":"user","content":"Reply OK."})];
+        }
+        ensure!(!messages.is_empty(), "Prompt or messages required");
+        for m in &mut messages {
+            ensure!(
+                matches!(
+                    m["role"].as_str(),
+                    Some("system" | "user" | "assistant" | "tool")
+                ) && m["content"].is_string(),
+                "Invalid workspace message"
+            );
+            if let Some(calls) = m["toolCalls"].as_array() {
+                m["tool_calls"]=calls.iter().map(|c|json!({"id":c["id"],"type":"function","function":{"name":c["name"],"arguments":c["input"].to_string()}})).collect();
+            }
+            if m["role"] == "tool" {
+                m["tool_call_id"] = m["toolCallId"].clone();
+            }
+            for key in ["toolCalls", "toolCallId", "toolName", "isError"] {
+                m.as_object_mut().unwrap().remove(key);
+            }
+        }
+        let tools=p["tools"].as_array().map(|tools|tools.iter().map(|t|json!({"type":"function","function":{"name":t["name"],"description":t["description"].as_str().unwrap_or(""),"parameters":t["inputSchema"]}})).collect::<Vec<_>>()).unwrap_or_default();
+        let operation = p["operationId"].as_str().map(str::to_owned);
+        ensure!(
+            operation.is_none() || !self.auxiliary.values().any(|j| j.operation == operation),
+            "Duplicate operation id"
+        );
+        let id = format!("workspace-query:{}", self.clock.id());
+        let cancel = CancellationToken::new();
+        self.auxiliary.insert(
+            id.clone(),
+            Auxiliary {
+                token: request.token,
+                cancel: cancel.clone(),
+                operation,
+                plugin_operation: None,
+                title: None,
+            },
+        );
+        let sink = EventSink {
+            session_id: id.clone(),
+            run_id: id,
+            tx: self.events.clone(),
+            origin: crate::contract::RequestOrigin::detached(self.clock.id()),
+            request_auth: None,
+        };
+        tokio::spawn(async move {
+            let result=model.complete(messages,&tools,&sink,&cancel).await.map(|out|{
+                if connectivity {return json!({"success":true});}
+                // Node 返回完整的 ModelUsage（cache、reasoning、serverToolUse），没有用量时省略。
+                let mut result = json!({"text":out.message["content"].as_str().unwrap_or(""),"selection":{"providerId":selected.provider_id,"modelId":selected.model_id,"options":{"reasoningLevel":selected.reasoning_level}},"finishReason":if out.output_limit{"length"}else if out.calls.is_empty(){"stop"}else{"tool-calls"}});
+                let usage = crate::domain::usage::model_usage(&out.usage);
+                if !usage.is_null() {
+                    result["usage"] = usage;
+                }
+                result["toolCalls"] = out.calls.iter().map(|c|json!({"id":c["id"],"name":c["function"]["name"],"input":serde_json::from_str::<Value>(c["function"]["arguments"].as_str().unwrap_or("{}")).unwrap_or(Value::Null)})).collect::<Vec<_>>().into();
+                result
+            });
+            let _ = sink.send(Event::AuxiliaryDone { result }).await;
+        });
+        Ok(())
+    }
+    pub(super) fn auxiliary_event(&mut self, event: RunEvent) -> Result<()> {
+        let id = event.session_id;
+        if event.run_id != id {
+            return Ok(());
+        }
+        match event.event {
+            Event::ToolCleanupFailed(message) => anyhow::bail!("{message}"),
+            // Node：标题请求的网络状态照常进入会话遥测，归属触发它的轮次。
+            Event::ModelStatus(status) => {
+                if let Some(title) = self.auxiliary[&id].title.as_ref() {
+                    let (session, turn) = (title.session.clone(), title.fact.turn_id.clone());
+                    self.session_event(&session, turn.as_deref(), "model_network_status", status);
+                }
+            }
+            Event::RequestAuth {
+                provider,
+                selection,
+                access,
+                reply,
+            } if !self.auxiliary[&id].cancel.is_cancelled() && !reply.is_closed() => {
+                let request_id = format!("rust-auth-{}", self.clock.id());
+                let workspace = json!({"workspaceKey":self.workspace,"workspacePath":self.workspace_path,"workspaceIdentity":self.workspace});
+                let params = json!({"requestId":request_id,"sessionId":id,"workspace":workspace,"providerId":provider,"modelSelection":selection,"accountAccess":access,"reason":"model-request"});
+                self.waiters.add_host(
+                    request_id.clone(),
+                    super::waiters::HostWait {
+                        owner: id,
+                        workspace,
+                        reply,
+                    },
+                );
+                self.outbox.push(ServerMsg::HostRequest {
+                    id: request_id,
+                    method: "interaction/requestProviderRuntimeHeaders",
+                    params,
+                });
+            }
+            Event::UsageDone { result } => self.usage_done(&id, result),
+            Event::HostCall {
+                method,
+                params,
+                reply,
+            } => self.host_call(method, params, reply),
+            Event::AuxiliaryReply { result } => {
+                // 插件作业自行按 Node 语义处理取消（安装返回诊断、市场操作报错）。
+                let job = self.auxiliary.remove(&id).unwrap();
+                self.outbox.push(ServerMsg::Reply {
+                    token: job.token,
+                    result,
+                });
+            }
+            Event::AuxiliaryDone { result } => {
+                self.cancel_auth(&id);
+                let job = self.auxiliary.remove(&id).unwrap();
+                let result = if job.cancel.is_cancelled() {
+                    Err(ModelFailure::cancelled())
+                } else {
+                    result
+                };
+                self.outbox.push(ServerMsg::Reply {
+                    token: job.token,
+                    result: result.map_err(|error| RuntimeError::Coded {
+                        code: -32000,
+                        message: error.to_string(),
+                    }),
+                });
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}
