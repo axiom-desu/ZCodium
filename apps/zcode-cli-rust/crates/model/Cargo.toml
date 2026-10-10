@@ -11,8 +11,24 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-zcode-cli-protocol.workspace = true
-zcode-cli-domain.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+httpdate.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
 zcode-cli-core-api.workspace = true
+zcode-cli-domain.workspace = true
 zcode-cli-host.workspace = true
 zcode-cli-net.workspace = true
+zcode-cli-protocol.workspace = true

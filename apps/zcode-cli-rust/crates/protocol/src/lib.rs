@@ -1,8 +1,9 @@
 mod command_schema;
-pub mod json_schema;
-pub use command_schema::{invalid_payload_ack, validate_command};
+pub use command_schema::{invalid_payload_ack, parse_command, validate_command};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+/// Shared, pure JSON Schema validator; kept here as a compatibility public entry point.
+pub use zcode_cli_schema as json_schema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -41,8 +42,11 @@ pub struct Command {
     ///
     /// 上游 ZCode-rs 的 Rust 结构体缺该字段而其 TS 契约已包含，属既有漂移；
     /// 本仓库显式保留，避免反序列化时静默丢弃。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ttft: Option<Value>,
-    pub base_revision: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_revision: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub base_log_epoch: Option<String>,
     #[serde(rename = "type")]
     pub kind: String,
@@ -85,6 +89,14 @@ pub struct CommandAck {
     pub revision_at_decision: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttft_excluded: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -94,6 +106,7 @@ pub enum AckStatus {
     Duplicate,
     Stale,
     Rejected,
+    Failed,
     Noop,
 }
 
@@ -145,7 +158,7 @@ mod tests {
             client_id: "client-1".into(),
             session_id: Some("session-1".into()),
             ttft: None,
-            base_revision: Some(3),
+            base_revision: Some(3.0),
             base_log_epoch: Some("epoch".into()),
             kind: "sendText".into(),
             payload: serde_json::json!({"text":"hello"}),

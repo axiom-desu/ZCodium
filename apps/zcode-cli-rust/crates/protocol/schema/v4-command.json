@@ -33,7 +33,8 @@
       },
       "baseLogEpoch": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "x-zcode-trim": true
       },
       "type": {
         "type": "string",
@@ -130,7 +131,8 @@
             },
             "entityId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             }
           },
           "required": ["rowId", "entityId"],
@@ -163,25 +165,29 @@
           "properties": {
             "text": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "modelSelection": {
               "type": "object",
               "properties": {
                 "providerId": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "x-zcode-trim": true
                 },
                 "modelId": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "x-zcode-trim": true
                 },
                 "options": {
                   "type": "object",
                   "properties": {
                     "reasoningLevel": {
                       "type": "string",
-                      "minLength": 1
+                      "minLength": 1,
+                      "x-zcode-trim": true
                     }
                   },
                   "additionalProperties": false
@@ -238,18 +244,21 @@
               "properties": {
                 "providerId": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "x-zcode-trim": true
                 },
                 "modelId": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "x-zcode-trim": true
                 },
                 "options": {
                   "type": "object",
                   "properties": {
                     "reasoningLevel": {
                       "type": "string",
-                      "minLength": 1
+                      "minLength": 1,
+                      "x-zcode-trim": true
                     }
                   },
                   "additionalProperties": false
@@ -276,18 +285,21 @@
               "properties": {
                 "providerId": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "x-zcode-trim": true
                 },
                 "modelId": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "x-zcode-trim": true
                 },
                 "options": {
                   "type": "object",
                   "properties": {
                     "reasoningLevel": {
                       "type": "string",
-                      "minLength": 1
+                      "minLength": 1,
+                      "x-zcode-trim": true
                     }
                   },
                   "additionalProperties": false
@@ -326,11 +338,13 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "x-zcode-trim": true
                   },
                   "command": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "x-zcode-trim": true
                   },
                   "args": {
                     "type": "array",
@@ -345,7 +359,8 @@
                       "properties": {
                         "name": {
                           "type": "string",
-                          "minLength": 1
+                          "minLength": 1,
+                          "x-zcode-trim": true
                         },
                         "value": {
                           "type": "string"
@@ -377,7 +392,8 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "x-zcode-trim": true
                   },
                   "type": {
                     "type": "string",
@@ -385,7 +401,8 @@
                   },
                   "url": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "x-zcode-trim": true
                   },
                   "headers": {
                     "type": "array",
@@ -394,7 +411,8 @@
                       "properties": {
                         "name": {
                           "type": "string",
-                          "minLength": 1
+                          "minLength": 1,
+                          "x-zcode-trim": true
                         },
                         "value": {
                           "type": "string"
@@ -415,15 +433,18 @@
                           },
                           "clientId": {
                             "type": "string",
-                            "minLength": 1
+                            "minLength": 1,
+                            "x-zcode-trim": true
                           },
                           "clientSecret": {
                             "type": "string",
-                            "minLength": 1
+                            "minLength": 1,
+                            "x-zcode-trim": true
                           },
                           "clientName": {
                             "type": "string",
-                            "minLength": 1
+                            "minLength": 1,
+                            "x-zcode-trim": true
                           },
                           "scope": {
                             "type": "string"
@@ -441,19 +462,23 @@
                           },
                           "clientId": {
                             "type": "string",
-                            "minLength": 1
+                            "minLength": 1,
+                            "x-zcode-trim": true
                           },
                           "clientSecret": {
                             "type": "string",
-                            "minLength": 1
+                            "minLength": 1,
+                            "x-zcode-trim": true
                           },
                           "clientName": {
                             "type": "string",
-                            "minLength": 1
+                            "minLength": 1,
+                            "x-zcode-trim": true
                           },
                           "redirectPath": {
                             "type": "string",
-                            "minLength": 1
+                            "minLength": 1,
+                            "x-zcode-trim": true
                           },
                           "scope": {
                             "type": "string"
@@ -511,7 +536,8 @@
       "properties": {
         "contextId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         }
       },
       "required": ["contextId"],
@@ -544,7 +570,8 @@
             },
             "entityId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             }
           },
           "required": ["rowId", "entityId"],
@@ -599,7 +626,8 @@
             },
             "entityId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             }
           },
           "required": ["rowId", "entityId"],
@@ -642,15 +670,18 @@
       "properties": {
         "sessionId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "remoteSessionId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "workspaceIdentity": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "bundleDigest": {
           "type": "string",
@@ -698,23 +729,28 @@
       "properties": {
         "sessionId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "taskId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "runId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "remoteSessionId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "workspaceIdentity": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "bundleDigest": {
           "type": "string",
@@ -722,7 +758,8 @@
         },
         "reviewFlowId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "generation": {
           "type": "integer",
@@ -731,7 +768,8 @@
         },
         "interactionId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "decision": {
           "type": "object",
@@ -745,7 +783,8 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "x-zcode-trim": true
               }
             }
           },
@@ -798,7 +837,8 @@
             },
             "entityId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             }
           },
           "required": ["rowId", "entityId"],
@@ -815,23 +855,28 @@
           "properties": {
             "sessionId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "taskId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "runId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "remoteSessionId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "workspaceIdentity": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "bundleDigest": {
               "type": "string",
@@ -839,7 +884,8 @@
             },
             "reviewFlowId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "generation": {
               "type": "integer",
@@ -848,14 +894,16 @@
             },
             "interactionId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "reviewItemIds": {
               "minItems": 1,
               "type": "array",
               "items": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "x-zcode-trim": true
               }
             }
           },
@@ -877,15 +925,18 @@
           "properties": {
             "sessionId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "remoteSessionId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "workspaceIdentity": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "bundleDigest": {
               "type": "string",
@@ -920,18 +971,21 @@
           "properties": {
             "providerId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "modelId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "options": {
               "type": "object",
               "properties": {
                 "reasoningLevel": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "x-zcode-trim": true
                 }
               },
               "additionalProperties": false
@@ -1018,7 +1072,8 @@
             "currentUrl": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 4096
+              "maxLength": 4096,
+              "x-zcode-trim": true
             }
           },
           "required": ["tabCount"],
@@ -1036,7 +1091,8 @@
               },
               "context_id": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "x-zcode-trim": true
               }
             },
             "required": ["kind", "context_id"],
@@ -1102,18 +1158,21 @@
           "properties": {
             "providerId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "modelId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "options": {
               "type": "object",
               "properties": {
                 "reasoningLevel": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "x-zcode-trim": true
                 }
               },
               "additionalProperties": false
@@ -1172,11 +1231,13 @@
             },
             "botId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "providerUserId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             },
             "chatType": {
               "type": "string",
@@ -1211,7 +1272,8 @@
             },
             "entityId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "x-zcode-trim": true
             }
           },
           "required": ["rowId", "entityId"],
@@ -1327,23 +1389,28 @@
       "properties": {
         "sessionId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "taskId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "runId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "remoteSessionId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "workspaceIdentity": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "bundleDigest": {
           "type": "string",
@@ -1351,7 +1418,8 @@
         },
         "reviewFlowId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "generation": {
           "type": "integer",
@@ -1360,11 +1428,13 @@
         },
         "interactionId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "reviewItemId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-zcode-trim": true
         },
         "enabled": {
           "type": "boolean"

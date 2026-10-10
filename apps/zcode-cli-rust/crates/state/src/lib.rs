@@ -1,4 +1,13 @@
-//! SQLite、session index/history、ACK、TS 只读导入、附件快照与 recovery。
-//!
-//! crate 边界与依赖方向见 .agents/specs/cli-rust-runtime.md；边界由
-//! scripts/check-zcode-cli-rust-boundaries.mjs 在 CI 中强制。
+use zcode_cli_core_api as contract;
+use zcode_cli_domain as domain;
+mod input_attachments;
+mod input_images;
+pub mod node;
+mod node_store;
+mod node_store_ports;
+mod usage;
+mod usage_query;
+mod workspace_lock;
+pub use node_store::NodeStore;
+pub use workspace_lock::lock_workspace;
+use zcode_cli_host::id;

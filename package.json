@@ -21,8 +21,11 @@
     "build:zcode": "node scripts/build-zcode.mjs",
     "build:bootstrap": "pnpm -r --filter \"./packages/*\" --filter \"!@zcode/desktop\" build && pnpm --filter @zcode/desktop build:no-runtime-assets",
     "build:zcode-cli-rust": "cargo build --locked --manifest-path apps/zcode-cli-rust/Cargo.toml",
-    "check:zcode-cli-rust": "node scripts/check-zcode-cli-rust-boundaries.mjs && cargo fmt --manifest-path apps/zcode-cli-rust/Cargo.toml --all --check && cargo clippy --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --all-targets -- -D warnings",
-    "test:zcode-cli-rust": "cargo test --locked --manifest-path apps/zcode-cli-rust/Cargo.toml",
+    "build:zcode-cli-rust-oracle-deps": "pnpm exec turbo --skip-infer --cwd apps/zcode-cli run build --filter=!@zcode/cli --force",
+    "check:zcode-cli-rust": "node scripts/check-zcode-cli-rust-boundaries.mjs && cargo fmt --manifest-path apps/zcode-cli-rust/Cargo.toml --all --check && cargo clippy --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --workspace --all-targets -- -D warnings",
+    "test:zcode-cli-rust": "cargo test --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --workspace",
+    "test:zcode-cli-rust-drivers": "node --import tsx --test --test-isolation=none scripts/tests/*.test.mjs",
+    "test:zcode-cli-rust-interop": "node --import tsx scripts/zcode-cli-rust-node-interop.mjs apps/zcode-cli/packages/cli/dist/zcode.cjs apps/zcode-cli-rust/target/debug/zcode-cli-rust apps/zcode-cli-rust/target/debug/examples/node_read",
     "build:sea": "pnpm --dir apps/zcode-cli build:sea",
     "build:sea:all": "pnpm install && pnpm --dir apps/zcode-cli build:sea",
     "build:native-search": "node scripts/build-native-search-tools.mjs",
@@ -48,7 +51,11 @@
     "architecture:baseline:update": "node scripts/architecture/architecture-check.mjs baseline:update",
     "architecture:context": "node scripts/architecture/architecture-check.mjs context",
     "check:zcode-cli-rust-protocol-schema": "node --import tsx scripts/generate-zcode-cli-rust-protocol-schema.mjs --check",
-    "generate:zcode-cli-rust-protocol-schema": "node --import tsx scripts/generate-zcode-cli-rust-protocol-schema.mjs"
+    "generate:zcode-cli-rust-protocol-schema": "node --import tsx scripts/generate-zcode-cli-rust-protocol-schema.mjs",
+    "check:zcode-cli-rust-contract-assets": "node --import tsx scripts/sync-zcode-cli-rust-node-migrations.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-path-constants.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-config-schema.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-tool-schemas.mjs --check && node --import tsx scripts/zcode-cli-rust-node-projection-schemas.mjs --check",
+    "generate:zcode-cli-rust-contract-assets": "node --import tsx scripts/sync-zcode-cli-rust-node-migrations.mjs && node --import tsx scripts/generate-zcode-cli-rust-path-constants.mjs && node --import tsx scripts/generate-zcode-cli-rust-config-schema.mjs && node --import tsx scripts/generate-zcode-cli-rust-tool-schemas.mjs && node --import tsx scripts/zcode-cli-rust-node-projection-schemas.mjs",
+    "check:zcode-cli-rust-domain-fixtures": "node --import tsx scripts/generate-zcode-cli-rust-domain-fixtures.mjs --check",
+    "generate:zcode-cli-rust-domain-fixtures": "node --import tsx scripts/generate-zcode-cli-rust-domain-fixtures.mjs"
   },
   "dependencies": {
     "border-beam": "^1.0.1",
