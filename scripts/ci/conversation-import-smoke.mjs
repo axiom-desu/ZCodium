@@ -59,6 +59,17 @@ try {
     executablePath: process.env.ZCODE_TEST_CHROMIUM_EXECUTABLE || undefined,
   });
   const page = await browser.newPage();
+  // busy 由 React 在 file input 清理后的一次提交中解除（见 useConversationArchiveImport.ts
+  // 的 finally / cancel 分支），input 从 DOM 移除是同步的、早于该提交。
+  // 因此等待 UI 可观察状态（菜单按钮 enabled），而不是把 input 移除当作解锁信号；
+  // waitForFunction 保留默认超时，避免回归时无限等待。
+  const waitForMenuEnabled = (label) =>
+    page.waitForFunction((name) => {
+      const button = [...document.querySelectorAll("button")].find(
+        (candidate) => candidate.getAttribute("aria-label") === name,
+      );
+      return Boolean(button && !button.disabled);
+    }, label);
   const errors = [],
     requests = [];
   page.on("pageerror", (error) => {
@@ -109,7 +120,7 @@ try {
           .evaluate((element) => element.dispatchEvent(new Event("cancel")));
         await page.waitForFunction(() => !document.querySelector('input[type="file"]'));
         assert.equal((await page.evaluate(() => window.importCalls)).begins, 0);
-        assert.equal(await menu.isEnabled(), true);
+        await waitForMenuEnabled(menuName);
         const selectFile = async () => {
           await menu.click();
           const chooser = page.waitForEvent("filechooser");
@@ -191,7 +202,7 @@ try {
   assert.equal((await page.evaluate(() => window.importCalls)).opens.length, 0);
   await page.evaluate(() => window.pendingImportResolvers[1]());
   await page.waitForFunction(() => window.importCalls.opens.length === 1);
-  assert.equal(await switchMenu.isEnabled(), true);
+  await waitForMenuEnabled("Conversation options");
   assert.deepEqual(errors, []);
   assert.deepEqual(requests, []);
   console.log(
