@@ -1,158 +1,221 @@
-# Edit patterns
+# Edit Patterns — Reusable Code for Complex Edit Operations
 
-The recurring transformations on an existing workbook, each with the trap that
-makes the naive version wrong. `scenes/edit.md` carries the method; this file
-is the lookup.
+> This file is part of the edit scene. **Read it whenever you are working on an edit task** — it contains tested code patterns for grouping, sorting, block detection, merging, and other complex operations.
 
-## Append rows to a table
+---
 
-    first_empty = sheet.max_row + 1
+## Pattern: Block Detection
 
-Trap: `max_row` counts formatted-but-empty cells. Verify the real last data row
-by scanning up from `max_row` for the first non-empty one.
-
-Trap: the totals row's range does not extend itself. Rewrite the total's
-formula (`=SUM(B2:B99)` → `=SUM(B2:B199)`) or the new rows are invisible to it.
-
-## Insert a row in the middle
-
-Trap: openpyxl's `insert_rows` moves cells but **does not rewrite formulas**.
-Every range that spanned the insertion point is now off by one. After
-inserting, audit the totals and any SUM/AVERAGE/VLOOKUP that ranged over the
-moved region.
-
-Safer pattern for a sorted table: append at the end and re-sort, or rebuild
-the sheet.
-
-## Add a computed column
-
-    for row in range(2, last + 1):
-        sheet.cell(row=row, column=4,
-                   value=f"=B{row}*C{row}")
-
-Trap: writing the computed value instead of the formula. The workbook must
-compute; see `scenes/create.md` §"Shared rules".
-
-Trap: the new column needs the sheet's number format and the formula-colour
-role (black), not the default.
-
-## Replace values in place (a "what-if" edit)
-
-- Inputs are blue; replace the input cell, never the formula cell.
-- After replacing, recalculate (`scripts/recalc.py`) — the cached values in
-  the file are stale until a real engine runs.
-- Keep the original: copy the file, edit the copy, name it for the scenario.
-  Overwriting the only copy of a model to test a number is how models are lost.
-
-## Split one workbook into many (per-region exports)
-
-Trap: copying the sheet object between workbooks does not work in openpyxl —
-build a new workbook per output and write the rows, reusing the style objects.
-Charts and images must be rebuilt.
-
-Trap: each output needs the same conventions (formats, widths, freeze panes) —
-extract them into a helper (`templates/base.py`) rather than re-deriving per
-script.
-
-## Merge many workbooks into one
-
-- Read each source with `data_only=True` **after recalculating it**, or the
-  formulas contribute `None`.
-- Normalise the column sets first: sources that disagree on a column name or a
-  date format produce a merged sheet that cannot be grouped.
-- Record provenance — a `source_file` column — so a merged row can be traced
-  back. A merge without provenance cannot be audited.
-
-## Rename a sheet
-
-Trap: formulas referencing `'Old Name'!A1` break silently (they become `#REF!`
-only after a recalc). openpyxl does not rewrite them. Rename through the
-defined-names audit: list every formula containing the old sheet name, rewrite
-them, then rename.
-
-## Protect a workbook
-
-- `sheet.protection.sheet = True` with the specific cells that must stay
-  editable unlocked (`cell.protection = Protection(locked=False)`).
-- Protect the *structure* (adding/deleting sheets) separately from cell
-  protection; a workbook whose structure is unprotected loses its hidden
-  sheets to the first stray click.
-- State the protection in the delivery note — a protected workbook that
-  surprises the recipient generates a support request.
-
-## Fill a template
-
-- Locate the input cells by their labels or named ranges, never by fixed
-  coordinates — a template revision that inserts a row shifts every coordinate.
-- Write values, then recalculate, then verify the template's own totals moved
-  as expected.
-- Save as a new file; the template is the asset, the output is the artifact.
-
-## Pattern: block detection
-
-Real sheets are not one table — they are several tables stacked with blank
-rows and section titles between them. Detect the blocks before transforming:
+Data is often split into independent blocks separated by blank rows or keyword rows (e.g., TOTAL, Subtotal).
 
 ```python
-def blocks(sheet):
-    current, start = [], None
-    for row in range(1, sheet.max_row + 1):
-        empty = all(sheet.cell(row=row, column=c).value in (None, "")
-                    for c in range(1, sheet.max_column + 1))
-        if empty:
-            if current:
-                yield start, row - 1, current
-                current = []
-            start = None
+def detect_blocks(ws, col=1, start_row=1, end_row=None,
+                  separator='blank', keyword='TOTAL'):
+    """
+    Detect data block boundaries.
+    separator: 'blank' (empty row) or 'keyword' (row containing keyword)
+    Returns: list of (start_row, end_row) tuples
+    """
+    if end_row is None:
+        end_row = ws.max_row
+    blocks, block_start = [], None
+    for row in range(start_row, end_row + 1):
+        val = ws.cell(row=row, column=col).value
+        is_blank = val is None or (isinstance(val, str) and val.strip() == '')
+        is_kw = (separator == 'keyword' and
+                 isinstance(val, str) and keyword in str(val).upper())
+        if separator == 'blank':
+            if not is_blank and block_start is None:
+                block_start = row
+            elif is_blank and block_start is not None:
+                blocks.append((block_start, row - 1))
+                block_start = None
+        elif separator == 'keyword':
+            if is_kw:
+                if block_start:
+                    blocks.append((block_start, row))
+                    block_start = None
+            elif not is_blank and block_start is None:
+                block_start = row
+    if block_start:
+        blocks.append((block_start, end_row))
+    return blocks
+```
+
+---
+
+## Pattern: Pre-filter Null Rows
+
+Before any groupby/aggregation, filter out rows where key columns are empty.
+
+```python
+def pre_filter_rows(ws, key_cols, start_row, end_row):
+    """Return row numbers where ALL key columns are non-null."""
+    return [row for row in range(start_row, end_row + 1)
+            if all(normalize_cell_value(ws.cell(row=row, column=c).value) is not None
+                   for c in key_cols)]
+```
+
+---
+
+## Pattern: Sort with Formula Rewrite
+
+When sorting rows by swapping data (not using `insert_rows`), formulas must be regenerated with new row numbers.
+
+```python
+def sort_block_with_formulas(ws, block_rows, sort_col, formula_templates,
+                             descending=True):
+    """
+    Sort rows within a block, regenerating formulas.
+    formula_templates: dict {col_index: '=B{row}+C{row}'}
+    """
+    # 1. Read all row data + compute sort key
+    rows_data = []
+    for r in block_rows:
+        vals = {c: ws.cell(row=r, column=c).value for c in range(1, ws.max_column + 1)}
+        rows_data.append(vals)
+    rows_data.sort(key=lambda x: (x.get(sort_col) or 0), reverse=descending)
+
+    # 2. Write back with new row numbers
+    for i, rd in enumerate(rows_data):
+        target = block_rows[i]
+        for col, val in rd.items():
+            if col in formula_templates:
+                ws.cell(row=target, column=col).value = formula_templates[col].format(row=target)
+            else:
+                ws.cell(row=target, column=col).value = val
+```
+
+---
+
+## Pattern: Group-Merge (Aggregate by Key)
+
+Group rows by a key column. Take first-row values for some columns, sum for others.
+
+```python
+from collections import OrderedDict
+
+def group_merge_rows(ws, key_col, start_row, end_row, first_cols, sum_cols):
+    """
+    Group by key_col, merge rows.
+    first_cols: take value from first row in group
+    sum_cols: sum values across group
+    """
+    groups = OrderedDict()
+    for row in range(start_row, end_row + 1):
+        key = normalize_cell_value(ws.cell(row=row, column=key_col).value)
+        if key is None:
+            continue
+        if key not in groups:
+            groups[key] = {
+                'first': {c: ws.cell(row=row, column=c).value for c in first_cols},
+                'sums': {c: 0.0 for c in sum_cols},
+            }
+        for c in sum_cols:
+            v = normalize_cell_value(ws.cell(row=row, column=c).value)
+            if v is not None:
+                try:
+                    groups[key]['sums'][c] += float(v)
+                except (ValueError, TypeError):
+                    pass
+    return groups
+```
+
+---
+
+## Pattern: Group-Max-Keep-Ties
+
+Group by key, find max value per group, keep ALL rows that match the max (not just the first).
+
+```python
+from collections import defaultdict
+
+def group_max_keep_ties(rows, key_func, value_func, filter_null=True):
+    """
+    Keep all rows with the maximum value per group (ties preserved).
+    rows: list of row dicts or tuples
+    key_func: row → group key
+    value_func: row → comparable value (e.g., date)
+    """
+    groups = defaultdict(list)
+    for row in rows:
+        val = value_func(row)
+        if filter_null and val is None:
+            continue
+        groups[key_func(row)].append(row)
+
+    kept = []
+    for key, group in groups.items():
+        max_val = max(value_func(r) for r in group)
+        kept.extend(r for r in group if value_func(r) == max_val)
+    return kept
+```
+
+---
+
+## Pattern: Sequence Fill (Smart Numbering)
+
+Fill blank rows with "parent number + letter suffix" (e.g., 5 → 5a, 5b, ..., 5z, 5aa).
+
+```python
+import re
+
+def get_letter_suffix(n):
+    """0=a, 25=z, 26=aa, 27=ab..."""
+    if n < 26:
+        return chr(ord('a') + n)
+    return chr(ord('a') + (n // 26) - 1) + chr(ord('a') + (n % 26))
+
+def fill_sequential_labels(ws, col, start_row, end_row):
+    last_base, blank_count = None, 0
+    for row in range(start_row, end_row + 1):
+        val = ws.cell(row=row, column=col).value
+        if val is not None:
+            m = re.match(r'^(\d+)', str(val))
+            if m:
+                last_base = m.group(1)
+            blank_count = 0
         else:
-            if start is None:
-                start = row
-            current.append(row)
-    if current:
-        yield start, sheet.max_row, current
+            if last_base is not None:
+                ws.cell(row=row, column=col).value = f"{last_base}{get_letter_suffix(blank_count)}"
+                blank_count += 1
 ```
 
-A transform applied to "the data" without block detection silently merges two
-tables and corrupts both. The block boundaries are the first thing to record.
+---
 
-## Pattern: pre-filter null rows
+## Pattern: Zero-as-Blank Output
 
-A null row inside a data region is either a separator (see block detection) or
-a gap. Filter before transforming:
+When merged/aggregated values of 0 should display as empty:
 
 ```python
-rows = [r for r in rows if any(cell not in (None, "") for cell in r)]
+# Method 1: Write None (best for programmatic verification)
+cell.value = computed_value if computed_value != 0 else None
+
+# Method 2: Number format (best for Excel viewing)
+cell.value = computed_value
+cell.number_format = '0.00;-0.00;""'  # positive;negative;zero(blank)
 ```
 
-And **count what was filtered** — a silently dropped row is the defect that
-surfaces three steps later as a total that is off by one.
+---
 
-## Pattern: sort with formula rewrite
+## Pattern: Side-by-Side Table Detection
 
-Sorting a region that contains formulas breaks the references — a formula that
-said `=B5*C5` now computes the wrong row's product after the sort. The pattern:
-
-1. Sort the **values** (or the source columns).
-2. Rewrite the formula column **after** the sort, filling one formula down.
-3. Recalculate and verify the first and last rows by hand.
-
-A sorted region with un-rewritten formulas is worse than an unsorted one: it
-is wrong and looks right.
-
-## Pattern: zero-as-blank output
-
-Financial output renders zeros as `-` (the number format), but an **empty cell
-and a zero are different facts**. The pattern for the output layer:
+Some sheets contain multiple independent tables arranged horizontally (separated by empty columns).
 
 ```python
-if value == 0:
-    cell.value = None            # truly nothing to report
-else:
-    cell.value = value
-cell.number_format = "$#,##0;($#,##0);-"
+def detect_side_by_side_tables(ws):
+    """Find column groups separated by all-null columns."""
+    tables = []
+    current_start = None
+    for col in range(1, ws.max_column + 1):
+        has_data = any(ws.cell(row=r, column=col).value is not None
+                       for r in range(1, ws.max_row + 1))
+        if has_data and current_start is None:
+            current_start = col
+        elif not has_data and current_start is not None:
+            tables.append((current_start, col - 1))
+            current_start = None
+    if current_start:
+        tables.append((current_start, ws.max_column))
+    return tables  # [(start_col, end_col), ...]
 ```
-
-Use `None` only when the absence is the truth (no activity in the period).
-Use `0` when the zero is the fact (activity happened, it totalled zero). The
-format makes both display as `-`; the underlying value keeps the distinction
-the reader needs.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@zcode/presentations-plugin",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "license": "Apache-2.0",
   "description": "PPTX presentation production skills, published as an official ZCode plugin."

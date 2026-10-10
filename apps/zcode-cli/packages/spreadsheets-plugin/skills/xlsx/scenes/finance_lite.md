@@ -1,107 +1,192 @@
-# Lightweight financial workbooks
+# Finance Lite — Simple Budget & Expense Guide
 
-The small-budget sibling of `finance.md`: a personal budget, a small project
-tracker, a household sheet — workbooks where the full analyst apparatus
-(colour-coded models, source-documented hardcodes, scenario blocks) is more
-ceremony than the job needs. The conventions below are the subset that still
-earns its keep at small scale.
+Load this reference for: simple budgets, expense reports, fee tracking, cost summaries, revenue/expense comparison, personal finance, project cost tracking — any financial table that does **NOT** need DCF, LBO, three-statement linkage, sensitivity analysis, or IB-grade formatting.
 
-## What carries over from `finance.md`
+For complex financial models → use `scenes/finance.md` instead.
 
-- **Formulas, not typed-in results.** A budget whose "total spent" was computed
-  in someone's head and typed in is wrong the moment a row changes. This rule
-  has no small-scale exception.
-- **Units in headers**, and one number format per column.
-- **Assumptions in their own cells** when there are assumptions — a budget with
-  a savings rate has one; a flat expense log has none and should not grow a
-  block for form's sake.
+Also load `engines/design.md` for styling (use **standard** design tokens, NOT IB overrides).
 
-## What drops
+---
 
-- The full colour-coding table. Keep **one** distinction: inputs (what you
-  typed) vs formulas (what the sheet computed) — blue vs black, or nothing at
-  all if every number is an input.
-- Source-documentation comments. A personal budget cites nothing. A workbook
-  that leaves the household is no longer lite — apply `finance.md`.
-- Scenario blocks and sensitivity tables. A lite workbook has one set of
-  numbers and a note saying what changed if it is edited later.
+## When to Use finance_lite vs finance
 
-## The structure that fits
+| Signal | finance_lite ✅ | finance.md ❌ |
+|--------|----------------|--------------|
+| 预算表 / budget | ✅ | |
+| 费用报表 / expense report | ✅ | |
+| 项目成本追踪 / project cost tracking | ✅ | |
+| 收支对比 / revenue vs cost | ✅ | |
+| 个人记账 / personal finance | ✅ | |
+| 简单 ROI 计算 / simple ROI calculation | ✅ | |
+| DCF / LBO / 估值模型 (valuation model) | | ✅ |
+| 三表联动 (P&L + BS + CF) | | ✅ |
+| 敏感性分析 / scenario table | | ✅ |
+| IB pitch book level formatting | | ✅ |
 
-Three sheets maximum:
+---
 
-1. **Inputs** — the numbers you type, one table, one header row. Categories in
-   a column, amounts in another, dates in a third.
-2. **Summary** — formulas over the inputs only: totals per category, per month,
-   remaining budget. Never a typed number.
-3. **Notes** — what the sheet is, what the categories mean, when it was last
-   reconciled. Three lines; the sheet's future self is the reader.
+## Standard Sheet Structure
 
-## Monthly reconciliation
+```
+Sheet: "Budget" (or user-specified name)
+  Row 1: margin (whitespace)
+  Row 2: Title (merged, styled via setup_sheet())
+  Row 3: spacer
+  Row 4: Headers
+  Row 5+: Data rows
+  Last row: Totals (if applicable)
+```
 
-The one ritual that makes a budget workbook trustworthy:
+### Typical Column Patterns
 
-1. Enter the period's actuals into Inputs.
-2. Recalculate (`scripts/recalc.py`) and confirm zero formula errors.
-3. Check the Summary's totals against the bank's own total — not against last
-   month's copy of the sheet.
-4. Write the reconciliation date and the checked total into Notes.
+**Budget Table:**
+```
+Category (类别) | Budget Amount (预算金额) | Actual Amount (实际金额) | Variance (差异) | Variance Rate (差异率) | Notes (备注)
+```
 
-A budget that has never been reconciled against its source is a guess with
-formatting.
+**Expense Report:**
+```
+Date (日期) | Category (类别) | Description (说明) | Amount (金额) | Claimant (报销人) | Status (状态)
+```
 
-## Anti-patterns
+**Revenue vs Cost:**
+```
+Month (月份) | Revenue (收入) | Cost (成本) | Gross Profit (毛利) | Gross Margin (毛利率)
+```
 
-- A category added mid-period without a formula update, so the period total
-  silently excludes it.
-- A "miscellaneous" category larger than any real one — the taxonomy is wrong,
-  not the data.
-- The sheet growing a fourth tab. When a lite workbook needs a fourth tab, it
-  is not lite anymore: rebuild it with `finance.md` conventions or split it.
+**Project Cost:**
+```
+Phase (阶段) | Task (任务) | Budget (预算) | Used (已用) | Remaining (剩余) | Usage Rate (使用率) | Status (状态)
+```
 
-## Formula patterns for the small workbook
+---
 
-The three formulas a lite workbook needs, and nothing more:
-
-    period total      =SUMIFS(Amount, Month, $A2)
-    category total    =SUMIFS(Amount, Category, $B2)
-    remaining         =Budget - SUMIFS(Amount, Category, $B2)
-
-- `SUMIFS` over a typed total: the workbook computes, and a new row is counted
-  without editing a formula. This is the whole point.
-- The criteria reference the label cell (`$A2`), never a typed string — the
-  label is the contract between the row and the formula.
-- A `remaining` that goes negative is information, not an error: format it with
-  the negatives-in-parentheses rule and let it show.
-
-## Conditional formatting (simple)
-
-One rule, used for one purpose: a `remaining` below zero, or a category over
-its budget, turns red.
+## Formula Patterns
 
 ```python
-sheet.conditional_formatting.add("C2:C50",
-    CellIsRule(operator="lessThan", formula=["0"],
-               font=Font(color="FFCC0000")))
+# Variance
+cell.value = '=C{r}-B{r}'  # Actual - Budget
+
+# Variance percentage (safe division)
+cell.value = '=IFERROR((C{r}-B{r})/B{r},0)'
+
+# Running total
+cell.value = '=SUM(D$5:D{r})'
+
+# Gross margin
+cell.value = '=IFERROR((B{r}-C{r})/B{r},0)'
+
+# Status formula (simple threshold)
+cell.value = '=IF(F{r}>1,"Over Budget",IF(F{r}>0.9,"At Risk","On Track"))'
+
+# Subtotal
+cell.value = '=SUBTOTAL(9,D{start}:D{end})'
+
+# Grand total
+cell.value = '=SUM(D5:D{last_data_row})'
 ```
 
-- One rule per workbook. A lite workbook with five conditional formats is not
-  lite.
-- The colour carries a meaning the label already states ("over budget") — it
-  is a signal, not the only signal.
-- Bound the range to the used rows; a whole-column rule is slower and the
-  difference is visible even at this scale.
+---
 
-## Quick templates
+## Number Formats
 
-Three sheets, and the file is done:
+Use standard formats from `templates/base.py`:
 
-```
-Inputs     one table: date, category, amount, note. One header row, frozen.
-Summary    =SUMIFS over Inputs by category and by month; the budget column.
-Notes      what the categories mean, when it was last reconciled, three lines.
+```python
+from templates.base import FORMATS
+
+cell.number_format = FORMATS['currency_cny']  # ¥#,##0.00
+cell.number_format = FORMATS['percentage']     # 0.0%
+cell.number_format = FORMATS['integer']        # #,##0
+cell.number_format = FORMATS['date']           # YYYY-MM-DD
 ```
 
-When the workbook needs a fourth sheet, it is not lite anymore — rebuild it
-with `finance.md` conventions or split it by purpose. That sentence is the
-whole scope rule, and it is the reason the template has exactly three sheets.
+For budget-specific formatting (negatives in parentheses):
+```python
+BUDGET_FORMATS = {
+    'currency':    '¥#,##0.00;(¥#,##0.00);"-"',
+    'variance':    '#,##0.00;(#,##0.00);"-"',
+    'var_pct':     '0.0%;(0.0%);"-"',
+}
+```
+
+---
+
+## Styling
+
+Use **standard** design tokens (NOT IB overrides):
+
+```python
+from templates.base import (
+    setup_sheet, style_header_row, style_data_row, style_total_row,
+    FONT_NAME, HEADER_BOLD, PRIMARY, ACCENT_POSITIVE, ACCENT_NEGATIVE, ACCENT_WARNING,
+    font_body, font_header, fill_header,
+)
+
+# Setup
+setup_sheet(ws, title="2026年部门预算", last_col=7)
+
+# Headers at row 4
+style_header_row(ws, row_num=4, col_start=2, col_end=7)
+
+# Data rows
+for i, row_num in enumerate(range(5, last_row + 1)):
+    style_data_row(ws, row_num=row_num, col_start=2, col_end=7, row_index=i)
+
+# Totals
+style_total_row(ws, row_num=last_row + 1, col_start=2, col_end=7)
+```
+
+---
+
+## Conditional Formatting (Simple)
+
+```python
+from openpyxl.formatting.rule import CellIsRule
+from templates.base import CF_POSITIVE_FONT, CF_POSITIVE_FILL, CF_NEGATIVE_FONT, CF_NEGATIVE_FILL
+
+# Highlight positive variance (green)
+ws.conditional_formatting.add(
+    f'D5:D{last_row}',
+    CellIsRule(operator='greaterThan', formula=['0'],
+               font=CF_POSITIVE_FONT, fill=CF_POSITIVE_FILL)
+)
+
+# Highlight negative variance (red)
+ws.conditional_formatting.add(
+    f'D5:D{last_row}',
+    CellIsRule(operator='lessThan', formula=['0'],
+               font=CF_NEGATIVE_FONT, fill=CF_NEGATIVE_FILL)
+)
+```
+
+---
+
+## Quick Templates
+
+### Template: Monthly Budget
+
+```python
+headers = ["类别", "预算金额", "实际金额", "差异", "差异率", "状态"]
+# Variance = Actual - Budget
+# Var% = IFERROR((Actual-Budget)/Budget, 0)
+# Status = IF(Var%>0.1,"超支"(Over Budget),IF(Var%>0,"注意"(Watch),"正常"(Normal)))
+```
+
+### Template: Expense Report
+
+```python
+headers = ["日期", "类别", "说明", "金额", "报销人", "状态"]
+# Date format: YYYY-MM-DD
+# Amount: currency_cny
+# Status: dropdown validation ["待审批"(Pending),"已审批"(Approved),"已报销"(Reimbursed),"已拒绝"(Rejected)]
+```
+
+### Template: Project Cost Tracker
+
+```python
+headers = ["阶段", "任务", "预算", "已用", "剩余", "使用率", "状态"]
+# Remaining = Budget - Used
+# Usage% = IFERROR(Used/Budget, 0)
+# Status = IF(Usage%>1,"超支"(Over Budget),IF(Usage%>0.9,"预警"(Warning),"正常"(Normal)))
+```

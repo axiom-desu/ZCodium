@@ -1,190 +1,698 @@
-# Brief — Exam papers and reference sheets
+# Scene: Exam Paper
 
-Applies to an exam paper, a quiz, an open-book reference sheet, and any short
-dense handout whose job is to be read under time pressure. A reference sheet is an
-exam document with the questions removed: same geometry, same density, same
-column mechanics.
+## Overview
 
-## 1. Orientation and columns
+Exam papers are among the most critical document types in education. Unlike general documents, they require high precision in layout, print compatibility, and subject-specific formatting. This specification covers the complete workflow from page framework to subject-specific features.
 
-- Landscape A4 for a reference sheet or a wide question paper; portrait for a
-  conventional exam. Decide before writing — the column count follows from it.
-- The paper size is the section's `w:pgSz`. Landscape A4 is
-  `<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>`; portrait A4 is the same
-  two numbers swapped with `w:orient` omitted or `portrait`.
-- Columns come from the section properties, not from a table:
-  `<w:cols w:num="7" w:space="284"/>` inside `w:sectPr`. The attribute is a twip gap
-  between columns; the count is whatever the content needs. Word's dialogue tops out
-  at a few columns, so write the element directly rather than trying to reach a
-  seven-column sheet through the UI.
-- A forced column break is `<w:br w:type="column"/>` inside a run — the equivalent
-  of the LaTeX `\columnbreak`. Use it to start a new topic at the top of a column
-  instead of letting it straddle the break.
-- **Do not build columns out of a table.** A seven-column layout table is a
-  seven-column failure: `table-pagination` wants a `w:tblHeader` header row on every
-  multi-row table and `w:cantSplit` on every row, `table-margins` wants `w:tcMar` on
-  every cell, and none of those mean anything for a layout grid.
+→ Universal prohibitions — see `references/common-rules.md`
+→ **Note:** Exam papers use their OWN font/layout specs (not Profile A defaults). All text is pure black/white/grey for photocopy clarity.
 
-## 2. Margins and the sealing line
+---
 
-- Margins 1.5–2 cm all round on a reference sheet; 2.5 cm plus a wider binding edge
-  on a bound exam paper.
-- A reference sheet uses the full printable area on purpose. A bound exam paper does
-  not: the binding edge needs the extra width so the staple does not eat the first
-  column.
-- The candidate information block — name, id, seat — sits at the top of page 1, in a
-  bordered box or under a rule, and is the only place those fields appear.
+## 1. Page Setup & Framework
 
-## 3. Type scale under time pressure
+### Paper Specifications
 
-- A conventional exam: body 10.5–12 pt, questions at body size, sub-questions one
-  step smaller.
-- A reference sheet: 5–7 pt body. At 5 pt the leading must be set explicitly —
-  `w:spacing/@w:line` at roughly the same value as the font size in half-points
-  times 1.2, or the lines collide.
-- One family for everything. A reference sheet has no hierarchy to buy with a
-  second family; it has colour, and colour is cheaper.
-- For Chinese content use 宋体 for body and 黑体 for headings. Both are safe;
-  `font-fallback` flags only Noto Sans SC, Noto Serif SC, Source Han Sans, Source
-  Han Serif, LXGW WenKai and 霞鹜文楷.
+| Type | Paper | Orientation | Use Case |
+|------|-------|-------------|----------|
+| Practice / Unit quiz | A4 | Portrait | Daily practice, homework, quizzes |
+| Formal exam | A3 | Landscape + 2-column | Midterm / final / standardized (requires OOXML) |
+| Answer sheet | A4 | Portrait | Standalone answer card |
 
-## 4. Colour as the only hierarchy
+### Margins
 
-On a dense sheet, colour is what makes it navigable, and it has to be systematic:
-a fixed palette of five or six roles, each with one meaning, applied by a paragraph
-style or a character style rather than run by run.
+```js
+// A4 portrait — no seal line
+page: { size: { width: 11906, height: 16838 },
+  margin: { top: 850, bottom: 850, left: 1200, right: 1200 } }
 
-| role                | typical use                                   | mechanism                                    |
-| ------------------- | --------------------------------------------- | -------------------------------------------- |
-| section banner      | a topic block heading, on a tinted background | paragraph shading `w:shd/@w:fill` on `w:pPr` |
-| sub-section heading | a sub-topic                                   | bold text in a single accent colour          |
-| key term            | vocabulary a candidate must recall            | text colour, one accent                      |
-| process or step     | a named procedure                             | text colour, a second accent                 |
-| category label      | "advantages", "pitfalls"                      | bold text in a third accent                  |
-| inline key          | a `key: value` pair                           | bold or plain, a muted accent                |
+// A4 portrait — with seal line (left binding area reserved)
+page: { size: { width: 11906, height: 16838 },
+  margin: { top: 850, bottom: 850, left: 2200, right: 850 } }
 
-Rules that keep the palette honest:
+// A3 landscape dual-column (requires OOXML)
+// ⚠️ A3 dual-column may render slightly differently in WPS vs Word. Test in both before batch printing.
+page: { size: { width: 23812, height: 16838, orientation: PageOrientation.LANDSCAPE },
+  margin: { top: 850, bottom: 850, left: 2200, right: 850 } }
+```
 
-- One meaning per colour. A colour that marks both "term" and "step" marks nothing.
-- Tinted backgrounds come from `w:shd/@w:fill` with `w:val="clear"` and a real hex
-  fill. `w:val="clear"` with a fill of `000000`, `auto`, or empty is the "whole cell
-  turned black" failure that `shading-type` reports.
-- Contrast is a print question, not a screen question. A pale tint that reads on a
-  monitor disappears on a mono laser printer; a dark tint eats the toner and the
-  text with it.
-- Greyscale must still work. Print one page in black and white before delivering —
-  if two categories become indistinguishable, they needed weight or position, not
-  only hue.
+### Section Handling
 
-## 5. Question numbering
+Different parts should use section breaks (`SectionType.NEXT_PAGE`):
+- **Header area (full-width):** Title, instructions, score table (no columns)
+- **Content area:** Questions (may use columns)
+- **Composition / answer sheet:** Independent section, independent format
+- **Attachment pages:** Large maps/diagrams for geography/biology can be separate pages
 
-- Questions are a real numbered list: `w:numPr` on each question paragraph, with a
-  `numId` from `word/numbering.xml`. Typed numbers do not renumber and do not
-  survive an inserted question.
-- Each question group — 选择题, 判断题, 简答题, 计算题 — has its own numbering
-  definition so it restarts at 1.
-- **`numbering-continuity` requires the `numId` values in use to be contiguous
-  integers.** Four question groups numbered with `numId` 1, 3, 7 and 9 fail the rule
-  even though the document renders correctly. Either renumber the definitions to be
-  contiguous, or scope the gate with `--only` and record why.
-- Scores sit at the right margin of the question line: a right-aligned tab at the
-  right margin, then `（本题 10 分）`. Not a table cell — a score column as a table
-  drags `table-pagination` and `table-margins` into a document that has no data
-  table.
+```js
+sections: [
+  { properties: { /* Header section — no columns */ }, children: [...] },
+  { properties: { type: SectionType.CONTINUOUS, column: { count: 2, space: 720 } }, children: [...] },
+  { properties: { type: SectionType.NEXT_PAGE }, children: [...] }, // Composition
+]
+```
 
-## 6. Answer space
+### Template-First Principle
 
-- Blank space for a handwritten answer is a paragraph with a fixed height: an empty
-  paragraph with a `w:spacing/@w:line` large enough to hold the answer, or several
-  of them. Five or more consecutive empty paragraphs is what `blank-pages` counts as
-  a blank page, so a long answer area is one paragraph with a tall line, not eight
-  empty ones.
-- An answer line is a paragraph with a bottom border (`w:pBdr/w:bottom`), repeated
-  per line. It reflows with the text; a typed run of underscores does not.
-- A machine-read answer sheet is a table, and then it is a real table: `w:tblHeader`
-  on the header row, `w:cantSplit` on every row, `w:tcMar` on every cell.
+⚠️ **Build framework first, fill content second.** Before writing questions, determine:
+1. Paper size + margins
+2. Whether seal line is needed
+3. Whether columns are used
+4. Question type structure and point allocation
+5. Whether composition grid / answer sheet is needed
 
-## 7. The instructions block
+---
 
-- A short "考生须知" block at the top: total marks, time allowed, closed or open
-  book, whether a calculator is permitted.
-- It is body prose, so it is subject to the body rules: Chinese paragraphs of twenty
-  or more characters that are not centred, not in a table and not list items need a
-  first-line indent in the 200–800 twip range, and every body paragraph outside
-  tables and lists must share one `w:spacing/@w:line` value.
-- The indent must be `w:ind/@w:firstLine`. Word's `w:firstLineChars="200"` renders
-  identically but is not what the rule reads.
+## 2. Seal Line & Student Information Area
 
-## 8. Fitting the content
+### When to Use Seal Line
 
-When the sheet does not fit, the order of preference is:
+| Scenario | Seal Line | Student Info Position |
+|----------|-----------|---------------------|
+| Formal standardized exam | ✅ Required | Left vertical info column |
+| Midterm / Final | ✅ Recommended | Left vertical info column |
+| Unit quiz | ❌ Optional | Header horizontal info row |
+| Daily practice | ❌ Skip | Header horizontal info row |
 
-1. Cut content. A reference sheet that covers everything covers nothing.
-2. Tighten the wording.
-3. Reduce the column gap (`w:cols/@w:space`).
-4. Reduce the leading (`w:spacing/@w:line`).
-5. Reduce the font size (`w:sz` in half-points — 5 pt is `w:sz w:val="10"`).
-6. Add a column.
+### Seal Line Implementation
 
-Shrinking type first is the failure mode: a sheet at 3 pt is not a dense sheet, it
-is an unreadable one, and it prints worse than it looks.
+#### Method 1: Header horizontal prompt (simple)
+```js
+headers: { default: new Header({ children: [
+  new Paragraph({ alignment: AlignmentType.CENTER,
+    children: [new TextRun({
+      text: ".............. Seal ...... Line ...... Do ...... Not ...... Answer ...... Inside ..............",
+      size: 16, color: "999999", font: "SimSun" })] })
+] }) }
+```
 
-## 9. Self-check before handing this over
+#### Method 2: Vertical text box (OOXML advanced)
+```xml
+<w:txbxContent>
+  <w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
+      <w:t>Name:________  Class:________  ID:________</w:t></w:r>
+  </w:p>
+  <w:p><w:r><w:rPr><w:sz w:val="16"/><w:color w:val="CCCCCC"/></w:rPr>
+      <w:t>- - - - - - - - - Seal Line - - - - - - - - -</w:t></w:r>
+  </w:p>
+</w:txbxContent>
+```
 
-- Page orientation and paper size match the intent.
-- Column count and gap set in the section properties, not in a table.
-- Every question group's numbering definitions contiguous, or the gate scoped.
-- No run of five or more consecutive empty paragraphs.
-- Every multi-row table carrying `w:tblHeader`, `w:cantSplit` and `w:tcMar`.
-- One line-spacing value across all body paragraphs.
-- One meaning per colour, and the sheet still readable in greyscale.
-- `postcheck.py exam.docx --only blank-pages,line-spacing,numbering-continuity,table-pagination,table-margins,font-fallback,shading-type`
-  — a single-section paper fails `cover-separation` by design.
+### Student Info Row
 
-## Source
+```js
+// Horizontal info row (when no seal line) — borderless 3-column table
+new Table({
+  alignment: AlignmentType.CENTER, columnWidths: [2800, 2800, 2800],
+  rows: [new TableRow({ children: [
+    cell("Name: ______________"),
+    cell("Class: ______________", AlignmentType.CENTER),
+    cell("ID: ______________", AlignmentType.RIGHT),
+  ] })]
+})
+```
 
-The structure of this brief — the landscape A4 sheet with deliberately tight
-margins, the seven-column layout driven from the section properties, the column
-break as the unit of topic placement, the colour-coded markup palette with one
-meaning per colour (tinted section banner, accent sub-headings, teal key terms,
-purple process names, green category labels, muted inline keys), and the order of
-preference for fitting content — follows the conventions of:
+Fill lines should be moderate length (10–14 underscore chars). Label order: Name → Class → Student ID.
 
-    Purestone/chitshit
-    https://github.com/Purestone/chitshit
-    Copyright (c) 2025 Puyan
-    MIT License — https://github.com/Purestone/chitshit/blob/main/LICENSE
+---
 
-The knowledge above is restated in this repository's own words and in `.docx` terms;
-no upstream file is distributed with this plugin.
+## 3. Paper Header & Title Area
 
-## 9. Photocopy survival
+### Structure
 
-An exam is copied — sometimes three generations deep — and read under bad light.
-Test for it explicitly, because a paper that is legible on screen can be
-unreadable as a copy:
+```
+School name (16pt SimHei, centered)
+Exam title (14pt SimHei, centered) — e.g., "2025–2026 Academic Year Second Semester Midterm"
+Subject title (14pt SimHei, centered) — e.g., "Grade 7 Mathematics"
+Student info row
+Instructions (10pt SimSun, centered, grey)
+Score table (as needed)
+```
 
-- **Minimum body size 10.5 pt (五号)** for a conventional exam. A 小五 (9 pt)
-  reference sheet survives a screen and dies in a copier.
-- **Greyscale legibility**: convert the page to greyscale and read it. Anything
-  that carried meaning by colour alone is now gone — §4's hierarchy rule is
-  what makes the greyscale copy work.
-- **Tint survival**: a tint below 10 % disappears in the first copy. Shaded
-  question blocks use 10–15 % or a rule.
-- **Figures at 300 dpi**, and checked at the size they will print, not the size
-  they were generated. A screenshot-quality figure becomes mush after one
-  photocopy generation.
-- **Barcodes and QR codes** tested at final print size with a phone camera
-  pointed at a photocopy, not at the screen.
-- **The staple zone**: on a bound paper, the first column of the binding edge
-  must survive being stapled — §2's wider binding margin is what buys it.
+### Font Specifications
 
-## 10. Delivery
+| Element | Font | Size | Style |
+|---------|------|------|-------|
+| School name | SimHei | 16pt (size:32) | Bold, centered |
+| Exam title | SimHei | 14pt (size:28) | Bold, centered |
+| Subject title | SimHei | 14pt (size:28) | Bold, centered |
+| Instructions | SimSun | 10pt (size:20) | Grey 333333, centered |
+| Student info | SimSun | 10.5pt (size:21) | Normal |
 
-- The paper ships as PDF, print-ready: fonts embedded, page size exact, and the
-  page count checked against the announced count.
-- A source copy (the `.docx`) is archived alongside, because the revision that
-  comes back from review is a diff against it.
-- The answer key and the marking scheme are separate files, never annotated
-  into the paper's source — a key that lives in the same document is one
-  careless export away from being distributed.
+### Instructions Content
+
+Should include: total score, exam duration, answer method, special requirements (e.g., calculator allowed).
+
+### Score Table
+- Header row: light grey background F0F0F0, centered
+- Columns: Question type | Section names... | Total
+- Rows: Points | Section points... | Total points
+- Row: Score | blank... | blank
+- Table centered, 80% page width
+
+⚠️ **Header area should not be too full** — title + info + instructions + score table should not exceed 1/3 of the page.
+
+---
+
+## 4. Content Layout Rules
+
+### Color Palette
+
+```js
+// Exam papers use only black/white/grey for clear photocopying
+const C = {
+  title: "000000", body: "000000", section: "333333",
+  seal: "999999", answerLine: "CCCCCC", headerBg: "F0F0F0", gridLine: "DDDDDD",
+};
+```
+
+### Column Usage
+
+| Subject / Question Type | Recommendation |
+|------------------------|----------------|
+| Math multiple choice + fill-in | ✅ Suitable for columns |
+| Physics multiple choice | ✅ Suitable for columns |
+| Chinese reading / composition | ❌ Not suitable |
+| English cloze / reading | ❌ Not suitable |
+| History source-based | ❌ Not suitable |
+| Geography map reading | ❌ Not suitable |
+
+### Question Numbering
+
+Entire paper uses consistent three-level numbering:
+- **Major sections:** I, II, III, IV... (Chinese: 一、二、三、四…)
+- **Questions:** 1. 2. 3. ... (Arabic + period)
+- **Sub-questions:** (1) (2) (3) ... (parenthesized)
+
+⚠️ **No extra symbols before question numbers** (no `•`, `▸`, `▪`, `-`, `*`). The number itself is the only marker. **Never use docx numbering/bullet list styles** for question numbers — must use plain TextRun manual numbering.
+
+```js
+// ✅ Correct — plain TextRun manual numbering
+new Paragraph({ spacing: { before: 120, after: 60, line: 360 },
+  children: [new TextRun({ text: `${i+1}. ${question}`, size: 21, font: { eastAsia: "SimSun" } })] })
+
+// ❌ Wrong — numbering causes Word to add bullets
+new Paragraph({ numbering: { reference: "xxx", level: 0 }, // ← Forbidden!
+  children: [new TextRun({ text: question })] })
+```
+
+### Question Spacing
+
+```js
+sectionTitle: { before: 300, after: 150 }  // Major section headers
+question: { before: 120, after: 80 }       // Between questions
+subQuestion: { before: 60, after: 40 }     // Between sub-questions
+```
+
+### Page Break Control
+
+⚠️ Key principles:
+- **Question stem and answer area must not split** across pages
+- **Source material and questions on same page**
+- **Figures adjacent to their questions**
+- **Avoid orphan lines** — question stem, options, answer area appear as a group
+
+```js
+new Paragraph({ keepNext: true, keepLines: true, children: [...] })
+```
+
+⚠️ **Answer question page break rule (mandatory):**
+
+Complete combination (stem + figure + answer lines) must be considered as a unit. If remaining space cannot fit stem + figure + at least 3 answer lines, push entire question to next page.
+
+Use `keepNext: true` to chain: stem → figure → first 3 answer lines.
+
+---
+
+## 5. Font & Paragraph Standards
+
+### Underline Formatting for "Underlined Parts" (Mandatory)
+
+When a question references "underlined part" (划线部分), the relevant text MUST use actual underline formatting (`underline: { type: UnderlineType.SINGLE }`). **Never** show "划线部分为 XXX" as plain text annotation — the underline must be visually rendered.
+
+```js
+// ✅ Correct — actual underline on the referenced text
+new Paragraph({ children: [
+  new TextRun({ text: "1. It is ", size: 21, font: { ascii: "Times New Roman" } }),
+  new TextRun({ text: "a butterfly", size: 21, font: { ascii: "Times New Roman" },
+    underline: { type: UnderlineType.SINGLE, color: "000000" } }),
+  new TextRun({ text: ". (Ask about the underlined part)", size: 21, font: { ascii: "Times New Roman" } }),
+]})
+
+// ❌ Wrong — underlined part described as annotation text
+new TextRun({ text: "1. It is a butterfly. (对划线部分提问) 注：划线部分为 a butterfly" })
+```
+
+### Font Hierarchy
+
+| Element | Font | Size | Style |
+|---------|------|------|-------|
+| Section title | SimHei | 11pt (size:22) | Bold |
+| Question content | SimSun | 10.5pt (size:21) | Normal |
+| Points annotation | SimSun | 10pt (size:20) | In parentheses |
+| Reading material | KaiTi/SimSun | 10.5pt (size:21) | KaiTi to differentiate |
+| Notes/source | SimSun | 9pt (size:18) | Grey 666666 |
+| Seal line | SimSun | 8pt (size:16) | Grey 999999 |
+| Page number | SimSun | 9pt (size:18) | Centered |
+
+### Line Spacing
+```js
+line: 360  // ~1.5x for readability
+answerLine: 500  // Answer line spacing for writing room
+```
+
+### Paragraph Rules
+- ⚠️ **Never use consecutive returns for whitespace** — use `spacing.before/after`
+- Chinese questions use Chinese punctuation; English materials use English punctuation
+- Mixed CN/EN: use Times New Roman or Calibri for English text
+
+---
+
+## 6. Multiple Choice Layout
+
+### Core Rule
+
+⚠️ **Options must NEVER be aligned with spaces!** Must use borderless tables.
+
+### Option Layout — Borderless Table
+
+```js
+// Short options: 4 columns in 1 row
+new Table({
+  columnWidths: [2200, 2200, 2200, 2200],
+  rows: [new TableRow({ children: ["A","B","C","D"].map((label, i) =>
+    new TableCell({ borders: NBs, width: { size: 2200, type: WidthType.DXA },
+      margins: { top: 0, bottom: 0, left: 60, right: 60 },
+      children: [new Paragraph({ spacing: { before: 0, after: 0 },
+        children: [new TextRun({ text: `${label}. ${options[i]}`, size: 21, font: "SimSun" })] })]
+    })
+  ) })]
+})
+// Medium options: 2 columns, 2 rows
+// Long options: 1 column, 4 rows
+```
+
+### Option Length Detection
+```js
+function getOptionLayout(options) {
+  const maxLen = Math.max(...options.map(o => o.length));
+  if (maxLen <= 6) return "4col";
+  if (maxLen <= 15) return "2col";
+  return "1col";
+}
+```
+
+---
+
+## 7. Fill-in-the-Blank Layout
+
+```js
+// Blank line length matches expected answer:
+// Short answer (number/word): 8 underscores
+// Medium (phrase): 14 underscores
+// Long (sentence): 20 underscores
+new Paragraph({ spacing: { before: 140, after: 80, line: 400 },
+  children: [new TextRun({ text: `${num}. Question text ________________.`, size: 21, font: "SimSun" })] })
+```
+
+⚠️ Fill-in lines must not break across lines — if line is too long, put the blank on the next line.
+
+---
+
+## 8. Short Answer / Problem-Solving Layout
+
+### Question + Points
+```js
+new Paragraph({ spacing: { before: 200, after: 60, line: 360 }, keepNext: true,
+  children: [new TextRun({ text: `${num}. (${points} pts) ${question}`, size: 21, font: "SimSun" })] })
+```
+
+### Answer Lines
+```js
+// Light grey answer lines (CCCCCC), NOT black
+// ⚠️ Answer lines are ONLY for writing space within each question — never as dividers between questions
+function answerLines(count) {
+  return Array(count).fill(null).map(() =>
+    new Paragraph({ spacing: { before: 0, after: 0, line: 500 },
+      borders: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" } },
+      children: [new TextRun({ text: " ", size: 21 })] })
+  );
+}
+```
+
+⚠️ **Separation between questions:**
+
+Use **only spacing** (`spacing.before: 200`) for visual separation between questions. **Forbidden:**
+- ❌ Grey horizontal lines (borders)
+- ❌ Color block dividers (Table-simulated separators)
+- ❌ Symbol dividers (e.g., `───────`)
+- ❌ Any visual separator decoration
+
+### Answer Space vs. Points
+
+| Points | Suggested Lines | Description |
+|--------|----------------|-------------|
+| 2–4 | 3–4 lines | Simple calculation / short answer |
+| 5–8 | 6–8 lines | Medium problem |
+| 10–12 | 8–10 lines | Complex problem |
+| 14–20 | 10–14 lines | Comprehensive / essay question |
+
+---
+
+## 9. Source-Based / Reading Question Layout
+
+### Material vs. Question Separation
+
+```js
+// Material area — indented + KaiTi to differentiate
+new Paragraph({ indent: { left: 420, right: 420 }, spacing: { before: 100, after: 100, line: 380 },
+  children: [new TextRun({ text: materialText, size: 21, font: "KaiTi" })] })
+// Source attribution
+new Paragraph({ alignment: AlignmentType.RIGHT, indent: { right: 420 },
+  children: [new TextRun({ text: "— from \"XXX\"", size: 18, color: "666666", font: "SimSun" })] })
+```
+
+### Key Principles
+- Material title, source, body, and notes use different fonts
+- Long materials: increase line spacing (line: 380–400)
+- Material and corresponding questions on same page
+- Sub-question numbers (1)(2)(3) clearly correspond to material
+- **Data tables in materials MUST use proper docx `Table` objects** — never render tabular data as Markdown plain text (`| col | col |`). This includes statistics tables, climate data tables, comparison tables, and any structured data within question materials. Use bordered tables (see § 13 Table Usage Standards) with appropriate header row styling.
+
+---
+
+## 10. Composition / Writing Area
+
+### Grid Count Calculation
+
+⚠️ **Grid count must exceed required word count by 20–30%** (for title, paragraph indents, line breaks).
+
+| Required Words | Min Grid Count | Recommended Layout |
+|---------------|---------------|-------------------|
+| 400 | 500 | 25 rows × 20 cols |
+| 600 | 750 | 38 rows × 20 cols |
+| 800 | 1000 | 50 rows × 20 cols |
+| 1000 | 1250 | 63 rows × 20 cols |
+
+```js
+function calcGridSize(requiredWords, colsPerRow = 20) {
+  const totalCells = Math.ceil(requiredWords * 1.25);
+  const rows = Math.ceil(totalCells / colsPerRow);
+  return { rows, colsPerRow, totalCells: rows * colsPerRow };
+}
+```
+
+### Chinese Composition Grid
+
+```js
+function compositionGrid(rows, colsPerRow) {
+  const cellSize = Math.floor(8800 / colsPerRow);
+  return new Table({
+    columnWidths: Array(colsPerRow).fill(cellSize),
+    rows: Array(rows).fill(null).map(() =>
+      new TableRow({
+        height: { value: cellSize, rule: HeightRule.EXACT },
+        children: Array(colsPerRow).fill(null).map(() =>
+          new TableCell({ borders: thinBs("DDDDDD"), width: { size: cellSize, type: WidthType.DXA },
+            children: [new Paragraph({ children: [] })] })
+        )
+      })
+    )
+  });
+}
+```
+
+### English Writing Area (Horizontal Lines) — MANDATORY for English Writing Questions
+
+⚠️ **Every English writing/composition question MUST include ruled horizontal lines.** A blank area without lines is FORBIDDEN — students need lines to write on.
+
+```js
+function writingLines(count) {
+  return Array(count).fill(null).map(() =>
+    new Paragraph({ spacing: { before: 0, after: 0, line: 560 },
+      borders: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" } },
+      children: [new TextRun({ text: " ", size: 21 })] })
+  );
+}
+```
+
+**Line count by word requirement:**
+| Required Words | Lines |
+|---------------|-------|
+| ≤50 | 8 |
+| 50–80 | 10 |
+| 80–120 | 12 |
+| 120+ | 15 |
+
+**Rules:**
+1. Lines must appear immediately after the writing prompt paragraph
+2. Line color: light grey `CCCCCC` (print-friendly, not visually heavy)
+3. Line spacing: `line: 560` (provides adequate writing room)
+4. Chinese composition uses grid (`compositionGrid`), English uses lines (`writingLines`) — never mix them up
+```
+
+### Composition Area Requirements
+- Independent section or clear separation
+- Title space reserved (for self-chosen topics)
+- Word count prompt visible ("No fewer than 800 words" / "About 120 words")
+- Grid/line colors light — must not interfere with writing
+- Pages continuous, not split
+
+---
+
+## 11. Answer Key (参考答案)
+
+### Output Rules
+
+1. **Default (user does not request answers in the same file):** Generate the answer key as a **separate .docx file** (e.g., `exam.docx` + `exam_answers.docx`). This prevents students from accidentally seeing answers.
+2. **User explicitly requests answers in the same file:** Place the answer key on an **independent page** using `SectionType.NEXT_PAGE`. Answer key MUST NOT appear on the same page as any exam question.
+
+### Separate File Format (Default)
+
+The answer key file should include:
+- Title: "《{exam title}》参考答案" (SimHei, 14pt/size:28, bold, centered)
+- Same question numbering as the exam
+- Concise answers (letter choices, key words, short solutions)
+- Font: SimSun 10.5pt (size: 21)
+
+### Same File Format (When User Requests)
+
+```js
+// Answer key as a separate section — MUST use SectionType.NEXT_PAGE
+{
+  properties: { type: SectionType.NEXT_PAGE,
+    page: { margin: { top: 850, bottom: 850, left: 1200, right: 1200 } } },
+  children: [
+    new Paragraph({
+      alignment: AlignmentType.CENTER, spacing: { after: 300 },
+      children: [new TextRun({ text: "参考答案", size: 28, bold: true,
+        font: { eastAsia: "SimHei" } })],
+    }),
+    // ... answer content paragraphs
+  ],
+}
+```
+
+### Rules
+1. ⚠️ **Never place answer content directly after the last question without a page/section break**
+2. Answer content should be concise — no answer lines, no grid, plain text only
+3. Calculation/proof questions: show key steps, not just final answer
+4. If the exam has figures, answers may reference "see Figure X" without re-embedding
+
+---
+
+## 12. Figures & Illustrations
+
+### Image Insertion
+```js
+new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 100, after: 60 },
+  children: [new ImageRun({ data: imageBuffer, transformation: { width: 300, height: 200 }, type: "png" })] })
+new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 100 },
+  children: [new TextRun({ text: "(Figure 1)", size: 18, color: "666666", font: "SimSun" })] })
+```
+
+### Key Principles
+- Images set as inline (default) to prevent floating
+- Resolution sufficient for print clarity
+- **B&W print compatible:** images must remain distinguishable when printed in grayscale
+- Figure numbers and captions complete
+- Figures adjacent to corresponding questions
+- Maps must have: scale bar, north arrow, legend
+- Coordinate graphs must have: axis labels, tick marks, units
+
+### ⚠️ Figure-Text Order (Strictly Enforced)
+
+**For questions with figures, element order must be:**
+```
+1. Question stem (keepNext: true)
+2. Figure (centered, keepNext: true)
+3. Answer lines / answer area
+```
+
+**Forbidden:** answer lines between stem and figure, or figure after answer lines.
+
+### Figure Content Matching
+- **Figures must be semantically consistent with question stem:** if question says "triangle ABC", figure must label vertices A, B, C
+- Geometry annotations must match described angles, side lengths
+- Function graphs must mark key points mentioned in the question
+- Physics experiment diagrams must match described apparatus
+- Figure width: geometry ≤ 50% page width, data/experiment ≤ 70%
+
+### ⚠️ Figure Diversity Rule (Mandatory)
+
+**No duplicate figures in the entire paper.** Even if two questions involve the same type (e.g., both triangles), each must have a distinct figure:
+1. Different labels (different vertex letters, angles, side lengths)
+2. Different shapes (acute vs. right vs. obtuse triangle)
+3. Different styling (if applicable)
+
+If using matplotlib, each call must use **different parameters and data** — never copy the same generation code.
+
+### Subject-Specific Figure Requirements
+
+| Subject | Common Types | Special Requirements |
+|---------|-------------|---------------------|
+| Math | Geometry, functions, coordinates | No distortion, clear labels |
+| Physics | Circuits, mechanics, apparatus | Standard symbols, correct arrows |
+| Chemistry | Apparatus, molecular structures | Reagent names labeled |
+| Biology | Cell, organ, ecosystem diagrams | Labels not too small |
+| Geography | Maps, contour lines, statistics | Legend + scale + north arrow |
+
+---
+
+## 13. Formulas & Special Symbols
+
+### Formulas
+Math/physics/chemistry formulas use **LaTeX → docx-js Math mapping** (see `references/math-formulas.md`):
+- Basic (fractions, sub/superscript, roots) → docx-js Math components
+- Complex (3+ nesting, matrices) → matplotlib PNG fallback
+- Never hand-type Unicode formula approximations
+
+### Common Unicode Math Symbols
+```
+× ÷ ± ∓ ≠ ≈ ≤ ≥ ∞ √ ∑ ∏ ∫ ∂ ∆ ∇
+α β γ δ ε θ λ μ π σ φ ω
+⊂ ⊃ ∈ ∉ ∪ ∩ ∅ ∀ ∃
+→ ← ↑ ↓ ⇒ ⇔  ° ′ ″ ‰  ² ³ ⁴ ⁿ ₁ ₂ ₃
+```
+
+### Chemical Formulas
+Subscripts/superscripts must be correct: H₂O, CO₂, Fe₂O₃, Ca(OH)₂
+Reaction arrows: → ⇌ ↑ ↓
+
+---
+
+## 14. Table Usage Standards
+
+### Borderless Tables (for alignment)
+For: option alignment, info rows, question number + points alignment
+```js
+const NB = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+const NBs = { top: NB, bottom: NB, left: NB, right: NB };
+```
+
+### Bordered Tables (for data display)
+For: score tables, data tables, statistics
+```js
+const thinB = (c="000000") => ({ style: BorderStyle.SINGLE, size: 1, color: c });
+const thinBs = (c="000000") => ({ top: thinB(c), bottom: thinB(c), left: thinB(c), right: thinB(c) });
+```
+
+### Table Standards
+- Cell padding moderate (margins: top/bottom 40–60, left/right 60–80)
+- Consistent border thickness
+- Header row: light grey F0F0F0 background
+- Avoid cross-page tables
+- Tables centered (`alignment: AlignmentType.CENTER`)
+
+---
+
+## 15. Headers & Footers
+
+### Page Numbers
+```js
+footers: { default: new Footer({ children: [
+  new Paragraph({ alignment: AlignmentType.CENTER,
+    children: [
+      new TextRun({ children: [PageNumber.CURRENT], size: 18, font: "SimSun" }),
+    ] })
+] }) }
+```
+
+⚠️ **Denominator FORBIDDEN** — never use `PageNumber.TOTAL_PAGES` or "Page X of Y". Show only current page number.
+
+### Headers
+- May contain seal line prompt or subject name
+- Small font (8–9pt), grey color (999999)
+- Should not be visually heavy — must not compete with content
+
+---
+
+## 16. Subject-Specific Standards
+
+### Chinese Language
+- Reading, classical poetry, composition: **no columns**
+- Poetry preserves original line breaks
+- Classical text needs annotation area (smaller font, indented)
+- Composition grid in independent section, grid count via `calcGridSize` (800 words → 50×20 = 1000 cells)
+- Dictation questions: horizontal lines, moderate length
+- Reading materials: use KaiTi to differentiate
+
+### Mathematics
+- Multiple choice, fill-in: suitable for neat layout
+- Formulas: Unicode symbols or OOXML
+- Geometry/function graphs must be clear, undistorted
+- Problem-solving: sufficient working space
+- Coordinate graphs: labeled axes, tick marks
+
+### English
+- English font: Times New Roman, moderate character spacing
+- Cloze: numbers in text, options after passage
+- Reading comprehension: material + questions as groups
+- Writing area: horizontal lines, not grid
+- Listening (if any): numbers aligned with options
+
+### Physics / Chemistry / Biology
+- Experiment/apparatus diagrams must be clear and accurate
+- Unit symbols standardized (m/s, kg, mol/L, etc.)
+- Chemical formula subscripts correct
+- Calculation and experiment analysis: sufficient answer space
+- Biology structure diagrams: labels not too small
+
+### History / Politics
+- Source-based questions are lengthy — **no columns**
+- Dates, figures, events clearly labeled
+- Essay questions: more whitespace than multiple choice
+- Historical sources cite provenance
+- Chart materials in logical order
+
+### Geography
+- Maps are the focus — must be clear
+- Legend, scale bar, north arrow required
+- Map and question close together — avoid page turns
+- Map reading questions: balance figure and text space
+- Contour line values clearly labeled
+
+---
+
+## Final Review Checklist
+
+After generating an exam paper, check every item:
+
+- [ ] Question numbers sequential, points correct, total correct
+- [ ] Question stems match options / materials / illustrations one-to-one
+- [ ] **Figures come after stem, before answer area** (strict order)
+- [ ] **Figure content matches question semantics** (labels, symbols match)
+- [ ] **Composition grid count ≥ required words × 1.25** (800 words → at least 1000 cells)
+- [ ] Options aligned with borderless tables (not spaces)
+- [ ] No wrong pages, missing pages, **no extra blank pages**
+- [ ] Images / tables / formulas positioned correctly
+- [ ] **No Markdown table syntax in document** — all data tables use proper docx Table objects
+- [ ] Fonts, sizes, line spacing consistent
+- [ ] Answer space matches difficulty and point value
+- [ ] Clear when printed in B&W
+- [ ] Subject-specific layout handled properly
+- [ ] Seal line / page numbers / headers formatted correctly
+- [ ] Header info complete (school, subject, duration, total score)
+- [ ] **No extra PageBreak at end of last section**
+- [ ] **Answer key is either a separate file (default) or on a separate page (if user requested in same file)** — never on the same page as questions

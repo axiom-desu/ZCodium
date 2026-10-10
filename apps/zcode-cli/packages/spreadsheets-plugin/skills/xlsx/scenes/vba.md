@@ -1,159 +1,298 @@
-# VBA and macros
+# VBA — Macro Generation & Management Guide
 
-When a workbook needs logic that formulas cannot express — or when the task
-arrives as "this macro does X". VBA lives in the `.xlsm` container; the
-guidance here is language-level, written from the public VBA grammar.
+Load this reference when the task involves: creating Excel macros, writing VBA code, automating Excel workflows, adding buttons/forms, modifying existing macros, or any `.xlsm` deliverable that needs programmatic automation.
 
-## Container rules
+Also load `engines/vba-templates.md` for ready-to-use code templates.
 
-- A macro-enabled workbook is `.xlsm`. Saving VBA as `.xlsx` silently deletes
-  the project — the single most destructive mistake in this scene.
-- openpyxl has `keep_vba=True` on `load_workbook` for preserving an existing
-  project; it cannot create or compile one.
-- LibreOffice can run and edit VBA but its dialect differs in edge cases; a
-  macro that must run everywhere is tested in both.
+---
 
-## Anatomy
+## Core Principles
 
-    Option Explicit
+### 1. Safety First
+- **Never** generate VBA that deletes files, accesses filesystem outside the workbook, or sends data to external URLs without explicit user request
+- **Always** include error handling (`On Error GoTo`)
+- **Always** add `Application.ScreenUpdating` toggle for performance
+- Generated macros must be **read-audit-friendly**: clear naming, comments, structured layout
 
-    Sub RefreshReport()
-        Dim ws As Worksheet
-        Set ws = ThisWorkbook.Worksheets("Report")
-        Application.ScreenUpdating = False
-        ws.Range("A1").Value = Now()
-        Application.ScreenUpdating = True
-    End Sub
+### 2. openpyxl VBA Workflow
+openpyxl can read/preserve/inject VBA but **cannot execute** it. The workflow:
 
-- `Option Explicit` at the top of every module: an undeclared variable is a
-  typo that becomes a new empty variable.
-- `Sub` does not return a value; `Function` does.
-- `Dim` every variable with a type. `Variant` everywhere is how a macro ends
-  up comparing text to a number and silently failing.
-- `Set` for object assignments (`Set ws = ...`); a missing `Set` is a type
-  error at runtime, not at compile time.
+```python
+# READ existing VBA
+from openpyxl import load_workbook
+wb = load_workbook('file.xlsm', keep_vba=True)
+# wb.vba_archive contains all VBA modules
 
-## The patterns that matter
-
-**Iterate a used range without walking a million rows:**
-
-    Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    For r = 2 To lastRow
-        ' ...
-    Next r
-
-`Cells(Rows.Count, col).End(xlUp).Row` is the reliable "last row"; `UsedRange`
-includes formatted-but-empty rows and over-reports.
-
-**Write in bulk, not cell by cell:**
-
-    ws.Range("A2:A1000").Value = dataArray
-
-A cell-at-a-time loop over a large range is the classic macro that "used to
-take a second and now takes ten minutes". Read into a variant array, transform
-in memory, write the array back.
-
-**Error handling that reports rather than swallows:**
-
-    On Error GoTo Handler
-    ' ...
-    Exit Sub
-    Handler:
-    MsgBox "RefreshReport failed at step " & step & ": " & Err.Description
+# CREATE new .xlsm with VBA
+from openpyxl import Workbook
+wb = Workbook()
+# ... build sheets ...
+# Inject VBA via vbaProject.bin (see Injection section)
+wb.save('output.xlsm')
 ```
 
-An empty `On Error Resume Next` hides every defect in the macro; if it is
-genuinely needed, bound it to the single statement that may fail.
+### 3. File Format Rules
+| Need | Format | Extension |
+|------|--------|-----------|
+| Data only, no macros | OpenXML | `.xlsx` |
+| Contains VBA macros | Macro-Enabled | `.xlsm` |
+| Binary with macros | Binary | `.xlsb` |
 
-**Never trust the active sheet.** `ActiveSheet` is whatever the user last
-clicked. Qualify every range with its worksheet (`ws.Range(...)`), or the
-macro edits the wrong sheet on someone else's machine.
+**Critical**: If user gives `.xlsx` but wants macros → output must be `.xlsm`. Always warn about format change.
 
-## When macros are the wrong answer
+---
 
-- The logic can be a formula: a formula recalculates, a macro only runs when
-  invoked. Prefer the formula.
-- The task is a one-off transformation of data: a script (openpyxl) is
-  testable, reviewable and does not require macro permissions.
-- The workbook must run in a locked-down environment: macros are disabled by
-  policy in most enterprises, and a workbook that depends on them fails there.
+## VBA Code Structure Standard
 
-## Security
+Every generated VBA module must follow this structure:
 
-- Macros execute with the user's permissions. A macro from an untrusted source
-  is untrusted code; open the project and read it before enabling anything.
-- `ThisWorkbook` is the file containing the code; `ActiveWorkbook` is whatever
-  is focused — a macro that edits `ActiveWorkbook` can write outside the file
-  it shipped in.
-- Digitally sign a macro that ships to others; an unsigned macro prompts on
-  every open and trains users to click through warnings.
+```vba
+Option Explicit
 
-## Core principles
+' ============================================================
+' Module: [ModuleName]
+' Purpose: [One-line description]
+' Author: Z.ai
+' Date: [YYYY-MM-DD]
+' ============================================================
 
-### 1. Safety first
+' --- Constants ---
+Private Const MODULE_NAME As String = "[ModuleName]"
 
-A macro runs with the user's permissions and edits real files. The minimum
-safety set:
+' --- Main Entry Point ---
+Public Sub Main()
+    On Error GoTo ErrHandler
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    
+    ' [Main logic here]
+    
+CleanUp:
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    Exit Sub
+    
+ErrHandler:
+    MsgBox "Error in " & MODULE_NAME & ": " & Err.Description, _
+           vbCritical, "Error"
+    Resume CleanUp
+End Sub
+```
 
-- **Never operate on `ActiveWorkbook`** when the macro ships inside a file —
-  use `ThisWorkbook`. A macro that edits whatever happens to be focused can
-  write outside the file it shipped in.
-- **Back up before the first write**: copy the target file within the macro,
-  or refuse to run when a backup cannot be made.
-- **`Application.Calculation = xlCalculationManual`** around any block that
-  writes many cells, restored on every exit path including the error handler.
-- **Guard on the workbook identity** (`If ThisWorkbook.Name <> "model.xlsm"`)
-  — macros get copied between workbooks by well-meaning users, and a guard
-  turns a silent wrong-file edit into a visible refusal.
+### Naming Conventions
+| Element | Convention | Example |
+|---------|-----------|---------|
+| Sub/Function | PascalCase | `GenerateMonthlyReport` |
+| Variable | camelCase | `lastRow`, `wsData` |
+| Constant | UPPER_SNAKE | `MAX_ROWS`, `REPORT_TITLE` |
+| Module | PascalCase | `ModReport`, `ModUtils` |
+| Worksheet variable | ws + Name | `wsData`, `wsSummary` |
+| Range variable | rng + Desc | `rngData`, `rngHeaders` |
 
-### 2. The openpyxl VBA workflow
+### Variable Declaration Rules
+```vba
+' Always use explicit types
+Dim lastRow As Long          ' Not Integer (row limit)
+Dim ws As Worksheet
+Dim rng As Range
+Dim cell As Range
+Dim i As Long
+Dim strValue As String
+Dim dblAmount As Double
+```
 
-openpyxl preserves an existing VBA project with `keep_vba=True` on
-`load_workbook`, and cannot create or compile one. So the workflow is:
+---
 
-1. Author the macro in the VBA editor (or keep a `.bas` module in source
-   control).
-2. `load_workbook(path, keep_vba=True)`, edit the cells, `save(path)` — the
-   project survives the round-trip.
-3. **Verify** by re-loading and checking the project is still there; a save
-   that silently drops the project is the failure this check exists for.
-4. Save as `.xlsm` always — saving VBA as `.xlsx` deletes the project.
+## Common Patterns
 
-### 3. File format rules
+### Find Last Row/Column (Robust)
+```vba
+' Last row with data in column A
+Dim lastRow As Long
+lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
 
-- `.xlsm` for anything with a project; `.xlsx` for anything without.
-- The project is part of the deliverable: a workbook whose macro was stripped
-  in the last save is a defect, and the check in step 3 is the gate.
-- LibreOffice can run and edit VBA but its dialect differs in edge cases; a
-  macro that must run everywhere is tested in both.
+' Last column with data in row 1
+Dim lastCol As Long
+lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
 
-## Naming and declaration standards
+' Used range (less reliable but useful)
+Dim usedRows As Long
+usedRows = ws.UsedRange.Rows.Count
+```
 
-- **Naming**: `Sub`/`Function` names are verbs (`RefreshReport`), variables are
-  camelCase with a type prefix where the type is not obvious (`wsData`,
-  `lastRow`), and constants are SCREAMING_SNAKE. One name per concept across
-  the project.
-- **`Option Explicit` in every module** — an undeclared variable is a typo that
-  becomes a new empty variable.
-- **`Dim` with explicit types**; `Variant` only where the value genuinely varies
-  in type (a parsed cell). `Variant` everywhere is how a macro ends up comparing
-  text to a number and silently failing.
-- **`Set` for object assignments** (`Set ws = ...`); a missing `Set` is a
-  runtime type error, not a compile error.
-- **Error handling reports rather than swallows**: `On Error GoTo Handler` with
-  a `MsgBox` naming the step and `Err.Description`. An empty
-  `On Error Resume Next` hides every defect; if one statement genuinely needs
-  it, bound the handler to that statement and restore it immediately.
+### Loop Through Data
+```vba
+' Row loop
+Dim i As Long
+For i = 2 To lastRow  ' Skip header
+    If ws.Cells(i, 1).Value <> "" Then
+        ' Process row
+    End If
+Next i
 
-## The patterns that matter
+' For Each (range)
+Dim cell As Range
+For Each cell In ws.Range("A2:A" & lastRow)
+    If Not IsEmpty(cell) Then
+        ' Process cell
+    End If
+Next cell
+```
 
-- **Last row**: `ws.Cells(ws.Rows.Count, "A").End(xlUp).Row` — not `UsedRange`,
-  which over-reports on formatted-but-empty cells.
-- **Bulk read/write**: `values = ws.Range(...).Value` into a variant array,
-  transform in memory, write back in one assignment. A cell-at-a-time loop over
-  a large range is the macro that "used to take a second".
-- **Filter and copy visible rows**: `SpecialCells(xlCellTypeVisible)` — the
-  only correct way to touch "the visible rows".
-- **Log every run** (append mode, `Format(Now(), ...)`): a macro that writes no
-  log cannot be debugged after the fact.
+### Sheet Operations
+```vba
+' Reference sheet safely
+Dim ws As Worksheet
+On Error Resume Next
+Set ws = ThisWorkbook.Sheets("Data")
+On Error GoTo 0
+If ws Is Nothing Then
+    MsgBox "Sheet 'Data' not found!", vbExclamation
+    Exit Sub
+End If
+
+' Create sheet if not exists
+Dim wsNew As Worksheet
+Dim sheetExists As Boolean
+For Each wsNew In ThisWorkbook.Sheets
+    If wsNew.Name = "Summary" Then sheetExists = True
+Next wsNew
+If Not sheetExists Then
+    Set wsNew = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+    wsNew.Name = "Summary"
+End If
+```
+
+### User Interaction
+```vba
+' Simple input
+Dim userInput As String
+userInput = InputBox("Enter report month (YYYY-MM):", "Month Selection")
+If userInput = "" Then Exit Sub
+
+' Confirmation
+If MsgBox("Generate report for " & userInput & "?", _
+          vbYesNo + vbQuestion, "Confirm") = vbNo Then Exit Sub
+
+' File picker
+Dim filePath As Variant
+filePath = Application.GetOpenFilename( _
+    FileFilter:="Excel Files (*.xlsx;*.xlsm),*.xlsx;*.xlsm", _
+    Title:="Select Source File")
+If filePath = False Then Exit Sub
+```
+
+---
+
+## VBA Injection via openpyxl
+
+### Method 1: Preserve Existing VBA
+```python
+# Open with VBA preserved
+wb = load_workbook('source.xlsm', keep_vba=True)
+# Edit data/formatting as usual
+wb.save('output.xlsm')  # VBA modules intact
+```
+
+### Method 2: Copy VBA from Template
+```python
+# Use a template .xlsm that already has the VBA you need
+import shutil
+shutil.copy('template_with_macros.xlsm', 'output.xlsm')
+wb = load_workbook('output.xlsm', keep_vba=True)
+# Modify data
+wb.save('output.xlsm')
+```
+
+### Method 3: Manual vbaProject.bin Injection
+```python
+# For advanced use: inject raw vbaProject.bin
+# 1. Create your VBA in Excel, save as .xlsm
+# 2. Extract vbaProject.bin from the .xlsm (it's a ZIP)
+# 3. Inject into new workbook
+
+import zipfile
+import shutil
+
+# Create the workbook first
+wb = Workbook()
+# ... add data ...
+wb.save('temp.xlsx')
+
+# Convert to .xlsm by injecting VBA
+shutil.copy('temp.xlsx', 'output.xlsm')
+with zipfile.ZipFile('output.xlsm', 'a') as zf:
+    zf.write('vbaProject.bin', 'xl/vbaProject.bin')
+    
+# Update [Content_Types].xml to register VBA
+# (This is fragile — Method 1 or 2 preferred)
+```
+
+**Recommendation**: Method 1 (preserve) or Method 2 (template) are robust. Method 3 is fragile and should be last resort.
+
+---
+
+## Security Checklist
+
+Before delivering any VBA-enabled file:
+
+- [ ] No filesystem access outside workbook (no `Kill`, `FileCopy`, `MkDir` unless requested)
+- [ ] No network calls (`XMLHTTP`, `WinHttpRequest`) unless requested
+- [ ] No shell execution (`Shell`, `WScript.Shell`) unless requested
+- [ ] No registry access (`CreateObject("WScript.Shell").RegWrite`)
+- [ ] No auto-execution (`Auto_Open`, `Workbook_Open`) unless explicitly requested
+- [ ] Error handling in every Sub/Function
+- [ ] `ScreenUpdating` restored in cleanup
+- [ ] All variables explicitly declared (`Option Explicit`)
+- [ ] Module purpose documented in header comment
+
+---
+
+## Performance Guidelines
+
+```vba
+' ALWAYS bracket bulk operations
+Application.ScreenUpdating = False
+Application.Calculation = xlCalculationManual
+Application.EnableEvents = False
+
+' [Bulk operations here]
+
+Application.EnableEvents = True
+Application.Calculation = xlCalculationAutomatic
+Application.ScreenUpdating = True
+```
+
+### Array-Based Processing (for large data)
+```vba
+' Read range into array — much faster than cell-by-cell
+Dim data As Variant
+data = ws.Range("A1:Z" & lastRow).Value  ' 2D array
+
+' Process in memory
+Dim i As Long
+For i = LBound(data, 1) To UBound(data, 1)
+    data(i, 3) = data(i, 1) * data(i, 2)  ' Column C = A * B
+Next i
+
+' Write back in one shot
+ws.Range("A1:Z" & lastRow).Value = data
+```
+
+---
+
+## Debugging Support
+
+When user reports VBA errors, include diagnostic code:
+
+```vba
+' Debug logging to Immediate Window
+Debug.Print "Processing row " & i & ": " & ws.Cells(i, 1).Value
+
+' Verbose error info
+ErrHandler:
+    Debug.Print "ERROR in " & MODULE_NAME
+    Debug.Print "  Number: " & Err.Number
+    Debug.Print "  Description: " & Err.Description
+    Debug.Print "  Source: " & Err.Source
+```

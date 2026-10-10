@@ -1,289 +1,315 @@
 ---
 name: docx
-description: Use whenever a .docx / Word document is the artifact being produced, edited, or reviewed. Covers comment and tracked-change editing through the `Document` / `DocxXMLEditor` Python API on an unpacked .docx, plus three command-line scripts — `postcheck.py` (11 visual and typesetting quality rules), `fix_footer_fields.py` (footer page numbers that print the raw field text in WPS), and `add_toc_placeholders.py` (a freshly built table of contents that renders as an empty block). Use it when the user asks to add or reply to comments, to apply revisions, or to check the quality of a generated document, and when the reported symptoms are a blank trailing page, a table header row that does not repeat across pages, Chinese body text with no first-line indent, fonts that exist only on the build machine, images wider than the text column, skipped heading levels, or a cover that shares page numbering with the body.
+metadata:
+  author: Z.AI
+  version: "1.1"
+description: "Complete DOCX document creation, editing, and analysis capabilities with support for revisions, comments, formatting preservation, and text extraction. Also handles Word format conversion: legacy .doc → .docx, DOCX → PDF, DOCX → images (PNG/JPG) for visual review or previews, and DOCX → Markdown/plain text extraction. Use for creating new documents, modifying content, handling revisions, adding comments, other professional Word document tasks, or when the user asks to convert, export, or render a Word document to another format (e.g. 'Word转PDF', 'doc转docx', 'export this docx as PDF/images')."
+license: Proprietary. LICENSE.txt has complete terms
 ---
 
-# DOCX Comments, Tracked Changes, and Post-Build Checks
+# DOCX Creation, Editing, and Analysis
 
-## 1. Scope
-
-This skill edits and reviews `.docx` files that already exist as OOXML packages:
-
-- comments and comment threads, and tracked-change edits, through the Python API in `scripts/document.py` and `scripts/utilities.py`;
-- three command-line scripts in the same directory: `postcheck.py`, `fix_footer_fields.py`, `add_toc_placeholders.py`.
-
-It does **not** build a document from scratch (there is no generator here), does not validate against the OOXML schemas (`validate()` is a presence check), does not render or convert anything (no LibreOffice or PDF pipeline ships in this plugin), and does not auto-repair (`--fix` is accepted and fixes nothing).
-
-When the document has a recognisable type, read its brief under `scenes/` before touching the package: `academic.md`, `contract.md`, `copywriting.md`, `exam.md`, `official-doc.md`, `report.md`, `resume.md`. Each one fixes the page geometry, the heading and numbering conventions and the postcheck rules that type of document trips — a contract's clause numbering and continuous page numbering, a Chinese official document's fonts and margins, a resume's single-page budget. They are guidance, not API manuals; the calls are in `routes/`. The shared rules those briefs assume live under `references/`: `design-system.md` (type scale, spacing, colour, component specs), `common-rules.md` (naming, structure, maintainability), `math-formulas.md`, `chart-templates.md`, `decorations.md` and `faq.md`.
-
-## 2. Working shape
-
-A `.docx` is a ZIP. The Python API works on an **unpacked directory**, never on the archive:
-
-1. Unpack: `unzip report.docx -d unpacked/` — keep the `[Content_Types].xml`, `_rels/`, and `word/` layout intact.
-2. Construct `Document("unpacked")`. It copies the tree into a temp directory and edits the copy.
-3. Edit through `doc["word/document.xml"]` (and the comment parts it creates on demand).
-4. `doc.save("out")` writes the whole tree; `out` may be a fresh directory.
-5. Repack into a `.docx` (`cd out && zip -r ../report.docx .`), or import `_pack_document` (§5).
-6. Run the three scripts against the packed `.docx`.
-
-Sequence matters: comments and tracked changes rewrite the XML that `postcheck.py` reads, so the gate runs after the edits are saved and packed.
-
-## 3. `Document` — the entry point (`scripts/document.py`)
-
-```python
-import sys
-
-sys.path.insert(0, "<plugin>/skills/docx")  # document.py uses a relative import
-from scripts.document import Document
-
-doc = Document("unpacked", track_revisions=False, author="ZCodium", initials="C")
-```
-
-Constructor arguments:
-
-- `unpacked_dir` — must exist and be a directory (`ValueError` otherwise); the unpacked `word/` subtree lives inside it. A missing `word/document.xml` fails **in the constructor**, because `__init__` opens that part eagerly — not later from `validate()` or `save()`.
-- `rsid` — revision-save ID stamped onto new elements; an 8-hex-digit one is generated when omitted, and the chosen value is printed to stdout.
-- `track_revisions` — when true, also writes `<w:trackRevisions/>` into `word/settings.xml`.
-- `author`, `initials` — defaults for comments and tracked changes.
-
-Construction is idempotent and sets up everything a comment session needs:
-
-- creates `word/people.xml` from `scripts/templates/people.xml` when absent, and registers its content type and relationship;
-- adds this session's RSID to `word/settings.xml`, creating the `<w:rsids>` section when needed;
-- always writes `<w:updateFields w:val="true"/>` unless it is already there, which makes Word recalculate TOC page numbers and cross-references at open time;
-- reads existing comments from `word/comments.xml` when present, so `next_comment_id` continues after the highest existing `w:id` and replies can target them.
-
-Public methods:
-
-- `add_comment(start, end, text) -> int` — `start` and `end` are elements of `word/document.xml`'s DOM (run-level anchors are allowed). Inserts `<w:commentRangeStart>` before `start`, and `<w:commentRangeEnd>` plus a reference run after `end` — appended *inside* `end` when `end` is a `w:p`. Writes the comment into `word/comments.xml` and its metadata into `commentsExtended.xml`, `commentsIds.xml`, and `commentsExtensible.xml`, copying those parts from `scripts/templates/` on first use. Returns the new `w:id`.
-- `reply_to_comment(parent_comment_id, text) -> int` — raises `ValueError` when the parent id is unknown (neither in the file nor created in this session). Anchors the reply's range after the parent's `commentRangeStart` and reference run, and records the parent link in `commentsExtended.xml`.
-- `validate() -> None` — a presence check, not a schema check. In practice the constructor has already opened `word/document.xml`, so the missing-part branch is unreachable through the normal path; call it to catch parts that vanish mid-session.
-- `save(destination=None, validate=True)` — ensures comment relationships and content types once comment parts exist, writes every part touched through an editor, validates unless disabled, then copies the whole unpacked tree to `destination`, or back over the input directory when `destination` is omitted.
-
-## 4. The editor returned by `doc[...]`
-
-`__getitem__` lazily builds and caches one `DocxXMLEditor` per part; a path that does not exist raises `ValueError`. The editor extends `XMLEditor` (`scripts/utilities.py`) and stamps bookkeeping attributes onto everything you insert, so fragments stay Word-shaped without hand-written IDs.
-
-Finding nodes — `get_node(tag, attrs=None, line_number=None, contains=None)`:
-
-- exactly one match is required; zero or many matches raise `ValueError` with a hint;
-- `attrs` — attribute equality, e.g. `{"w:id": "3"}`;
-- `line_number` — an int or a `range`, 1-indexed against the file as parsed;
-- `contains` — a substring of the element's text; `&#8220;` and the literal `“` both match.
-
-Mutating — `replace_node(elem, xml)`, `insert_before(elem, xml)`, `insert_after(elem, xml)`, `append_to(elem, xml)`: each parses the fragment in the edited part's own namespaces (write `w:`-prefixed XML for `word/*.xml` parts), returns the inserted nodes, and requires at least one element in the fragment.
-
-Relationship IDs — `get_next_rid()` scans a `.rels` part for the highest `rIdN` and returns the next free one. `save()` writes the part back to its own path, preserving the encoding detected from the file header.
-
-What is stamped automatically onto inserted content:
-
-- `w:p` → `w:rsidR`, `w:rsidRDefault`, `w:rsidP`, `w14:paraId`, `w14:textId`
-- `w:r` → `w:rsidR`, or `w:rsidDel` when inside a `w:del`
-- `w:t` → `xml:space="preserve"` when the text has leading or trailing whitespace
-- `w:ins` / `w:del` → `w:id`, `w:author`, `w:date`, `w16du:dateUtc`
-- `w:comment` → `w:author`, `w:date`, `w:initials`; `w16cex:commentExtensible` → `w16cex:dateUtc`
-
-Line and column tracking is installed by the parser itself: `XMLEditor.__init__` parses through the line-tracking SAX parser built by `_create_line_tracking_parser` in `utilities.py`, whose patched `setContentHandler` stamps every element with its `parse_position`. That is what makes the `line_number` filter work; there is no separate hook for you to call.
-
-Tracked changes:
-
-- `suggest_deletion(elem)` — marks a `w:r` or `w:p` as deleted: wraps the content in `w:del`, converts `w:t` to `w:delText`, and adds `<w:del/>` to `w:pPr/w:rPr` for numbered list items. Raises `ValueError` for an element that already carries tracked changes, or is neither `w:r` nor `w:p`.
-- `suggest_paragraph(xml)` (static) — transforms a `<w:p>` XML string into a tracked insertion: wraps the runs in `w:ins` and adds `<w:ins/>` to `w:pPr/w:rPr`.
-- `revert_insertion(elem)` — rejects an insertion by wrapping its runs in `w:del` (`w:t` → `w:delText`); accepts a single `w:ins` or any container. Raises `ValueError` when no `w:ins` is found.
-- `revert_deletion(elem)` — rejects a deletion by cloning the deleted runs into a new `w:ins` placed after the `w:del` (`w:delText` → `w:t`). Returns `[elem]`, or `[w:del, new w:ins]` when given a single deletion. Raises `ValueError` when no `w:del` is found.
-
-## 5. Module-level helpers worth knowing
-
-- `_pack_document(input_dir, output_file)` — packs an unpacked directory back into a `.docx` (DEFLATED), after staging a copy so the input directory is never modified.
-- `_strip_formatting_whitespace(xml_file)` — removes inter-element blank text and comments from one XML part, in place. It deliberately skips `*:t` elements, where whitespace is content. Stripping is a correctness requirement, not an optimization: pretty-printing leaves text nodes between elements, and Word is order-sensitive about `settings.xml` children.
-- `_generate_hex_id()` — random 8-hex-digit id below `0x7FFFFFFF`, used for `w14:paraId`, `w14:textId`, and comment para/durable ids.
-- `_generate_rsid()` — random 8-hex-digit RSID.
-- `_insert_settings_element(editor, root, local_name, xml)` — inserts a `settings.xml` child at its schema-valid position per the CT_Settings child-order table, so the result stays valid whatever optional settings the source file already carries. Callers must ensure the element is not already present.
-
-These are private (underscore-prefixed). Read them to understand behavior; do not treat them as a stable API.
-
-## 6. `postcheck.py` — the quality gate
-
-```
-python3 postcheck.py <file.docx> [--json] [--only name[,name...]] [--fix]
-```
-
-It looks for the defects a reader notices and a validator walks past. Exit status: `0` once every selected rule passes, `1` as soon as one of them reports anything, `2` when the path is not a file — so it drops straight into a build step. Human output prints one `[PASS]` / `[WARN]` / `[FAIL]` line per rule plus an `N/M checks passed` summary; `--json` prints the same findings as objects with `name`, `ok`, `message`, and `severity`. Rules report severity `warning`, so a failing rule renders `[WARN]`; `[FAIL]` is reserved for `error` severity, which means an unknown rule name or a rule that raised. `--fix` is accepted for CLI compatibility and fixes nothing.
-
-The eleven rules:
-
-| rule | fails when |
-| --- | --- |
-| `blank-pages` | the last paragraph is a page break with no text and no drawing, or 5 or more consecutive empty paragraphs |
-| `line-spacing` | body text (outside tables and lists, non-empty) mixes more than one `w:spacing/@w:line` value |
-| `table-margins` | any table cell has no `w:tcMar` padding |
-| `table-pagination` | a multi-row table has no `w:tblHeader` header row, or any row lacks `w:cantSplit` |
-| `image-overflow` | an image is wider than the narrowest usable text column across sections (1 twip = 635 EMU) |
-| `font-fallback` | a declared font is in the fallback-risk list: Noto Sans SC, Noto Serif SC, Source Han Sans, Source Han Serif, LXGW WenKai, 霞鹜文楷 |
-| `cjk-indent` | a Chinese body paragraph (20 characters or more, not a heading, table cell, list item, or centered) has no first-line indent in the 200–800 twip range |
-| `heading-continuity` | heading levels skip, e.g. H1 followed by H3 |
-| `numbering-continuity` | the numId values used by numbered lists are not contiguous |
-| `cover-separation` | the document has a single section, so the cover cannot carry its own page numbering |
-| `shading-type` | a cell is shaded with `w:val="clear"` and a black, `auto`, or empty fill — the "whole cell turned black" failure |
-
-`--only` runs a subset, which is how you scope the gate to the route you took, e.g. `--only table-pagination,image-overflow`.
-
-The runner is a thin shell. `postcheck_document.py` derives the shared read-only view of the package once — sections and page geometry, paragraphs (style, text, page break, drawing, centering, list membership, first-line indent), tables (rows, `tblHeader` / `cantSplit` / `tcMar` counts, shading), image extents, declared fonts, and numbering ids — and `postcheck_rules.py` holds the eleven rules against that view. Neither has a command-line entry of its own; call them through `postcheck.py`.
-
-## 7. `fix_footer_fields.py` — footer page numbers in WPS
-
-```
-python3 fix_footer_fields.py <file.docx> [--dry-run]
-```
-
-A build through docx-js leaves the keyword `PAGE` sitting in the footer with no format switch attached. Word reads the numbering style off the section's `<w:pgNumType>`; WPS skips that lookup and prints the instruction itself, so where a page number belongs the reader finds the literal text `PAGE \* arabic \* MERGEFORMAT`.
-
-The repair:
-
-1. For every footer part it decides the numbering style from the section that points at it through `<w:footerReference>`. That lookup has to follow references rather than positions, because a section carrying no `footerReference` of its own keeps using the previous section's footer. Each unformatted `PAGE` then becomes ` PAGE \* arabic \* MERGEFORMAT `, or ` PAGE \* ROMAN \* MERGEFORMAT ` when the style is `upperRoman` or `lowerRoman`.
-2. It drops the placeholder `<w:pgNumType/>` elements that docx-js puts on cover sections, since WPS treats an empty one as an instruction to restart numbering.
-
-A footer that no section points at is handled as decimal. Because only the unformatted keyword is rewritten, a footer already carrying a switch is untouched and running the script twice changes nothing. The report lists how many footers were scanned and rewritten, the style chosen for each, and the count of empty `pgNumType` elements dropped. `--dry-run` reports without touching the file; a real run swaps the archive atomically through a temporary file beside it.
-
-## 8. `add_toc_placeholders.py` — a TOC that is not an empty block
-
-```
-python3 add_toc_placeholders.py <file.docx> [--entries '[{"level":1,"text":"…","page":"1"}]'] [--dry-run]
-```
-
-A table of contents in OOXML is a field built from five pieces: a begin marker, the instruction, a separate marker, the cached result that stays on screen until a refresh, and an end marker. Word refreshes that cached result while opening the file, but only when the settings ask for it with `<w:updateFields/>`; a document assembled programmatically has nothing cached, and the reader is left staring at an empty gap where the contents belong.
-
-The repair:
-
-- collects the headings from level 1 through 3 in the order they appear, ignoring empty ones and ones that read like captions (`图 1：…`, `Table 2. …`), unless `--entries` supplies them explicitly as a JSON array of `{level, text, page}`;
-- clears whatever currently sits between the separate and end markers and writes placeholder entries in its place, each styled `TOC{level}` with a right-aligned dot-leader tab at 9000 twips, an indent of 240 at level 1 and 480 below, and the page `1`;
-- makes sure `word/settings.xml` carries `<w:updateFields w:val="true"/>`, placed after `defaultTabStop` / `hyphenationZone` when either exists, so the first open in Word swaps the placeholders for real page numbers.
-
-`--entries` must be a JSON array; anything unparseable, or not an array, exits `2`. Running it again changes nothing. Placement works on whole paragraphs: the separate and end markers have to live in different top-level paragraphs. When the entire field sits inside a single paragraph the report says `entries inserted: 0` and only the settings change lands. `--dry-run` reports without touching the file; a real run swaps the archive atomically through a temporary file beside it.
-
-## 9. Workflows
-
-### Review pass (comments)
-
-1. Unpack the document, then `doc = Document("unpacked", author="Reviewer")`.
-2. `editor = doc["word/document.xml"]`; find anchors with `get_node(tag="w:p", contains="…")`.
-3. `cid = doc.add_comment(start=first, end=last, text="…")`, then `doc.reply_to_comment(cid, "…")` for a thread.
-4. `doc.save("reviewed")`, repack, and run `postcheck.py` on the result.
-
-### Tracked-change edit
-
-1. Unpack, then `doc = Document("unpacked", track_revisions=True)`.
-2. Locate the run or paragraph; call `editor.suggest_deletion(elem)` to strike it out.
-3. For an insertion, transform the paragraph first and then place it: `xml = editor.suggest_paragraph("<w:p>…</w:p>")` followed by `editor.insert_after(anchor, xml)`.
-4. To take a side on an existing change, `editor.revert_insertion(elem)` or `editor.revert_deletion(elem)`.
-5. `doc.save("revised")`, repack, then run the gate.
-
-### Build → gate → repair
-
-1. Produce the `.docx` with whatever build path the task uses.
-2. `python3 postcheck.py out.docx --json` — act on the findings and re-run until the selected rules pass.
-3. If the build path is docx-js, run `python3 fix_footer_fields.py out.docx` and `python3 add_toc_placeholders.py out.docx`.
-4. This plugin has no renderer: convert to page images yourself and hand them to the `visual-judge` agent for the visual gate.
-
-## 10. Pitfalls
-
-- **There is no pack/unpack CLI.** The Python API takes a directory. Unzip and zip yourself, or import `_pack_document(input_dir, output_file)` from `scripts.document`.
-- **`save()` without a destination overwrites the input directory.** Pass one when the original must survive.
-- **`Document` edits a temp copy**, removed when the instance is garbage-collected. Finish reading before dropping the reference.
-- **`get_node` needs a unique target.** Line numbers shift once you mutate; prefer `attrs` or `contains`. Text split across runs will not match `contains`.
-- **Fragments must contain at least one element** and must use the edited part's namespace prefix — a prefix the part does not declare cannot be resolved.
-- **`validate()` is not a schema check.** A document that passes it can still be malformed OOXML.
-- **`cover-separation` fails single-section documents by design**, so a one-page memo always trips it. Scope the run with `--only`.
-- **`numbering-continuity` only gap-checks ids that are all digits.** A non-numeric `w:numId` is dropped from the comparison entirely, so a document mixing `w:numId="a"` with `w:numId="7"` is judged on `[7]` alone and cannot report a gap.
-- **`postcheck --fix` fixes nothing.** `fix_footer_fields.py` and `add_toc_placeholders.py` are the actual repair tools.
-- **Run the scripts by file path.** `postcheck.py` imports `postcheck_document` and `postcheck_rules` by flat module name, so `python3 -m scripts.postcheck` fails while `python3 …/scripts/postcheck.py` works from any directory. `document.py` is the opposite: it uses a relative import, so it must be imported as `scripts.document` with `skills/docx` on `sys.path`.
-- **Construction prints the RSID** to stdout. That is expected noise, not an error.
-
-## 11. Environment
-
-Python 3.10 with `defusedxml` installed; every XML parse goes through it, and it is the only third-party dependency.
-
-## 12. Script path setup (mandatory before any script call)
-
-Every script in this plugin is invoked by path, and the path is derived once:
+## Quick Setup
 
 ```bash
-# From the plugin root (where .zcodium-plugin/plugin.json lives):
-DOCX_SKILL_DIR="$(pwd)/skills/docx"
-python3 "$DOCX_SKILL_DIR/scripts/document.py" ...
+bash "$SKILL_DIR/setup.sh"    # Interactive environment check + install
 ```
 
-- The path is absolute or derived from the plugin root — a bare
-  `python3 scripts/document.py` from an arbitrary cwd fails, and the failure
-  looks like a missing script rather than a wrong cwd.
-- `DOCX_SKILL_DIR` is the same variable the scripts' own messages use; set it
-  once per shell.
-- The scripts resolve the skill directory from their own location
-  (`__filedirname`), so a script invoked by absolute path works regardless of
-  cwd — but a script invoked through a relative path from the wrong directory
-  resolves its siblings wrong.
+> **Local-font-first.** Inspect fonts available in the user's local environment and prefer a suitable
+> installed font. Use bundled or downloaded fonts only as fallbacks; do not install fonts without the
+> user's confirmation.
 
-## 13. Task router
+## Overview
 
-| the request is… | start at |
-| --- | --- |
-| create a document from nothing | §3 `document.py`, then the scene brief |
-| edit an existing document | §2 working shape, then the scene brief |
-| fix page numbers in the footer (WPS) | §7 `fix_footer_fields.py` |
-| add a table of contents | §8 `add_toc_placeholders.py` |
-| check a finished document | §6 `postcheck.py` |
-| a specific document type (resume, contract, exam, official-doc, academic) | the scene brief, after §12 |
+A .docx file is a ZIP archive containing XML files. This skill provides tools for creating, editing, reading, and reviewing Word documents.
 
-## 14. Scene router (load after the route)
+### Original File Preserved
 
-The scene briefs carry the document-type conventions. Load one after the task
-route is settled — never instead of it:
+User-provided input files are read-only by default. Deliverables go to new files
+(`<stem>_updated.docx` next to the input); edit an original in place only when the user explicitly
+asks — and then copy it to `<stem>_backup.docx` next to it (never `/tmp`) first. See
+`routes/edit.md` for the full workflow.
 
-| document type | brief |
-| --- | --- |
-| report | `scenes/report.md` |
-| academic paper / thesis | `scenes/academic.md` |
-| resume / CV | `scenes/resume.md` |
-| contract | `scenes/contract.md` |
-| exam paper | `scenes/exam.md` |
-| official document (公文) | `scenes/official-doc.md` |
-| copywriting | `scenes/copywriting.md` |
+## Quick Route — Read This First
 
-Shared conventions that apply regardless of scene:
-`references/design-system.md` (the design system),
-`references/common-rules.md` (naming, structure, font profiles, orphan and null
-prevention, WPS compatibility), `references/chart-templates.md` (charts).
+**Step 1**: Determine task type → load the corresponding route file
+**Step 2**: Determine business scene → load the corresponding scene file (if applicable)
+**Step 3**: Load `references/design-system.md` for cover recipes, palettes, and chart colors
+**Step 4**: Load `references/common-rules.md` for shared layout, font, and quality rules
+**Step 5**: Execute per route instructions
+**Step 6**: Run the post-generation checklist
 
-## 15. Unit quick reference
+⚠️ **MANDATORY — Cover Recipe Enforcement (Step 3):**
+When creating a document that needs a cover page, you MUST use one of the 7 validated cover recipes (R1–R7) from `design-system.md`. **Free-form cover code is FORBIDDEN.** The recipe provides the wrapper table, background, layout structure, border settings, and spacing — do not reinvent any of these.
 
-OOXML's units are the source of most "my text is the wrong size" defects:
+Workflow: (1) Call `selectCoverRecipe(docType, industry)` to get recipe + palette → (2) Use the corresponding `buildCoverRX()` function code from `design-system.md` → (3) Pass your `config` (title, subtitle, metaLines, etc.) into the recipe builder. If you skip this and write cover code from scratch, the cover WILL have compatibility issues (blank pages in MS Office, missing borders, overflow, etc.).
 
-| unit | value | used for |
-| --- | --- | --- |
-| half-point | 1/2 pt | font sizes (`w:sz` — 18 pt is `w:sz="36"`) |
-| twip | 1/20 pt (1/1440 in) | indents, spacing, table widths |
-| EMU | 1/914400 in | image extents, shape positions |
-| eighth of a point | 1/8 pt | border widths (`w:sz` on borders) |
+### Script Path Setup (MANDATORY before any script call)
 
-The two that bite: **font size is half-points** (`w:sz="24"` is 12 pt), and
-**border size is eighths of a point** (`w:sz="4"` is 0.5 pt). Mixing the two
-conventions — or assuming they are the same — is the classic "my border is
-enormous" bug.
+All CLI tools live in `scripts/` relative to this skill's directory. Before calling any script, resolve the absolute path once:
 
-## 16. Two-layer verification
+```bash
+DOCX_SCRIPTS="<skill_directory>/scripts"   # ← parent directory of this SKILL.md
 
-**Layer 1 — the manual checklist, during generation.** Every scene brief ends
-with one. It runs while the document is being built, because the defects it
-catches (an orphaned heading, a null field, a missing unit) are cheaper to fix
-in the source than in the output.
+# Then all commands use $DOCX_SCRIPTS:
+python3 "$DOCX_SCRIPTS/postcheck.py" output.docx
+python3 "$DOCX_SCRIPTS/add_toc_placeholders.py" output.docx --auto
+```
 
-**Layer 2 — `postcheck.py`, after generation.** The automated gate (§6): it
-checks what a human misses at scale — the numbering continuity, the blank-page
-count, the table pagination, the image overflow, the shading that paints black.
-Run it on every document, read its output, and fix what it names. A document
-that has not been through both layers is a draft.
+**For Python imports** (when generation code needs to import skill modules):
 
-The two layers are not interchangeable: the checklist catches intent (is this
-the document that was asked for), the gate catches mechanics (is this document
-well-formed). A document can pass the gate and still be the wrong document.
+```python
+import sys, os
+DOCX_SCRIPTS = os.path.join("<skill_directory>", "scripts")
+if DOCX_SCRIPTS not in sys.path:
+    sys.path.insert(0, DOCX_SCRIPTS)
+```
+
+**⚠️ NEVER use bare `python3 scripts/...`** — it only works if cwd happens to be the skill directory. Always use the absolute `$DOCX_SCRIPTS` path.
+
+### Task Router
+
+| User Intent | Route | Files to Load |
+|-------------|-------|---------------|
+| Create/write/generate (no attachment) | **Create** | `routes/create.md` + `references/docx-js-core.md` |
+| Edit/modify/revise (has attachment) | **Edit** | `routes/edit.md` + `references/ooxml.md` |
+| Format/layout/font/margin | **Format** | `routes/format.md` |
+| Comment/annotate/review | **Comment** | `routes/comment.md` |
+| Read/analyze/extract | **Read** | `routes/read.md` |
+
+### Scene Router (Optional — load after route)
+
+| User Keywords | Scene | File |
+|---------------|-------|------|
+| thesis, academic, research, paper, dissertation, abstract, journal | Academic | `scenes/academic.md` |
+| report, analysis, experiment, testing, survey, review, summary, proposal, feasibility, competitor, industry, operations | Report | `scenes/report.md` |
+| contract, agreement, terms, transfer, NDA, confidential, framework, cooperation, service terms, user agreement, procurement | Contract | `scenes/contract.md` |
+| resume, CV, job application | Resume | `scenes/resume.md` |
+| exam, test, quiz, paper (exam context), lesson plan | Exam | `scenes/exam.md` |
+| official document, notice, letter, reply, minutes, red header, government, issuance | Official | `scenes/official-doc.md` |
+| broadcast script, product copy, livestream, speech, presentation script, video script | Copywriting | `scenes/copywriting.md` |
+| plan, proposal (if not report context) | Report | `scenes/report.md` |
+| policy, regulation, standard, management rules | Official | `scenes/official-doc.md` |
+
+**If no scene matches**, use default design rules from `references/design-system.md` and `references/common-rules.md`.
+
+## Formatting Standards (Always Apply)
+
+→ See `references/common-rules.md` for full font profiles, spacing, indent, and layout rules.
+
+**Key rules (quick reference):**
+- **Line spacing**: 1.3x (`line: 312`) — MANDATORY. Exceptions: resume 1.15x, official doc 28pt fixed, copywriting `400`, contract 1.5x
+- **CJK body**: Justified + 2-char indent (`firstLine: 480` SimSun / `420` YaHei)
+- **Tables**: `margins` set, `ShadingType.CLEAR`, `tableHeader: true`, `cantSplit: true`, title `keepNext: true`
+- **Images**: `type` parameter required, preserve aspect ratio via `image-size`, PageBreak inside Paragraph
+- **Full-page Table row**: `rule: "exact"` with 1200 twips safety margin
+
+## Unit Quick Reference
+
+| Unit | Value |
+|------|-------|
+| 1 cm | 567 twips |
+| 1 inch | 1440 twips |
+| 1 pt | 20 half-points |
+| A4 | 11906 × 16838 twips |
+
+For Chinese font size table and common margins, see `references/common-rules.md`.
+
+## Post-Generation — Two-Layer Verification
+
+### Layer 1: Manual Checklist (self-check during generation)
+
+#### Basic Format
+- [ ] Line spacing is 1.3x (`line: 312`) or scene-specific override
+- [ ] CJK body has 2-char indent (`firstLine: 480` or `420`)
+- [ ] Tables have margins set
+- [ ] Images preserve aspect ratio via `image-size` — NEVER hardcode both width and height
+- [ ] PageBreak inside Paragraph
+- [ ] ShadingType uses CLEAR
+- [ ] Each numbered list uses unique `reference`
+- [ ] **⚠️ CRITICAL — Quotation marks in JS strings properly escaped.** Chinese curly quotes (`""` `''`) MUST use Unicode escapes (`\u201c` `\u201d` `\u2018` `\u2019`); straight quotes (`"` `'`) use `\"` `\'` or alternate delimiters. **This is the #1 most common code generation bug.** Chinese text frequently contains `""` for emphasis or proper nouns (e.g., "双11", "前低后高", "618") — every occurrence MUST be escaped. Failure to escape produces JS syntax errors that silently break document generation.
+- [ ] ImageRun includes `type` parameter
+- [ ] Header/footer present (unless scene says otherwise)
+
+#### Heading Styles
+- [ ] All body chapter headings use `heading: HeadingLevel.HEADING_X` (never simulate with bold + large font)
+- [ ] Cover title may skip Heading style (not in TOC), but body headings MUST use Heading style
+
+#### Page Break & Blank Page Prevention
+- [ ] Cover/content in separate sections
+- [ ] Three rules to prevent blank pages:
+  - ① When using section(NEXT_PAGE), previous section must NOT end with PageBreak (double break = blank page)
+  - ② PageBreak paragraph SHOULD contain visible text — **exception**: section-ending empty para + PageBreak is allowed (normal section separator, e.g., after cover page)
+  - ③ No more than 3 consecutive empty paragraphs
+- [ ] Full-page Table row height uses `rule: "exact"` (never `"atLeast"` for tall tables)
+- [ ] No unwanted blank pages (check each section ending)
+
+#### TOC
+→ See `references/toc.md` for the complete TOC reference and checklist.
+- [ ] If TOC title exists → `TableOfContents` element must be present
+- [ ] **⚠️ MANDATORY PageBreak after TableOfContents** — a Paragraph containing PageBreak MUST immediately follow the `TableOfContents` element; without it, TOC and body content will render on the same page. This is the #1 TOC formatting failure — never omit it
+- [ ] `add_toc_placeholders.py --auto` runs after generation; exit code = 0
+- [ ] **TOC MUST be in its own section** — body section sets `page: { pageNumbers: { start: 1, formatType: NumberFormat.DECIMAL } }` so page numbers start from the first body page, not from the TOC pages
+- [ ] **Page number API nesting** — `pageNumbers` MUST be inside `page: {}`, NOT at properties top level (see toc.md § Page Number API)
+- [ ] **3-section page numbering** — Cover (no page#) → Front matter (Roman i,ii,iii, start=1) → Body (Arabic 1,2,3, start=1)
+- [ ] **Post-process footers** — Roman section footer instrText must contain `PAGE \* ROMAN \* MERGEFORMAT`; Arabic section `PAGE \* arabic \* MERGEFORMAT` (WPS ignores pgNumType fmt). **⚠️ NEVER use `\* decimal` in instrText** — `decimal` is a docx-js API enum value (`NumberFormat.DECIMAL`), NOT a valid Word field format switch; using it causes page numbers to render as "1decimal", "2decimal". The correct Word field switch for Arabic numerals is `\* arabic`.
+- [ ] **Remove empty pgNumType** — Post-process to strip `<w:pgNumType/>` from cover section (docx-js emits empty element that confuses WPS)
+- [ ] **⚠️ TOC Refresh Hint MANDATORY** — between `TableOfContents` element and the PageBreak, MUST add an italic gray note paragraph telling users to right-click TOC → "Update Field" to refresh page numbers (see toc.md § TOC Refresh Hint)
+
+#### Table Cross-Page
+- [ ] Header rows: `tableHeader: true`
+- [ ] All rows: `cantSplit: true`
+- [ ] Title paragraph: `keepNext: true`
+
+#### Cover
+- [ ] **Cover MUST use a validated recipe (R1–R7)** from `design-system.md` — free-form cover code is forbidden
+- [ ] Cover recipe matches document type (per `selectCoverRecipe()` in `design-system.md`)
+- [ ] Cover uses the 16838 outer wrapper table with `allNoBorders` (all recipes provide this)
+- [ ] Cover title uses `calcTitleLayout()` — never hardcoded font size above 40pt
+- [ ] Cover spacing uses `calcCoverSpacing()` — never hardcoded large spacing values
+- [ ] Cover content does not overflow (total height ≤ 15638 twips, Table uses `rule: "exact"`)
+- [ ] Every TextRun on dark/colored background has explicit `color` set (Rule 9 — never rely on default black)
+- [ ] Cover section has no trailing PageBreak or empty paragraphs
+- [ ] Title lines split at semantic boundaries (no mid-word breaks, no single-char orphan lines)
+- [ ] No text-character decorative lines (`───`, `━━━`) — use paragraph borders only
+
+#### Output Files
+- [ ] The user's original input file is untouched at its original path (unless the user explicitly asked for in-place editing); any backup you created stays next to it — these are NOT temp/retry artifacts
+- [ ] Deliverable is a new file (`<stem>_updated.docx`), not the input path overwritten
+- [ ] Working directories from unpack/pack are cleaned up; only expected deliverables remain
+
+### Layer 2: Automated Post-Check Script
+
+```bash
+python3 "$DOCX_SCRIPTS/postcheck.py" output.docx
+```
+
+Automatically checks 14 business rules: blank pages, **cover overflow (font size/spacing/trailing content)**, line spacing consistency, table margins, table cross-page control (cantSplit/tblHeader), image overflow, image aspect ratio distortion, font fallback, CJK indent, heading hierarchy, ShadingType misuse, TOC quality, document cleanliness (placeholder text/Markdown/HTML residuals), report content quality (abstract presence/heading specificity/vague conclusion detection).
+
+⚠️ **After generating any document, MUST run postcheck.py and fix all ❌ errors.**
+
+## Math Formulas
+
+Formula input uses **LaTeX syntax**, internally converted to docx-js Math objects.
+
+- **Basic formulas** (fractions, sub/superscript, roots, summation) → docx-js Math components
+- **Complex formulas** (3+ nesting, matrices, piecewise functions) → matplotlib PNG fallback
+
+See `references/math-formulas.md`.
+
+## Charts
+
+Default: **matplotlib template library** generates PNG for embedding.
+
+6 ready-to-use templates: bar, line, pie, box, radar, heatmap.
+Colors auto-derived from document palette.accent for style consistency.
+Default palette: Morandi low-saturation (see design-system.md).
+
+See `references/chart-templates.md`.
+
+## Dependencies
+
+- **pandoc**: Text extraction
+- **docx**: `bun add docx` or `npm install docx` (creating)
+- **LibreOffice**: PDF conversion, .doc support — install from the Tsinghua mirror
+  (`https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/`, see below)
+- **Poppler**: PDF to image (`pdftoppm`)
+- **defusedxml**: Secure XML parsing
+- **python-docx**: Simple comment operations
+
+### 🔴 HARD REQUIREMENT — LibreOffice is missing
+
+Any step that calls `libreoffice`/`soffice` (`.doc` → `.docx`, DOCX → PDF, visual verification)
+depends on LibreOffice.
+
+**If LibreOffice is not installed, you MUST install it. This is not a choice.**
+
+**FORBIDDEN — do not do any of these:**
+- ❌ Using Microsoft Word, WPS Office, Pages, or any other program already on the user's machine
+  *instead of* installing LibreOffice.
+- ❌ Deciding on the user's behalf that the download is "too large", "too slow", or "not worth it".
+  **The package being large is NOT a reason to skip the install.** It is expected to be large.
+- ❌ Asking the user "should I use Word instead to save time?" — that is the same violation dressed
+  up as a question. Do not offer the substitution.
+- ❌ Silently degrading (skipping the PDF check, skipping visual verification) to avoid installing.
+
+**REQUIRED sequence — no steps skipped, in this order:**
+
+1. **Explain the necessity to the user.** LibreOffice is the conversion engine that preserves the
+   document's styles, layout, fonts, and page breaks faithfully — no other tool reproduces the same
+   output, so substituting it degrades fidelity.
+2. **Tell them the download is large** (roughly several hundred MB) and may take a while. This is
+   information for the user, **not** a decision point for you — state it and proceed to install.
+3. **Install it now.** **Preferred source — Tsinghua TUNA mirror** (fast in China, current build):
+   `https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/` — pick the
+   subdirectory for the platform/arch (`deb/x86_64`, `deb/aarch64`, `rpm/x86_64`, `mac/aarch64`,
+   `mac/x86_64`, `win/x86_64`, `win/aarch64`) and download the main package from it. If 26.8.0 is no
+   longer there, list `https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/` and take
+   the newest version. Full per-platform download-and-install commands: `env_setup/setup.md` →
+   *"LibreOffice — Recommended Download Source"*.
+   Package-manager fallback, only if the mirror is unreachable:
+   - macOS: `brew install --cask libreoffice`
+   - Linux (Debian/Ubuntu): `sudo apt install libreoffice-core`
+   - Windows: `winget install TheDocumentFoundation.LibreOffice`
+4. **Register the binary on `PATH`, then re-verify.** An install that leaves `soffice` off the
+   executable search path looks identical to "not installed" on the next probe — that is what causes
+   the same several-hundred-MB package to be downloaded twice. **The mechanism differs per OS**
+   (Linux/macOS: symlink into `/usr/local/bin`; Windows: append the program dir to the user `PATH`
+   with `setx`). Full per-OS commands: `env_setup/setup.md` → *"Register the binary on PATH"*.
+   Re-run `soffice --version` and only continue once it prints a version. Corollary: **probe before
+   installing** — if the binary already exists on disk but off-`PATH`, register it instead of
+   reinstalling.
+5. **Only after that install has actually been attempted AND failed** may you use software already
+   on the user's machine (Word, WPS, Pages). Report the install failure and what you switched to,
+   and warn that output fidelity may differ.
+
+> **The gate is simple: no install attempt = no substitute program.** If you have not run the
+> install command and seen it fail, using Word/WPS/Pages/Keynote is a violation of this skill.
+
+## Final response citations
+
+Place `::zcode-file-citation{...}` inline in prose, not in a trailing list. Use `purpose="source"` for Q&A/no-op and `purpose="output"` for create/edit.
+
+- [HARD REQUIREMENT] Create/edit: cite each final file exactly once with a plain output citation. Summarize representative changes; do not cite every section/page or add a separate filename, path, or Markdown link. Example: `Created ::zcode-file-citation{path="/abs/path/launch-plan.docx" purpose="output"}, highlighting the rollout and owners.`
+- Q&A: do not edit/re-export.
+
+### Document
+
+For non-in-place edits, preserve the source and export a copy; if unchanged, cite the source plainly.
+
+For page-specific evidence, use a page number verified against the latest render/inspection.
+
+Locators support only `page_number`; otherwise use a plain citation. Do not guess or add object, label, paragraph, table, or cell IDs. Do not cite intermediates unless asked. Inspect complete relevant pages and preserve material headings, question/table labels, footnotes, sources, and sample sizes; cite each needed page once.
+
+```text
+::zcode-file-citation{path="/abs/path/file.docx" purpose="source" artifact_kind="document" page_number=4}
+```
+
+### PDF
+Citations currently support only plain file citations. Do not add `artifact_kind`, `page_number`, or other locators. Never cite rendered PNGs, scratch files, builders, or QA intermediates unless asked. Inspect the complete relevant pages, preserve material headings, table/figure labels, footnotes, sources, and sample sizes, and cite each source PDF once with a plain source citation.
+
+### Presentation 
+
+inspect the complete relevant slide, including callouts, question wording, chart/table titles, totals/sample sizes, and source/methodology footers. Answer directly, group same-slide claims, and cite that slide once. For concrete chart/table/image/diagram/callout evidence, include exact inspected `slide_id`, `object_id`, and a useful label when available.
+
+For non-in-place edits, preserve the source and export a copy; if unchanged, cite the source plainly.
+
+Use only locators verified against the latest render/inspection:
+
+```text
+::zcode-file-citation{path="/abs/path/deck.pptx" purpose="source" artifact_kind="presentation" slide_number=3}
+::zcode-file-citation{path="/abs/path/deck.pptx" purpose="source" artifact_kind="presentation" slide_number=1 slide_id="sl/gs5z1kshq0xv" object_id="ch/pz9t1r3ka8vn" label="ARR by segment chart"}
+```
+
+If IDs are not exact, stop at `slide_number`; never guess or cite intermediates unless asked.
+
+### Spreadsheets
+
+- Cite whole-workbook claims plainly; otherwise use the narrowest reliable `sheet` + `range` (the exact cell for a discrete value). Cite discontiguous cells separately. For objects, use `sheet` + exact inspected `object_id`; add `object_kind`/`label` only when useful. Never cite a sheet alone or guess locators.
+- Calculations: cite only distinct inputs, drivers, formulas, or results the answer needs.
+
+```text
+::zcode-file-citation{path="/abs/path/book.xlsx" purpose="source" artifact_kind="workbook" sheet="Revenue Model" range="C27"}
+```
+
+Never cite intermediates unless asked.

@@ -1,242 +1,463 @@
-# Brief — Contracts and agreements
+# Scene: Contract / Agreement
 
-Applies to a sales contract, a service agreement, an NDA, a lease, and any document
-whose authority comes from being citable clause by clause. A contract is not a
-report: it is read for one clause at a time, by someone looking for the number.
+## Goal
 
-## 1. The four parts
+Generate a complete, formal, well-structured legal document with clear clauses, rigorous logic, and proper formatting. Must simultaneously meet:
+- Complete structure, clear clauses, formal language, explicit responsibilities
+- Identifiable risk boundaries, proper Word formatting
+- Ready for review, revision, circulation, or signing preparation
 
-| part | contents                                                               |
-| ---- | ---------------------------------------------------------------------- |
-| 首部 | title, party identification, recitals (鉴于…)                          |
-| 正文 | definitions, then the operative clauses                                |
-| 尾部 | signature and seal block, effective date, attachments list             |
-| 附件 | schedules, annexes, technical specifications — numbered 附件一, 附件二 |
+**Forbidden:** Producing outlines-only / sample clauses / drafting advice / risk summaries; outputting chat-style explanations or filler phrases.
 
-The recitals are not decoration. They are the context a court reads when the
-operative text is ambiguous, and they belong before clause 1, numbered with the same
-scheme or set as unnumbered paragraphs under a heading.
+→ Font profile: **A (Formal)** — see `references/common-rules.md`
+→ Default layout: standard margins — see `references/common-rules.md`
+→ Placeholder convention & universal prohibitions — see `references/common-rules.md`
 
-## 2. Clause numbering
+---
 
-- Three levels: `第一条` / `1.1` / `1.1.1`. Articles run continuously through the
-  whole contract; sub-clauses restart at each article; sub-sub-clauses restart at
-  each sub-clause.
-- Each level is a separate numbering definition in `word/numbering.xml` with its own
-  indents, so a level change is a style change and not a re-typed number.
-- The number belongs to the paragraph, not to the text. A typed `1.1` does not
-  renumber when a clause is inserted, and a contract that gains a clause mid-life is
-  the normal case.
-- **`numbering-continuity` requires the `numId` values actually in use to be
-  contiguous integers.** A contract assembled from clauses copied out of three
-  templates typically ends up with `numId` 1, 4, 7 — the document renders correctly
-  and the gate reports a gap. Renumber the definitions to be contiguous before
-  delivering.
-- Cross-references (`按照第 5.2 条`) are text, so they drift when clauses move.
-  Either re-check them after any structural edit, or use a cross-reference field that
-  resolves the clause number. A stale cross-reference in a contract is worse than a
-  missing one.
+## Contract Type Routing
 
-## 3. Defined terms and consistency
+```js
+function selectContractType(keywords, topic) {
+  if (/confidential|NDA|non-disclosure/.test(keywords)) return "nda";
+  if (/transfer|equity|asset|rights/.test(keywords)) return "transfer";
+  if (/framework|strategic|cooperation agreement/.test(keywords)) return "framework";
+  if (/terms|platform rules|user agreement|privacy/.test(keywords)) return "terms";
+  return "bilateral"; // default: bilateral commercial contract
+}
+```
 
-- Definitions live in one clause near the top, quoted and bold on first use, and
-  then used verbatim everywhere. "The Supplier" and "供应商" in the same contract is
-  two parties.
-- Amounts appear in both Arabic numerals and Chinese characters, so a transcription
-  error in one form is visible against the other: `¥1,200,000.00` beside
-  `人民币壹佰贰拾万元整`.
-- Dates in ISO form (`2026-09-22`) or in the local long form, one of them throughout.
-  A contract mixing `2026/9/22` and `22 September 2026` invites an argument about
-  which one governs.
-- Units, currency and rounding rules stated once, in a definitions or interpretation
-  clause, rather than repeated per clause where they can disagree.
+### 5 Contract Types
 
-## 4. Layout
+| Type | Use Case | Structure Focus |
+|------|----------|----------------|
+| bilateral | Service/sale/development/procurement contracts | Subject → Consideration → Performance → Acceptance → Breach → Dispute |
+| transfer | Equity/debt/asset/rights transfer | Subject → Consideration → Closing & Registration → Representations → Tax |
+| nda | Non-disclosure agreements | Definition of Confidential Info → Obligations → Use Restrictions → Exceptions → Duration |
+| framework | Cooperation framework / strategic alliance | Scope → Division of Work → Mechanism → Subsequent Agreements |
+| terms | Platform rules / Terms of Service / User agreements | Definitions → Services → Rights & Obligations → Liability Limits → Amendments |
 
-- Body 10.5–12 pt, one family, justified, first-line indent of two characters for
-  Chinese body paragraphs.
-- The indent must be `w:ind/@w:firstLine` in the 200–800 twip range. Word writes
-  `w:firstLineChars="200"` for a two-character indent and it looks identical, but the
-  rule reads only `@w:firstLine`.
-- One `w:spacing/@w:line` value across every body paragraph outside tables and
-  lists. Two values fail `line-spacing`, and a contract whose clauses have different
-  leading reads as two documents stapled together.
-- Headings are real heading styles, contiguous, so the outline and any table of
-  contents work. A long contract carries a table of contents; a two-page NDA does
-  not.
-- No page number restart anywhere. See §6.
+---
 
-## 5. The signature block
+## Standard Template Structures
 
-- Two parties, one per side, on the same line or on facing halves of the page:
-  `甲方（盖章）` on the left, `乙方（盖章）` on the right, a right-aligned tab at the
-  right margin to place the second.
-- Under each: 法定代表人或授权代表（签字）, then an underlined blank for the
-  signature, then 日期 with an underlined blank.
-- The underline is a bottom border — `w:pBdr/w:bottom` on the run's paragraph, or a
-  cell's `w:tcBorders/w:bottom` — never a typed run of underscores. A typed rule does
-  not survive an edit, does not align, and looks wrong the moment the font changes.
-- The two-column layout is a two-cell borderless table when each side needs several
-  lines. If it is a table, then it is a table for the gate's purposes: `w:tcMar`
-  padding on every cell (`table-margins`), and because it has more than one row it
-  needs `w:tblHeader` on a row plus `w:cantSplit` on every row (`table-pagination`).
-  A signature block split across a page break is a real defect, so `w:cantSplit` is
-  worth adding for its own sake.
-- The effective date and the signature dates are different fields. The effective date
-  is a clause; the signature date is written by hand at signing.
+### Template A: Bilateral Commercial Contract
+1. Header (title, contract number, date, location)
+2. Party Information (Party A, Party B)
+3. Recitals ("Whereas" clauses)
+4. Definitions & Interpretation
+5. Subject Matter & Scope of Services/Delivery
+6. Contract Price & Payment Terms
+7. Rights & Obligations of Both Parties
+8. Timeline, Delivery & Acceptance
+9. Invoicing, Tax & Settlement
+10. Intellectual Property & Confidentiality
+11. Representations & Warranties (if applicable)
+12. Liability for Breach
+13. Force Majeure
+14. Termination & Dissolution
+15. Notices & Service
+16. Dispute Resolution
+17. Miscellaneous
+18. Signature Block
 
-## 6. Page numbering is one continuous sequence
+### Template B: Rights Transfer Agreement
+1. Header & Parties
+2. Recitals
+3. Definitions & Interpretation
+4. Subject of Transfer
+5. Consideration & Payment Arrangement
+6. Closing & Registration/Transfer
+7. Representations & Warranties
+8. Tax Allocation
+9. Liability for Breach
+10. Dispute Resolution
+11. Miscellaneous
+12. Signature Block
 
-This is the rule a contract breaks most often, because the document is assembled
-from parts.
+### Template C: Non-Disclosure Agreement (NDA)
+1. Header & Parties
+2. Recitals
+3. Definition of Confidential Information
+4. Confidentiality Obligations
+5. Use Restrictions
+6. Return, Deletion & Destruction of Information
+7. Exceptions
+8. Confidentiality Period
+9. Liability for Breach
+10. Dispute Resolution
+11. Miscellaneous
+12. Signature Block
 
-- One numbering sequence, running from the first page to the last, including the
-  signature page and every attachment. A reader citing "page 12 of the Agreement"
-  means one document.
-- Continuity is expressed by the absence of a restart: a section's
-  `<w:pgNumType w:fmt="decimal"/>` with no `w:start` attribute continues from the
-  previous section. A `w:start` on a later section is a restart, and a restart in the
-  middle of a contract is a defect.
-- **Do not leave an empty `<w:pgNumType/>` on any section.** `fix_footer_fields.py`
-  drops those, because WPS reads an empty one as an instruction to restart numbering
-  — which is exactly the failure it exists to prevent. Run
-  `python3 fix_footer_fields.py contract.docx` before delivering.
-- To suppress the number on page 1 without breaking continuity, use a different
-  first page: `<w:titlePg/>` in the section properties plus an empty first-page
-  footer. Restarting the sequence at 0 to hide the first number is not the same
-  thing and is wrong.
-- The page number is a `PAGE` field in the footer. A freshly built footer often
-  carries the bare keyword with no format switch, and WPS then prints
-  `PAGE \* arabic \* MERGEFORMAT` where the number belongs — `fix_footer_fields.py`
-  §1 in `routes/format.md` is the repair.
-- A contract has no cover section in the report sense, so `cover-separation` reports
-  `only one section` for a single-section agreement. That is the rule working as
-  designed; scope the run with `--only` and record why.
+### Template D: Framework / Cooperation Agreement
+1. Header & Parties
+2. Recitals
+3. Purpose & Principles
+4. Scope of Cooperation
+5. Division of Work & Responsibilities
+6. Project Advancement Mechanism
+7. Commercial Arrangements / Subsequent Agreements
+8. Confidentiality, IP & Compliance
+9. Term, Amendment & Termination
+10. Liability for Breach
+11. Dispute Resolution
+12. Miscellaneous
+13. Signature Block
 
-## 7. Attachments and a revision record
+### Template E: Unilateral Terms / Platform Rules
+1. Document Title
+2. Definitions & Scope
+3. Service/Rule Content
+4. User Rights & Obligations / Platform Rights & Obligations
+5. Liability Limitations & Disclaimers
+6. Fees & Payment (if applicable)
+7. Intellectual Property
+8. Termination, Suspension & Amendment
+9. Notices & Service
+10. Dispute Resolution
+11. Miscellaneous
 
-- Attachments start after the signature block, each on a new page, each titled
-  `附件一 …` and referenced from the clause that introduces it.
-- A revision record at the end — version, date, author, what changed — is what makes
-  a contract maintainable. It is a small table, and it is a real table:
-  `w:tblHeader` on the header row, `w:cantSplit` on every row, `w:tcMar` on every
-  cell.
+**Note:** Unilateral/boilerplate terms require special attention to adhesion clause risks — avoid creating extremely one-sided documents.
 
-## 8. Self-check before handing this over
+**If the user provides an existing template, historical agreement, or company standard, always follow it first.**
 
-- One page-numbering sequence, no restart, no empty `w:pgNumType` anywhere.
-- Page number present on every page except a deliberately suppressed first page.
-- `numId` values in use contiguous, or the gate scoped and the reason recorded.
-- One line-spacing value across all body paragraphs.
-- Every Chinese body paragraph carrying `w:ind/@w:firstLine` in 200–800 twips.
-- No typed underscores used as a rule.
-- Cross-references re-checked after any clause insertion or deletion.
-- `postcheck.py contract.docx --only line-spacing,cjk-indent,numbering-continuity,heading-continuity,table-pagination,table-margins,font-fallback,blank-pages`
+---
 
-## 9. Contract type routing
+## Input Recognition & Completion
 
-Five families, each with its own spine. Route on the first read — the type
-decides which sections exist and in what order.
+### Processing Rules
+1. If user provides a template, historical agreement, or company standard → **always follow it first**
+2. If information is incomplete, fill conservatively — must be **restrained, natural, professional, consistent with transaction logic**
+3. **Never fabricate** unrealistic commercial terms, regulatory requirements, approval conclusions, qualification status, tax treatment results, payment facts, or performance facts
+4. If critical info is missing → use standardized placeholders
+5. If user does not specify jurisdiction → default to PRC commercial writing conventions, but avoid making specific legal conclusions
 
-| type | spine | signature |
-| --- | --- | --- |
-| **Bilateral commercial** | parties → recitals → definitions → subject & price → delivery & acceptance → payment → breach → dispute → misc | both parties, side by side |
-| **Rights transfer** | grant scope → territory & term → fees & royalty → moral rights → warranty → termination | grantor and grantee |
-| **NDA** | definition of confidential info → exclusions → permitted use → term → return/destruction → remedies | both parties |
-| **Framework / cooperation** | principles → scope of cooperation → each party's obligations → IP & data → term & exit → dispute | both parties |
-| **Unilateral terms / platform rules** | acceptance → service description → user obligations → fees → liability → changes & termination | one party (the user accepts by use) |
+---
 
-The routing matters because a missing spine section is a legal gap, not a
-formatting one. An NDA without an exclusions clause is unenforceable in
-practice; a framework agreement without an exit clause traps both parties.
+## Legal Writing Standards
 
-## 10. Template structures
+### Register
+1. Use formal legal document register
+2. Use clear party designations: "Party A", "Party B", "both parties", "either party", "non-breaching party", "breaching party"
+3. **Forbidden:** Colloquial expressions ("you", "me", "they", "pay up", "cancel the contract", "handle ASAP")
+4. Preferred terms: "pay consideration", "perform obligations", "constitute a breach", "terminate the contract", "assume liability for damages", "written notice", "deliver and accept", "representations and warranties"
 
-The section lists below are the minimum for each type. Sections are numbered
-per §2, and every cross-reference points at a number, never at a title.
+### Precision
+1. Eliminate vague adjectives: avoid "quality", "reasonable", "enormous", "appropriate", "ASAP" unless necessary for legal flexibility
+2. Each obligation must specify: who, when, how, what
+3. Consistent legal phrasing:
+   - Mandatory obligation → "shall"
+   - Right authorization → "has the right to"
+   - Prohibition → "shall not"
+   - Discretionary → "may"
+4. Amounts, dates, percentages, deadlines, business days vs. calendar days must be as specific as possible
 
-### Bilateral commercial contract
+### Clear Subjects
+1. Every clause must have an explicit responsible party — avoid vague subjects ("relevant parties", "relevant personnel", "when necessary")
+2. Joint obligations: explicitly write "both parties agree" or "both parties shall"
+3. Unilateral obligations: explicitly write "Party A shall" or "Party B shall"
 
-1. Parties (full legal names, registration numbers, addresses)
-2. Recitals (background, in "whereas" form)
-3. Definitions (every capitalised term)
-4. Subject matter and price
-5. Delivery and acceptance
-6. Payment terms and invoicing
-7. Intellectual property
-8. Confidentiality
-9. Breach and remedies
-10. Force majeure
-11. Dispute resolution and governing law
-12. Miscellaneous (notices, assignment, entire agreement, severability)
+---
 
-### Rights transfer agreement
+## Transaction Closure & Risk Control
 
-1. Grant of rights (what, exclusively or not)
-2. Territory
-3. Term
-4. Fees and royalty
-5. Moral rights and attribution
-6. Warranty of title
-7. Termination and reversion
-8. Dispute resolution and governing law
+A contract must not only describe the transaction — it must ensure logical closure. Check the following:
 
-### Non-disclosure agreement
+1. If a performance deadline is specified → specify consequences of delay
+2. If payment milestones are specified → specify payment conditions, method, invoice requirements
+3. If a delivery obligation exists → specify delivery standards, method, acceptance rules, objection period
+4. If termination rights exist → specify conditions, notice, effective date, post-termination settlement
+5. If breach liability exists → must correspond to main obligations in preceding clauses
+6. If IP/technology/data/trade secrets are involved → separately address ownership, license scope, use restrictions
+7. If confidentiality obligations exist → define scope, exceptions, duration, breach consequences
+8. If force majeure clause exists → specify notice obligation, mitigation duty, subsequent negotiation mechanism
+9. If notice/service arrangements exist → specify address, contact person, email, or other delivery method
+10. If user requests significantly one-sided adhesion/disclaimer clauses → add a note near the clause:
+    `[Note: This clause may involve adhesion terms or liability limitations. Manual review recommended for the specific transaction.]`
 
-1. Definition of confidential information
-2. Exclusions (public domain, prior possession, independent development,
-   compelled disclosure)
-3. Permitted purpose and permitted recipients
-4. Term of confidentiality
-5. Return or destruction on termination
-6. Remedies (injunctive relief stated)
-7. Governing law
+---
 
-### Framework / cooperation agreement
+## Truthfulness & Legal Caution
 
-1. Principles and scope
-2. Each party's obligations
-3. Intellectual property and data
-4. Commercial terms (or the mechanism that sets them)
-5. Term, renewal and exit
-6. Dispute resolution
+1. **Never fabricate** specific statute article numbers, judicial interpretation numbers, or regulatory document numbers
+2. Legal bases should use general references, e.g.: "In accordance with the Civil Code of the PRC and relevant laws and regulations..."
+3. **Never** pretend to provide formal legal opinions, litigation success predictions, or definitive validity/invalidity conclusions
+4. **Never** state definitive legality conclusions for high-risk clauses (adhesion terms, penalty clauses, disclaimers, non-compete, exclusivity, unilateral interpretation rights)
+5. **Never** fabricate that regulatory approvals are obtained, title is unencumbered, tax compliance is assured, or third-party consent is secured
+6. When critical info is insufficient → use placeholders, never present as confirmed fact
+7. For high-risk areas (equity, debt, licenses, data compliance, labor, personal information, cross-border) → maintain restrained language, do not add rigid commitments without user confirmation
 
-### Unilateral terms / platform rules
+---
 
-1. Acceptance mechanism
-2. Service description
-3. User obligations and prohibited conduct
-4. Fees and payment
-5. Liability and warranty disclaimers
-6. Changes to the terms
-7. Termination and suspension
+## Special Clause Requirements
 
-## 11. Input recognition and completion
+### Definitions Clause
+If the document repeatedly uses specialized terms ("deliverables", "service results", "confidential information", "source code", "project milestones", "acceptance criteria", "trade secrets"), include a "Definitions & Interpretation" clause near the beginning.
 
-- **Every party's full legal name** appears in the parties clause and in the
-  signature block, character for character. A mismatch between the two is the
-  most common defect in generated contracts.
-- **Monetary amounts** carry the currency and whether tax is included.
-  `¥1,000,000` and `¥1,000,000 (tax inclusive)` are different contracts.
-- **Dates are unambiguous**: `2024年3月1日`, never `3/1` in a document that
-  crosses locales.
-- **Defined terms are used consistently**: if the definitions clause says
-  "the Licensor", the body does not say "the Company". §3's consistency rule
-  is enforced by reading, and the read is not optional.
+### Dispute Resolution
+1. Must be explicit
+2. Choose between litigation OR arbitration — never mix both
+3. Litigation → specify jurisdictional connection point
+4. Arbitration → specify arbitration institution
+5. If user hasn't specified → use placeholder for confirmation
 
-## 12. Legal writing standards
+### Tax Clause
+1. If the transaction involves taxes → specify which party bears them, whether price includes tax, invoice type and conditions
+2. Avoid vague "taxes borne as required by law" without transaction-specific detail
 
-- **"Shall" for obligations, "may" for permissions, "will" for statements of
-  fact.** The three are not interchangeable, and mixing them is what ambiguity
-  clauses are made of.
-- **One clause, one obligation.** A clause with two "and"-joined obligations
-  is two clauses; splitting them is what makes breach provable.
-- **No adverbs of degree in obligations**: "promptly", "reasonable", "best
-  efforts" each need a definition or a number elsewhere in the document. An
-  undefined "promptly" is a dispute with a head start.
-- **Cross-references point at numbers** (§2), and every referenced section
-  exists — a contract that references a deleted clause is worse than one that
-  never referenced it.
-- **The miscellaneous section is not optional**: notices, assignment, entire
-  agreement, severability, counterparts. Omitting them does not simplify the
-  contract; it removes the parties' agreed answers to predictable questions.
+### Breach Liability
+1. Must correspond to main obligations in preceding clauses
+2. Penalty amounts should be restrained — avoid obviously exaggerated or severely imbalanced figures
+3. If fundamental breach exists → consider corresponding termination rights and damages
+
+### Appendices
+1. For complex subjects/pricing/technical requirements/deliverables → use "Appendix 1, Appendix 2..." format
+2. Explicitly state appendix-contract relationship (typically: "Appendices form an integral part of this contract")
+3. If appendix content is unknown → use placeholder
+
+---
+
+## Palette
+
+**Legal Wood** (Warm + Heavy + Calm) — for decorative elements only; body text must be pure black.
+
+```js
+const palette = { primary:"#28201C", body:"#000000", secondary:"#6E6560", accent:"#7A5C3A", surface:"#FBF9F7" };
+```
+
+⚠️ **ALL visible text in contracts must be pure black `"000000"`.** This includes:
+- Contract title (SimHei, black, NOT accent color)
+- Contract number (black)
+- Clause headings (black)
+- Body text (black)
+- Party information (black)
+- Signature block text (black)
+
+**The only exception** is red-header official documents (红头文件), which follow their own GB/T 9704 color rules. For standard contracts, NO colored text is permitted — no red, no accent color, no dark-blue-grey.
+
+```js
+// ✅ Contract title — always pure black
+new Paragraph({ alignment: AlignmentType.CENTER,
+  spacing: { line: Math.ceil(22 * 23), lineRule: "atLeast" },  // ★ Rule 8: prevent clipping
+  children: [new TextRun({ text: "Training Cooperation Framework Agreement",
+    size: 44, bold: true, color: "000000",  // ← MUST be "000000"
+    font: { eastAsia: "SimHei", ascii: "Times New Roman" } })]
+})
+
+// ❌ FORBIDDEN — accent/palette color on contract text
+new TextRun({ text: "Training Cooperation Framework Agreement", color: palette.accent }) // ← WRONG
+new TextRun({ text: "Contract No.:", color: palette.primary }) // ← WRONG (if primary ≠ "000000")
+```
+
+---
+
+## Scene-Specific Font Overrides
+
+Beyond Profile A defaults:
+
+| Element | Font | Size | Style |
+|---------|------|------|-------|
+| Contract title | SimHei | Er Hao 22pt (size: 44) | Bold, centered |
+| Contract number | SimSun | Wu Hao 10.5pt (size: 21) | Right-aligned |
+| Clause heading | SimHei | Xiao Si 12pt (size: 24) | Bold |
+| Monetary amount | SimSun | Xiao Si 12pt (size: 24) | Bold |
+
+---
+
+## Document Structure
+
+1. **Title**: "XXX Contract" or "XXX Agreement" — Er Hao SimHei, centered
+2. **Contract number**: right-aligned, Wu Hao
+3. **Preamble**: Party information with placeholders
+4. **Recitals** (summarize transaction background and purpose)
+5. **Definitions** (if specialized terms recur)
+6. **Substantive clauses** (per selected template)
+7. **Signature block**
+8. **Appendices** (if any)
+
+---
+
+## Clause Numbering System
+
+Use stable, consistent, pure-text numbering suitable for Chinese legal documents.
+
+```
+Article 1  Subject Matter
+  1.1  xxxxxxxxxx
+  1.2  xxxxxxxxxx
+    (1) xxxxxxxxxx
+    (2) xxxxxxxxxx
+      ① xxxxxxxxxx
+      ② xxxxxxxxxx
+Article 2  Price and Payment
+  2.1  ...
+```
+
+**Numbering discipline:**
+1. No level-skipping
+2. **Forbidden:** Using Markdown list markers (`-` `*` `1.`) for clause hierarchy
+3. No switching from "Article X" to `-` or `*` or auto-list mid-document
+4. Numbering style must be consistent throughout the entire document
+5. Clause headings should be clean and simple
+
+---
+
+## Party Information Layout (Table-Based Alignment — Mandatory)
+
+Party A and Party B information MUST be laid out using a **borderless table** so that labels align vertically. Never use plain paragraphs with indentation — this causes misalignment between parties.
+
+```js
+// ✅ Correct — borderless table ensures "统一社会信用代码：", "地址：", "法定代表人：" align
+function partyInfoBlock(partyLabel, partyName, fields) {
+  // fields: [["Unified Social Credit Code", value], ["Address", value], ["Legal Representative", value]]
+  const NB = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+  const noBorders = { top: NB, bottom: NB, left: NB, right: NB };
+
+  const headerPara = new Paragraph({ spacing: { before: 200, after: 120 },
+    children: [new TextRun({ text: `${partyLabel}: ${safeText(partyName, "【Company full name】")}`,
+      size: 24, font: { eastAsia: "SimSun", ascii: "Times New Roman" } })]
+  });
+
+  const infoTable = new Table({
+    width: { size: 90, type: WidthType.PERCENTAGE },
+    borders: { top: NB, bottom: NB, left: NB, right: NB, insideHorizontal: NB, insideVertical: NB },
+    rows: fields.map(([label, value]) => new TableRow({
+      children: [
+        new TableCell({
+          width: { size: 35, type: WidthType.PERCENTAGE },
+          borders: noBorders,
+          margins: { top: 40, bottom: 40, left: 420, right: 60 },
+          children: [new Paragraph({
+            children: [new TextRun({ text: `${label}:`, size: 24,
+              font: { eastAsia: "SimSun", ascii: "Times New Roman" } })],
+          })],
+        }),
+        new TableCell({
+          borders: noBorders,
+          margins: { top: 40, bottom: 40, left: 60, right: 120 },
+          children: [new Paragraph({
+            children: [new TextRun({ text: safeText(value, `【Please fill in: ${label}】`), size: 24,
+              font: { eastAsia: "SimSun", ascii: "Times New Roman" } })],
+          })],
+        }),
+      ],
+    })),
+  });
+
+  return [headerPara, infoTable];
+}
+
+// Usage:
+const partyAChildren = partyInfoBlock("Party A (甲方)", config.partyA?.name, [
+  ["Unified Social Credit Code (统一社会信用代码)", config.partyA?.creditCode],
+  ["Address (地址)", config.partyA?.address],
+  ["Legal Representative (法定代表人/负责人)", config.partyA?.legalRep],
+]);
+```
+
+**Rules:**
+1. Party A and Party B info blocks must use the **same table column widths** — labels align across both blocks
+2. Use `safeText()` for all field values — never output `undefined`
+3. Label column width should accommodate the longest label (e.g., "统一社会信用代码")
+4. The indent (`margins.left: 420`) simulates sub-level nesting under the party name
+
+---
+
+## Signature Block
+
+Left-right symmetric, structured, easy to adjust in Word. Never write as scattered paragraphs.
+
+Required fields for each party:
+- Party name (seal)
+- Legal representative / Authorized representative
+- Contact person
+- Contact information
+- Signing location
+- Date: 【____/____/____】
+
+Use a borderless 2-column table for symmetry. **Every field value must use `safeText()`** — never output `undefined` or empty string. If a field is not provided, use the appropriate `【Please fill in】` placeholder.
+
+```js
+// ✅ Correct signature block — safeText for all values
+function buildSignatureBlock(partyA, partyB) {
+  const fields = ["Party (Seal)", "Legal Rep / Authorized Rep (Signature)", "Contact Person", "Contact Info", "Signing Location", "Date"];
+  const NB = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+  const noBorders = { top: NB, bottom: NB, left: NB, right: NB };
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: { top: NB, bottom: NB, left: NB, right: NB, insideHorizontal: NB, insideVertical: NB },
+    rows: fields.map((label, i) => {
+      const aVal = i === fields.length - 1 ? "【____/____/____】" : safeText(partyA?.[i], "");
+      const bVal = i === fields.length - 1 ? "【____/____/____】" : safeText(partyB?.[i], "");
+      const displayA = i === 0 ? `Party A (甲方): ${aVal}` : `${label}: ${aVal}`;
+      const displayB = i === 0 ? `Party B (乙方): ${bVal}` : `${label}: ${bVal}`;
+      return new TableRow({
+        children: [
+          new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, borders: noBorders,
+            margins: { top: 80, bottom: 80, left: 120, right: 60 },
+            children: [new Paragraph({ children: [new TextRun({ text: displayA, size: 24, color: "000000" })] })] }),
+          new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, borders: noBorders,
+            margins: { top: 80, bottom: 80, left: 60, right: 120 },
+            children: [new Paragraph({ children: [new TextRun({ text: displayB, size: 24, color: "000000" })] })] }),
+        ],
+      });
+    }),
+  });
+}
+```
+
+---
+
+## Monetary Amount Format
+
+Contracts must show amounts in **both uppercase Chinese and numeric format**:
+
+```
+Contract amount: RMB One Million Two Hundred Thirty-Four Thousand Five Hundred Sixty-Seven Yuan (¥1,234,567.00)
+```
+
+---
+
+## Style Rules
+
+- **NO cover page** — title page is the first page (title + contract number at top)
+- **NO TOC** unless >20 clauses
+- **NO decorative elements** — contracts must be formal and clean
+- **Line spacing**: 1.5x (line: 360) — ⚠️ scene override (Profile A default is 1.3x/312; contracts use 1.5x for readability and annotation space)
+- **Body**: Justified, first-line indent 480 twips
+- **Color**: pure black "000000" throughout — no colored text
+
+---
+
+## Scene-Specific Quality Checks
+
+In addition to universal checks (see `references/common-rules.md`):
+
+### Format
+- [ ] Party information complete (full name / address / legal representative / contact)
+- [ ] Signature block properly formatted, symmetrical, all fields present
+- [ ] Monetary amounts shown in both uppercase and numeric format
+- [ ] Clause numbering sequential with no gaps
+- [ ] No cover page (title page is first page)
+- [ ] No Markdown list markers mixed into clause hierarchy
+
+### Content
+- [ ] Clause numbering system consistent, no mixing
+- [ ] Transaction closure complete (subject → consideration → performance → acceptance → breach → dispute)
+- [ ] Breach liability corresponds to main obligations
+- [ ] Dispute resolution explicitly stated (or placeholder for confirmation)
+- [ ] All unconfirmed variables use `【】` placeholders consistently
+- [ ] Language is formal, restrained, subjects are explicit
+- [ ] No fabricated statute numbers or overreaching legal conclusions
+- [ ] High-risk clauses include manual review notes
+- [ ] Terminology consistent throughout
+- [ ] Appendix-contract relationship explicitly stated
+
+### Closure
+- [ ] Performance deadline → delay consequences specified
+- [ ] Payment milestones → conditions and invoice requirements specified
+- [ ] Delivery obligation → acceptance rules and objection period specified
+- [ ] Termination right → conditions and post-termination handling specified
+- [ ] Confidentiality obligation → scope, exceptions, duration, breach consequences specified
+- [ ] Force majeure → notice and mitigation duties specified

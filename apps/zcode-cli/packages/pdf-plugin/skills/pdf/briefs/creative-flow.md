@@ -1,133 +1,255 @@
-# Brief — Creative flow documents
+# Brief: Creative Flow (Designed Long Documents)
 
-Applies to the multi-page visual family: magazine-style reports, lookbooks,
-annual reviews, editorial features — documents with pages that turn, a rhythm
-across spreads, and images that share the stage with text. Where
-`creative.md` designs a single canvas, this brief designs a *sequence* of them.
+**When to use this brief:** Text-heavy documents that need design flair but content flows naturally across pages — guides, handbooks, catalogs, introductions, collections, illustrated manuals. The content is the star; design supports readability.
 
-## The spread is the unit
+**How it differs from `creative.md`:** `creative.md` (Blueprint Mode) treats each page as a self-contained fixed-size visual canvas. This brief lets content flow continuously, with Chromium's `@page` auto-paginating at page boundaries.
 
-- Design in **spreads** (two facing pages), not in pages. A single page of a
-  spread is half of a composition; the gutter is a real seam — nothing crosses
-  it except a deliberate full-bleed image.
-- Fix the grid for the whole document first: margins, column count, and the
-  header/footer bands. Every page then places content on that grid, which is
-  what makes twenty pages look like one document.
-- Alternate the rhythm: dense page, open page, image page, dense page. A
-  document where every page carries the same weight reads as a wall.
+**→ MUST READ: `typesetting/overflow.md`** for Playwright/HTML-specific overflow patterns.
 
-## Page-level composition
+---
 
-- **Entry points per page.** Each page needs one clear place the eye lands —
-  usually the largest image or the display headline. If a page has two
-  candidates, it is two pages.
-- **Image and text share the grid.** Text wraps a real shape (`wrapfig`,
-  CSS `float`/`shape-outside`, or a measured text block) rather than sitting in
-  a box beside the picture. Boxes floating beside images are the look of a
-  template nobody adjusted.
-- **Pull quotes and callouts** break a long text run and give the skim-reader
-  the argument. One per spread at most; they are seasoning.
-- **Folios and running heads** carry the document's identity: page numbers,
-  a section name, a rule. They are part of the design, not an afterthought.
+## Core Principle: Content Flows, Design Wraps
 
-## Pacing across the document
+You write raw HTML/CSS directly (no JSON Blueprint, no `design_engine.py`). The document is one continuous HTML body, and the browser's print engine splits it into pages automatically.
 
-- Open with a full-bleed or near-full-page image and a display headline; close
-  the document the same way. The middle carries the content pages.
-- Section openers may break the grid (full bleed, inverted colours) — but a
-  section opener that looks like a content page wastes the transition.
-- Keep captions in one voice and one position family across the document; the
-  reader learns the pattern by page three and relies on it after that.
+**⚠️ Iron rule: All HTML→PDF conversions MUST use `html2pdf-next.js` — do NOT write custom Python Playwright scripts.** It automatically handles @page injection, overflow detection, font waiting, Mermaid/KaTeX rendering, PDF metadata, etc.
 
-## Text on a flow document
-
-- Body in a serif for long runs, or a sturdy sans for a document read on
-  screen; the choice is made once for the whole document.
-- Column measure of roughly 45–75 characters; multi-column pages need a visible
-  gutter (≥5 mm) or the columns merge.
-- Widows and orphans are controlled, not accepted: `\clubpenalty`/
-  `\widowpenalty` in LaTeX, `orphans`/`widows` in CSS.
-- Drop caps, small caps and rules are accents with a job — marking a section
-  opening, not decorating every page.
-
-## Images
-
-- One image treatment per document: full-bleed, grid-aligned, or inset with a
-  caption band. Mixing all three without a rule is visual noise.
-- Crop for the page, not for the original frame; a portrait image forced into a
-  landscape slot with letterbox bars is a defect.
-- Raster at 300 dpi at placed size; vector wherever the art allows.
-- Every image is referenced or captioned; an uncaptioned image in an editorial
-  document reads as filler.
-
-## Delivery
-
-- Render the whole document to page images and read the spreads in order:
-  gutter collisions, orphaned headings at page bottoms, images that lost their
-  crop, rhythm that flatlines.
-- Check the PDF's page count and page order against the outline — creative
-  documents are reordered often and silently.
-
-## The pagination model
-
-A flow document's pages are a sequence, and the sequence has rules:
-
-**The iron rules:**
-
-1. **One spread, one composition.** The unit of design is the spread, not the
-   page; a page designed alone is half a design.
-2. **Content flows, design wraps.** The text decides where it ends; the design
-   decides what the page looks like around it. Fighting the flow with manual
-   breaks produces a page that is wrong after the next edit.
-3. **Entry point per page.** Each page has one place the eye lands. Two
-   candidates means two pages.
-4. **Rhythm alternates.** Dense, open, image, dense. A document where every
-   page carries the same weight reads as a wall.
-5. **The gutter is a seam.** Nothing crosses it except a deliberate full-bleed
-   image.
-6. **Pacing is planned**: open and close the document the same way (full-bleed
-   or near-full-page), and let the middle carry the content.
-
-**What not to do:**
-
-- Hand-placed `\newpage` after every section: the break is right for one edit
-  and wrong after the next. Use `needspace`, class-level section breaks, or the
-  pagination rules in `typesetting/pagination.md`.
-- Every page full: a document with no open pages has no rhythm.
-- Figures floated wherever they land: a figure belongs near its first
-  reference, and the reference is what the reader follows.
-- A column grid that changes mid-document: the reader learns the grid by page
-  three and relies on it after that.
-
-## CSS template (the HTML path)
-
-When the flow document is built through the HTML path (`html2pdf.py`), the
-structure is CSS, and the rules above become properties:
-
-```css
-@page { size: A4; margin: 18mm 16mm; }
-.spread { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8mm; }
-.entry  { font-size: 34pt; line-height: 1.05; }   /* one entry point */
-.body   { columns: 2; column-gap: 6mm; }
-.pull   { float: right; width: 45%; margin: 0 0 4mm 4mm; }
-.full-bleed { width: 210mm; margin-left: -16mm; } /* past the text block */
+```bash
+node "$PDF_SKILL_DIR/scripts/html2pdf-next.js" input.html --output output.pdf --width 720px --height 1020px
 ```
 
-- `columns: 2` for the body with a visible gutter; a single long measure is
-  what makes a flow document unreadable.
-- `break-inside: avoid` on figures, pull quotes and stat blocks.
-- `break-before: page` on section openers only — never on ordinary sections.
-- The full-bleed rule is arithmetic: page width minus the text block's left
-  offset. A background that stops 5 mm short is the tell of a cover built
-  without a bleed specification.
+---
 
-## Body background rule
+## Pagination Model
 
-A tinted page on a flow document:
+### The Iron Rules
 
-- The tint reaches the paper edge or it visibly does not — there is no
-  in-between.
-- Text on the tint clears the contrast floor; a 5–8 % tint is invisible in
-  print, a 20 % tint competes with the text on it.
-- Alternate tinted and white pages only when the rhythm calls for it; a tint
-  on every page is a style that should have been a page colour.
+1. **NO fixed height on content containers.** Let content flow naturally. The browser decides where to cut pages.
+2. **NO `.page` divs for content sections.** Use a single `<div class="main-content">` with padding for all body content.
+3. **NO `break-before: page` between content sections.** This is the #1 cause of blank space — when the previous section doesn't fill a page, the remainder becomes a void. Use `margin-top` for visual chapter separation instead.
+4. **`break-inside: avoid`** on individual cards, items, and guide entries to prevent them from being split across pages.
+5. **`break-after: avoid`** on chapter headers (tag + title + divider group) to keep them attached to the first content block below.
+6. **Fixed-height containers ONLY for cover and ending pages** that must occupy a full page:
+
+```css
+/* Cover: fixed height, standalone page */
+.cover {
+    width: 720px;
+    height: 1020px;
+    box-sizing: border-box;
+    break-after: page;
+    overflow: hidden;  /* OK here — clips decorative elements on cover only */
+    /* ⚠️ Use justify-content: center (NOT flex-end) to avoid top-heavy blank */
+    /* Add decorative elements (circles, lines) + bottom edition label for visual balance */
+}
+
+/* Ending: fixed height, standalone page */
+.ending {
+    width: 720px;
+    height: 1020px;
+    box-sizing: border-box;
+    break-before: page;
+    overflow: hidden;
+}
+
+/* Content: flows naturally, NO fixed height */
+.main-content {
+    padding: 60px 65px 40px 65px;
+    /* NO height property */
+    /* NO overflow: hidden */
+}
+```
+
+### What NOT to Do (Common Mistakes)
+
+| Mistake | Why it breaks | Fix |
+|---------|--------------|-----|
+| `.content { height: 1020px; }` | Content that exceeds the height gets clipped or overflows | Remove fixed height |
+| Multiple `<div class="content">` each with `padding: 60px` | Double padding (60+60=120px) between sections creates voids | One container, chapters separated by `margin-top` |
+| `break-before: page` on chapter headers | Previous chapter doesn't fill the page → blank space before new chapter | Use `margin-top: 36px` instead |
+| `overflow: hidden` on content container | Clips content at page boundaries | Only use on fixed-height cover/ending |
+| `justify-content: flex-end` on cover | Title sinks to bottom, 60%+ blank above | Use `center` + decorative anchors for balance |
+| Chapter with < 3 paragraphs of content | Leaves half a page blank before next chapter | Write enough content to fill at least 50% of a page |
+| `margin-top: 50px+` on chapters | Compounds with `break-inside: avoid`, creates large voids | Keep chapter `margin-top` ≤ 30px |
+
+---
+
+## CSS Template
+
+```css
+@page {
+    size: 720px 1020px;   /* Concrete px values — CSS variables NOT supported in @page */
+    margin: 0;
+}
+:root {
+    --c-bg: #0d0d0d;
+    --c-text: #e8e6e3;
+    --c-accent: #ff4757;
+}
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 720px;
+    background: var(--c-bg);
+    color: var(--c-text);
+    font-family: 'Noto Sans SC', sans-serif;
+}
+@media screen {
+    html {
+        height: auto;
+        display: flex;
+        justify-content: center;
+        background: #222;
+    }
+    body {
+        transform-origin: top center;
+        margin: 20px auto;
+    }
+}
+```
+
+**⚠️ @page rules do NOT resolve CSS variables** (`var(--x)` is silently ignored, falls back to A4). Always use concrete `px` values in `@page`.
+
+---
+
+## HTML Structure Template
+
+```html
+<body>
+
+<!-- Cover: fixed height, occupies one full page -->
+<div class="cover">
+    <div class="tag">CATEGORY</div>
+    <div class="title">Document Title</div>
+    <div class="subtitle">Description text</div>
+</div>
+
+<!-- All body content in ONE continuous container -->
+<div class="main-content">
+
+    <!-- Chapter 1 -->
+    <div class="section-tag">Chapter 1</div>
+    <div class="section-title">Title</div>
+    <div class="divider"></div>
+    <div class="body-text">Paragraph content...</div>
+    <div class="body-text">More paragraphs...</div>
+
+    <!-- Chapter 2: separated by margin-top, NOT break-before -->
+    <div class="chapter-header">
+        <div class="section-tag">Chapter 2</div>
+        <div class="section-title">Title</div>
+        <div class="divider"></div>
+    </div>
+
+    <!-- Cards / items with break-inside: avoid -->
+    <div class="card">Card content...</div>
+    <div class="card">Card content...</div>
+
+</div>
+
+<!-- Ending: fixed height, occupies one full page -->
+<div class="ending">
+    <div class="big-text">Closing text</div>
+</div>
+
+</body>
+```
+
+Key CSS for chapter headers and cards:
+```css
+.chapter-header {
+    break-after: avoid;    /* Keep header with first content block */
+    break-inside: avoid;
+    margin-top: 28px;      /* ≤ 30px! Larger values compound with break-inside: avoid → blank pages */
+}
+.card {
+    break-inside: avoid;   /* Don't split a single card across pages */
+    margin-bottom: 14px;   /* ≤ 16px! Every px of margin is lost space if card is pushed to next page */
+}
+```
+
+---
+
+## Body Background Rule
+
+Set `html, body { background }` to the document's dominant/darkest color. This prevents sub-pixel gap artifacts between content and page boundaries.
+
+- All pages same dark color → `body { background: <that color> }`
+- Mixed dark cover + light body → `body { background: <darkest color> }` (dark body is invisible under white content pages)
+- All pages white/light → `body { background: <lightest content bg> }` (e.g. `#f8fafc`)
+
+---
+
+## Shared Rules with creative.md
+
+The following rules apply identically to both Creative Flow and Creative Blueprint pipelines:
+
+### Character Encoding Safety
+Never use Japanese kana (の, が, は), rare symbols, or Private Use Area characters. They corrupt to U+FFFD (�) during LLM→file write→read transit. Replace with plain Chinese equivalents: `の`→`之/的/缔`.
+
+### Vertical Chinese Text
+When using `writing-mode: vertical-rl`:
+```css
+writing-mode: vertical-rl;
+text-orientation: upright;
+white-space: nowrap;
+letter-spacing: 12px;
+```
+
+### Font Coverage
+For CJK content, always load Google Fonts via `<link>` tag in `<head>` (NOT `@import`):
+```html
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
+```
+
+### Post-Generation Text Verification
+After Playwright renders the PDF, extract text and scan for `?` or `\ufffd`. If found, fix encoding-corrupted characters in the source HTML.
+
+### HTML Pre-Render Validation (MANDATORY)
+Before calling `html2pdf-next.js`, run the validator:
+```bash
+python3 "$PDF_SKILL_DIR/scripts/poster_validate.py" check-html <file>.html
+```
+- **ERROR** → must fix before PDF generation. Use `--fix --output <file>.html` for auto-repair.
+- **WARNING** → review and fix where appropriate.
+
+---
+
+## Quality Checklist — Creative Flow
+
+### Layout & Pagination
+- [ ] **No fixed height on content containers** (only cover/ending pages)
+- [ ] **No `break-before: page` between content sections**
+- [ ] **`break-inside: avoid`** on all cards/items/guide entries
+- [ ] **Chapter headers have `break-after: avoid`** to stay with first content block
+- [ ] **Single `<div class="main-content">`** wraps all body content
+- [ ] **No double padding** between sections (one container, not multiple)
+
+### Full-Bleed & Background
+- [ ] **`@page { margin: 0 }`** with concrete px size values
+- [ ] **`html, body { margin: 0; padding: 0 }`**
+- [ ] **Body background matches dominant page color**
+- [ ] **No white edge artifacts** on dark pages
+
+### Cover Page Design
+- [ ] **Cover `justify-content: center`** (not `flex-end`) — `flex-end` pushes content to the bottom and leaves 60%+ blank at top, making the page feel empty
+- [ ] **Add visual anchors** to fill the cover: decorative elements (circles, lines), edition/date label at bottom, badge at top. A cover with only title+subtitle will look hollow.
+- [ ] **Cover padding ≤ 70px** — excessive padding shrinks the visual footprint further
+
+### Content Density (Anti-Blank-Page)
+- [ ] **Each chapter must have enough content to fill at least 50% of a page.** If a chapter (text + quote + cards) occupies < 50% of a page, it will leave a large blank area before the next chapter. Solution: expand the content (add 1-2 more paragraphs, examples, or context).
+- [ ] **Chapter `margin-top` ≤ 30px.** Larger values (50px+) compound with `break-inside: avoid` on cards, pushing content to the next page and leaving voids on the current page.
+- [ ] **Card/callout `margin` ≤ 16px.** Every pixel of vertical margin inside a `break-inside: avoid` block is space that cannot be reclaimed if the block is pushed to the next page.
+- [ ] **After generating PDF, visually check every page** for >30% trailing blank space. If found, either: (a) add more content to that chapter, (b) reduce margins/padding, or (c) reorder elements so a smaller block fills the gap.
+
+### Design Quality
+- [ ] **Entire document ≤ 5 colors**: Primary + secondary + accent + neutral + background
+- [ ] **2-typeface maximum**: At most 2 font families
+- [ ] **Decorative elements ≤ 3 per page** (cover exempt)
+- [ ] **No stock images / clipart / AI-generated decorations** unless user-provided
+
+### Output
+- [ ] **Vector PDF** via `html2pdf-next.js` (not screenshot)
+- [ ] **HTML source file** delivered alongside PDF
+- [ ] **PDF metadata** set via `pdf.py meta.brand`
+- [ ] **QA passed** via `pdf_qa.py --no-tables`

@@ -190,10 +190,10 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       // seed 注册与发行清单一致，资源完整性仍由 requiredSeedPaths 严格校验。
       // version 与各自 package.json / plugin.json 逐字一致：三处不一致会让官方 seed
       // 继续加载旧缓存目录（见上方 browser-use 的同类注释）。
-      ["presentations", "pptx", "Presentations", "演示文档", "0.1.7"],
-      ["documents", "docx", "Documents", "Word 文档", "0.1.7"],
+      ["presentations", "pptx", "Presentations", "演示文档", "0.1.8"],
+      ["documents", "docx", "Documents", "Word 文档", "0.1.8"],
       ["pdf", "pdf", "PDF", "PDF 文档", "0.2.0"],
-      ["spreadsheets", "xlsx", "Spreadsheets", "电子表格", "0.1.7"],
+      ["spreadsheets", "xlsx", "Spreadsheets", "电子表格", "0.1.8"],
     ] as const
   ).map(
     ([name, skill, displayName, chineseName, version]): OfficialPluginDefinition => ({

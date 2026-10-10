@@ -1,203 +1,136 @@
-# Route: edit
+# Route: Edit Existing Document
 
-Propose text as a tracked change, or take a side on one that is already there.
+## Workflow Overview
 
-Four methods, two directions:
-
-| method                   | direction                                               |
-| ------------------------ | ------------------------------------------------------- |
-| `suggest_deletion(elem)` | propose removing something that is currently plain text |
-| `suggest_paragraph(xml)` | propose adding a paragraph                              |
-| `revert_insertion(elem)` | reject an insertion someone else made                   |
-| `revert_deletion(elem)`  | reject a deletion someone else made                     |
-
-All four live on the editor returned by `doc[...]`, and all four mutate the DOM in
-memory. Nothing reaches disk until `save()`.
-
-## 1. Set the session up for revisions
-
-```python
-doc = Document("unpacked", track_revisions=True, author="Editor", initials="E")
+```
+1. Receive .docx (or .doc → convert)
+2. Unpack → working directory
+3. Analyze structure (document.xml, styles.xml)
+4. Plan changes → batch by type
+5. OUTPUT → By default pack to a NEW sibling file (`<stem>_updated.docx`),
+            never touch the input; overwrite in place ONLY if the user explicitly
+            asks to edit their own file — then first copy it to `<stem>_backup.docx`
+            next to it (never /tmp)
+6. Implement via Document library (Python)
+7. Pack → <stem>_updated.docx
+8. Verify (pandoc or visual)
 ```
 
-`track_revisions=True` writes `<w:trackRevisions/>` into `word/settings.xml`, at its
-schema-valid position per the `CT_Settings` child-order table. Without it Word stops
-recording _new_ edits as revisions — the markup written below still renders as a
-tracked change, but anything typed into the document afterwards is applied silently.
+> **Decide the output path BEFORE you modify anything.** The unpack step in Step 1 copies content out
+> of the input, so the input itself stays intact — but the pack step in Step 7 will silently clobber
+> whatever path you name. Never pass the user's original path to `zip`.
 
-## 2. Propose a deletion
-
-```python
-editor = doc["word/document.xml"]
-run = editor.get_node(tag="w:r", attrs={"w:rsidR": "7ACC09CE"})
-editor.suggest_deletion(run)
-```
-
-`suggest_deletion` accepts exactly two element kinds and raises
-`ValueError: Element must be w:r or w:p, got <tag>` for anything else.
-
-**On a `w:r`** — converts `w:t` to `w:delText`, moves `w:rsidR` to `w:rsidDel`, wraps
-the run in a new `<w:del>`, and returns that wrapper. The run itself keeps its
-`w:rPr`, so the struck-out text keeps its formatting. A run that already contains
-`w:delText` raises `ValueError: w:r element already contains w:delText` — the method
-refuses to delete something twice.
-
-**On a `w:p`** — the paragraph must not already carry tracked changes, or it raises
-`ValueError: w:p element already contains tracked changes`. Every `w:t` in it becomes
-`w:delText`, every run's `w:rsidR` becomes `w:rsidDel`, and all non-`w:pPr` children
-are wrapped in a single `<w:del>` inside the paragraph. The return value is the
-`w:p` itself, not the wrapper.
-
-The extra step for numbered list items: a paragraph whose `w:pPr` carries `w:numPr`
-also gets `<w:del/>` added to `w:pPr/w:rPr`. Without that marker Word deletes the
-text but keeps the list number, and the numbering silently renumbers.
-
-## 3. Propose an insertion
-
-```python
-xml = editor.suggest_paragraph("<w:p><w:r><w:t>新增的一段。</w:t></w:r></w:p>")
-editor.insert_after(anchor, xml)
-```
-
-`suggest_paragraph` is a **static** method that takes a `<w:p>` XML string and
-returns a transformed string. It does not touch the DOM, and it cannot be called on
-an element — the two-step shape is deliberate, because the transformed XML has to go
-through `insert_after` to get its bookkeeping attributes stamped.
-
-The transformation: `<w:ins/>` is added to `w:pPr/w:rPr` (creating `w:pPr` and `w:rPr`
-when absent, and inserting the marker as the first child of `w:rPr`), and every
-non-`w:pPr` child of the paragraph is wrapped in one `<w:ins>`.
-
-The `<w:ins/>` inside `w:rPr` is the paragraph mark revision — it is what makes Word
-treat the paragraph break itself as inserted, so accepting the change does not leave
-an empty paragraph behind. It is a `w:ins` element as far as attribute injection is
-concerned, so it too receives `w:id`, `w:author` and `w:date`, and it consumes a
-change id — a document whose first tracked change is an insertion therefore carries
-both an empty `w:ins` marker and the `w:ins` that wraps the runs.
-
-Because placement goes through `insert_after`, the new `w:ins` receives `w:id`,
-`w:author`, `w:date` and `w16du:dateUtc`, the runs receive `w:rsidR`, and the
-paragraph receives `w:rsidR`, `w:rsidRDefault`, `w:rsidP`, `w14:paraId` and
-`w14:textId`. None of that has to be written by hand.
-
-## 4. Take a side on an existing change
-
-```python
-ins = editor.get_node(tag="w:ins", attrs={"w:id": "5"})
-editor.revert_insertion(ins)
-
-dele = editor.get_node(tag="w:del", attrs={"w:id": "3"})
-nodes = editor.revert_deletion(dele)
-```
-
-### What each accepts
-
-Both methods take either the tracked-change element itself or any container holding
-them. The branch is on `elem.tagName`:
-
-- `revert_insertion` — a single `w:ins`, or a container (`w:p`, `w:body`, `w:tbl`,
-  anything) whose descendants include `w:ins`;
-- `revert_deletion` — a single `w:del`, or a container whose descendants include
-  `w:del`.
-
-Neither walks up: given a `w:r` that sits inside a `w:ins`, `revert_insertion` finds
-no `w:ins` among the run's own descendants and raises
-`ValueError: revert_insertion requires w:ins elements. The provided element <w:r>
-contains no insertions.` Pass the `w:ins`, or a container above it.
-
-### What each does
-
-`revert_insertion` keeps the `w:ins` where it is and wraps the runs _inside_ it in a
-new `w:del`, converting `w:t` to `w:delText` and `w:rsidR` to `w:rsidDel`. The
-result is an insertion that is itself struck out — Word shows the text as inserted
-and deleted, and accepting all changes leaves nothing.
-
-`revert_deletion` clones the deleted runs into a new `w:ins` placed immediately
-_after_ the `w:del`, converting `w:delText` back to `w:t` and `w:rsidDel` back to
-`w:rsidR`. The `w:del` is left in place, so both readings survive: rejecting the
-deletion restores the text, accepting it removes it again.
-
-### What each returns — and why they differ
-
-| input                      | `revert_insertion` | `revert_deletion`   |
-| -------------------------- | ------------------ | ------------------- |
-| a single `w:ins` / `w:del` | `[elem]`           | `[elem, new w:ins]` |
-| a container                | `[elem]`           | `[elem]`            |
-
-`revert_deletion` on a single `w:del` hands back the newly created insertion as the
-second list item, because that node did not exist before and there is no other way
-to reach it. `revert_insertion` has no equivalent: the `w:del` it creates is always
-inside the `w:ins` you already passed in.
-
-For a container, `revert_deletion` returns only `[elem]` even though it created
-insertions — one per `w:del` found. To reach them, query again:
-
-```python
-for new_ins in editor.dom.getElementsByTagName("w:ins"):
-    ...
-```
-
-Both raise when there is nothing to act on: `revert_deletion` with no `w:del`
-descendant raises `ValueError: revert_deletion requires w:del elements. …`, and
-`revert_insertion` likewise for `w:ins`. Neither is a no-op.
-
-## 5. Save, repack, gate
-
-```python
-doc.save("revised")
-```
+## Step 0: Format Conversion
 
 ```bash
-python3 <plugin>/skills/docx/scripts/postcheck.py revised.docx --json
+# .doc → .docx
+libreoffice --headless --convert-to docx input.doc
 ```
 
-Two rules interact with tracked changes specifically:
+> 🔴 **If `libreoffice` is not installed, you MUST install it — do not substitute.** Using Word, WPS,
+> or Pages *instead of* installing is forbidden, and a large download is **not** a reason to skip it.
+> Required: explain the necessity to the user (only engine that converts legacy `.doc` while
+> preserving styles and layout), tell them the package is large, then install it **from the Tsinghua TUNA mirror** (`https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/`, or the newest version under `.../libreoffice/stable/`; package-manager commands are the fallback). Only after an
+> install attempt has actually **failed** may you use another program. **No install attempt = no
+> substitute program.** See the HARD REQUIREMENT block in `SKILL.md`.
 
-- `numbering-continuity` reads the `w:numId` values actually used, so a paragraph
-  you struck out still counts. It gap-checks only ids that are all digits.
-- `heading-continuity` reads paragraph styles regardless of whether the heading is
-  inside a `w:ins` or a `w:del`, so deleting a heading can open a level gap that the
-  gate then reports. That is the gate being right.
+## Step 1: Unpack
 
-## 6. Full sequence
+```bash
+IN="input.docx"; STEM="${IN%.docx}"     # deliverable will be "${STEM}_updated.docx"
+mkdir -p work_dir && cd work_dir && unzip "../$IN"
+```
+
+Key files: `word/document.xml` (content), `word/styles.xml` (styles), `word/numbering.xml` (lists), `word/media/` (images), `[Content_Types].xml`, `word/_rels/document.xml.rels`
+
+## Step 2: Plan Changes
+
+Group changes into batches, process in order:
+
+1. **Structural** — Add/remove sections, reorder paragraphs
+2. **Style** — Font, size, color modifications
+3. **Text** — Find/replace, fix typos
+4. **Table** — Add/remove rows/columns, update data
+5. **Image** — Replace/add images
+
+## Step 3: Implement
+
+Load `references/ooxml.md` for the full Document library API. Key patterns:
 
 ```python
-import sys
-
-sys.path.insert(0, "<plugin>/skills/docx")
 from scripts.document import Document
 
-doc = Document("unpacked", track_revisions=True, author="Editor", initials="E")
-editor = doc["word/document.xml"]
+doc = Document('work_dir')
 
-# strike out a run
-run = editor.get_node(tag="w:r", attrs={"w:rsidR": "7ACC09CE"})
-editor.suggest_deletion(run)
+# Text replacement with tracked changes
+node = doc["word/document.xml"].get_node(tag="w:r", contains="old text")
+rpr = tags[0].toxml() if (tags := node.getElementsByTagName("w:rPr")) else ""
+replacement = f'<w:del><w:r>{rpr}<w:delText>old text</w:delText></w:r></w:del><w:ins><w:r>{rpr}<w:t>new text</w:t></w:r></w:ins>'
+doc["word/document.xml"].replace_node(node, replacement)
 
-# insert a paragraph as a tracked insertion
-anchor = editor.get_node(tag="w:p", contains="1.1 背景")
-xml = editor.suggest_paragraph("<w:p><w:r><w:t>补充说明一段。</w:t></w:r></w:p>")
-editor.insert_after(anchor, xml)
-
-# reject someone else's insertion
-ins = editor.get_node(tag="w:ins", attrs={"w:id": "5"})
-editor.revert_insertion(ins)
-
-# reject someone else's deletion
-dele = editor.get_node(tag="w:del", attrs={"w:id": "3"})
-nodes = editor.revert_deletion(dele)
-print(len(nodes))  # 2 — the w:del and the w:ins that restores its text
-
-doc.save("revised")
+doc.save()
 ```
 
-## Failure modes
+## Step 4: Pack
 
-| symptom                                                    | cause                                                                                              |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `ValueError: Element must be w:r or w:p, got <tag>`        | `suggest_deletion` was given a table, a `w:t`, or a `w:del`                                        |
-| `ValueError: w:r element already contains w:delText`       | the run is already deleted; deleting it again is refused                                           |
-| `ValueError: w:p element already contains tracked changes` | the paragraph already carries `w:ins` or `w:del`; revert it first, or edit a different paragraph   |
-| `revert_insertion` raises on a run                         | it does not walk up to the enclosing `w:ins`; pass the `w:ins` or a container                      |
-| the new `w:ins` has no `w:id`                              | the XML was placed with a raw DOM call instead of `insert_after`, so attribute injection never ran |
-| `suggest_paragraph` returns a string, nothing changed      | it is static and pure; the returned XML still has to be inserted                                   |
+```bash
+# Pack to a NEW sibling file — never to the user's original path
+cd work_dir && zip -r "../${STEM}_updated.docx" . -x ".*"
+```
+
+## Step 5: Verify
+
+```bash
+pandoc "${STEM}_updated.docx" -t plain -o /dev/stdout | head -50
+# or visual
+libreoffice --headless --convert-to pdf "${STEM}_updated.docx"
+```
+
+> 🔴 **LibreOffice missing? You MUST install it — do not substitute.** Explain its necessity, say the
+> package is large (not a reason to skip), then install it **from the Tsinghua TUNA mirror** (`https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/`, or the newest version under `.../libreoffice/stable/`; package-manager commands are the fallback). Word/WPS is permitted **only** after an
+> install attempt has failed. **No install attempt = no substitute program.** See `SKILL.md`.
+
+---
+
+## Template Matching Workflow
+
+When user says "use this format" or provides a template:
+
+1. Unpack template, extract `styles.xml`, `numbering.xml`
+2. Analyze font/size/spacing/margins
+3. Copy `styles.xml` into target document
+4. Match heading hierarchy and spacing
+
+## Multi-File Merge
+
+1. Use first document as base
+2. Extract content from additional documents
+3. Insert with page breaks between sections
+4. Merge styles (prefer base document's)
+5. Re-number figures/tables sequentially
+
+## Redlining (Tracked Changes) — Default for Revisions
+
+When user asks for revisions, **default to tracked changes** so they can review:
+
+```python
+doc = Document('work_dir', track_revisions=True)
+# ... make changes using replace_node with <w:del>/<w:ins>
+doc.save()
+```
+
+Ask user if they want clean output or tracked changes only if ambiguous.
+
+## Common Operations Quick Reference
+
+| Operation | Approach |
+|-----------|----------|
+| Replace text | `get_node` + `replace_node` with tracked changes |
+| Change font | Modify `<w:rFonts>` in run properties |
+| Add paragraph | `insert_after` with `<w:p>` element |
+| Delete paragraph | `suggest_deletion` on `<w:p>` |
+| Add table row | Clone `<w:tr>`, modify cells |
+| Update header | Edit `word/headerN.xml` |
+| Change margins | Edit `<w:pgMar>` in `<w:sectPr>` |
+| Add image | See `references/ooxml.md` image insertion pattern |
+| Add comment | `doc.add_comment(start, end, text)` |

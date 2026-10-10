@@ -1,169 +1,234 @@
-# Analysis recipes
+# Analyze Recipes — Code Patterns for Data Analysis
 
-The recurring shapes, each as a short recipe. Encoding vocabulary from
-vega-lite's documentation (BSD-3-Clause); mechanics from openpyxl/pandas public
-APIs. `scenes/analyze.md` carries the method; this file is the lookup.
+> This file is part of the analyze scene. **Read it whenever you are working on an analysis task** — it contains tested code patterns for aggregation, time series, comparison, cleaning, and bridge patterns.
 
-## 1. Total and mix
+---
 
-Question: how big, and what makes it up.
-
-    summary = (
-        frame.groupby("region", as_index=False)["revenue"]
-        .sum()
-        .assign(share=lambda d: d["revenue"] / d["revenue"].sum())
-    )
-
-Chart: one horizontal bar sorted by the measure, with the share labelled on
-each mark. A pie only when the parts are few and the claim is "dominated by
-one thing".
-
-## 2. Change over time
-
-Question: is it going up, and since when.
-
-    monthly = (
-        frame.assign(month=pd.to_datetime(frame["date"]).dt.to_period("M"))
-        .groupby("month")["revenue"].sum()
-    )
-
-Chart: a line over a temporal axis. Mark the period the claim is about; state
-the baseline in the caption. Do not connect across a gap in the data — break
-the line or say the period is missing.
-
-## 3. This period vs last
-
-Question: growth.
-
-    pivot = frame.pivot_table(index="region", columns="year",
-                              values="revenue", aggfunc="sum")
-    pivot["growth"] = pivot[2025] / pivot[2024] - 1
-
-Chart: paired bars (this/last) with the growth labelled — not a single bar of
-growth rates with no base. State the base period in the axis title.
-
-## 4. Distribution
-
-Question: where does the mass sit, what are the tails.
-
-    counts, edges = np.histogram(frame["amount"], bins=20)
-
-Chart: a histogram with equal-width bins, bin edges labelled, or a boxplot per
-category when comparing several distributions. Never a mean alone — the mean
-hides the bimodality that is usually the finding.
-
-## 5. Top-N with a long tail
-
-Question: what dominates.
-
-    top = (frame.groupby("product")["revenue"].sum()
-           .sort_values(ascending=False))
-    top10 = top.head(10)
-
-Chart: a horizontal bar of the top 10, plus an explicit "other" bar for the
-remainder — the remainder is part of the answer. Sorted descending; category
-labels never rotated.
-
-## 6. Relationship between two measures
-
-Question: do they move together.
-
-Chart: a scatter, one point per entity, both axes quantitative, axes starting
-at zero or with the truncation stated. A fitted line only when the claim is the
-fit, and then report the fit's uncertainty, not just the line.
-
-## 7. Conversion / funnel
-
-Question: where do we lose them.
-
-Chart: a horizontal bar per stage, each labelled with its absolute count and
-the conversion from the previous stage. A funnel chart that skips the absolute
-numbers is decoration.
-
-## 8. Cohort retention
-
-Question: do they stay.
-
-    cohorts = frame.assign(
-        cohort=frame.groupby("customer")["date"].transform("min").dt.to_period("M")
-    )
-
-Chart: a table-heatmap (cohort × period-since-start), cells coloured by
-retention, values printed. Rows are cohorts, columns are periods since start —
-never calendar months on both axes.
-
-## 9. Outlier check
-
-Question: is this row real?
-
-    q1, q3 = frame["amount"].quantile([0.25, 0.75])
-    iqr = q3 - q1
-    outliers = frame[(frame["amount"] < q1 - 1.5 * iqr)
-                     | (frame["amount"] > q3 + 3 * iqr)]
-
-Report the outliers **with their identity**, not just their count — "3 rows
-above 3×IQR" is not actionable; "orders #1042, #2210, #3198" is. Outliers are
-a question for the data owner, not a deletion.
-
-## 10. Reconciliation
-
-Question: does this workbook agree with that one?
-
-    left = frame_a.groupby("key")["amount"].sum()
-    right = frame_b.groupby("key")["amount"].sum()
-    diff = left.subtract(right, fill_value=0)
-    breaks = diff[diff.abs() > 0.005]
-
-A reconciliation that ends "difference: 0" without showing the comparison was
-run is not a reconciliation. Show both totals, the break list, and the
-tolerance used.
-
-## The pandas → openpyxl bridge
-
-The recurring shape: analyse with pandas, land the result in a workbook that
-keeps the conventions.
+## Load & Explore
 
 ```python
 import pandas as pd
-from openpyxl import load_workbook
 
-summary = (
-    frame.groupby("region", as_index=False)["revenue"].sum()
-    .sort_values("revenue", ascending=False)
-)
+df = pd.read_excel('input.xlsx')  # or read_csv, read_json
+# Multi-sheet: pd.read_excel('input.xlsx', sheet_name=None) → dict
 
-workbook = load_workbook("report.xlsx")
-sheet = workbook["Summary"]
-sheet.append([])                                   # one blank row first
-sheet.append(["Region", "Revenue ($mm)"])         # header, conventions hold
-for _, row in summary.iterrows():
-    sheet.append([row["region"], round(float(row["revenue"]), 1)])
+print(f"Shape: {df.shape}")
+print(f"Columns: {list(df.columns)}")
+print(f"Dtypes:\n{df.dtypes}")
+print(f"Nulls:\n{df.isnull().sum()}")
+print(f"Duplicates: {df.duplicated().sum()}")
+print(f"\nDescribe:\n{df.describe()}")
 ```
 
-- The result lands with a header row, the unit in the header, and the number
-  format from `engines/design.md` — derived output follows the same
-  conventions as authored output.
-- Round **once**, at the boundary, and state the precision in the header. A
-  raw float in a report cell is a formatting defect.
-- `as_index=False` keeps the group key as a column, which is what the sheet
-  needs; the pandas-native index is a pandas artifact, not a spreadsheet
-  concept.
+---
 
-## The KPI summary card
+## Aggregation & Grouping
 
-The one-screen answer, and the pattern is fixed:
+```python
+summary = df.groupby('Category').agg(
+    total=('Revenue', 'sum'),
+    avg=('Revenue', 'mean'),
+    count=('Revenue', 'count'),
+    max_val=('Revenue', 'max')
+).round(2)
 
-| element | rule |
-| --- | --- |
-| the metric | one per card, named in the header with its unit |
-| the value | display size, the number format from `engines/design.md` |
-| the comparison | previous period, and the delta with its sign |
-| the source | the sheet and range the number came from, in a note |
+pivot = df.pivot_table(
+    values='Amount', index='Category', columns='Quarter',
+    aggfunc='sum', margins=True
+)
+```
 
-- One card per metric. Three metrics on one card is three cards.
-- The delta is `current / previous - 1`, formatted as a percentage with the
-  sign — never a bare number whose direction the reader must infer.
-- The source note is what makes the card auditable; without it the card is a
-  claim.
-- The card reads from the model with formulas, not from pasted values — a
-  card of typed numbers is a table pretending to be a dashboard.
+---
+
+## Time Series
+
+```python
+df['date'] = pd.to_datetime(df['date'])
+monthly = df.resample('M', on='date').agg({'revenue': 'sum', 'orders': 'count'})
+monthly['growth'] = monthly['revenue'].pct_change()
+monthly['rolling_3m'] = monthly['revenue'].rolling(3).mean()
+```
+
+---
+
+## Comparison / Diff
+
+```python
+df1 = pd.read_excel('this_month.xlsx')
+df2 = pd.read_excel('last_month.xlsx')
+merged = df1.merge(df2, on='ID', suffixes=('_new', '_old'))
+merged['change'] = merged['value_new'] - merged['value_old']
+merged['change_pct'] = (merged['change'] / merged['value_old'] * 100).round(1)
+```
+
+---
+
+## Statistical Analysis
+
+```python
+stats = df.describe().T
+stats['median'] = df.median()
+stats['skew'] = df.skew()
+corr = df.select_dtypes(include='number').corr().round(3)
+top_10 = df.nlargest(10, 'Revenue')
+bottom_10 = df.nsmallest(10, 'Revenue')
+```
+
+---
+
+## Data Cleaning
+
+```python
+df = df.drop_duplicates()
+df['amount'] = df['amount'].fillna(0)
+df['name'] = df['name'].fillna('Unknown')
+df['date'] = pd.to_datetime(df['date'], errors='coerce')
+df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+
+# Remove outliers (IQR)
+Q1, Q3 = df['value'].quantile([0.25, 0.75])
+IQR = Q3 - Q1
+df = df[(df['value'] >= Q1 - 1.5*IQR) & (df['value'] <= Q3 + 1.5*IQR)]
+```
+
+---
+
+## Bridge Pattern: pandas → openpyxl
+
+```python
+from openpyxl import Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+
+wb = Workbook()
+ws = wb.active
+ws.title = "Analysis"
+
+for r_idx, row in enumerate(dataframe_to_rows(summary, index=True, header=True), 1):
+    for c_idx, value in enumerate(row, 1):
+        ws.cell(row=r_idx + 3, column=c_idx + 1, value=value)
+```
+
+---
+
+## KPI Summary Card
+
+```python
+kpis = [
+    ('Total Revenue', total_revenue, '$#,##0'),
+    ('Avg Order Value', avg_order, '$#,##0.00'),
+    ('Growth Rate', growth_rate, '0.0%'),
+    ('Total Orders', total_orders, '#,##0'),
+]
+col = 2
+for label, value, fmt in kpis:
+    ws.cell(row=3, column=col, value=label)
+    ws.cell(row=4, column=col, value=value)
+    ws.cell(row=4, column=col).number_format = fmt
+    col += 3
+```
+
+---
+
+## Cross-Validation Review Sheet
+
+```python
+review_ws = wb.create_sheet("Review")
+review_ws.sheet_properties.tabColor = "FFC000"
+
+checks = [
+    ["Check", "Expected", "Actual", "Status"],
+    ["Total Revenue", "=SUM(Data!B2:B100)", "=Summary!B10", '=IF(B2=C2,"✓ PASS","✗ FAIL")'],
+    ["Row Count", "=COUNTA(Data!A:A)-1", "=Summary!B3", '=IF(B3=C3,"✓ PASS","✗ FAIL")'],
+]
+for i, row in enumerate(checks, 1):
+    for j, val in enumerate(row, 1):
+        review_ws.cell(row=i, column=j, value=val)
+```
+
+---
+
+## xlsx.py Pivot Workflow
+
+```bash
+python3 "$XLSX_SKILL_DIR/xlsx.py" inspect data.xlsx --pretty
+python3 "$XLSX_SKILL_DIR/xlsx.py" pivot data.xlsx output.xlsx \
+    --source "Data!A1:F500" \
+    --rows "Product,Region" \
+    --values "Revenue:sum,Units:count" \
+    --location "Summary!A3" \
+    --style "finance" \
+    --chart "bar"
+python3 "$XLSX_SKILL_DIR/xlsx.py" validate output.xlsx
+```
+
+### PivotTable Best Practices
+- Source data: first row must have unique, non-blank headers
+- No merged cells or blank rows in source range
+- Place pivot on a dedicated sheet, position at A3 or B2
+- Row axis: primary grouping; Column axis: ≤10 distinct values
+- Values: numeric measures only
+
+### PivotTable Troubleshooting
+| Symptom | Remedy |
+|---------|--------|
+| "Field not found" | Check header spelling via `inspect` |
+| PivotTable empty | Ensure `--source` covers all data rows |
+| `validate` reports pivot errors | Critical — must fix |
+| `validate` reports `pass_with_warnings` | Safe to deliver |
+
+---
+
+## Alternating Column Structure (Key-Value Pairs)
+
+When odd columns contain identifiers and even columns contain corresponding values (e.g., O=PartNo, P=Qty, Q=PartNo, R=Qty, ...):
+
+**Detection heuristic**:
+- Odd columns have repeated values or category codes
+- Even columns are numeric
+- Headers alternate between descriptive and quantitative names
+
+**Solution**: Use SUMIF across the combined key/value ranges:
+
+```python
+# Excel formula: =SUMIF(O2:W2, A2, P2:X2)
+# SUMIF matches position-by-position across multi-column ranges
+formula = f'=SUMIF(O{row}:W{row},A{row},P{row}:X{row})'
+```
+
+---
+
+## FIFO Allocation Formula (Cumulative Deduction)
+
+Scenario: Allocate limited inventory to order lines in sequence — each row gets what's left after previous rows consumed their share.
+
+**Formula template** (row N):
+```
+=MAX(0, MIN(OrderQty_N,
+    TotalInventory_for_key - SUM_of_already_allocated_above))
+```
+
+**Example** (H column = allocated qty):
+```python
+# Row 2 (first row): allocate up to available inventory
+f'=MIN(G2, SUMIFS(Sheet2!D:D, Sheet2!A:A, A2, Sheet2!B:B, D2))'
+
+# Row 3+ (subsequent): subtract already-allocated from rows above
+f'=MAX(0, MIN(G{r}, SUMIFS(Sheet2!D:D, Sheet2!A:A, A{r}, Sheet2!B:B, D{r})'
+f'  - SUMIFS(H$1:H{r-1}, A$1:A{r-1}, A{r}, D$1:D{r-1}, D{r})))'
+```
+
+**Key**: `SUMIFS(H$1:H{r-1}, ...)` creates a running total of already-allocated amounts, achieving row-by-row deduction.
+
+⚠️ This is a self-referencing formula pattern — openpyxl cannot verify it. Must open in Excel to confirm calculation.
+
+### Data Provenance Implementation
+
+```python
+src_ws = wb.create_sheet("Sources")
+src_ws.sheet_properties.tabColor = PRIMARY
+headers = ["Data Description", "Source Name", "Source URL", "Access Date"]
+for col, h in enumerate(headers, 1):
+    cell = src_ws.cell(row=1, column=col, value=h)
+    cell.font = Font(name=FONT_NAME, bold=HEADER_BOLD, color="FFFFFF")
+    cell.fill = PatternFill(start_color=PRIMARY, end_color=PRIMARY, fill_type="solid")
+```

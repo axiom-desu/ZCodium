@@ -1,35 +1,37 @@
-"""Docx comment/tracked-change editing.
-
-Clean-room reimplementation. The API surface and the comment-XML shapes follow
-the upstream Anthropic document-skills lineage, whose MIT-licensed reference
-implementation lives at:
-
-    https://github.com/appautomaton/document-SKILLs
-    Copyright (c) 2026 appautomaton, MIT License
-
-This file is a rewrite, not a copy. Differences from that reference, all
-deliberate:
-
-  * Self-contained packing. The reference delegates to ooxml/scripts/pack.py
-    and to two XSD validators in the same tree; neither ships here, so
-    _pack_document / _strip_formatting_whitespace below replace them.
-  * validate() is a structural precondition check rather than a schema check,
-    for the same reason. It still fails closed on a missing word/document.xml.
-  * _update_settings gained `update_fields`, which writes <w:updateFields
-    w:val="true"/> so Word recomputes TOC page numbers on open.
-  * Insertion keeps the reference's full CT_Settings order table instead of a
-    hand-written "insert before defaultTabStop" heuristic. See the note in
-    _update_settings for why that matters.
-  * Default author is "ZCodium" rather than a vendor name.
-
-The five templates/ XML parts are byte-identical to the reference's and carry
-the same MIT notice via NOTICE.md at the repository root.
+#!/usr/bin/env python3
 """
+Utilities for editing OOXML documents.
 
+This module provides XMLEditor, a tool for manipulating XML files with support for
+line-number-based node finding and DOM manipulation. Each element is automatically
+annotated with its original line and column position during parsing.
+
+Example usage:
+    editor = XMLEditor("document.xml")
+
+    # Find node by line number or range
+    elem = editor.get_node(tag="w:r", line_number=519)
+    elem = editor.get_node(tag="w:p", line_number=range(100, 200))
+
+    # Find node by text content
+    elem = editor.get_node(tag="w:p", contains="specific text")
+
+    # Find node by attributes
+    elem = editor.get_node(tag="w:r", attrs={"w:id": "target"})
+
+    # Combine filters
+    elem = editor.get_node(tag="w:p", line_number=range(1, 50), contains="text")
+
+    # Replace, insert, or manipulate
+    new_elem = editor.replace_node(elem, "<w:r><w:t>new text</w:t></w:r>")
+    editor.insert_after(new_elem, "<w:r><w:t>more</w:t></w:r>")
+
+    # Save changes
+    editor.save()
+"""
 
 import html
 from pathlib import Path
-from typing import Optional, Union
 
 import defusedxml.minidom
 import defusedxml.sax
@@ -73,9 +75,9 @@ class XMLEditor:
     def get_node(
         self,
         tag: str,
-        attrs: Optional[dict[str, str]] = None,
-        line_number: Optional[Union[int, range]] = None,
-        contains: Optional[str] = None,
+        attrs: dict[str, str] | None = None,
+        line_number: int | range | None = None,
+        contains: str | None = None,
     ):
         """
         Get a DOM element by tag and identifier.

@@ -1,123 +1,326 @@
-# Environment setup
+# DOCX Skill — Environment Setup Guide
 
-Everything the `docx` skill runs is Python. There is no Node runtime, no
-`node_modules`, and no npm install step — the document-generation library that
-upstream documentation describes is not part of this plugin, and nothing here
-depends on it.
+This document contains full platform-specific instructions for setting up the DOCX skill environment.
+The model should read this file when first-time setup is needed.
 
-## What is required
+---
 
-| requirement  | version       | why                                       |
-| ------------ | ------------- | ----------------------------------------- |
-| Python       | 3.10 or newer | every script under `skills/docx/scripts/` |
-| `defusedxml` | any recent    | every XML parse in the plugin             |
+## Step 1: Platform Detection
 
-That is the whole list. There is nothing to build, no lockfile, and no transitive
-dependency.
+Detect the OS and set core variables:
 
-## Python
-
-`python3` must be on `PATH`. The scripts are plain standard-library Python plus
-`defusedxml`; they are invoked as
+### macOS / Linux (bash/zsh)
 
 ```bash
-python3 <plugin>/skills/docx/scripts/postcheck.py report.docx
+OS="$(uname -s)"   # Darwin = macOS, Linux = Linux
+ARCH="$(uname -m)" # x86_64 or arm64
+
+DOCX_SKILL_DIR="<skill_directory>"
+export DOCX_SKILL_DIR
 ```
 
-and the same interpreter is used when you import the API from your own code.
+### Windows (PowerShell, Win10/Win11)
 
-The floor is 3.10 because the code uses `X | Y` union syntax and builtin generics in
-annotations, and `from __future__ import annotations` is relied on rather than
-treated as optional. Older interpreters fail at import time, not at run time, so the
-error is immediate and unambiguous. Newer versions are fine; nothing here uses a
-feature removed after 3.10.
+```powershell
+$WinVer = [System.Environment]::OSVersion.Version
+$Arch   = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
 
-## defusedxml
+$env:DOCX_SKILL_DIR = "<skill_directory>"
+```
 
-`defusedxml` is the only third-party dependency. It is used in two places:
+---
 
-- `utilities.py` — `defusedxml.minidom` to parse each part and `defusedxml.sax` to
-  build the line-tracking parser;
-- `packing.py` — `defusedxml.minidom` while stripping formatting whitespace.
+## Step 2: Dependency Check & Install
 
-Every XML parse in the plugin goes through it. A `.docx` is an untrusted archive:
-entity-expansion and external-entity attacks are the standard ways a malicious
-document turns a parser into a file read or a hang, and `defusedxml` closes both.
-Substituting the standard library's `xml` package is not a drop-in change.
+Run the platform-appropriate setup script:
 
-Install it with the interpreter you will actually run:
+| Platform | Command |
+|----------|---------|
+| macOS / Linux | `bash "$DOCX_SKILL_DIR/env_setup/setup_mac_linux.sh"` |
+| Windows | `powershell -ExecutionPolicy Bypass -File "$env:DOCX_SKILL_DIR\env_setup\setup_windows.ps1"` |
+
+### Required Dependencies
+
+| Category | Package | Purpose |
+|----------|---------|---------|
+| Runtime | Node.js + npm | DOCX generation (docx-js) |
+| npm pkg | docx | Word document creation library |
+| Runtime | Python 3 + pip | Post-processing scripts |
+| Python pkg | defusedxml | Safe XML parsing for validation |
+| On demand (not substitutable) | LibreOffice | `.doc`→`.docx`, DOCX→PDF, visual verification — install it; do not swap in local Word/WPS/Pages |
+| Font | CJK fonts (from CDN) | Chinese text in documents |
+
+### Manual Install by Platform
+
+#### macOS
 
 ```bash
+brew install node python3
+npm install -g docx
 python3 -m pip install defusedxml
+# On demand, not substitutable: LibreOffice (prefer the Tsinghua mirror below)
+brew install --cask libreoffice
 ```
 
-On a distribution that marks the system Python as externally managed (PEP 668), that
-command refuses to run. Pick one:
+#### Linux (Debian/Ubuntu)
 
 ```bash
-python3 -m pip install --user defusedxml     # installs into the user site
-python3 -m venv .venv && .venv/bin/pip install defusedxml
+sudo apt install nodejs npm python3 python3-pip
+npm install -g docx
+python3 -m pip install defusedxml
+# On demand, not substitutable: LibreOffice (prefer the Tsinghua mirror below)
+sudo apt install libreoffice-core
 ```
 
-A virtual environment is the safer of the two when several projects share the
-machine, because the plugin then runs under whichever interpreter is first on
-`PATH` and a system-wide install is visible to all of them.
+#### Windows (PowerShell)
 
-Verify:
+```powershell
+winget install OpenJS.NodeJS.LTS
+winget install Python.Python.3.11
+npm install -g docx
+python -m pip install defusedxml
+# On demand, not substitutable: LibreOffice (prefer the Tsinghua mirror below)
+winget install TheDocumentFoundation.LibreOffice
+```
+
+Alternative Windows package managers:
+- `choco install nodejs-lts python3`
+- `scoop install nodejs-lts python`
+
+---
+
+## Step 3: Font Installation
+
+Fonts are downloaded individually from CDN on first setup.
+
+- **CDN base**: `https://z-cdn.chatglm.cn/office-skill/fonts/`
+- **Font list**: `env_setup/font_list.txt` (78 fonts, one relative path per line)
+- **Marker file**: `.office-skill-fonts-installed` in the user font directory prevents re-download
+- Special characters in filenames (e.g., `[`, `]`) are URL-encoded automatically by the setup script
+
+The setup scripts read `font_list.txt`, check which fonts are already installed, and download only the missing ones. Each font is saved flat (filename only) to the user font directory.
+
+### CDN Directory Structure (78 fonts)
+
+| Directory | Count | Description |
+|-----------|-------|-------------|
+| `truetype/lxgw-wenkai/` | 6 | LXGW WenKai — Chinese handwriting style |
+| `truetype/noto-serif-sc/` | 9 | Noto Serif SC — Chinese serif (variable + 8 static weights) |
+| `chinese/` | 14 | Noto Sans SC, Sarasa Mono SC, Liberation fallbacks |
+| `dejavu/` | 8 | DejaVu Sans/Serif/Mono — Latin/symbol fallback |
+| `emoji/` | 1 | Noto Color Emoji |
+| `english/` | 12 | Tinos, Carlito, Calibri |
+| `freefont/` | 12 | FreeSans/FreeSerif/FreeMono — open-source fallback |
+| `liberation/` | 12 | Liberation Sans/Serif/Mono — MS-metric-compatible |
+| `libreoffice/` | 1 | OpenSymbol |
+| `noto/` | 1 | Noto Color Emoji (duplicate) |
+| `wqy/` | 1 | WenQuanYi Zen Hei — CJK fallback |
+| *(root)* | 1 | Japanese Gothic |
+
+### Install Targets by Platform
+
+| Platform | User Font Directory |
+|----------|-------------------|
+| macOS | `~/Library/Fonts/` |
+| Linux | `~/.local/share/fonts/` (then run `fc-cache -f`) |
+| Windows | `%LOCALAPPDATA%\Microsoft\Windows\Fonts` (per-user, no admin) |
+
+### Manual Font Installation
+
+If CDN is unreachable, download fonts manually. Example:
 
 ```bash
-python3 -c "import defusedxml.minidom, defusedxml.sax; print('defusedxml ok')"
+# Download a single font
+curl -fSLO "https://z-cdn.chatglm.cn/office-skill/fonts/chinese/NotoSansSC%5Bwght%5D.ttf"
+# Copy to user font dir
+cp "NotoSansSC[wght].ttf" ~/Library/Fonts/   # macOS
 ```
 
-## Optional: archive tools
-
-The Python API takes an unpacked directory. Two ways to get one:
+Or download all fonts listed in `font_list.txt`:
 
 ```bash
-unzip report.docx -d unpacked/          # and back: cd unpacked && zip -r ../report.docx .
+while read f; do
+    encoded=$(echo "$f" | sed 's/\[/%5B/g; s/\]/%5D/g')
+    curl -fSLO "https://z-cdn.chatglm.cn/office-skill/fonts/$encoded"
+done < env_setup/font_list.txt
 ```
 
-```python
-import sys
-sys.path.insert(0, "<plugin>/skills/docx")
-from scripts.document import _pack_document
-_pack_document("unpacked", "report.docx")
-```
+### Post-Install Variable
 
-`_pack_document` is preferred when the tree has ever been pretty-printed, because it
-strips the inter-element whitespace that Word is order-sensitive about. `unzip` and
-`zip` are convenience only — nothing in the plugin shells out to them.
+After font installation, `FONT_DIR` points to the user font directory:
 
-On Windows, where `unzip` and `zip` are usually absent, use `_pack_document` and
-Python's `zipfile` for unpacking. The scripts themselves are platform-independent:
-paths go through `pathlib`, and the archive work goes through `zipfile`.
+| Platform | FONT_DIR |
+|----------|----------------|
+| macOS | `~/Library/Fonts` |
+| Linux | `~/.local/share/fonts` |
+| Windows | `%LOCALAPPDATA%\Microsoft\Windows\Fonts` |
 
-## Checking the environment
+---
+
+## China Network Fallback
+
+If default sources are unreachable, use China mirrors:
+
+### npm (npmmirror)
 
 ```bash
-bash <plugin>/skills/docx/env_setup/env_check.sh
+npm install -g docx --registry https://registry.npmmirror.com
 ```
 
-It verifies the interpreter version, that `defusedxml` imports, and that the script
-files the skill depends on are present. Exit status is `0` when everything passes and
-`1` otherwise, so it drops into a setup step.
+### pip (Tsinghua mirror)
 
 ```bash
-bash <plugin>/skills/docx/setup.sh
+python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  --trusted-host pypi.tuna.tsinghua.edu.cn \
+  defusedxml
 ```
 
-`setup.sh` is the entry point that prepares the environment: it runs the same checks
-and installs `defusedxml` when it is missing. Pass `--check-only` to skip the
-install, or `--yes` to install without the confirmation prompt.
+### Windows (PowerShell) China mirrors
 
-## Not required
+```powershell
+npm install -g docx --registry https://registry.npmmirror.com
+python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn defusedxml
+```
 
-- **Node.js, npm, pnpm** — no JavaScript runs anywhere in this plugin.
-- **Any JavaScript document-generation library** — the upstream plugin generated
-  documents through one; this one does not generate them at all. Nothing here
-  imports, vendors or shells out to it.
-- **LibreOffice, Word, poppler** — the plugin neither renders nor converts. Turning a
-  `.docx` into page images for the `visual-judge` gate is a separate step done with
-  whatever converter the host has.
-- **An OOXML schema set** — `validate()` is a presence check, and `postcheck.py`
-  reads the package with `xml.etree.ElementTree`. No XSD ships here.
+### Installer downloads (China)
+
+| Software | China Mirror |
+|----------|-------------|
+| Node.js | https://npmmirror.com/mirrors/node/ |
+| Python | https://npmmirror.com/mirrors/python/ |
+| LibreOffice | https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/ |
+
+---
+
+## LibreOffice — Recommended Download Source (Tsinghua TUNA mirror)
+
+**Prefer this mirror over the official libreoffice.org download and over `brew`/`apt`/`winget`
+package sources** — it is much faster on Chinese networks and ships the current full build.
+
+- **Recommended base URL:** `https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/`
+- **If 26.8.0 is gone** (the mirror only keeps a few releases), list
+  `https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/` and pick the newest
+  version directory, then substitute that version number everywhere below.
+
+### Pick the right package for the platform
+
+Under the version directory, choose the subdirectory matching the OS and CPU architecture:
+
+| Platform | Path under the version dir | Main package |
+|----------|---------------------------|--------------|
+| Linux x86_64 (Debian/Ubuntu) | `deb/x86_64/` | `LibreOffice_26.8.0_Linux_x86-64_deb.tar.gz` |
+| Linux ARM64 (Debian/Ubuntu) | `deb/aarch64/` | `LibreOffice_26.8.0_Linux_aarch64_deb.tar.gz` |
+| Linux x86_64 (RHEL/Fedora/openSUSE) | `rpm/x86_64/` | `LibreOffice_26.8.0_Linux_x86-64_rpm.tar.gz` |
+| macOS Apple Silicon (M1+) | `mac/aarch64/` | `LibreOffice_26.8.0_MacOS_aarch64.dmg` |
+| macOS Intel | `mac/x86_64/` | `LibreOffice_26.8.0_MacOS_x86-64.dmg` |
+| Windows 64-bit | `win/x86_64/` | `LibreOffice_26.8.0_Win_x86-64.msi` |
+| Windows ARM64 | `win/aarch64/` | `LibreOffice_26.8.0_Win_aarch64.msi` |
+
+Determine the architecture with `uname -m` (macOS/Linux: `x86_64` vs `arm64`/`aarch64`) or
+`$env:PROCESSOR_ARCHITECTURE` (Windows: `AMD64` vs `ARM64`). The base package is English-only; add
+the Chinese UI with the matching `*_langpack_zh-CN.*` file from the same directory if the user wants
+a Chinese interface. Help packs (`*_helppack_*`) are optional and not needed for conversion tasks.
+
+### Linux (Debian/Ubuntu) — install from the mirror
+
+```bash
+LO_VER=26.8.0
+case "$(uname -m)" in x86_64) LO_ARCH=x86_64; LO_TAG=x86-64 ;; aarch64|arm64) LO_ARCH=aarch64; LO_TAG=aarch64 ;; esac
+BASE="https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/$LO_VER/deb/$LO_ARCH"
+
+cd /tmp
+curl -fSLO "$BASE/LibreOffice_${LO_VER}_Linux_${LO_TAG}_deb.tar.gz"
+tar -xzf "LibreOffice_${LO_VER}_Linux_${LO_TAG}_deb.tar.gz"
+sudo dpkg -i LibreOffice_${LO_VER}*/DEBS/*.deb
+sudo apt-get install -f -y     # resolve any missing dependencies
+soffice --version              # verify (binary lands in /usr/bin or /opt/libreoffice*/program)
+```
+
+If `soffice` is not on `PATH` after install, register it — see
+*"Register the binary on PATH"* at the end of this section.
+
+`sudo apt install libreoffice-core` from the distro repo remains an acceptable fallback if the
+mirror is unreachable — it is older, but sufficient for conversion.
+
+### macOS — install from the mirror
+
+```bash
+LO_VER=26.8.0
+case "$(uname -m)" in arm64) LO_ARCH=aarch64; LO_TAG=aarch64 ;; x86_64) LO_ARCH=x86_64; LO_TAG=x86-64 ;; esac
+BASE="https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/$LO_VER/mac/$LO_ARCH"
+
+cd /tmp
+curl -fSLO "$BASE/LibreOffice_${LO_VER}_MacOS_${LO_TAG}.dmg"
+hdiutil attach "LibreOffice_${LO_VER}_MacOS_${LO_TAG}.dmg"
+cp -R "/Volumes/LibreOffice/LibreOffice.app" /Applications/
+hdiutil detach "/Volumes/LibreOffice"
+/Applications/LibreOffice.app/Contents/MacOS/soffice --version   # verify
+```
+
+`brew install --cask libreoffice` is the fallback if the mirror is unreachable.
+
+### Windows (PowerShell) — install from the mirror
+
+```powershell
+$LoVer = "26.8.0"
+$LoArch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "aarch64" } else { "x86_64" }
+$LoTag  = if ($LoArch -eq "aarch64") { "aarch64" } else { "x86-64" }
+$Base = "https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/$LoVer/win/$LoArch"
+$Msi  = "$env:TEMP\LibreOffice_${LoVer}_Win_${LoTag}.msi"
+
+Invoke-WebRequest -Uri "$Base/LibreOffice_${LoVer}_Win_${LoTag}.msi" -OutFile $Msi
+Start-Process msiexec.exe -ArgumentList "/i `"$Msi`" /qn" -Wait   # silent install (needs admin)
+& "C:\Program Files\LibreOffice\program\soffice.exe" --version    # verify
+```
+
+`winget install TheDocumentFoundation.LibreOffice` is the fallback if the mirror is unreachable.
+
+### Register the binary on PATH (do this immediately after install)
+
+**Do this as part of the install, not as an afterthought.** A LibreOffice that is installed but whose
+`soffice` binary is not on the executable search path is indistinguishable from "not installed" to
+the next `command -v soffice` probe — which re-triggers the HARD REQUIREMENT and makes you download
+several hundred MB you already have. **The mechanism differs per OS; use the one for the platform you
+are on.**
+
+Before installing anything, probe first — if the binary already exists somewhere on disk, you need
+only the registration step below, **not** a reinstall:
+
+```bash
+command -v soffice || ls -d /opt/libreoffice*/program/soffice /Applications/LibreOffice.app/Contents/MacOS/soffice 2>/dev/null
+```
+
+```powershell
+Get-Command soffice -ErrorAction SilentlyContinue; Test-Path "C:\Program Files\LibreOffice\program\soffice.exe"
+```
+
+#### Linux — symlink into a directory already on `PATH`
+
+```bash
+sudo ln -sf /opt/libreoffice*/program/soffice /usr/local/bin/soffice
+soffice --version   # re-verify: must print a version, not "command not found"
+```
+
+If the distro package was used instead of the mirror, `soffice` normally lands in `/usr/bin` already
+and no link is needed.
+
+#### macOS — symlink the binary inside the .app bundle
+
+```bash
+sudo ln -sf /Applications/LibreOffice.app/Contents/MacOS/soffice /usr/local/bin/soffice
+soffice --version   # re-verify
+```
+
+On Apple Silicon, `/usr/local/bin` is not always on `PATH` — if the verify still fails, link into
+`/opt/homebrew/bin` instead: `sudo ln -sf /Applications/LibreOffice.app/Contents/MacOS/soffice /opt/homebrew/bin/soffice`.
+
+#### Windows — append the program directory to the user `PATH`
+
+```powershell
+$LoDir = "C:\Program Files\LibreOffice\program"
+$UserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+if ($UserPath -notlike "*$LoDir*") { setx PATH "$UserPath;$LoDir" }
+```
+
+`setx` only affects **newly launched** shells. For the remainder of the current session, call the
+binary by its full path: `& "C:\Program Files\LibreOffice\program\soffice.exe" --version`.

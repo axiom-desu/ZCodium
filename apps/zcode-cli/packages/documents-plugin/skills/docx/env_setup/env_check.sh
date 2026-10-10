@@ -1,125 +1,41 @@
 #!/usr/bin/env bash
-# Dependency self-check for the docx skill: interpreter version, defusedxml, and
-# the script files the skill depends on. Exit 0 when everything passes, 1 otherwise.
-#
-# No network access, no installation, no writes to the plugin tree.
+# Lightweight environment check for DOCX skill.
+# Exit 0 = all OK, exit 1 = missing dependencies.
+# Also resolves and exports DOCX_SKILL_DIR and FONT_DIR.
+# Usage: source env_check.sh  (preferred, exports vars to caller)
+#    or: bash env_check.sh [--quiet]
+QUIET=false; [ "${1:-}" = "--quiet" ] && QUIET=true
+FAIL=0
+check() { local desc="$1"; shift; if ! "$@" &>/dev/null; then $QUIET || echo "MISSING: $desc"; FAIL=1; fi; }
+# LibreOffice is install-on-demand (its absence does not fail this check), but it is NOT
+# substitutable: when .doc→.docx / DOCX→PDF / visual verification needs it and it is absent, the
+# model must explain + warn + install, never silently switch to the user's local Word/WPS/Pages.
+required_on_demand() { local desc="$1"; shift; if "$@" &>/dev/null; then $QUIET || echo "on-demand OK: $desc"; else $QUIET || echo "on-demand MISSING: $desc — if a task needs it you MUST install it, not substitute it. FORBIDDEN: using Word/WPS/Pages instead, or skipping the PDF/visual check; a large download is NOT a reason to skip. REQUIRED: explain the necessity to the user, say the package is large, then INSTALL (preferred source: https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/), THEN register it on PATH and re-verify 'soffice --version' (Linux/macOS: ln -sf the binary into /usr/local/bin; Windows: setx the program dir onto the user PATH) — see env_setup/setup.md \"Register the binary on PATH\". FIRST check whether it is already installed but merely off PATH (/opt/libreoffice*/program/soffice, /Applications/LibreOffice.app/Contents/MacOS/soffice) — if so register it instead of reinstalling. No install attempt = no substitute program."; fi; }
 
-set -u
+# ── Resolve DOCX_SKILL_DIR & FONT_DIR ──
+_ENV_CHECK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+DOCX_SKILL_DIR="$(cd "$_ENV_CHECK_DIR/.." && pwd)"
+export DOCX_SKILL_DIR
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SCRIPTS_DIR="$SKILL_DIR/scripts"
-
-# Importing the package must not litter the tree with __pycache__.
-export PYTHONDONTWRITEBYTECODE=1
-
-MIN_MAJOR=3
-MIN_MINOR=10
-
-failures=0
-
-pass() { printf '[PASS] %s\n' "$*"; }
-fail() { printf '[FAIL] %s\n' "$*"; failures=$((failures + 1)); }
-
-# ---------------------------------------------------------------- interpreter
-
-PYTHON="${PYTHON:-}"
-if [ -z "$PYTHON" ]; then
-  if command -v python3 >/dev/null 2>&1; then
-    PYTHON=python3
-  elif command -v python >/dev/null 2>&1; then
-    PYTHON=python
-  else
-    fail "no python3 interpreter on PATH"
-    printf '\n%d check(s) failed\n' "$failures"
-    exit 1
-  fi
-fi
-
-if ! command -v "$PYTHON" >/dev/null 2>&1; then
-  fail "PYTHON=$PYTHON is not executable"
-  printf '\n%d check(s) failed\n' "$failures"
-  exit 1
-fi
-
-version="$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)"
-if [ -z "$version" ]; then
-  fail "$PYTHON did not report a version"
+if [ "$(uname -s)" = "Darwin" ]; then
+    FONT_DIR="${HOME}/Library/Fonts"
 else
-  if awk -v v="$version" -v maj="$MIN_MAJOR" -v min="$MIN_MINOR" 'BEGIN {
-        split(v, got, ".")
-        if (got[1] > maj) exit 0
-        if (got[1] == maj && got[2] >= min) exit 0
-        exit 1
-      }'; then
-    pass "python $version ($PYTHON) meets ${MIN_MAJOR}.${MIN_MINOR}+"
-  else
-    fail "python $version is older than the required ${MIN_MAJOR}.${MIN_MINOR} ($PYTHON)"
-  fi
+    FONT_DIR="/usr/share/fonts"
+fi
+export FONT_DIR
+
+check "node"        command -v node
+check "python3"     command -v python3
+check "defusedxml"  python3 -c "import defusedxml"
+
+# Font check
+if command -v fc-list &>/dev/null; then
+    fc-list :lang=zh 2>/dev/null | grep -qi "noto\|simhei\|wenquanyi" || { $QUIET || echo "MISSING: CJK fonts"; FAIL=1; }
 fi
 
-# ------------------------------------------------------------------ defusedxml
+# ── ON-DEMAND but NOT substitutable: .doc→.docx / DOCX→PDF / visual check (LibreOffice/soffice) ──
+required_on_demand "libreoffice (soffice)" command -v soffice
 
-if "$PYTHON" -c 'import defusedxml.minidom, defusedxml.sax' 2>/dev/null; then
-  defusedxml_version="$("$PYTHON" -c 'import defusedxml; print(getattr(defusedxml, "__version__", "unknown"))' 2>/dev/null)"
-  pass "defusedxml importable (${defusedxml_version:-unknown})"
-else
-  fail "defusedxml is not importable by $PYTHON — install with: $PYTHON -m pip install defusedxml"
-fi
-
-# -------------------------------------------------------------- plugin scripts
-
-required=(
-  "__init__.py"
-  "document.py"
-  "utilities.py"
-  "packing.py"
-  "identifiers.py"
-  "docx_editor.py"
-  "tracked_changes.py"
-  "comments.py"
-  "postcheck.py"
-  "postcheck_document.py"
-  "postcheck_rules.py"
-  "fix_footer_fields.py"
-  "add_toc_placeholders.py"
-)
-
-for name in "${required[@]}"; do
-  if [ -f "$SCRIPTS_DIR/$name" ]; then
-    pass "scripts/$name present"
-  else
-    fail "scripts/$name missing — the skill cannot run without it"
-  fi
-done
-
-for name in comments.xml commentsExtended.xml commentsIds.xml commentsExtensible.xml people.xml; do
-  if [ -f "$SCRIPTS_DIR/templates/$name" ]; then
-    pass "scripts/templates/$name present"
-  else
-    fail "scripts/templates/$name missing"
-  fi
-done
-
-# --------------------------------------------------------- import smoke check
-
-# scripts.document uses a relative import, so skills/docx must be on sys.path.
-if "$PYTHON" -c 'import sys; sys.path.insert(0, sys.argv[1]); import scripts.document' "$SKILL_DIR" 2>/dev/null; then
-  pass "scripts.document imports"
-else
-  fail "scripts.document failed to import — check the Python version and defusedxml"
-fi
-
-# The three CLI scripts import each other by flat module name.
-if "$PYTHON" -c 'import sys; sys.path.insert(0, sys.argv[1]); import postcheck, postcheck_document, postcheck_rules, fix_footer_fields, add_toc_placeholders' "$SCRIPTS_DIR" 2>/dev/null; then
-  pass "the three CLI scripts import"
-else
-  fail "a CLI script failed to import — check the Python version and defusedxml"
-fi
-
-if [ "$failures" -eq 0 ]; then
-  printf '\nall checks passed\n'
-  exit 0
-fi
-printf '\n%d check(s) failed\n' "$failures"
-exit 1
+$QUIET || echo "DOCX_SKILL_DIR=$DOCX_SKILL_DIR"
+$QUIET || echo "FONT_DIR=$FONT_DIR"
+return $FAIL 2>/dev/null || exit $FAIL

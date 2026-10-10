@@ -1,148 +1,271 @@
-# Advanced workbook features
+# Scene: Advanced Operations
 
-The features that separate a data dump from a tool: data validation,
-conditional formatting, named ranges, protection, print setup and the
-performance habits that keep a large workbook usable. Everything here is
-openpyxl/XlsxWriter public API.
+## When This Applies
+Batch processing multiple files, handling very large datasets, data validation, conditional formatting, sheet protection, or other power-user features.
 
-## Data validation
+---
 
-    from openpyxl.worksheet.datavalidation import DataValidation
+## Large File Handling (>100K rows)
 
-    dv = DataValidation(type="list", formula1='"Draft,Sent,Paid"', allow_blank=True)
-    dv.error = "Pick a value from the list."
-    dv.errorTitle = "Invalid status"
-    sheet.add_data_validation(dv)
-    dv.add("D2:D500")
+### Read-Only Mode
+```python
+from openpyxl import load_workbook
 
-- `type="list"` with an inline list has a 255-character ceiling; longer lists
-  point at a range (`formula1="=Lists!$A$2:$A$50"`).
-- `type="whole"` / `"decimal"` / `"date"` / `"textLength"` with `operator`
-  (`between`, `greaterThan`, …) for numeric constraints.
-- `showInputMessage` with a prompt turns the validation into documentation —
-  the cheapest input-help a workbook can carry.
-- Validation restricts typing, not pasting. A paste over a validated cell
-  bypasses it; the audit in `quality/pipeline.md` is the real gate.
+# Memory-efficient reading — does NOT load entire file
+wb = load_workbook('huge.xlsx', read_only=True)
+ws = wb.active
 
-## Conditional formatting
+for row in ws.iter_rows(min_row=2, values_only=True):
+    process(row)  # Yields rows one at a time
 
-    from openpyxl.formatting.rule import CellIsRule, ColorScaleRule
+wb.close()  # MUST close read-only workbooks
+```
 
-    sheet.conditional_formatting.add("B2:B500",
-        CellIsRule(operator="lessThan", formula=["0"],
-                   font=Font(color="FFCC0000")))
+### Write-Only Mode
+```python
+from openpyxl import Workbook
 
-- Rules are evaluated by the consumer, in order; the first matching rule wins
-  unless `stopIfTrue` is set.
-- `ColorScaleRule` for heatmaps, `FormulaRule` for anything stateful (a rule
-  that depends on another column).
-- Keep the palette from `engines/design.md` — conditional colour that invents
-  new hues breaks the workbook's colour language.
-- Performance: a conditional format over a whole column (`B:B`) is slower than
-  over the used range; bound the range.
+wb = Workbook(write_only=True)
+ws = wb.create_sheet()
 
-## Named ranges and defined names
+# Write rows sequentially — cannot random-access cells
+for data_row in large_dataset:
+    ws.append(data_row)
 
-    workbook.defined_names.add(DefinedName("TaxRate", attr_text="Assumptions!$B$7"))
+wb.save('output.xlsx')
+```
 
-- A named range makes formulas readable (`=Revenue*TaxRate`) and survives row
-  insertion — the reason to use them for assumptions.
-- Names are workbook-scoped by default; sheet-scoped names shadow them and
-  confuse. Prefer one scope per name.
-- A name pointing at a deleted range becomes `#REF!` in every formula that
-  uses it — audit names after structural edits (`scenes/edit-patterns.md`).
+### Chunked Processing with pandas
+```python
+# Read in chunks
+chunks = pd.read_excel('huge.xlsx', chunksize=10000)
+# Note: chunksize only works with read_csv, not read_excel
 
-## Tables (ListObjects)
+# For Excel, read specific columns/rows
+df = pd.read_excel('huge.xlsx',
+    usecols=['A', 'C', 'E'],     # Only needed columns
+    nrows=50000,                   # Limit rows
+    dtype={'id': str}              # Prevent type inference overhead
+)
+```
 
-- `openpyxl.worksheet.table.Table` with a style gives banded rows, filter
-  buttons and structured references (`Table1[Revenue]`).
-- One table per sheet region; tables cannot overlap, and a table's header row
-  must be unique and non-empty.
-- Structured references are Excel/Calc syntax; a formula using them breaks in
-  older consumers. Prefer plain ranges for anything that leaves the machine.
+---
 
-## Protection
+## Batch Processing Multiple Files
 
-- Cell-level: unlock the input cells, then `sheet.protection.sheet = True`.
-- Workbook-level: `workbook.security` locks the structure (no adding,
-  deleting, hiding or renaming sheets).
-- State the protection in the delivery note (`scenes/edit-patterns.md`).
+```python
+import os
+import glob
+import pandas as pd
 
-## Print setup
+# Collect all Excel files
+files = glob.glob('data/*.xlsx')
 
-- `sheet.print_area`, `sheet.print_title_rows = "1:1"` (repeat the header on
-  every page), `sheet.page_setup.orientation`, `fitToWidth`.
-- A workbook that prints as fourteen unlabelled pages is a defect; the print
-  setup is part of the deliverable, not an afterthought.
-- Verify by exporting to PDF (`scenes/convert.md`) and counting pages.
+# Method 1: Concatenate into one DataFrame
+all_data = []
+for f in files:
+    df = pd.read_excel(f)
+    df['source_file'] = os.path.basename(f)
+    all_data.append(df)
 
-## Performance
+combined = pd.concat(all_data, ignore_index=True)
+combined.to_excel('combined.xlsx', index=False)
 
-- Write with `write_only=True` (openpyxl) or in batches (XlsxWriter) for large
-  outputs — a cell-at-a-time loop over 100k rows is minutes, not seconds.
-- Avoid whole-column conditional formats and whole-column formulas; bound them
-  to the used range.
-- Recalculation is the expensive step; run `scripts/recalc.py` once on the
-  final file, not after every save.
-- Styles: reuse format objects. Thousands of near-identical formats inflate
-  the file and slow every consumer.
+# Method 2: One sheet per file
+wb = Workbook()
+wb.remove(wb.active)  # Remove default sheet
 
-## Large file handling (>100K rows)
+for f in files:
+    df = pd.read_excel(f)
+    ws = wb.create_sheet(title=os.path.splitext(os.path.basename(f))[0][:31])
+    for r in dataframe_to_rows(df, index=False, header=True):
+        ws.append(r)
 
-A workbook that loads eagerly will exhaust memory; the modes below are the
-difference between seconds and a timeout.
+wb.save('all_files.xlsx')
+```
 
-### Read-only mode
+---
 
-    workbook = load_workbook(path, read_only=True, data_only=True)
-    for row in workbook["Data"].iter_rows(values_only=True):
-        ...
+## Data Validation (Dropdown Lists)
 
-- `read_only=True` streams the sheet instead of building the whole cell model.
-- `data_only=True` returns the **cached** values — a workbook nobody
-  recalculated returns `None` for every formula cell. Recalculate first
-  (`scripts/recalc.py`) or read the inputs and recompute yourself.
-- `max_row`/`max_column` are unreliable in read-only mode; count while
-  streaming.
+```python
+from openpyxl.worksheet.datavalidation import DataValidation
 
-### Write-only mode
+# Dropdown list
+dv = DataValidation(
+    type="list",
+    formula1='"High,Medium,Low"',
+    allow_blank=True,
+    showErrorMessage=True,
+    errorTitle="Invalid",
+    error="Please select High, Medium, or Low"
+)
+ws.add_data_validation(dv)
+dv.add('D5:D100')  # Apply to range
 
-    workbook = Workbook(write_only=True)
-    sheet = workbook.create_sheet()
-    sheet.append(row)          # append, never index
-    workbook.save(path)
+# Number range validation
+dv_num = DataValidation(
+    type="whole",
+    operator="between",
+    formula1=1,
+    formula2=100,
+    errorTitle="Out of range",
+    error="Enter a number between 1 and 100"
+)
+ws.add_data_validation(dv_num)
+dv_num.add('E5:E100')
 
-- No random access, no styles after the fact: set the column formats up front
-  and append. The mode exists for generated artifacts, not for workbooks a
-  human will edit.
+# Date validation
+dv_date = DataValidation(
+    type="date",
+    operator="greaterThan",
+    formula1="2024-01-01"
+)
+ws.add_data_validation(dv_date)
+dv_date.add('F5:F100')
+```
 
-### Chunked processing with pandas
+---
 
-    for chunk in pd.read_excel(path, sheet_name="Data", chunksize=50_000):
-        process(chunk)
+## Conditional Formatting
 
-- `chunksize` bounds memory regardless of file size. pandas is optional
-  (`SKILL.md` §9); nothing here depends on it.
+For full conditional formatting rules, color usage, and code examples → see **`engines/design.md §8`**.
 
-## Batch processing multiple files
+Quick reference for advanced-only patterns (FormulaRule for row-level highlighting):
 
-- One function per file, a loop over the directory, and a **result log** — a
-  batch that fails on file 7 of 40 must say which 39 succeeded.
-- Never write the output next to the input in the same directory with a
-  similar name; the "overwrote my input" failure is always a naming failure.
-- Recalculate each output before the batch moves on, so a recalc failure names
-  the file that caused it.
-- The batch is idempotent: running it twice produces the same outputs, not
-  doubled rows.
+```python
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import PatternFill
 
-## Conditional formatting at scale
+# Formula-based: highlight entire row if status = "Overdue"
+ws.conditional_formatting.add('B5:H100',
+    FormulaRule(formula=['$G5="Overdue"'],
+               fill=PatternFill('solid', fgColor='FFEBEE')))
 
-- Bound the rule range to the used range. A conditional format over a whole
-  column (`B:B`) is slower than over `B2:B5000` and the difference is visible
-  at 100k rows.
-- Rules are evaluated in order; the first matching rule wins unless
-  `stopIfTrue` is set.
-- `FormulaRule` for anything stateful (a rule that depends on another column);
-  `CellIsRule` for the simple comparisons; `ColorScaleRule` for heatmaps.
-- Keep the palette from `engines/design.md` — conditional colour that invents
-  new hues breaks the workbook's colour language.
+# Note: Icon sets are NOT supported by openpyxl — use color fills instead
+```
+
+---
+
+## Sheet Protection
+
+```python
+# Protect sheet (allow select + sort, prevent edits)
+ws.protection.sheet = True
+ws.protection.password = 'mypassword'
+ws.protection.sort = True
+ws.protection.autoFilter = True
+
+# Unlock specific cells for user input
+from openpyxl.styles import Protection
+unlocked = Protection(locked=False)
+for row in range(5, 101):
+    ws.cell(row=row, column=4).protection = unlocked  # Column D is editable
+
+# Protect workbook structure (prevent adding/deleting sheets)
+wb.security.workbookPassword = 'structpass'
+wb.security.lockStructure = True
+```
+
+---
+
+## Named Ranges
+
+```python
+from openpyxl.workbook.defined_name import DefinedName
+
+# Create named range
+ref = f"'Data'!$B$5:$B$100"
+defn = DefinedName('SalesData', attr_text=ref)
+wb.defined_names.add(defn)
+
+# Use in formulas
+ws['H5'] = '=SUM(SalesData)'
+```
+
+---
+
+## Auto-Filter & Sort
+
+```python
+# Apply auto-filter
+ws.auto_filter.ref = 'B4:H100'
+
+# Add filter criteria (for saved state — user can change in Excel)
+ws.auto_filter.add_filter_column(0, ['Active', 'Pending'])
+
+# Sort (openpyxl can set sort state, but actual reordering
+# must be done in Python before writing)
+df = df.sort_values(['Category', 'Revenue'], ascending=[True, False])
+```
+
+---
+
+## Merged Cells
+
+```python
+# Merge cells
+ws.merge_cells('B2:H2')  # Title spanning full width
+
+# Write to merged range (write to top-left cell)
+ws['B2'] = 'Report Title'
+
+# Check existing merges before editing
+for merge_range in ws.merged_cells.ranges:
+    print(f"Merged: {merge_range}")
+
+# Unmerge if needed
+ws.unmerge_cells('B2:H2')
+```
+
+**Warning**: Never write to cells within a merged range except the top-left cell. This causes corruption.
+
+---
+
+## Performance Tips
+
+| Technique | When | Impact |
+|-----------|------|--------|
+| `read_only=True` | Reading files >50K rows | ~10x less memory |
+| `write_only=True` | Writing files >50K rows | ~5x faster |
+| `usecols` parameter | Only need specific columns | Faster read |
+| Avoid `ws.cell()` in tight loops | Use `ws.append()` instead | Faster write |
+| Batch style application | Apply to ranges, not cell-by-cell | Faster formatting |
+| `data_only=True` for analysis | Need values not formulas | Faster read |
+
+---
+
+## VBA Module Inspection
+
+When working with `.xlsm` files, you can read and list VBA modules:
+
+```python
+from openpyxl import load_workbook
+import zipfile
+import os
+
+def list_vba_modules(filepath):
+    """List all VBA modules in an .xlsm file."""
+    if not filepath.endswith(('.xlsm', '.xlsb')):
+        return {"has_vba": False, "modules": []}
+    
+    modules = []
+    try:
+        with zipfile.ZipFile(filepath, 'r') as zf:
+            vba_files = [f for f in zf.namelist() if f.startswith('xl/vbaProject')]
+            if not vba_files:
+                return {"has_vba": False, "modules": []}
+            
+            # Read with keep_vba to access vba_archive
+            wb = load_workbook(filepath, keep_vba=True)
+            if wb.vba_archive:
+                for name in wb.vba_archive.namelist():
+                    modules.append(name)
+            wb.close()
+    except Exception as e:
+        return {"has_vba": False, "error": str(e)}
+    
+    return {"has_vba": True, "modules": modules}
+```
+
+Use this to inspect before editing — know what VBA exists before you touch the file.

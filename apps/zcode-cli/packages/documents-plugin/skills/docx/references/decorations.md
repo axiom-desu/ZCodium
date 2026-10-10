@@ -1,255 +1,537 @@
-# Decorations
+## Geometric Decoration System — Pure docx-js Decorations
 
-The small amount of ink that is not text: rules, boxes, tints, and the block
-diagrams built out of them. This plugin has no drawing canvas — a decoration in a
-`.docx` is a paragraph border, a table border, or a cell fill. That is a smaller
-toolkit than a vector graphics package, and it is enough for almost everything a
-document needs.
+### Design Philosophy
 
-## 1. The three primitives, and their OOXML homes
+Uses only docx-js native capabilities for visual decoration — no external tools (like Playwright screenshots). Suitable for covers, chapter separators, page background enhancement.
 
-| what you want                          | mechanism                                         | where it lives          |
-| -------------------------------------- | ------------------------------------------------- | ----------------------- |
-| a rule above or below a paragraph      | `w:pBdr/w:top` / `w:bottom`                       | the paragraph's `w:pPr` |
-| a tinted block behind a paragraph      | `w:pPr/w:shd`                                     | the paragraph's `w:pPr` |
-| a box around a paragraph               | `w:pBdr` with all four sides                      | the paragraph's `w:pPr` |
-| a box around a cell, or one side of it | `w:tcBorders`                                     | the cell's `w:tcPr`     |
-| a tinted cell                          | `w:tcPr/w:shd`                                    | the cell's `w:tcPr`     |
-| rules inside and around a table        | `w:tblBorders`                                    | the table's `w:tblPr`   |
-| a block diagram                        | nested single-cell tables, or bordered paragraphs | as above                |
+**When to fall back to Playwright?**
+Only when gradients, complex illustrations, or brand visuals are needed that pure OOXML cannot express. Default: prefer native solutions below.
 
-Everything else — a vector shape, an arrow, a callout — is a `w:drawing` with a
-shape inside it, which this plugin can insert as a fragment but cannot build. Prefer
-the primitives; they reflow, they print, and they survive an edit.
+### Decoration Element Library
 
-## 2. Border attributes
+#### 1. Color Strip — Table Simulation
 
-A border element carries four attributes:
+Single-row single-column borderless table + background color to create horizontal color strips.
 
-| attribute | meaning                               | notes                                                              |
-| --------- | ------------------------------------- | ------------------------------------------------------------------ |
-| `w:val`   | the line style                        | `single`, `dotted`, `dashed`, `double`, `none`, and a dozen others |
-| `w:sz`    | the weight                            | **in eighths of a point** — `w:sz="8"` is 1 pt                     |
-| `w:space` | the gap between the text and the line | in points, 0–31                                                    |
-| `w:color` | the line colour                       | a hex RGB value                                                    |
+```js
+function colorStrip(color, height = 80) {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: { top: NB, bottom: NB, left: NB, right: NB,
+               insideHorizontal: NB, insideVertical: NB },
+    rows: [new TableRow({
+      height: { value: height, rule: "exact" },
+      children: [new TableCell({
+        shading: { type: ShadingType.CLEAR, fill: color.replace("#", "") },
+        borders: { top: NB, bottom: NB, left: NB, right: NB },
+        children: [new Paragraph({ children: [] })],
+      })],
+    })],
+  });
+}
 
-The `w:sz` unit is the one that surprises people. A rule meant to be hairline is
-`w:sz="4"` (0.5 pt); `w:sz="4"` intending 4 pt produces a line four times heavier
-than anything else in the document.
+// ══════════════════════════════════════════════════════════════
+// R6 — Editorial Warm (minimal, warm white bg, no decorations)
+// ══════════════════════════════════════════════════════════════
+// Suitable for: lesson plans (non-STEM), cultural/creative, newsletters,
+//   event planning, internal reports, light-weight documents
+// NOT for: formal business, consulting, finance, government, academic
+// Title constraint: single line only (≤20 chars). Longer titles → route to R1.
+//
+// Structure: 2-row wrapper table (no border, warm bg shading)
+//   Row 1 (content): category → title → subtitle → fields
+//   Row 2 (footer):  left English title + right label
+// All spacing via paragraph indent (WPS safe, no cell margins).
 
-Weights come in three sizes and no more:
+function buildCoverR6(config) {
+  const P = config.palette;
+  const PAD_L = 1300, PAD_R = 1100;
+  const ind = { left: PAD_L, right: PAD_R };
+  const FOOTER_H = 900;
+  const CONTENT_H = 16838 - FOOTER_H;
+  const shading = { fill: P.bg || "F7F7F5", type: ShadingType.CLEAR };
 
-| use                                                     | `w:sz` |
-| ------------------------------------------------------- | ------ |
-| hairline, a separator inside a table or under a caption | 4      |
-| normal, a rule under a heading or a table's outer frame | 8      |
-| heavy, a rule above a 版记 or under a document head     | 12–24  |
+  // ⚠️ R6 uses a simplified title layout: prefer single line, shrink font to fit
+  const availW = 11906 - PAD_L - PAD_R;
+  const { titlePt, titleLines } = calcTitleLayoutR6(config.title, availW, 36, 22);
+  const titleSize = titlePt * 2;
+  const lineH = Math.ceil(titlePt * 23 * 1.3);
 
-`w:space` matters more than it looks. A rule with `w:space="0"` sits on the
-descenders; 1–4 pt of space is what makes it read as a rule rather than as a
-strikethrough.
+  // Dynamic top spacing
+  const titleH = titleLines.length * (titleSize * 10 + 200);
+  const categoryH = 22 * 10 + 900;
+  const subtitleH = config.subtitle ? (28 * 10 + 1200) : 0;
+  const fieldsH = (config.metaLines || []).length * (24 * 10 + 100);
+  const contentH = categoryH + titleH + subtitleH + fieldsH;
+  const remaining = Math.max(CONTENT_H - 1200 - contentH, 400);
+  const topSpacing = Math.floor(remaining * 0.55);
 
-## 3. Shading, and the one failure that turns a cell black
+  const children = [];
 
-A shading element has two colour attributes and a style:
+  // 1. Top spacer (dynamic)
+  children.push(new Paragraph({ indent: ind, spacing: { before: topSpacing } }));
 
-```xml
-<w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/>
+  // 2. Category label (small, wide letter-spacing)
+  if (config.englishLabel) {
+    children.push(new Paragraph({
+      indent: ind, spacing: { after: 900 },
+      children: [new TextRun({
+        text: config.englishLabel, size: 22,
+        color: P.cover.metaColor || "9A9A9A",
+        font: { ascii: "Calibri", eastAsia: "Microsoft YaHei" },
+        characterSpacing: 60,
+      })],
+    }));
+  }
+
+  // 3. Title (single line preferred, dynamic font size)
+  for (let i = 0; i < titleLines.length; i++) {
+    children.push(new Paragraph({
+      indent: ind,
+      spacing: { after: i < titleLines.length - 1 ? 60 : 300, line: lineH, lineRule: "atLeast" },
+      children: [new TextRun({
+        text: titleLines[i], size: titleSize,
+        color: P.cover.titleColor || "2C2C2C",
+        font: { ascii: "Calibri", eastAsia: "Microsoft YaHei" },
+        characterSpacing: 30,
+      })],
+    }));
+  }
+
+  // 4. Subtitle
+  if (config.subtitle) {
+    children.push(new Paragraph({
+      indent: ind, spacing: { after: 1200 },
+      children: [new TextRun({
+        text: config.subtitle, size: 28,
+        color: P.cover.subtitleColor || "6B6B6B",
+        font: { ascii: "Calibri", eastAsia: "Microsoft YaHei" },
+        characterSpacing: 15,
+      })],
+    }));
+  }
+
+  // 5. Meta fields (tab-aligned label + value)
+  for (const line of (config.metaLines || [])) {
+    // Expect "label：value" format or plain text
+    const sep = line.indexOf("：") !== -1 ? "：" : (line.indexOf(":") !== -1 ? ":" : null);
+    const label = sep ? line.split(sep)[0].trim() : line;
+    const value = sep ? line.split(sep).slice(1).join(sep).trim() : "";
+    children.push(new Paragraph({
+      indent: ind, spacing: { after: 100 },
+      tabStops: [{ type: TabStopType.LEFT, position: PAD_L + 1600 }],
+      children: [
+        new TextRun({ text: label, size: 22, color: P.cover.metaColor || "9A9A9A",
+          font: { ascii: "Calibri", eastAsia: "Microsoft YaHei" }, characterSpacing: 20 }),
+        ...(value ? [
+          new TextRun({ text: "\t" }),
+          new TextRun({ text: value, size: 24, color: P.cover.subtitleColor || "6B6B6B",
+            font: { ascii: "Calibri", eastAsia: "Microsoft YaHei" }, characterSpacing: 8 }),
+        ] : []),
+      ],
+    }));
+  }
+
+  // 6. Footer (2-column borderless table)
+  const footerLeft = config.footerLeft || "";
+  const footerRight = config.footerRight || "";
+  // Adaptive font size for long English footer text
+  const flSize = footerLeft.length > 60 ? 14 : (footerLeft.length > 40 ? 16 : 18);
+  const flSpacing = footerLeft.length > 60 ? 5 : (footerLeft.length > 40 ? 10 : 20);
+
+  const footerTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    layout: TableLayoutType.FIXED, borders: allNoBorders,
+    rows: [new TableRow({
+      children: [
+        new TableCell({
+          width: { size: 70, type: WidthType.PERCENTAGE }, borders: noBorders, shading,
+          children: [new Paragraph({
+            indent: { left: PAD_L },
+            children: [new TextRun({ text: footerLeft, size: flSize,
+              color: P.cover.footerColor || "9A9A9A",
+              font: { ascii: "Calibri" }, characterSpacing: flSpacing })],
+          })],
+        }),
+        new TableCell({
+          width: { size: 30, type: WidthType.PERCENTAGE }, borders: noBorders, shading,
+          children: [new Paragraph({
+            alignment: AlignmentType.RIGHT, indent: { right: PAD_R },
+            children: [new TextRun({ text: footerRight, size: 18,
+              color: P.cover.footerColor || "9A9A9A",
+              font: { ascii: "Calibri" }, characterSpacing: 20 })],
+          })],
+        }),
+      ],
+    })],
+  });
+
+  // 7. 2-row wrapper (content + footer)
+  return [new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    layout: TableLayoutType.FIXED, borders: allNoBorders,
+    rows: [
+      new TableRow({
+        height: { value: CONTENT_H, rule: "exact" },
+        children: [new TableCell({
+          shading, borders: noBorders,
+          margins: { top: 0, bottom: 0, left: 0, right: 0 },
+          verticalAlign: VerticalAlign.TOP,
+          children,
+        })],
+      }),
+      new TableRow({
+        height: { value: FOOTER_H, rule: "exact" },
+        children: [new TableCell({
+          shading, borders: noBorders,
+          margins: { top: 0, bottom: 0, left: 0, right: 0 },
+          verticalAlign: VerticalAlign.CENTER,
+          children: [footerTable],
+        })],
+      }),
+    ],
+  })];
+}
+
+// R6 title layout: prefer FEWER lines over larger font size (single line best)
+function calcTitleLayoutR6(title, availableWidthTw, preferredPt, minPt) {
+  const step = 2;
+  // Try to fit in 1 line (shrink font if needed)
+  for (let pt = preferredPt; pt >= minPt; pt -= step) {
+    const charWidthTw = pt * 23 * 0.5; // CJK ~50% em width
+    const charsPerLine = Math.floor(availableWidthTw / charWidthTw);
+    if (title.length <= charsPerLine) return { titlePt: pt, titleLines: [title] };
+  }
+  // Can't fit in 1 line, try 2 lines at largest possible font
+  for (let pt = preferredPt; pt >= minPt; pt -= step) {
+    const charWidthTw = pt * 23 * 0.5;
+    const charsPerLine = Math.floor(availableWidthTw / charWidthTw);
+    const lines = splitTitleLines(title, charsPerLine);
+    if (lines.length <= 2) return { titlePt: pt, titleLines: lines };
+  }
+  // Fallback: minPt, up to 3 lines
+  const charWidthTw = minPt * 23 * 0.5;
+  const charsPerLine = Math.floor(availableWidthTw / charWidthTw);
+  return { titlePt: minPt, titleLines: splitTitleLines(title, charsPerLine) };
+}
+
+// Usage: cover top decoration
+// children: [colorStrip(P.accent, 120), ...]
 ```
 
-- `w:val` — the pattern. `clear` means "no pattern, fill the area with `w:fill`";
-  `solid` means a solid pattern painted in `w:color`. Reach for `clear` — it is the
-  one whose colour attribute is the one you set.
-- `w:color` — the pattern (foreground) colour.
-- `w:fill` — the background colour, which is the one that shows for `clear`.
+#### 2. Side Ribbon
 
-**The failure.** `w:val="clear"` with a `w:fill` of `000000`, `auto`, or empty
-paints the area in the default colour, which is black. `shading-type` in
-`postcheck.py` reports exactly that — a cell whose entire area turned black. It is
-the single most common way a document gets ruined by a style, and it happens because
-a fill was omitted rather than set.
+Uses left border to create vertical ribbon effect.
 
-So: never write `w:shd` without a `w:fill`. If you want a tint, name the tint. If
-you want no shading, omit the element.
+```js
+function sideRibbon(content, color, width = 14) {
+  return new Paragraph({
+    border: {
+      left: { style: BorderStyle.SINGLE, size: width, color: color.replace("#", ""), space: 12 },
+    },
+    indent: { left: 240 },
+    spacing: { before: 100, after: 100 },
+    children: content,
+  });
+}
 
-## 4. Tints are percentages
+// Usage: emphasis quotes, chapter tips
+// sideRibbon([new TextRun({ text: "Key Insight", bold: true })], P.accent)
+```
 
-A vector package expresses a tint as a percentage of a hue — `green!10` is ten
-percent green. OOXML has no percentage: you compute the hex. The arithmetic is the
-same one a designer does by eye:
+#### 3. Border Compositions
 
-- take the hue's RGB;
-- take the paper's RGB, `FFFFFF`;
-- the result is `hue × p + white × (1 − p)` per channel, rounded to an integer.
+```js
+// Top thick line + bottom thin line — title area frame
+function frameTitle(titleRuns) {
+  return new Paragraph({
+    border: {
+      top: { style: BorderStyle.SINGLE, size: 18, color: c(P.accent) },
+      bottom: { style: BorderStyle.SINGLE, size: 4, color: c(P.accent) },
+    },
+    spacing: { before: 400, after: 200 },
+    alignment: AlignmentType.CENTER,
+    children: titleRuns,
+  });
+}
 
-`green!10` on a `00B050` green is `(0×0.1 + 255×0.9, 176×0.1 + 255×0.9,
-80×0.1 + 255×0.9)` ≈ `(230, 242, 232)`, so `E6F2E8`. A 5% tint is a highlight; a
-10–15% tint is a panel; 25% and above is a colour block that competes with the text
-on it.
+// L-shape border — left + bottom
+function lShapeBorder(content) {
+  return new Paragraph({
+    border: {
+      left: { style: BorderStyle.SINGLE, size: 12, color: c(P.accent), space: 10 },
+      bottom: { style: BorderStyle.SINGLE, size: 12, color: c(P.accent) },
+    },
+    indent: { left: 300 },
+    spacing: { before: 200, after: 300 },
+    children: content,
+  });
+}
 
-Two tints of the same hue at different percentages give you a two-level hierarchy
-with one hue. That is cheaper and calmer than two hues.
+// Double-line frame — top and bottom double lines
+function doubleLine(content) {
+  return new Paragraph({
+    border: {
+      top: { style: BorderStyle.DOUBLE, size: 6, color: c(P.accent) },
+      bottom: { style: BorderStyle.DOUBLE, size: 6, color: c(P.accent) },
+    },
+    spacing: { before: 200, after: 200 },
+    alignment: AlignmentType.CENTER,
+    children: content,
+  });
+}
+```
 
-## 5. What a decoration is for
+#### 4. Gradient Simulation
 
-A rule or a tint is doing one of three jobs. Name which one before adding it:
+Multiple narrow color strips to simulate gradient effect.
 
-| job       | example                                                           | mechanism                                         |
-| --------- | ----------------------------------------------------------------- | ------------------------------------------------- |
-| separate  | a rule under a heading, a hairline between table rows             | `w:pBdr/w:bottom`, `w:tblBorders/w:insideH`       |
-| group     | a tinted panel behind a set of paragraphs, a box around a callout | `w:shd` on the paragraphs, or a single-cell table |
-| emphasise | a heavy rule above a footer block, a coloured left edge           | `w:pBdr/w:bottom` at `w:sz="24"`, `w:pBdr/w:left` |
+```js
+function gradientStrip(startColor, endColor, steps = 5, totalHeight = 200) {
+  const rows = [];
+  const h = Math.floor(totalHeight / steps);
+  for (let i = 0; i < steps; i++) {
+    const ratio = i / (steps - 1);
+    const blended = blendColors(startColor, endColor, ratio);
+    rows.push(new TableRow({
+      height: { value: h, rule: "exact" },
+      children: [new TableCell({
+        shading: { type: ShadingType.CLEAR, fill: blended },
+        borders: { top: NB, bottom: NB, left: NB, right: NB },
+        children: [new Paragraph({ children: [] })],
+      })],
+    }));
+  }
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: { top: NB, bottom: NB, left: NB, right: NB,
+               insideHorizontal: NB, insideVertical: NB },
+    rows,
+  });
+}
 
-A decoration doing none of the three is noise. Two rules under one heading is noise.
-A tint behind a paragraph that is already inside a tinted table is noise.
+function blendColors(hex1, hex2, ratio) {
+  const r1 = parseInt(hex1.slice(1, 3), 16), g1 = parseInt(hex1.slice(3, 5), 16), b1 = parseInt(hex1.slice(5, 7), 16);
+  const r2 = parseInt(hex2.slice(1, 3), 16), g2 = parseInt(hex2.slice(3, 5), 16), b2 = parseInt(hex2.slice(5, 7), 16);
+  const r = Math.round(r1 + (r2 - r1) * ratio), g = Math.round(g1 + (g2 - g1) * ratio), b = Math.round(b1 + (b2 - b1) * ratio);
+  return `${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
+}
+```
 
-## 6. Block diagrams out of the primitives
+#### 5. Symbol Ornaments
 
-A block diagram is nested rectangles with labels and arrows between them. The
-primitives map directly:
+```js
+// Section divider line — for chapter separation
+function ornamentDivider(symbol = "◆", count = 3) {
+  const ornament = Array(count).fill(symbol).join("   ");
+  return new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 400, after: 400 },
+    children: [new TextRun({ text: ornament, size: 20, color: c(P.accent) })],
+  });
+}
 
-- **a block** is a single-cell table with a border and, optionally, a tint. The
-  label is the cell's paragraph.
-- **nesting** is a table inside a cell. Two levels deep is readable; three is where
-  a reader loses track of which box they are in.
-- **an arrow** is a `→` or `⇒` character in a paragraph between the blocks, or a
-  single-cell table with only a bottom border standing in for a connector. There is
-  no arrow primitive in the border set.
-- **dimensions and parameters** are set once and named, exactly as a vector package
-  would: the widths of a diagram's three columns are three constants, not three
-  literals typed into three cells. When the diagram needs to be a centimetre
-  narrower, that is three edits.
-- **alignment** is the table's alignment plus each cell's paragraph alignment. A
-  diagram whose blocks are individually centred rather than aligned to a shared
-  column reads as a pile of boxes.
+// Common decoration symbols
+// ◆ ◇ ● ○ ★ ☆ ■ □ ▲ △ ─ ━ ═ ║ ╔ ╗ ╚ ╝
+// Ornamental: ❧ ❦ ✦ ✧ ✿ ❀ ❁ ※
+```
 
-If a diagram needs real vector shapes — curved arrows, layered 3-D blocks, a
-coordinate grid — it does not belong in a `.docx` built by this plugin. Build it as
-an image, size it against the text column, and caption it as a figure; see
-`chart-templates.md` §2 for the extent arithmetic.
+#### 6. Info Card — Table Implementation
 
-## 7. The rules that watch decorations
+```js
+function infoCard(title, items, accentColor) {
+  const ac = accentColor.replace("#", "");
+  const headerRow = new TableRow({
+    children: [new TableCell({
+      columnSpan: 2,
+      shading: { type: ShadingType.CLEAR, fill: ac },
+      margins: { top: 80, bottom: 80, left: 160, right: 160 },
+      borders: { top: NB, bottom: NB, left: NB, right: NB },
+      children: [new Paragraph({
+        children: [new TextRun({ text: title, bold: true, size: 24, color: "FFFFFF" })],
+      })],
+    })],
+  });
 
-| rule               | what it checks                                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `shading-type`     | a cell shaded `w:val="clear"` with a `000000`, `auto`, or empty fill                                          |
-| `table-margins`    | any cell with no `w:tcMar` padding — a decorated table usually has the padding removed along with the borders |
-| `table-pagination` | a multi-row table with no `w:tblHeader` header row, or any row without `w:cantSplit`                          |
-| `blank-pages`      | five or more consecutive empty paragraphs — the way a "boxed callout" is usually faked                        |
+  const dataRows = items.map(([label, value]) => new TableRow({
+    children: [
+      new TableCell({
+        width: { size: 30, type: WidthType.PERCENTAGE },
+        margins: { top: 60, bottom: 60, left: 160, right: 80 },
+        shading: { type: ShadingType.CLEAR, fill: "F8F9FA" },
+        borders: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "E0E0E0" },
+                   top: NB, left: NB, right: NB },
+        children: [new Paragraph({ children: [new TextRun({ text: label, size: 21, color: "666666" })] })],
+      }),
+      new TableCell({
+        margins: { top: 60, bottom: 60, left: 80, right: 160 },
+        borders: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "E0E0E0" },
+                   top: NB, left: NB, right: NB },
+        children: [new Paragraph({ children: [new TextRun({ text: value, size: 21 })] })],
+      }),
+    ],
+  }));
 
-The last one is worth spelling out. A callout is not four empty paragraphs with
-borders; it is one paragraph with `w:pBdr` on all four sides and `w:shd` behind it,
-with `w:space` giving the text room inside the box.
+  return new Table({
+    width: { size: 80, type: WidthType.PERCENTAGE },
+    alignment: AlignmentType.CENTER,
+    borders: { top: NB, bottom: NB, left: NB, right: NB,
+               insideHorizontal: NB, insideVertical: NB },
+    rows: [headerRow, ...dataRows],
+  });
+}
+```
 
-## 8. Print, not screen
 
-- A tint that reads on a monitor can vanish on a mono laser printer. Anything below
-  about 8% is a screen effect.
-- A dark tint with dark text on it is unreadable in print and eats the toner. Text
-  on a tint wants the tint at 10–15% and the text at full weight.
-- Greyscale first. If a decoration's job disappears in greyscale, the job was being
-  done by colour and needs to be redone with weight, position, or a rule.
-- Double rules (`w:val="double"`) print as two hairlines and are heavier than they
-  look on screen. Prefer one heavier rule to two thin ones.
+// R7 — Swiss Tech Minimalist (slate grey bg, Klein blue accent, asymmetric layout)
+// Suitable for: cultural/creative research, trend reports, brand strategy, design deliverables
+// Palette: ST-1 (exclusive)
+// Layout: left-aligned title (upper 20%), right-shifted subtitle with top rule,
+//         right-aligned info block with accent right border, Swiss cross anchor
+// Key features: ■ square accent dot, open-frame tables, large whitespace
+//
+// ⚠️ MANDATORY: All cover non-negotiables apply (margin=0, 16838 exact, allNoBorders)
+// ⚠️ Title uses calcTitleLayout() with maxPt=36 (not 40 — R7 uses lighter visual weight)
 
-## Source
+function buildCoverR7(config) {
+  const P = palettes[config.palette || "ST-1"];
+  const C = P.cover;
+  const padL = 600;
 
-The structure of this brief — decorations built from a small set of primitives
-(`draw`, `filldraw`, `node`) rather than from bespoke shapes, parameters named once
-and reused, tints expressed as a percentage of a hue, a tint light enough not to
-compete with the content, and block diagrams assembled from filled rectangles and
-nodes — follows the conventions of:
+  // Title layout — R7 uses 36pt max (lighter than R1-R4's 40pt)
+  const availW = 11906 - padL - 600;
+  const { titlePt, titleLines } = calcTitleLayout(config.title, availW, 36, 24);
+  const titleSize = titlePt * 2;
+  const lineH = Math.ceil(titlePt * 23);
 
-    xinychen/awesome-latex-drawing
-    https://github.com/xinychen/awesome-latex-drawing
-    Copyright (c) 2019 Xinyu Chen
-    MIT License — https://github.com/xinychen/awesome-latex-drawing/blob/master/LICENSE
+  // Dynamic spacing based on title lines
+  const topSpacer = titleLines.length <= 2 ? 1200 : 800;
+  const subtitleSpacer = titleLines.length <= 2 ? 1400 : 800;
+  const infoSpacer = titleLines.length <= 2 ? 2200 : 1200;
 
-The knowledge above is restated in this repository's own words and in `.docx` terms;
-no upstream file is distributed with this plugin.
+  const children = [];
 
-## 9. The element library
+  // 1. Swiss cross anchor — top-left decorative element
+  children.push(new Paragraph({
+    spacing: { before: 600 },
+    indent: { left: padL },
+    children: [new TextRun({
+      text: "\uFF0B",  // ＋ fullwidth plus
+      size: 40, bold: true, color: C.titleColor,
+      font: { ascii: "Arial", eastAsia: "SimHei" },
+    })],
+  }));
 
-Concrete patterns built from the three primitives. Each is a named, reusable
-specification — not a one-off arrangement. An element that is not in this
-library is an element that has not been specified.
+  // 2. Top spacer
+  children.push(new Paragraph({ spacing: { before: topSpacer } }));
 
-### `Rule_Hairline`
+  // 3. Title lines — left-aligned, last line has accent ■
+  titleLines.forEach((line, i) => {
+    const isLast = i === titleLines.length - 1;
+    const runs = [new TextRun({
+      text: line, size: titleSize, color: C.titleColor,
+      font: { ascii: "Arial", eastAsia: "Noto Sans SC" },
+    })];
+    if (isLast) {
+      runs.push(new TextRun({
+        text: " \u25A0",  // ■ black square
+        size: 24, color: P.accent,
+        font: { ascii: "Arial" },
+      }));
+    }
+    children.push(new Paragraph({
+      indent: { left: padL },
+      spacing: { after: isLast ? 200 : 80, line: lineH, lineRule: "atLeast" },
+      children: runs,
+    }));
+  });
 
-A 0.5 pt single rule, full text width, in the `rule` colour. Separates sections
-where a heading is not wanted. Spacing: 6 pt above, 6 pt below — set once, in
-the paragraph's `w:spacing`, not with empty paragraphs.
+  // 4. Subtitle spacer
+  children.push(new Paragraph({ spacing: { before: subtitleSpacer } }));
 
-### `Rule_Accent_Short`
+  // 5. Subtitle — right-shifted, top border rule, wide character spacing
+  if (config.subtitle) {
+    children.push(new Paragraph({
+      indent: { left: 3800, right: 600 },
+      border: { top: { style: BorderStyle.SINGLE, size: 2, color: C.titleColor, space: 14 } },
+      spacing: { after: 200 },
+      children: [new TextRun({
+        text: config.subtitle, size: 26, color: C.subtitleColor,
+        font: { ascii: "Arial", eastAsia: "Noto Sans SC" },
+        characterSpacing: 40,
+      })],
+    }));
+  }
 
-A 2–3 pt rule, 1.5–3 cm wide, in the accent colour, sitting under a title or
-a section heading. The width is fixed in the spec, not "whatever looks right".
-This is the only element allowed to use the accent.
+  // 6. Decorative horizontal line
+  children.push(new Paragraph({
+    spacing: { before: 600 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "C8D0DC", space: 0 } },
+  }));
 
-### `Panel_Tint`
+  // 7. Info spacer
+  children.push(new Paragraph({ spacing: { before: infoSpacer } }));
 
-A paragraph (or table cell) with a `w:shd` fill at `tint10` and no border, or
-a left border only (3 pt, accent) with no fill. Carries a callout, a quote, or
-a summary block. Padding comes from the paragraph's indent, not from spaces.
+  // 8. Info footer — right-aligned, 4 label+value pairs, accent right border
+  // Standard fields: ORGANIZATION, RESPONSIBILITY, REPORT NUMBER, DATE & EDITION
+  const metaEntries = config.metaEntries || [
+    { label: "ORGANIZATION", value: config.organization || "" },
+    { label: "RESPONSIBILITY", value: config.responsibility || "" },
+    { label: "REPORT NUMBER", value: config.reportNumber || "" },
+    { label: "DATE & EDITION", value: config.dateEdition || "" },
+  ];
 
-### `Frame_Box`
+  for (const entry of metaEntries) {
+    // Label — 7pt uppercase English
+    children.push(new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      indent: { right: 800 },
+      border: { right: { style: BorderStyle.SINGLE, size: 12, color: P.accent, space: 16 } },
+      spacing: { after: 20 },
+      children: [new TextRun({
+        text: entry.label, size: 14, color: C.metaColor,
+        font: { ascii: "Arial" },
+        characterSpacing: 20,
+      })],
+    }));
+    // Value — 11pt bold
+    children.push(new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      indent: { right: 800 },
+      border: { right: { style: BorderStyle.SINGLE, size: 12, color: P.accent, space: 16 } },
+      spacing: { after: 280 },
+      children: [new TextRun({
+        text: entry.value, size: 22, bold: true, color: C.titleColor,
+        font: { ascii: "Arial", eastAsia: "Noto Sans SC" },
+      })],
+    }));
+  }
 
-A full box: 0.5 pt border in the `rule` colour, no fill. For a candidate
-information block, a seal-line frame, a form field group. Never for body text —
-a boxed paragraph is unreadable at length.
+  // Wrap in 16838 exact wrapper table
+  return [new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    layout: TableLayoutType.FIXED,
+    borders: allNoBorders,
+    rows: [new TableRow({
+      height: { value: 16838, rule: "exact" },
+      children: [new TableCell({
+        shading: { type: ShadingType.CLEAR, fill: P.bg },
+        borders: noBorders,
+        verticalAlign: VerticalAlign.TOP,
+        children,
+      })],
+    })],
+  })];
+}
 
-### `Corner_Brackets`
+### Decoration Usage Scenarios
 
-Two L-shaped borders (top+left, bottom+right) framing a title or a figure.
-Built from four border specifications on one paragraph. The bracket thickness
-matches `Rule_Accent_Short`; the gap from the text is a fixed indent.
+| Scenario | Recommended Decoration | Combination |
+|------|----------|----------|
+| Report cover | Color strip + L-frame border | Top strip → Title area → L-frame author info |
+| Proposal cover | Gradient simulation + double-line frame | Gradient bg → Double-line title |
+| Chapter separator | Symbol ornament + side ribbon | Symbol divider → New chapter title with ribbon |
+| Summary card | Info card | Standalone card displaying key metrics |
+| Academic cover | Color strip + info table | Top strip → School name → Title → Info table |
 
-### `Table_Header_Band`
-
-A table's header row with a `tint10` fill and a bottom border at 1 pt in the
-`rule` colour, no vertical rules anywhere in the table (`common-rules.md`
-§2.3). The band is what makes a table scannable; vertical lines are what make
-it a grid of cells nobody reads.
-
-### `Number_Badge`
-
-A number or short label set in a small tinted cell (a 1×1 table), used to
-number sections in a document whose heading style must stay unnumbered. The
-badge's size is fixed; the number comes from the numbering definition, never
-typed.
-
-## 10. Usage scenarios
-
-Which element, where — the mapping is the design system's second half.
-
-| scenario | elements | notes |
-| --- | --- | --- |
-| report / paper title block | `Rule_Accent_Short` | one short rule under the title; nothing else |
-| section separation | `Rule_Hairline` | only where the heading style does not already separate |
-| callout / warning | `Panel_Tint` | the tint is the only signal; no border, no icon font |
-| candidate info block (exam) | `Frame_Box` | full box; the only framed element in the document |
-| letterhead | `Rule_Hairline` + logo | the rule separates the lockup from the body |
-| contract clause group | none | a contract has no decorations; the numbering is the structure |
-| official document | none beyond the 版头 | GB/T 9704 defines the furniture; nothing is added |
-| table of contents | `Rule_Hairline` between groups | dot leaders are a tab stop, not a decoration |
-
-**The default is none.** A document whose decorations are all default has no
-decoration defects; a document that adds elements because they exist has a
-design problem. Each element above must earn its place in a specific scenario,
-and the scenario table is where that place is recorded.
-
-## 11. Decoration budget
-
-Per document, the ceiling:
-
-| element | max per document |
-| --- | --- |
-| `Rule_Accent_Short` | one per section heading, or one for the whole document |
-| `Rule_Hairline` | one per section boundary |
-| `Panel_Tint` | as many as there are callouts — but a callout that is not one of the defined kinds is body text |
-| `Frame_Box` | one, or one per form-field group |
-| `Corner_Brackets` | one (a title or a cover) |
-| `Number_Badge` | as many as there are unnumbered sections |
-
-A document that exceeds the budget is not "richly decorated" — it is a document
-whose hierarchy is being asked to do a job the styles should be doing.
+---
