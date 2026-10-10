@@ -11,10 +11,37 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-zcode-cli-protocol.workspace = true
-zcode-cli-domain.workspace = true
-zcode-cli-core-api.workspace = true
-zcode-cli-host.workspace = true
-zcode-cli-bash-parse.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+globset.workspace = true
+ignore.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+sse-stream.workspace = true
+rmcp.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+image.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+unicode-normalization.workspace = true
+tracing.workspace = true
+url.workspace = true
+nix.workspace = true
 zcode-cli-bash.workspace = true
 zcode-cli-plugins.workspace = true
+zcode-cli-bash-parse.workspace = true
+zcode-cli-core-api.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-host.workspace = true
+zcode-cli-net.workspace = true
+zcode-cli-protocol.workspace = true
+
+
+[dev-dependencies]
+tempfile.workspace = true

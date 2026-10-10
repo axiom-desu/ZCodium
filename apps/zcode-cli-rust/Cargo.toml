@@ -1,6 +1,7 @@
 [workspace]
 members = [
   ".",
+  "crates/schema",
   "crates/protocol",
   "crates/domain",
   "crates/core-api",
@@ -32,17 +33,67 @@ unsafe_code = "deny"
 [workspace.dependencies]
 anyhow = "1"
 async-trait = "0.1"
-serde = { version = "1", features = ["derive"] }
-# Node 的 JSON.stringify 与 zod 解析都保持插入顺序；strip 的键序必须与之
-# 一致（schema 序在前、保留的未知键按输入序），否则序列化结果与 Node 不同源。
-serde_json = { version = "1", features = ["preserve_order"] }
-# ECMAScript 语义的正则：协议 schema 的 pattern 必须与 JS RegExp 一致。
+base64 = "0.22"
+bytes = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# 用量统计按 IANA 时区归日（Node 用 Intl）；数据编译进二进制，三平台一致。
+chrono-tz = "0.10"
+httpdate = "1"
+ignore = "0.4"
+globset = "0.4"
 regex = "1"
+# ECMAScript 语义的正则：hook matcher 与展示脱敏必须与 Node 的 RegExp 一致。
+regress = "0.12"
+rmcp = { version = "3.4", default-features = false, features = [
+  "client",
+  "transport-async-rw",
+  "transport-streamable-http-client-reqwest",
+  "reqwest-tls-no-provider",
+] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+clap = { version = "4", features = ["derive"] }
+crc32fast = "1"
+futures-util = "0.3"
+# 模型与 MCP 共用 0.13；关闭 system-proxy，代理只按 ZCode 显式配置逐请求决定。
+reqwest = { version = "0.13", default-features = false, features = [
+  "json",
+  "stream",
+  "rustls-no-provider",
+  "socks",
+] }
+iana-time-zone = "0.1"
+# Read 图片按 Node 的模型预算解码、缩放与重新编码（WebP 只校验不转码）。
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
+rusqlite = { version = "0.37", features = ["bundled", "backup"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
+# 已是 hyper/reqwest 的传递依赖；runtime 只用门面宏，订阅者在 host 内实现。
 tracing = { version = "0.1", default-features = false, features = ["std"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+# 官方 MCP 的 streamable HTTP 客户端产出与 rmcp 相同的 SSE 事件类型，版本须与 rmcp 一致。
+sse-stream = "0.2.6"
+# 插件 ZIP 来源解压（Node yauzl）：只启用 deflate，其余压缩方法按 Node 报不支持。
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+url = "2"
+unicode-normalization = "0.1"
+
+nix = { version = "0.30.1", default-features = false, features = [
+  "signal",
+  "process",
+  "fs",
+  "feature",
+] }
+sysinfo = { version = "0.37.2", default-features = false, features = ["system"] }
+tempfile = "3"
+zcode-cli-schema = { path = "crates/schema" }
 zcode-cli-protocol = { path = "crates/protocol" }
 zcode-cli-domain = { path = "crates/domain" }
+zcode-cli-bash-parse = { path = "crates/bash-parse" }
+zcode-cli-bash = { path = "crates/bash" }
+zcode-cli-plugins = { path = "crates/plugins" }
 zcode-cli-core-api = { path = "crates/core-api" }
 zcode-cli-core = { path = "crates/core" }
 zcode-cli-host = { path = "crates/host" }
@@ -50,9 +101,6 @@ zcode-cli-net = { path = "crates/net" }
 zcode-cli-state = { path = "crates/state" }
 zcode-cli-model = { path = "crates/model" }
 zcode-cli-tools = { path = "crates/tools" }
-zcode-cli-bash-parse = { path = "crates/bash-parse" }
-zcode-cli-bash = { path = "crates/bash" }
-zcode-cli-plugins = { path = "crates/plugins" }
 zcode-cli-app-server = { path = "crates/app-server" }
 zcode-cli-headless = { path = "crates/headless" }
 zcode-cli-tui = { path = "crates/tui" }
@@ -70,6 +118,18 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+nix.workspace = true
+rusqlite.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
 zcode-cli-protocol.workspace = true
 zcode-cli-domain.workspace = true
 zcode-cli-core-api.workspace = true
@@ -79,12 +139,14 @@ zcode-cli-net.workspace = true
 zcode-cli-state.workspace = true
 zcode-cli-model.workspace = true
 zcode-cli-tools.workspace = true
-zcode-cli-bash-parse.workspace = true
-zcode-cli-bash.workspace = true
-zcode-cli-plugins.workspace = true
 zcode-cli-app-server.workspace = true
 zcode-cli-headless.workspace = true
 zcode-cli-tui.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 
 [profile.release]
 lto = "thin"

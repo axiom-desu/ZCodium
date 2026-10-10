@@ -11,6 +11,23 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+iana-time-zone.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true
+nix.workspace = true
+sysinfo.workspace = true
+
 zcode-cli-protocol.workspace = true
 zcode-cli-domain.workspace = true
 zcode-cli-core-api.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-version = "=0.1.5"
+
+[dev-dependencies]
+tempfile.workspace = true
