@@ -56,6 +56,25 @@ flowchart TD
 - SHA256SUMS 由最终下载后的文件生成。重跑仅可更新同标签草稿；已公开 Release 拒绝覆盖。
 - 发布 job 是 Release 的唯一写入者；失败不会自动发布。上传中断可能留下草稿，重跑覆盖同名草稿资产。
 
+## 检查、远端资产与打包的 needs 图与失败语义
+
+`checks`（coverage 型源码门禁）、`remote-assets`（真实构建并上传 Linux x64 远端运行时）、`build`（各平台打包）是相互独立的缺陷类，不能用一个 job 的 success 掩盖另一个：
+
+```mermaid
+flowchart LR
+  C[checks] --> A[remote-assets]
+  C --> B{build 只在 assets 真实成功时运行}
+  A -->|result == success| B
+  A -->|failed / cancelled| S[build 跳过，如实反映]
+  B --> R[release: needs checks+build，默认需全部 success]
+  C -.->|失败不阻断| A
+```
+
+- `remote-assets` 只按 `!cancelled()` 门禁：`checks` 失败（非取消）时仍要真实构建并上传资产，否则 `build` 只能拿到不存在的 artifact。取消 run 时不启动构建。
+- `build` / `build-macos` 用 `needs.remote-assets.result == 'success'` 而不看 `checks`：checks 红但 assets 成功时继续打包，保留「检查与打包独立」的产品规则；assets 失败或取消时跳过，避免四个平台各自重复报 artifact-not-found。
+- 不引入 `continue-on-error`、`if-no-files-found: ignore` 或 artifact 静默 fallback；跳过/失败状态必须诚实可读。
+- `release` 保持 `needs: [checks, build, build-macos]` 的默认全成功语义，`checks` 失败时绝不创建草稿。
+
 ## 验收场景
 
 1. fork PR 无仓库写权限也能运行检查与全平台构建；不触发发布。
@@ -74,6 +93,8 @@ flowchart TD
 Checks 中的诊断回归直接读取受检源码，不依赖 CLI package 的 `dist`、历史 bundle 或本地增量构建缓存。诊断测试入口共用独立 tsconfig，将需要的 `@zcode/contracts` 公共入口解析到契约源码，并保留 UI 的 `@/*` 源码别名；静态与测试执行时的动态导入使用同一配置。不修改生产 package exports，也不为测试加载整个 CLI 构建流程。
 
 验收：隐藏全部 CLI workspace 构建输出后，使用与 CI 相同的 `node --test --test-isolation=none scripts/ci/*.test.mjs` 执行，必须实际加载全部诊断子用例；导入失败不能算作未执行的成功测试。
+
+浏览器 smoke 的同步契约：断言必须等待 UI 可观察状态（例如菜单触发器 enabled），不能把偶然的 DOM 变化（例如 file input 被 `input.remove()`）当作状态已解锁的信号。`useConversationArchiveImport` 在取消/完成路径里由 `busyRef` + `setBusy` 解除 busy，React 提交发生在这类同步 DOM 清理之后，因此旧式「input 移除即解锁」断言会抢跑。等待真实状态仍保留取消零 `beginArchiveImport`、重复导入与 host generation stale guard 的断言。
 
 ## 发行边界
 

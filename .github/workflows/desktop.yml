@@ -121,6 +121,9 @@ jobs:
   remote-assets:
     name: Bundled Linux remote runtime
     needs: checks
+    # checks 是 coverage 类门禁，打包链路与它相互独立：checks 失败（非取消）时仍要真实构建
+    # 远端资产并上传，否则 build 会下载不存在的 artifact。取消 run 时不再启动。
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -144,10 +147,11 @@ jobs:
   build:
     name: Build (${{ matrix.platform }} ${{ matrix.arch }})
     needs: [checks, remote-assets]
-    # checks / remote-assets 失败时仍然打包。Coverage 型检查与打包是两类独立缺陷：
-    # 若用默认的「needs 全部成功才运行」，checks 一红，打包就被整体跳过，
-    # 于是「源码检查通过但产物根本构不出来」这类问题会一直潜伏到发版才爆。
-    if: ${{ !cancelled() }}
+    # 打包只看 assets 是否真实产出，不看 checks 是否通过：
+    # - checks 失败但 assets 成功 -> 继续打包，保留「检查与打包独立」的产品规则；
+    # - assets 失败/取消 -> build 跳过，避免四个平台各自下载缺失 artifact 制造重复噪声；
+    # 不使用 continue-on-error 或 artifact 静默 fallback，跳过状态如实反映 assets 失败。
+    if: ${{ !cancelled() && needs.remote-assets.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -228,7 +232,7 @@ jobs:
     name: Build (mac ${{ matrix.arch }})
     # macOS runner 按 10 倍费率计分钟，只在发版 tag 与手动触发时打包；
     # 日常 push/PR 的打包回归由 linux/win 矩阵与 checks 覆盖。
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')
+    if: ${{ !cancelled() && needs.remote-assets.result == 'success' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')) }}
     needs: [checks, remote-assets]
     strategy:
       fail-fast: false
