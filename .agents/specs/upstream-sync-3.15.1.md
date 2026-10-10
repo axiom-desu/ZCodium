@@ -110,6 +110,21 @@ git diff 29628c9 upstream/main -- \
 
 **不要动 `zcode-cua-plugin` 的运行时**——见工作项 3。
 
+### 例外：`superpowers-plugin` 不换，我们对的那份更新
+
+`superpowers-plugin` 不是 clean-room 重写，而是 vendor 自 `obra/superpowers`
+（`plugin-backfill-openbase-survey.md` 记录的基座）。上游 3.15.1 那份是**同一上游的另
+一份（更旧的）快照**：14 个技能 / 54 文件，而我们这份是 15 技能 / 79 文件。文件级对应关
+系表明我们更新（上游那份的 `code-quality-reviewer-prompt.md` + `spec-reviewer-prompt.md`
+在我们这份里被 `task-reviewer-prompt.md` + `re-review-prompt.md` 取代，
+`testing-anti-patterns.md` 被 `writing-good-tests.md` 取代），共同文件也普遍更长。
+
+所以这一项的正确做法是**不动**：用上游那份覆盖是降级。要跟进上游，应直接取
+`obra/superpowers` 当前版本再比对。上游那份的 `hooks/**` 本插件也不引用（清单无 `hooks`
+键，运行时 hooks 服务只读用户 / 工作区配置），取过来是死资产。
+
+详情与逐项对照见 `apps/zcode-cli/packages/superpowers-plugin/NOTICE.md`。
+
 ## 工作项 3：CUA 只取文本
 
 ### 本轮实际结果：这条早已执行过，照原样做会倒退
@@ -314,16 +329,16 @@ CI 守护（会红，必须一起处理）：
 
 ## 进度
 
-| 工作项                            | 状态                                                             |
-| --------------------------------- | ---------------------------------------------------------------- |
-| 1. 协议 delta                     | 待做（scoped diff 路径已补 `zcode-protocol/trace.ts`）           |
-| 2. 插件换上游（含前置 diff 判断） | 待做                                                             |
-| 3. CUA 只取文本                   | **已做**（早已执行 + 本轮按缺口补，见工作项 3）                  |
-| 4. 核心包判断                     | 待做                                                             |
-| 5. Browser 放开 subagent          | **已做**（`58b4952a`，设计见 `browser-subagent-shared-tabs.md`） |
-| 清单与契约同步                    | 待做                                                             |
-| `.zcodium-plugin` 改名            | 待做                                                             |
-| spec 标历史快照                   | 待做                                                             |
+| 工作项                            | 状态                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| 1. 协议 delta                     | 待做（scoped diff 路径已补 `zcode-protocol/trace.ts`）                                                              |
+| 2. 插件换上游（含前置 diff 判断） | 进行中：skill-creator / visualize / plugin-creator / zcode-guide 已换；superpowers 为例外（不换，我们对的那份更新） |
+| 3. CUA 只取文本                   | **已做**（早已执行 + 本轮按缺口补，见工作项 3）                                                                     |
+| 4. 核心包判断                     | 待做                                                                                                                |
+| 5. Browser 放开 subagent          | **已做**（`58b4952a`，设计见 `browser-subagent-shared-tabs.md`）                                                    |
+| 清单与契约同步                    | 待做                                                                                                                |
+| `.zcodium-plugin` 改名            | 待做                                                                                                                |
+| spec 标历史快照                   | 待做                                                                                                                |
 
 ## 附：测量口径
 
