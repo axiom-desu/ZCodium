@@ -231,7 +231,12 @@ export const BUILTIN_PLUGIN_SEED_PATHS = {
     "skills/plugin-creator/references/installing-and-updating.md",
   ],
   "image-search-plugin": [".mcp.json"],
-  "restore-legacy-sessions-plugin": [],
+  "restore-legacy-sessions-plugin": [
+    "commands/restore-legacy-sessions.md",
+    "skills/restore-legacy-sessions/SKILL.md",
+    "skills/restore-legacy-sessions/scripts/restore-conversation.mjs",
+    "skills/restore-legacy-sessions/scripts/scan-legacy-sessions.mjs",
+  ],
   "zcode-guide-plugin": [
     "commands/workflow.md",
     "skills/dynamic-workflows/SKILL.md",

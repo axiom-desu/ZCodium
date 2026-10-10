@@ -234,7 +234,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../../image-search-plugin",
       "../../../image-search-plugin",
     ],
-    version: "0.2.0",
+    version: "0.2.1",
   },
   {
     listing: {

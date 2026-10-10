@@ -318,6 +318,16 @@ CI 守护（会红，必须一起处理）：
 - 不整包跟随 `dynamic-workflow` 等核心包
 - 不为了「保持新鲜」而同步
 
+### 故意不跟、且要一直不跟的（下次同步别再引入）
+
+| 类别                                             | 上游文件 / 目录                                                                                                                                                                                    | 为什么不要                                                                                                                        |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 遥测与内容录制                                   | `packages/shared/src/{telemetry,telemetryRedaction,remoteUsageTelemetry,sessionCreateTelemetry,rendererActionTrace}.ts`、`api-key-usage-scene.ts`；`packages/services/src/usage-stats`、`feedback` | 本仓库已有 `TELEMETRY_REMOVAL.md`：官方与专有上报实现、自动身份归因、内容录制均已删除，只保留本地诊断与用户可显式开启的 OTLP 出口 |
+| 商业与增长                                       | `coding-plan-subscription.ts`、`rewardsBridge.ts`、`rewardsEmbedded.ts`、`marketingTouch.ts`、`highspeed.ts` 及其 services 侧同名目录                                                              | 订阅/奖励/推广不属于本 fork 的产品面                                                                                              |
+| `packages/zcode-cua/**` 的 broker 与 pip-session | `broker-*.js`、`pip-session*.js`                                                                                                                                                                   | 本仓库已删该层，改用 `@trycua/cua-driver`（见工作项 3）                                                                           |
+| 上游 vendoring 的 superpowers 快照               | `superpowers-plugin/hooks/**` 等                                                                                                                                                                   | 那份比我们旧，而且 hooks 在我们这边不会被加载（见工作项 2 的例外段）                                                              |
+| 测试入口差异                                     | 上游根的 `vitest.config.ts` / `vitest.setup.ts` / 根 `specs/`                                                                                                                                      | 本仓库用 `node:test`（含 `scripts/ci/*.test.mjs`）与 `.agents/specs/`；不为了对齐上游而再引入一套 runner                          |
+
 ## 验收场景
 
 1. **协议**：每个上游版本发布后执行 scoped diff，并明确记录「已核对」或「已跟进」；不得跳过。
@@ -329,16 +339,26 @@ CI 守护（会红，必须一起处理）：
 
 ## 进度
 
-| 工作项                            | 状态                                                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| 1. 协议 delta                     | 待做（scoped diff 路径已补 `zcode-protocol/trace.ts`）                                                              |
-| 2. 插件换上游（含前置 diff 判断） | 进行中：skill-creator / visualize / plugin-creator / zcode-guide 已换；superpowers 为例外（不换，我们对的那份更新） |
-| 3. CUA 只取文本                   | **已做**（早已执行 + 本轮按缺口补，见工作项 3）                                                                     |
-| 4. 核心包判断                     | 待做                                                                                                                |
-| 5. Browser 放开 subagent          | **已做**（`58b4952a`，设计见 `browser-subagent-shared-tabs.md`）                                                    |
-| 清单与契约同步                    | 待做                                                                                                                |
-| `.zcodium-plugin` 改名            | 待做                                                                                                                |
-| spec 标历史快照                   | 待做                                                                                                                |
+| 工作项                            | 状态                                                                                                                                                                                                                              |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. 协议 delta                     | **已核对**：MCP UI 实例（`zcodeMcpUiOpenInstance`/`CloseInstance`）与 MCP resource read（`zcodeMcpReadResource` + content schema）两边都有；**未跟**的一条是 topic resource relay（`TOPIC_RESOURCE_RELAY_CHANNEL`），归入工作项 6 |
+| 2. 插件换上游（含前置 diff 判断） | **本轮做完 12 个**：skill-creator、visualize、plugin-creator、zcode-guide、pdf、documents、presentations、spreadsheets、android-emulator（+构建）、ios-simulator（+构建）、restore-legacy-sessions、superpowers（改为整理，不换） |
+| 3. CUA 只取文本                   | **已做**（早已执行 + 本轮按缺口补，见工作项 3）                                                                                                                                                                                   |
+| 4. 核心包判断                     | 待做                                                                                                                                                                                                                              |
+| 5. Browser 放开 subagent          | **已做**（`58b4952a`，设计见 `browser-subagent-shared-tabs.md`）                                                                                                                                                                  |
+| 6. 远控分片与确认式中继           | **已评估，未实现**（见 `web-remote-control-acked-relay.md`：这是我们自己注释里写明的 P5，上游已实现，建议单独立项）                                                                                                               |
+| 清单与契约同步                    | **本轮同步做了 5 类**：`builtinPluginAssets.ts` 的 seed 清单、`official-plugin-definitions.ts` 的三处版本、`requiresRuntime` 与构建脚本、根 `NOTICE.md`、`third-party/copied-components.json` 台账                                |
+| `.zcodium-plugin` 改名            | **已定：保留我们的名字**（上游用 `.zcode-plugin`），本轮所有新换插件都改回 `.zcodium-plugin`，此项结束                                                                                                                            |
+| spec 标历史快照                   | 待做                                                                                                                                                                                                                              |
+
+### 本轮新增的两个决定
+
+- **image-search 不换**：上游那份指向官方搜图服务并用 ZCode JWT 鉴权，换成它等于把用户的登录凭据
+  发往该服务。本仓库的版本按 `image-search-local-backend.md` 只连用户自己配置的端点，本轮只补了
+  一份中文 README，并把版本 `0.2.0 → 0.2.1`（仅文档变化也要让已装用户拿到）。
+- **restore-legacy-sessions 的源与目标是两个不同的根**：源保持 `~/.zcode/v2/sessions`
+  （ACP 时代的 ZCode 数据，只读），目标改为 `~/.zcodium-exp/{v2,cli}`（本仓库自己的数据根，
+  见 `appDirNames.ts` 的 `ZCODE_USER_DATA_DIR_NAME`）。两个脚本里都加了注释说明这一点。
 
 ## 附：测量口径
 
