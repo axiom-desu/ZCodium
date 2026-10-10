@@ -43,6 +43,9 @@ jobs:
       - name: Lint
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm lint
+      - name: Format
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm fmt:check
       - name: Architecture
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm architecture:check

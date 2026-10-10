@@ -25,7 +25,9 @@ const SELECTION_ACTION_COMMAND_PREFIX: Partial<Record<SelectionPrompt["action"],
   "reply.set": "/reply",
 };
 
-function toBridgeSelectionKind(action: SelectionPrompt["action"]): "permission" | "elicitation" | "menu" {
+function toBridgeSelectionKind(
+  action: SelectionPrompt["action"],
+): "permission" | "elicitation" | "menu" {
   switch (action) {
     case "permission.respond":
       return "permission";

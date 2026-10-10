@@ -54,7 +54,9 @@ export declare function assembleComputerUseRuntime(
 ): AssembledComputerUseRuntime;
 
 export declare function assembleComputerUseRuntimeAsync(
-  options?: Omit<AssembleComputerUseRuntimeOptions, "client" | "connectDriver"> & { driverModule?: unknown },
+  options?: Omit<AssembleComputerUseRuntimeOptions, "client" | "connectDriver"> & {
+    driverModule?: unknown;
+  },
 ): Promise<AssembledComputerUseRuntime>;
 
 export declare function assembleCuaPermissionServiceAsync(options?: {

@@ -98,27 +98,57 @@ test("portal 无 XDG_SESSION_TYPE 时按 WAYLAND_DISPLAY 判定", () => {
 test("resolvePlatformPath：Windows / macOS / X11 走 native", () => {
   assert.equal(resolvePlatformPath({ platform: "darwin" }).path, "native");
   assert.equal(resolvePlatformPath({ platform: "win32" }).path, "native");
-  assert.equal(resolvePlatformPath({ platform: "linux", env: { XDG_SESSION_TYPE: "x11" } }).path, "native");
+  assert.equal(
+    resolvePlatformPath({ platform: "linux", env: { XDG_SESSION_TYPE: "x11" } }).path,
+    "native",
+  );
 });
 
 test("resolvePlatformPath：老 GNOME → compat，新 GNOME → native", () => {
   assert.equal(
-    resolvePlatformPath({ platform: "linux", env: WAYLAND_GNOME, gnomeShellVersion: "42", portalRemoteDesktopVersion: "1", winRectsVersion: "8" }).path,
+    resolvePlatformPath({
+      platform: "linux",
+      env: WAYLAND_GNOME,
+      gnomeShellVersion: "42",
+      portalRemoteDesktopVersion: "1",
+      winRectsVersion: "8",
+    }).path,
     "compat",
   );
   assert.equal(
-    resolvePlatformPath({ platform: "linux", env: WAYLAND_GNOME, gnomeShellVersion: "46", portalRemoteDesktopVersion: "2", winRectsVersion: "8" }).path,
+    resolvePlatformPath({
+      platform: "linux",
+      env: WAYLAND_GNOME,
+      gnomeShellVersion: "46",
+      portalRemoteDesktopVersion: "2",
+      winRectsVersion: "8",
+    }).path,
     "native",
   );
   assert.equal(
-    resolvePlatformPath({ platform: "linux", env: WAYLAND_GNOME, gnomeShellVersion: "42", portalRemoteDesktopVersion: "1" }).path,
+    resolvePlatformPath({
+      platform: "linux",
+      env: WAYLAND_GNOME,
+      gnomeShellVersion: "42",
+      portalRemoteDesktopVersion: "1",
+    }).path,
     "unavailable",
   );
 });
 
 test("resolvePlatformPath：wlroots/Hyprland native，KWin 缺口", () => {
   const wl = { XDG_SESSION_TYPE: "wayland" };
-  assert.equal(resolvePlatformPath({ platform: "linux", env: { ...wl, XDG_CURRENT_DESKTOP: "sway" } }).path, "native");
-  assert.equal(resolvePlatformPath({ platform: "linux", env: { ...wl, XDG_CURRENT_DESKTOP: "Hyprland" } }).path, "native");
-  assert.equal(resolvePlatformPath({ platform: "linux", env: { ...wl, XDG_CURRENT_DESKTOP: "KDE" } }).path, "unavailable");
+  assert.equal(
+    resolvePlatformPath({ platform: "linux", env: { ...wl, XDG_CURRENT_DESKTOP: "sway" } }).path,
+    "native",
+  );
+  assert.equal(
+    resolvePlatformPath({ platform: "linux", env: { ...wl, XDG_CURRENT_DESKTOP: "Hyprland" } })
+      .path,
+    "native",
+  );
+  assert.equal(
+    resolvePlatformPath({ platform: "linux", env: { ...wl, XDG_CURRENT_DESKTOP: "KDE" } }).path,
+    "unavailable",
+  );
 });

@@ -1,6 +1,7 @@
 # Computer Use 跨平台架构（Windows / macOS / Linux X11 / Wayland 各合成器）
 
 配套：
+
 - `.agents/specs/computer-use-runtime.md`（原生引擎 = cua-driver，唯一）
 - `.agents/specs/computer-use-wayland-input.md`（老 GNOME 兼容层）
 
@@ -26,32 +27,32 @@ interface ComputerUseRuntime {
 
 模型可见工具面来自 cua-driver 原生工具（`cua-driver list-tools`），按职责分层：
 
-| 类别 | 工具（示例） | 说明 |
-| --- | --- | --- |
-| 发现 | `list_apps` `list_windows` `get_accessibility_tree` | 跨平台 |
-| 观察 | `get_window_state` `get_desktop_state` `zoom` `get_screen_size` `verify_state` | 可访问性树 + 截图 |
-| 激活 | `bring_to_front` `set_window_frame` `launch_app` `kill_app` | 前台/窗口控制 |
-| 输入 | `click` `double_click` `right_click` `drag` `scroll` `move_cursor` `hotkey` `press_key` `type_text` `mouse_button_*` | 逐平台机制不同 |
-| 语义 | `set_value` `invoke_menu` | 直接走可访问性接口 |
-| 剪贴板 | `clipboard_read` `clipboard_write` | |
-| 会话 | `start_session` `end_session` `list_sessions` | 多调用公共标签 |
-| 浏览器 | `browser_*` `get_browser_state` | CDP，跨平台 |
-| 录制/诊断 | `start_recording` `health_report` `check_permissions` | |
+| 类别      | 工具（示例）                                                                                                         | 说明               |
+| --------- | -------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| 发现      | `list_apps` `list_windows` `get_accessibility_tree`                                                                  | 跨平台             |
+| 观察      | `get_window_state` `get_desktop_state` `zoom` `get_screen_size` `verify_state`                                       | 可访问性树 + 截图  |
+| 激活      | `bring_to_front` `set_window_frame` `launch_app` `kill_app`                                                          | 前台/窗口控制      |
+| 输入      | `click` `double_click` `right_click` `drag` `scroll` `move_cursor` `hotkey` `press_key` `type_text` `mouse_button_*` | 逐平台机制不同     |
+| 语义      | `set_value` `invoke_menu`                                                                                            | 直接走可访问性接口 |
+| 剪贴板    | `clipboard_read` `clipboard_write`                                                                                   |                    |
+| 会话      | `start_session` `end_session` `list_sessions`                                                                        | 多调用公共标签     |
+| 浏览器    | `browser_*` `get_browser_state`                                                                                      | CDP，跨平台        |
+| 录制/诊断 | `start_recording` `health_report` `check_permissions`                                                                |                    |
 
 **输入类工具是唯一可能触发兼容层的类别**；观察/语义一律走 cua-driver。
 
 ## 3. 平台机制总表
 
-| 平台 / 合成器 | 可访问性 | 截图 | 输入注入 | 激活 / 前台 | 权限 | cua-driver 台账 |
-| --- | --- | --- | --- | --- | --- | --- |
-| Windows 10/11 | UI Automation (UIA) | DXGI Desktop Dup / GDI | `SendInput`；UIA 后台模式 | `SetForegroundWindow` + UIAccess worker | 无 TCC；提权窗口需 UIAccess | 122/122 |
-| macOS 13+ | Accessibility (AX) | ScreenCaptureKit | `CGEvent`（前台绑定）；AX action（后台） | `NSRunningApplication.activate` + AX raise | TCC：辅助功能 + 屏幕录制 | 145/145 |
-| Linux / X11 | AT-SPI2 | X11/XComposite | `XSendEvent`（定向后台）；XTest | EWMH `_NET_ACTIVE_WINDOW` | 无 | 116/116 |
-| Linux / Wayland / GNOME 45+ | AT-SPI2 | portal ScreenCast/Screenshot 或 ext-image-copy；helper stage capture | portal RemoteDesktop + **libei** | 官方 `winrects@cua` `Activate` + 二次 `GetRects` 验证 | portal 会话（无 root） | GNOME 46 GTK3 31/31 |
-| Linux / Wayland / GNOME ≤44 | AT-SPI2 | **兼容层** legacy 扩展 `Capture` | **兼容层** mutter 直连 | **兼容层** legacy 扩展 `Activate` | 无 | **原生不可用** |
-| Linux / Wayland / wlroots（Sway、labwc） | AT-SPI2 | ext-image-capture / wlr-screencopy | `virtual-pointer` + `virtual-keyboard` 协议 | foreign-toplevel activation + layer-shell | 无 | Sway 116/116 |
-| Linux / Wayland / KWin（KDE Plasma） | AT-SPI2 | portal / PipeWire | portal libei（全局焦点） | **缺 target-addressable 适配器** | portal 会话 | **缺口** |
-| Linux / Wayland / Hyprland | AT-SPI2 | portal / screencopy | `hyprland` IPC + virtual-pointer | `hyprland` IPC | 无 | 有后端 |
+| 平台 / 合成器                            | 可访问性            | 截图                                                                 | 输入注入                                    | 激活 / 前台                                           | 权限                        | cua-driver 台账     |
+| ---------------------------------------- | ------------------- | -------------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------- | --------------------------- | ------------------- |
+| Windows 10/11                            | UI Automation (UIA) | DXGI Desktop Dup / GDI                                               | `SendInput`；UIA 后台模式                   | `SetForegroundWindow` + UIAccess worker               | 无 TCC；提权窗口需 UIAccess | 122/122             |
+| macOS 13+                                | Accessibility (AX)  | ScreenCaptureKit                                                     | `CGEvent`（前台绑定）；AX action（后台）    | `NSRunningApplication.activate` + AX raise            | TCC：辅助功能 + 屏幕录制    | 145/145             |
+| Linux / X11                              | AT-SPI2             | X11/XComposite                                                       | `XSendEvent`（定向后台）；XTest             | EWMH `_NET_ACTIVE_WINDOW`                             | 无                          | 116/116             |
+| Linux / Wayland / GNOME 45+              | AT-SPI2             | portal ScreenCast/Screenshot 或 ext-image-copy；helper stage capture | portal RemoteDesktop + **libei**            | 官方 `winrects@cua` `Activate` + 二次 `GetRects` 验证 | portal 会话（无 root）      | GNOME 46 GTK3 31/31 |
+| Linux / Wayland / GNOME ≤44              | AT-SPI2             | **兼容层** legacy 扩展 `Capture`                                     | **兼容层** mutter 直连                      | **兼容层** legacy 扩展 `Activate`                     | 无                          | **原生不可用**      |
+| Linux / Wayland / wlroots（Sway、labwc） | AT-SPI2             | ext-image-capture / wlr-screencopy                                   | `virtual-pointer` + `virtual-keyboard` 协议 | foreign-toplevel activation + layer-shell             | 无                          | Sway 116/116        |
+| Linux / Wayland / KWin（KDE Plasma）     | AT-SPI2             | portal / PipeWire                                                    | portal libei（全局焦点）                    | **缺 target-addressable 适配器**                      | portal 会话                 | **缺口**            |
+| Linux / Wayland / Hyprland               | AT-SPI2             | portal / screencopy                                                  | `hyprland` IPC + virtual-pointer            | `hyprland` IPC                                        | 无                          | 有后端              |
 
 > 依据：cua-driver 官方 `wayland-helper/README.md`、`cua-driver list-tools`、
 > `cua-driver manifest`（`features:{portal_capture,portal_input,wayland_native}`）、`doctor`。
@@ -165,11 +166,11 @@ detect() →
 
 ## 6. 打包、嵌入与权限
 
-| 平台 | 嵌入形态 | 权限入口 | 常驻 |
-| --- | --- | --- | --- |
-| Windows | 子进程 `cua-driver mcp`/`serve` | 无 TCC | Scheduled Task（`autostart`） |
-| macOS | `EmbeddedCuaDriverHost` 私 daemon + SDK | Electron main TCC（`/electron`） | daemon（随 app） |
-| Linux | 同进程 SDK（默认）或 app 私有 daemon 子进程 | 无 | 随 app（**不做 systemd user**，见 §6.1） |
+| 平台    | 嵌入形态                                    | 权限入口                         | 常驻                                     |
+| ------- | ------------------------------------------- | -------------------------------- | ---------------------------------------- |
+| Windows | 子进程 `cua-driver mcp`/`serve`             | 无 TCC                           | Scheduled Task（`autostart`）            |
+| macOS   | `EmbeddedCuaDriverHost` 私 daemon + SDK     | Electron main TCC（`/electron`） | daemon（随 app）                         |
+| Linux   | 同进程 SDK（默认）或 app 私有 daemon 子进程 | 无                               | 随 app（**不做 systemd user**，见 §6.1） |
 
 - 同进程 SDK：`CuaDriver.create()`；`--embedded` 继承宿主授权（macOS）。
 - daemon 模式：`cua-driver serve`；`--direct`（MCP 进程内持有 runtime）/`--socket`（显式服务）。
@@ -184,7 +185,7 @@ detect() →
 - `EmbeddedCuaDriverHost(bin, bundleId)` 在 Linux **可启动**（起 `cua-driver mcp --embedded --socket`，
   有 generation / `restart()` / `waitForExit()`），但其 `environment` 受**固定安全白名单**约束：显式传
   `CUA_DRIVER_RS_ENABLE_WAYLAND` 报 `EmbeddedDriverError.Configuration: ... is not in the embedded
-  safe allowlist`；白名单只含 `DISPLAY` / `WAYLAND_DISPLAY` / `XDG_*` / `HOME` / `PATH` /
+safe allowlist`；白名单只含 `DISPLAY` / `WAYLAND_DISPLAY` / `XDG_*` / `HOME` / `PATH` /
   `DBUS_SESSION_BUS_ADDRESS` 等，**不含 Wayland 开关**，默认继承同样被过滤，`dangerouslyBypassApprovals`
   也不能放行 → daemon 只看到 XWayland 窗口（实测 2 个）。故 `EmbeddedCuaDriverHost` 是 macOS（TCC）
   设施，在 Linux Wayland 不可用。
@@ -206,39 +207,39 @@ detect() →
 
 ## 7. 失败语义
 
-| 场景 | 行为 |
-| --- | --- |
-| 平台不支持某原语 | 透传 cua-driver 结构化 refusal，`actionSent:false` |
-| 兼容层判定适用但 helper 缺失 | 明确错误 + 安装指引，不静默降级 |
-| KWin 等缺口 | `ACTION_UNAVAILABLE`，不伪造成功 |
-| 动作可能已下发 | `actionSent:true`，不自动重试 |
-| abort | 传播 `AbortError`，无新副作用 |
+| 场景                         | 行为                                               |
+| ---------------------------- | -------------------------------------------------- |
+| 平台不支持某原语             | 透传 cua-driver 结构化 refusal，`actionSent:false` |
+| 兼容层判定适用但 helper 缺失 | 明确错误 + 安装指引，不静默降级                    |
+| KWin 等缺口                  | `ACTION_UNAVAILABLE`，不伪造成功                   |
+| 动作可能已下发               | `actionSent:true`，不自动重试                      |
+| abort                        | 传播 `AbortError`，无新副作用                      |
 
 ## 8. 验收矩阵（计划）
 
-| 平台 | 观察 | 元素点击 | 键盘/文本 | 再观察复核 |
-| --- | --- | --- | --- | --- |
-| Windows | 待 | 待 | 待 | 待 |
-| macOS | 待 | 待 | 待 | 待 |
-| Linux/X11 | 待 | 待 | 待 | 待 |
-| GNOME 45+ | 待 | 待 | 待 | 待 |
-| 老 GNOME（兼容层） | 已通 | 已通 | 已通 | 部分（截图/AT-SPI） |
-| Sway | 待 | 待 | 待 | 待 |
+| 平台               | 观察 | 元素点击 | 键盘/文本 | 再观察复核          |
+| ------------------ | ---- | -------- | --------- | ------------------- |
+| Windows            | 待   | 待       | 待        | 待                  |
+| macOS              | 待   | 待       | 待        | 待                  |
+| Linux/X11          | 待   | 待       | 待        | 待                  |
+| GNOME 45+          | 待   | 待       | 待        | 待                  |
+| 老 GNOME（兼容层） | 已通 | 已通     | 已通      | 部分（截图/AT-SPI） |
+| Sway               | 待   | 待       | 待        | 待                  |
 
 ## 9. 状态：已实现 / 计划 / 缺口
 
-| 项 | 状态 |
-| --- | --- |
-| cua-driver 适配器 `createComputerUseRuntime` | 已实现（单测 + 真实 driver 验证） |
-| 老 GNOME 兼容层（legacy 扩展 + mutter） | 已实现并验证（`compatible/`） |
-| 跨平台路由 `detect()` / `resolvePlatformPath()` | 已实现（纯函数 + 单测） |
-| 平台装配 `packages/zcode-cua/platform.js` | 已实现（Linux compat / macOS native / 缺 client fail-closed） |
-| host 接线 `captureComputerUseRuntimeFromEnvironment` | 已接入（按平台装配；driver 缺失保持 fail-closed） |
-| macOS TCC 归属 | 待做（嵌入宿主 ZCode.app） |
-| Windows 嵌入 / autostart | 由另一路负责 |
-| Linux 本机 UI 限制 | 已解锁（`local-linux` supported:true） |
-| KWin/KDE Wayland | **缺口**（等上游或另行论证） |
-| 三平台 E2E | 计划 |
+| 项                                                   | 状态                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------- |
+| cua-driver 适配器 `createComputerUseRuntime`         | 已实现（单测 + 真实 driver 验证）                             |
+| 老 GNOME 兼容层（legacy 扩展 + mutter）              | 已实现并验证（`compatible/`）                                 |
+| 跨平台路由 `detect()` / `resolvePlatformPath()`      | 已实现（纯函数 + 单测）                                       |
+| 平台装配 `packages/zcode-cua/platform.js`            | 已实现（Linux compat / macOS native / 缺 client fail-closed） |
+| host 接线 `captureComputerUseRuntimeFromEnvironment` | 已接入（按平台装配；driver 缺失保持 fail-closed）             |
+| macOS TCC 归属                                       | 待做（嵌入宿主 ZCode.app）                                    |
+| Windows 嵌入 / autostart                             | 由另一路负责                                                  |
+| Linux 本机 UI 限制                                   | 已解锁（`local-linux` supported:true）                        |
+| KWin/KDE Wayland                                     | **缺口**（等上游或另行论证）                                  |
+| 三平台 E2E                                           | 计划                                                          |
 
 ## 10. 待定
 

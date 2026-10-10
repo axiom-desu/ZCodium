@@ -109,9 +109,7 @@ export declare function isCuaHelperError(value: unknown): value is CuaHelperErro
 
 export declare function mintBrokerSocketPath(options?: { dir?: string }): string;
 
-export declare function resolveBrokerSocketPath(
-  options?: ResolveBrokerSocketPathOptions,
-): string;
+export declare function resolveBrokerSocketPath(options?: ResolveBrokerSocketPathOptions): string;
 
 export declare function waitForCuaHelperStartup<T>(
   startup: Promise<T>,

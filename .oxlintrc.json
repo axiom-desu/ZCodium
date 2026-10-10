@@ -9,7 +9,18 @@
     {
       // 测试文件天然会堆叠大量场景与断言，继续复用生产代码的行数上限会造成误报，
       // 因此只对 test/spec 文件关闭 max-lines，避免放宽业务代码约束。
-      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      // 后缀必须覆盖 .mjs/.js：scripts/ 与 packages/*/test/ 下的测试是 .mjs，
+      // 漏掉它们会让「格式化后超 400 行」在测试文件上误报（见 formatting-gate.md）。
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.test.mjs",
+        "**/*.spec.mjs",
+        "**/*.test.js",
+        "**/*.spec.js"
+      ],
       "rules": {
         "max-lines": "off"
       }

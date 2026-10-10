@@ -40,7 +40,11 @@ function makeCompat(applies, calls) {
 test("applies 时输入类工具走兼容层，driver 不被调用", async () => {
   const calls = [];
   const runtime = createCuaDriverRuntime(makeClient(calls), { compat: makeCompat(true, calls) });
-  const result = await runtime.execute({ toolName: "type_text", arguments: { text: "hi" }, context: CONTEXT });
+  const result = await runtime.execute({
+    toolName: "type_text",
+    arguments: { text: "hi" },
+    context: CONTEXT,
+  });
   assert.equal(result.isError, false);
   assert.deepEqual(calls, [{ target: "compat", toolName: "type_text", args: { text: "hi" } }]);
 });
@@ -48,7 +52,12 @@ test("applies 时输入类工具走兼容层，driver 不被调用", async () =>
 test("applies 时 cua-driver 原生观察/语义名仍只走 driver", async () => {
   const calls = [];
   const runtime = createCuaDriverRuntime(makeClient(calls), { compat: makeCompat(true, calls) });
-  for (const toolName of ["get_window_state", "get_desktop_state", "zoom", "get_accessibility_tree"]) {
+  for (const toolName of [
+    "get_window_state",
+    "get_desktop_state",
+    "zoom",
+    "get_accessibility_tree",
+  ]) {
     await runtime.execute({ toolName, arguments: { pid: 1 }, context: CONTEXT });
   }
   assert.equal(calls.length, 4);

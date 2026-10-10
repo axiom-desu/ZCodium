@@ -80,7 +80,10 @@ export function createCompatExecutor({ backend, client } = {}) {
       );
     }
     if (!client || typeof client.callTool !== "function") {
-      throw new CompatError("compat element resolution requires the cua-driver client", "ACTION_UNAVAILABLE");
+      throw new CompatError(
+        "compat element resolution requires the cua-driver client",
+        "ACTION_UNAVAILABLE",
+      );
     }
     const stateResult = await client.callTool(
       "get_window_state",
@@ -92,7 +95,8 @@ export function createCompatExecutor({ backend, client } = {}) {
         ? candidate.element_token === args.element_token
         : candidate.element_index === args.element_index,
     );
-    if (!element?.frame) throw new CompatError("element not found in a fresh snapshot", "ACTION_UNAVAILABLE");
+    if (!element?.frame)
+      throw new CompatError("element not found in a fresh snapshot", "ACTION_UNAVAILABLE");
 
     const windows = await backend.listWindows();
     const window =
@@ -118,7 +122,8 @@ export function createCompatExecutor({ backend, client } = {}) {
 
   async function hotkey(args) {
     const keys = Array.isArray(args.keys) ? args.keys : [];
-    if (keys.length < 2) throw new CompatError("hotkey needs at least one modifier and one key", "ACTION_UNAVAILABLE");
+    if (keys.length < 2)
+      throw new CompatError("hotkey needs at least one modifier and one key", "ACTION_UNAVAILABLE");
     await focus(args);
     await backend.hotkey(keys.slice(0, -1), keys[keys.length - 1]);
     return ok(`compat hotkey ${keys.join("+")}`);
@@ -155,7 +160,8 @@ export function createCompatExecutor({ backend, client } = {}) {
 
   async function typeText(args) {
     const text = String(args.text ?? "");
-    if (await trySetValue(args, text)) return ok("compat type_text via AT-SPI set_value", "set_value");
+    if (await trySetValue(args, text))
+      return ok("compat type_text via AT-SPI set_value", "set_value");
     await focus(args);
     if (isAscii(text)) {
       await backend.typeAscii(text);
@@ -219,7 +225,8 @@ export function createCompatExecutor({ backend, client } = {}) {
     }
     const x = args[`${prefix}_x`];
     const y = args[`${prefix}_y`];
-    if (Number.isFinite(x) && Number.isFinite(y)) return windowLocalToScreen(window, scale, { x, y });
+    if (Number.isFinite(x) && Number.isFinite(y))
+      return windowLocalToScreen(window, scale, { x, y });
     throw new CompatError(
       `drag needs ${prefix}_x/${prefix}_y or ${prefix}_element_index/${prefix}_element_token`,
       "ACTION_UNAVAILABLE",
@@ -263,7 +270,10 @@ export function createCompatExecutor({ backend, client } = {}) {
           return await drag(args);
         default:
           return fail(
-            new CompatError(`tool ${tool} is not supported by the legacy GNOME compat backend`, "ACTION_UNAVAILABLE"),
+            new CompatError(
+              `tool ${tool} is not supported by the legacy GNOME compat backend`,
+              "ACTION_UNAVAILABLE",
+            ),
           );
       }
     } catch (error) {

@@ -142,9 +142,7 @@ class CuaWinRects {
     target.activate(global.get_current_time());
     // 100ms 后回报焦点是否真的落到目标窗口；cua-driver 只在 true 时才发输入。
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-      invocation.return_value(
-        new GLib.Variant("(b)", [global.display.focus_window === target]),
-      );
+      invocation.return_value(new GLib.Variant("(b)", [global.display.focus_window === target]));
       return GLib.SOURCE_REMOVE;
     });
   }

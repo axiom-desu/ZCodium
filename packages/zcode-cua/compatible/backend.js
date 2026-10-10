@@ -7,7 +7,14 @@
  * 元素框/AT-SPI 归 cua-driver。本后端**不缓存**这些状态，每次现取。
  */
 
-import { charToKey, hotkeySequence, isAscii, keySequence, mouseButtonCode, typedKeys } from "./evdev.js";
+import {
+  charToKey,
+  hotkeySequence,
+  isAscii,
+  keySequence,
+  mouseButtonCode,
+  typedKeys,
+} from "./evdev.js";
 import { scaleAt, screenToRelativeMotion } from "./geometry.js";
 
 const LEFT_SHIFT = 42;
@@ -41,7 +48,11 @@ function scaleForPoint(monitors, point, fallback) {
  * @param {Function} [options.sleep] 注入的延时（测试用）
  * @param {number} [options.keyHoldMs] 逐键间隔
  */
-export function createWaylandInputBackend({ helper, sleep = defaultSleep, keyHoldMs = DEFAULT_KEY_HOLD_MS } = {}) {
+export function createWaylandInputBackend({
+  helper,
+  sleep = defaultSleep,
+  keyHoldMs = DEFAULT_KEY_HOLD_MS,
+} = {}) {
   if (!helper || typeof helper.request !== "function") {
     throw new TypeError("compat backend requires a helper port with request()");
   }

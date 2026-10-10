@@ -47,7 +47,12 @@ test("scroll 映射到 mutter 轴：axis 0=垂直、1=水平，符号表方向",
   assert.deepEqual(await backend.scroll("left", 4), { axis: 1, steps: -4 });
   assert.deepEqual(
     helper.calls.map((call) => call.params),
-    [{ axis: 0, steps: 5 }, { axis: 0, steps: -3 }, { axis: 1, steps: 2 }, { axis: 1, steps: -4 }],
+    [
+      { axis: 0, steps: 5 },
+      { axis: 0, steps: -3 },
+      { axis: 1, steps: 2 },
+      { axis: 1, steps: -4 },
+    ],
   );
   await assert.rejects(() => backend.scroll("down", 0), /non-zero/);
 });
@@ -62,8 +67,13 @@ test("drag：按住左键分步相对移动后抬起", async () => {
   );
   assert.deepEqual(helper.calls[2].params, { dx: 200, dy: 464 });
   assert.deepEqual(
-    helper.calls.filter((call) => call.method === "button").map((call) => [call.params.code, call.params.pressed]),
-    [[272, true], [272, false]],
+    helper.calls
+      .filter((call) => call.method === "button")
+      .map((call) => [call.params.code, call.params.pressed]),
+    [
+      [272, true],
+      [272, false],
+    ],
   );
 });
 
@@ -124,9 +134,16 @@ test("typeAscii 逐键，字母/Shift 标点正确", async () => {
   const backend = createWaylandInputBackend({ helper, sleep: noSleep });
   await backend.typeAscii("aB!");
   assert.deepEqual(codes(helper), [
-    [30, true], [30, false],
-    [42, true], [48, true], [48, false], [42, false],
-    [42, true], [2, true], [2, false], [42, false],
+    [30, true],
+    [30, false],
+    [42, true],
+    [48, true],
+    [48, false],
+    [42, false],
+    [42, true],
+    [2, true],
+    [2, false],
+    [42, false],
   ]);
   await assert.rejects(() => backend.typeAscii("π"), /ASCII/);
 });
@@ -154,11 +171,20 @@ test("typeUnicode 用 Ctrl+Shift+U + 十六进制 + Enter", async () => {
   const backend = createWaylandInputBackend({ helper, sleep: noSleep });
   await backend.typeUnicode("π"); // U+03C0 → hex "3c0"
   assert.deepEqual(codes(helper), [
-    [29, true], [42, true], [22, true], [22, false], [42, false], [29, false],
-    [4, true], [4, false], // '3'
-    [46, true], [46, false], // 'c'
-    [11, true], [11, false], // '0'
-    [28, true], [28, false], // Enter
+    [29, true],
+    [42, true],
+    [22, true],
+    [22, false],
+    [42, false],
+    [29, false],
+    [4, true],
+    [4, false], // '3'
+    [46, true],
+    [46, false], // 'c'
+    [11, true],
+    [11, false], // '0'
+    [28, true],
+    [28, false], // Enter
   ]);
 });
 

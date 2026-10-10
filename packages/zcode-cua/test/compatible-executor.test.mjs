@@ -12,7 +12,13 @@ import test from "node:test";
 import { createCompatExecutor } from "../compatible/executor.js";
 
 const ELEMENTS = [
-  { element_index: 202, element_token: "s1:202", role: "push button", label: "5", frame: { x: 282, y: 517, w: 60, h: 44 } },
+  {
+    element_index: 202,
+    element_token: "s1:202",
+    role: "push button",
+    label: "5",
+    frame: { x: 282, y: 517, w: 60, h: 44 },
+  },
 ];
 
 function makeBackend({ windows, monitors } = {}) {
@@ -21,7 +27,21 @@ function makeBackend({ windows, monitors } = {}) {
     calls,
     async listWindows() {
       calls.push({ method: "listWindows" });
-      return windows ?? [{ id: 31, pid: 100, title: "Calculator", x: 174, y: 104, w: 1360, h: 1084, buffer_x: 122, buffer_y: 58 }];
+      return (
+        windows ?? [
+          {
+            id: 31,
+            pid: 100,
+            title: "Calculator",
+            x: 174,
+            y: 104,
+            w: 1360,
+            h: 1084,
+            buffer_x: 122,
+            buffer_y: 58,
+          },
+        ]
+      );
     },
     async monitors() {
       calls.push({ method: "monitors" });
@@ -67,7 +87,8 @@ function makeClient({ setValueSucceeds = true } = {}) {
     calls,
     async callTool(name, argumentsJson) {
       calls.push({ name, args: JSON.parse(argumentsJson) });
-      if (name === "get_window_state") return { structuredJson: JSON.stringify({ elements: ELEMENTS }), isError: false };
+      if (name === "get_window_state")
+        return { structuredJson: JSON.stringify({ elements: ELEMENTS }), isError: false };
       if (name === "set_value") return { isError: !setValueSucceeds };
       return { isError: false };
     },
@@ -94,14 +115,20 @@ test("click 用 element_index 定位到屏幕 (398,928) 并激活后点击", asy
 test("click 支持 element_token 与右键", async () => {
   const backend = makeBackend();
   const executor = createCompatExecutor({ backend, client: makeClient() });
-  await executor.execute({ toolName: "right_click", arguments: { pid: 100, window_id: 31, element_token: "s1:202" } });
+  await executor.execute({
+    toolName: "right_click",
+    arguments: { pid: 100, window_id: 31, element_token: "s1:202" },
+  });
   assert.deepEqual(backend.calls.at(-1), { method: "click", x: 398, y: 928, button: "right" });
 });
 
 test("click 缺元素定位时返回 ACTION_UNAVAILABLE，不投递", async () => {
   const backend = makeBackend();
   const executor = createCompatExecutor({ backend, client: makeClient() });
-  const result = await executor.execute({ toolName: "click", arguments: { pid: 100, window_id: 31, x: 1, y: 2 } });
+  const result = await executor.execute({
+    toolName: "click",
+    arguments: { pid: 100, window_id: 31, x: 1, y: 2 },
+  });
   assert.equal(result.isError, true);
   assert.equal(result.structuredContent.code, "ACTION_UNAVAILABLE");
   assert.equal(result._meta.actionSent, false);
@@ -122,7 +149,10 @@ test("element 不在新 snapshot 中时报 ACTION_UNAVAILABLE", async () => {
 test("hotkey 拆成修饰键 + 末键", async () => {
   const backend = makeBackend();
   const executor = createCompatExecutor({ backend, client: makeClient() });
-  await executor.execute({ toolName: "hotkey", arguments: { pid: 100, window_id: 31, keys: ["ctrl", "shift", "t"] } });
+  await executor.execute({
+    toolName: "hotkey",
+    arguments: { pid: 100, window_id: 31, keys: ["ctrl", "shift", "t"] },
+  });
   assert.deepEqual(backend.calls.at(-1), { method: "hotkey", mods: ["ctrl", "shift"], key: "t" });
 });
 
@@ -131,13 +161,19 @@ test("press_key 无修饰键走 pressKey，有则走 hotkey", async () => {
   const executor = createCompatExecutor({ backend, client: makeClient() });
   await executor.execute({ toolName: "press_key", arguments: { window_id: 31, key: "enter" } });
   assert.deepEqual(backend.calls.at(-1), { method: "pressKey", key: "enter" });
-  await executor.execute({ toolName: "press_key", arguments: { window_id: 31, key: "c", modifiers: ["ctrl"] } });
+  await executor.execute({
+    toolName: "press_key",
+    arguments: { window_id: 31, key: "c", modifiers: ["ctrl"] },
+  });
   assert.deepEqual(backend.calls.at(-1), { method: "hotkey", mods: ["ctrl"], key: "c" });
 });
 
 test("type_text 分级：set_value → keycode → UTF-8 码点", async () => {
   const backend = makeBackend();
-  const executor = createCompatExecutor({ backend, client: makeClient({ setValueSucceeds: true }) });
+  const executor = createCompatExecutor({
+    backend,
+    client: makeClient({ setValueSucceeds: true }),
+  });
 
   const viaSet = await executor.execute({
     toolName: "type_text",
@@ -146,11 +182,17 @@ test("type_text 分级：set_value → keycode → UTF-8 码点", async () => {
   assert.equal(viaSet._meta.textLevel, "set_value");
   assert.equal(backend.calls.length, 0);
 
-  const viaKeys = await executor.execute({ toolName: "type_text", arguments: { window_id: 31, text: "hi" } });
+  const viaKeys = await executor.execute({
+    toolName: "type_text",
+    arguments: { window_id: 31, text: "hi" },
+  });
   assert.equal(viaKeys._meta.textLevel, "keycode");
   assert.deepEqual(backend.calls.at(-1), { method: "typeAscii", text: "hi" });
 
-  const viaCode = await executor.execute({ toolName: "type_text", arguments: { window_id: 31, text: "你好 π" } });
+  const viaCode = await executor.execute({
+    toolName: "type_text",
+    arguments: { window_id: 31, text: "你好 π" },
+  });
   assert.equal(viaCode._meta.textLevel, "codepoint");
   assert.deepEqual(backend.calls.at(-1), { method: "typeUnicode", text: "你好 π" });
 });
@@ -165,7 +207,10 @@ test("scroll 把指针移到窗口中心再滚轮", async () => {
   assert.equal(result.isError, false);
   assert.deepEqual(backend.calls.at(-2), { method: "moveTo", x: 802, y: 600 });
   assert.deepEqual(backend.calls.at(-1), { method: "scroll", direction: "down", amount: 5 });
-  const bad = await executor.execute({ toolName: "scroll", arguments: { window_id: 31, direction: "diagonal" } });
+  const bad = await executor.execute({
+    toolName: "scroll",
+    arguments: { window_id: 31, direction: "diagonal" },
+  });
   assert.equal(bad.structuredContent.code, "ACTION_UNAVAILABLE");
 });
 
@@ -174,7 +219,16 @@ test("drag 用窗口本地像素换算到屏幕", async () => {
   const executor = createCompatExecutor({ backend, client: makeClient() });
   const result = await executor.execute({
     toolName: "drag",
-    arguments: { pid: 100, window_id: 31, from_x: 10, from_y: 20, to_x: 100, to_y: 200, button: "left", steps: 8 },
+    arguments: {
+      pid: 100,
+      window_id: 31,
+      from_x: 10,
+      from_y: 20,
+      to_x: 100,
+      to_y: 200,
+      button: "left",
+      steps: 8,
+    },
   });
   assert.equal(result.isError, false);
   assert.deepEqual(backend.calls.at(-1), {
@@ -215,7 +269,10 @@ test("backend 抛错时转成错误结果，不伪造成功", async () => {
     throw new Error("mutter session lost");
   };
   const executor = createCompatExecutor({ backend, client: makeClient() });
-  const result = await executor.execute({ toolName: "click", arguments: { pid: 100, window_id: 31, element_index: 202 } });
+  const result = await executor.execute({
+    toolName: "click",
+    arguments: { pid: 100, window_id: 31, element_index: 202 },
+  });
   assert.equal(result.isError, true);
   assert.equal(result._meta.actionSent, false);
   assert.match(result.content[0].text, /mutter session lost/);

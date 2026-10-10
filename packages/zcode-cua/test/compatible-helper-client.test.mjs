@@ -31,7 +31,10 @@ function makeProcess({ respond = true } = {}) {
         queueMicrotask(() => proc.emit("exit", 0));
       } else if (respond) {
         queueMicrotask(() =>
-          stdout.emit("data", `${JSON.stringify({ id: request.id, ok: true, result: { method: request.method } })}\n`),
+          stdout.emit(
+            "data",
+            `${JSON.stringify({ id: request.id, ok: true, result: { method: request.method } })}\n`,
+          ),
         );
       }
       return true;

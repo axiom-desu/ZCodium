@@ -92,7 +92,9 @@ export function createCuaDriverPermissionService(options = {}) {
         );
         return projectCuaPermissionStatus(parseStructured(result), {
           platform,
-          ...(options.grantOwnerDisplayName ? { grantOwnerDisplayName: options.grantOwnerDisplayName } : {}),
+          ...(options.grantOwnerDisplayName
+            ? { grantOwnerDisplayName: options.grantOwnerDisplayName }
+            : {}),
         });
       } catch (error) {
         return {

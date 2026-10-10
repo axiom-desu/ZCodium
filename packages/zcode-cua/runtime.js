@@ -65,11 +65,7 @@ export function projectToolResult(result) {
     content.push({ type: "text", text: result.text });
   }
   for (const image of Array.isArray(result.images) ? result.images : []) {
-    if (
-      image &&
-      typeof image.dataBase64 === "string" &&
-      typeof image.mimeType === "string"
-    ) {
+    if (image && typeof image.dataBase64 === "string" && typeof image.mimeType === "string") {
       content.push({ type: "image", data: image.dataBase64, mimeType: image.mimeType });
     }
   }
@@ -122,7 +118,9 @@ export function createCuaDriverRuntime(client, options = {}) {
   // 胶水：ZCode 模型面（14 工具）走 surface 映射层；原生工具名直接透传。
   const callDriver = (toolName, args, signal) => {
     const argsJson = JSON.stringify(args ?? {});
-    return signal ? client.callTool(toolName, argsJson, { signal }) : client.callTool(toolName, argsJson);
+    return signal
+      ? client.callTool(toolName, argsJson, { signal })
+      : client.callTool(toolName, argsJson);
   };
   const surface = createSurfaceLayer({
     callDriver,

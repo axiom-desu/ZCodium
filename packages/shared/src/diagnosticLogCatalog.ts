@@ -1801,7 +1801,7 @@ export const diagnosticMessages: readonly string[] = [
   "运行时偏好响应找不到 pending 请求",
   "运行时偏好请求已转发给 Host",
   "运行时偏好请求等待 Host 响应超时",
-  "运行时偏好超时响应发送失败"
+  "运行时偏好超时响应发送失败",
 ];
 export const diagnosticPrefixes: readonly string[] = [
   "Bot storage initialization failed: ",
@@ -2200,7 +2200,7 @@ export const diagnosticPrefixes: readonly string[] = [
   "读取 task index meta_json 失败 taskId=",
   "读取 task index meta_json 非法 taskId=",
   "释放 manual automation claim 失败 automation=",
-  "首次 sessions-index 基线补齐 task index 失败 workspace="
+  "首次 sessions-index 基线补齐 task index 失败 workspace=",
 ];
 export const diagnosticModules: readonly string[] = [
   "apps/zcode-cli/packages/adapters/src/auth/browser.ts",
@@ -5749,5 +5749,5 @@ export const diagnosticModules: readonly string[] = [
   "packages/zcode-server-cli/src/server-core/serverIdentity.ts",
   "packages/zcode-server-cli/src/server-core/taskActivityTracker.ts",
   "packages/zcode-server-cli/src/supervisor/crashBudget.ts",
-  "packages/zcode-server-cli/src/supervisor/supervisor.ts"
+  "packages/zcode-server-cli/src/supervisor/supervisor.ts",
 ];

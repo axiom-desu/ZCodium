@@ -72,7 +72,13 @@ function session(method, params) {
  * DisplayConfig 只给 mode 像素与 scale，尺寸需自行除，并按 transform 交换宽高。
  */
 function logicalMonitors() {
-  const reply = dbus(DISPLAYCONFIG_DEST, DISPLAYCONFIG_PATH, DISPLAYCONFIG_IFACE, "GetCurrentState", null);
+  const reply = dbus(
+    DISPLAYCONFIG_DEST,
+    DISPLAYCONFIG_PATH,
+    DISPLAYCONFIG_IFACE,
+    "GetCurrentState",
+    null,
+  );
   const [, monitors, logical] = reply.deep_unpack();
   const modesByConnector = new Map();
   for (const entry of monitors) modesByConnector.set(entry[0][0], entry[1]);
@@ -100,7 +106,8 @@ function logicalMonitors() {
 function capture() {
   const pngBase64 = winrects("Capture", null).deep_unpack()[0];
   const monitors = logicalMonitors();
-  const main = monitors.find((monitor) => monitor.primary) ?? monitors[0] ?? { w: 0, h: 0, scale: 1 };
+  const main = monitors.find((monitor) => monitor.primary) ??
+    monitors[0] ?? { w: 0, h: 0, scale: 1 };
   return {
     pngBase64,
     width: Math.round(main.w * main.scale),
@@ -127,15 +134,24 @@ const methods = {
     return { ok: true };
   },
   button: (params) => {
-    session("NotifyPointerButton", new GLib.Variant("(ib)", [params.code, params.pressed === true]));
+    session(
+      "NotifyPointerButton",
+      new GLib.Variant("(ib)", [params.code, params.pressed === true]),
+    );
     return { ok: true };
   },
   keycode: (params) => {
-    session("NotifyKeyboardKeycode", new GLib.Variant("(ub)", [params.code, params.pressed === true]));
+    session(
+      "NotifyKeyboardKeycode",
+      new GLib.Variant("(ub)", [params.code, params.pressed === true]),
+    );
     return { ok: true };
   },
   keysym: (params) => {
-    session("NotifyKeyboardKeysym", new GLib.Variant("(ub)", [params.code, params.pressed === true]));
+    session(
+      "NotifyKeyboardKeysym",
+      new GLib.Variant("(ub)", [params.code, params.pressed === true]),
+    );
     return { ok: true };
   },
   // 滚轮：axis 0=垂直（steps>0 向下），1=水平（steps>0 向右）；steps 不能为 0。
@@ -145,7 +161,10 @@ const methods = {
   },
   // 连续滚动：flags 位 WHEEL=2 / FINGER=4 / CONTINUOUS=8，默认 0=FINGER。
   axis: (params) => {
-    session("NotifyPointerAxis", new GLib.Variant("(ddu)", [params.dx, params.dy, params.flags ?? 0]));
+    session(
+      "NotifyPointerAxis",
+      new GLib.Variant("(ddu)", [params.dx, params.dy, params.flags ?? 0]),
+    );
     return { ok: true };
   },
 };
@@ -198,7 +217,11 @@ function readNext() {
 try {
   write({ event: "ready", version: methods.version() });
 } catch (error) {
-  write({ event: "ready", version: null, error: String(error && error.message ? error.message : error) });
+  write({
+    event: "ready",
+    version: null,
+    error: String(error && error.message ? error.message : error),
+  });
 }
 readNext();
 loop.run();

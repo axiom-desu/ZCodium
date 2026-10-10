@@ -31,24 +31,24 @@ cua-driver；只有**输入类**工具可能被老 GNOME 兼容层接管。不�
 
 ## 2. 状态所有者
 
-| 状态 | 唯一所有者 | 其他层禁止 |
-| --- | --- | --- |
-| 桌面观察 / snapshot / element ref | cua-driver | bridge/broker/runtime 不缓存，每次取当前值 |
-| 输入投递 / 前后台策略 | cua-driver；老 GNOME 兼容层 | runtime 只透传，不重试已投递动作 |
-| session / 多调用标签 | cua-driver `start_session` / `end_session` | runtime 把 `context.sessionId` 映射之 |
-| 权限授权（macOS TCC） | ZCode.app（cua-driver 继承，不自建信任链） | `permissions.js` 只报告，不授权 |
-| workspace / subagent / trace | ZCode bridge + runtime context | driver 不感知 |
-| 输入未提交草稿 / pending overlay | Renderer | Host owner/lease 负责路由 |
+| 状态                              | 唯一所有者                                 | 其他层禁止                                 |
+| --------------------------------- | ------------------------------------------ | ------------------------------------------ |
+| 桌面观察 / snapshot / element ref | cua-driver                                 | bridge/broker/runtime 不缓存，每次取当前值 |
+| 输入投递 / 前后台策略             | cua-driver；老 GNOME 兼容层                | runtime 只透传，不重试已投递动作           |
+| session / 多调用标签              | cua-driver `start_session` / `end_session` | runtime 把 `context.sessionId` 映射之      |
+| 权限授权（macOS TCC）             | ZCode.app（cua-driver 继承，不自建信任链） | `permissions.js` 只报告，不授权            |
+| workspace / subagent / trace      | ZCode bridge + runtime context             | driver 不感知                              |
+| 输入未提交草稿 / pending overlay  | Renderer                                   | Host owner/lease 负责路由                  |
 
 ## 3. 进程与常驻
 
-| 平台 | 引擎形态 | 常驻 |
-| --- | --- | --- |
-| Linux（默认） | node_repl host 内同进程 SDK `CuaDriver.create()` | 随 host |
-| Linux（可选） | Desktop main 自起 `cua-driver serve --socket`，窗口 host `CuaDriver.connect` | 随 app |
-| macOS | ZCode.app 起 `EmbeddedCuaDriverHost` 私 daemon，socket 经 `ZCODE_CUA_DRIVER_SOCKET` 注入 | daemon 随 app |
-| Windows | 子进程 `cua-driver mcp`/`serve`（另一路） | Scheduled Task |
-| 老 GNOME compat | 独立长驻 GJS helper（stdio JSON-lines），runtime 监督 | helper 随 host |
+| 平台            | 引擎形态                                                                                 | 常驻           |
+| --------------- | ---------------------------------------------------------------------------------------- | -------------- |
+| Linux（默认）   | node_repl host 内同进程 SDK `CuaDriver.create()`                                         | 随 host        |
+| Linux（可选）   | Desktop main 自起 `cua-driver serve --socket`，窗口 host `CuaDriver.connect`             | 随 app         |
+| macOS           | ZCode.app 起 `EmbeddedCuaDriverHost` 私 daemon，socket 经 `ZCODE_CUA_DRIVER_SOCKET` 注入 | daemon 随 app  |
+| Windows         | 子进程 `cua-driver mcp`/`serve`（另一路）                                                | Scheduled Task |
+| 老 GNOME compat | 独立长驻 GJS helper（stdio JSON-lines），runtime 监督                                    | helper 随 host |
 
 - **不引入 systemd user**（版本漂移 / 发行假设 / 安全边界 / 跨平台一致，见 platform-architecture §6.1）。
 - Wayland 会话下 `platform.js` 在 import 原生 SDK **之前**自动设 `CUA_DRIVER_RS_ENABLE_WAYLAND=1`；
@@ -83,17 +83,17 @@ linux + Wayland + KWin             → ACTION_UNAVAILABLE（上游缺口）
 
 ## 6. 迁移状态
 
-| 阶段 | 状态 |
-| --- | --- |
-| 适配器 `createComputerUseRuntime` + `surface.js` 14 工具映射 | 已完成 |
-| 老 GNOME 兼容层 + 坐标/键盘/滚动/拖动 | 已完成并本机验证 |
-| 平台装配 `platform.js` + host 接线 | 已完成 |
-| Wayland 窗口后端开关自动注入 | 已完成 |
-| 权限契约 + cua-driver 后端 `@zcode/zcode-cua/permissions` | 已完成 |
-| 权限服务接入 Desktop main / 设置页改接 | 进行中 |
-| 移除闭源 Helper 链（broker / 安装验签 / 拖拽 / PiP / `node.ts` 编排） | 进行中 |
-| macOS 嵌入宿主 + TCC 归 ZCode.app | 待做 |
-| 打包 Desktop app 端到端 | 待做 |
+| 阶段                                                                  | 状态             |
+| --------------------------------------------------------------------- | ---------------- |
+| 适配器 `createComputerUseRuntime` + `surface.js` 14 工具映射          | 已完成           |
+| 老 GNOME 兼容层 + 坐标/键盘/滚动/拖动                                 | 已完成并本机验证 |
+| 平台装配 `platform.js` + host 接线                                    | 已完成           |
+| Wayland 窗口后端开关自动注入                                          | 已完成           |
+| 权限契约 + cua-driver 后端 `@zcode/zcode-cua/permissions`             | 已完成           |
+| 权限服务接入 Desktop main / 设置页改接                                | 进行中           |
+| 移除闭源 Helper 链（broker / 安装验签 / 拖拽 / PiP / `node.ts` 编排） | 进行中           |
+| macOS 嵌入宿主 + TCC 归 ZCode.app                                     | 待做             |
+| 打包 Desktop app 端到端                                               | 待做             |
 
 ## 7. 目录
 

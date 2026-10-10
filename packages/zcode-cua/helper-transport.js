@@ -63,7 +63,10 @@ export async function waitForCuaHelperStartup(startup, deadlineMs) {
       startup,
       new Promise((_resolve, reject) => {
         timer = setTimeout(
-          () => reject(new CuaHelperError("CUA Helper startup is still running", { code: "caller_timeout" })),
+          () =>
+            reject(
+              new CuaHelperError("CUA Helper startup is still running", { code: "caller_timeout" }),
+            ),
           deadlineMs,
         );
       }),

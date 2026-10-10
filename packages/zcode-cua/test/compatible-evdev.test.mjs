@@ -84,7 +84,10 @@ test("hotkey 顺序是 down(mods) → tap(key) → up(mods 逆序)", () => {
 });
 
 test("hotkey 对 Shift 字符不重复按 Shift", () => {
-  assert.deepEqual(hotkeySequence(["ctrl"], "A").map((step) => step.code), [29, 42, 30, 30, 42, 29]);
+  assert.deepEqual(
+    hotkeySequence(["ctrl"], "A").map((step) => step.code),
+    [29, 42, 30, 30, 42, 29],
+  );
 });
 
 test("hotkey 对未知修饰键/键抛错", () => {

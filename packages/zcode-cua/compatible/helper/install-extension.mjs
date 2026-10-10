@@ -42,7 +42,16 @@ function winRectsReachable() {
   try {
     execFileSync(
       "gdbus",
-      ["call", "--session", "--dest", "org.cua.WinRects", "--object-path", "/org/cua/WinRects", "--method", "org.cua.WinRects.GetVersion"],
+      [
+        "call",
+        "--session",
+        "--dest",
+        "org.cua.WinRects",
+        "--object-path",
+        "/org/cua/WinRects",
+        "--method",
+        "org.cua.WinRects.GetVersion",
+      ],
       { stdio: "ignore" },
     );
     return true;

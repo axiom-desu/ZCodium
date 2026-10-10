@@ -5,13 +5,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assembleComputerUseRuntime, createCompatRuntimeOptions, describeCompatReadiness } from "../platform.js";
+import {
+  assembleComputerUseRuntime,
+  createCompatRuntimeOptions,
+  describeCompatReadiness,
+} from "../platform.js";
 import { assembleCuaPermissionServiceAsync } from "../platform.js";
 
 function makeClient() {
   return {
     async callTool() {
-      return { text: "", structuredJson: "{}", images: [], isError: false, degraded: false, rawJson: "{}" };
+      return {
+        text: "",
+        structuredJson: "{}",
+        images: [],
+        isError: false,
+        degraded: false,
+        rawJson: "{}",
+      };
     },
   };
 }
@@ -33,7 +44,10 @@ const PROBES = { gnomeShellVersion: "42", portalRemoteDesktopVersion: "1", winRe
 
 test("macOS：native，报告需要 TCC", async () => {
   const client = makeClient();
-  const { path, runtime, requiresMacOsPermissions } = assembleComputerUseRuntime({ platform: "darwin", client });
+  const { path, runtime, requiresMacOsPermissions } = assembleComputerUseRuntime({
+    platform: "darwin",
+    client,
+  });
   assert.equal(path.path, "native");
   assert.equal(requiresMacOsPermissions, true);
   const result = await runtime.execute({ toolName: "list_apps", arguments: {}, context: {} });
@@ -69,7 +83,10 @@ test("Linux 老 GNOME 未注入 compat 时默认组装（不抛错）", () => {
 });
 
 test("Windows：native（嵌入由另一路负责）", () => {
-  const { path, requiresMacOsPermissions } = assembleComputerUseRuntime({ platform: "win32", client: makeClient() });
+  const { path, requiresMacOsPermissions } = assembleComputerUseRuntime({
+    platform: "win32",
+    client: makeClient(),
+  });
   assert.equal(path.path, "native");
   assert.equal(requiresMacOsPermissions, false);
 });
@@ -107,22 +124,39 @@ test("connectDriver 收到 socketPath", () => {
 });
 
 test("createCompatRuntimeOptions 返回 applies 端口", () => {
-  const helper = { async request() { return { ok: true }; } };
+  const helper = {
+    async request() {
+      return { ok: true };
+    },
+  };
   const options = createCompatRuntimeOptions({ client: makeClient(), helper });
   assert.equal(options.applies, true);
   assert.equal(typeof options.execute, "function");
 });
 
 test("describeCompatReadiness：老 GNOME 未加载扩展 → 需要安装 + 重登", () => {
-  const result = describeCompatReadiness({ gnomeShellVersion: "42", portalRemoteDesktopVersion: "1" });
+  const result = describeCompatReadiness({
+    gnomeShellVersion: "42",
+    portalRemoteDesktopVersion: "1",
+  });
   assert.equal(result.ready, false);
   assert.equal(result.needsExtension, true);
   assert.match(result.guidance, /install:gnome-extension/);
 });
 
 test("describeCompatReadiness：扩展可达 / 新 GNOME → 就绪", () => {
-  assert.equal(describeCompatReadiness({ gnomeShellVersion: "42", portalRemoteDesktopVersion: "1", winRectsVersion: "8" }).ready, true);
-  assert.equal(describeCompatReadiness({ gnomeShellVersion: "46", portalRemoteDesktopVersion: "2" }).ready, true);
+  assert.equal(
+    describeCompatReadiness({
+      gnomeShellVersion: "42",
+      portalRemoteDesktopVersion: "1",
+      winRectsVersion: "8",
+    }).ready,
+    true,
+  );
+  assert.equal(
+    describeCompatReadiness({ gnomeShellVersion: "46", portalRemoteDesktopVersion: "2" }).ready,
+    true,
+  );
 });
 
 test("Linux Wayland 会话自动启用 cua-driver Wayland 窗口后端", () => {

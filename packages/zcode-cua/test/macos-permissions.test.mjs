@@ -23,10 +23,7 @@ test("归一化宿主返回的权限状态", async () => {
 });
 
 test("两项都授予才算 ready", () => {
-  assert.equal(
-    hasRequiredMacOSPermissions({ accessibility: true, screenRecording: true }),
-    true,
-  );
+  assert.equal(hasRequiredMacOSPermissions({ accessibility: true, screenRecording: true }), true);
   assert.equal(hasRequiredMacOSPermissions({ accessibility: true, screenRecording: false }), false);
   assert.equal(hasRequiredMacOSPermissions(undefined), false);
 });
@@ -37,15 +34,31 @@ test("宿主缺 requestMacOSPermissions 时 fail-closed 返回 undefined", async
 });
 
 test("加载失败（非 macOS / 原生库缺失）不抛，返回 undefined", async () => {
-  assert.equal(await requestMacOSPermissionsFromHost({ load: async () => { throw new Error("nope"); } }), undefined);
-  assert.equal(await openMacOSScreenRecordingSettingsPanel({ load: async () => { throw new Error("nope"); } }), false);
+  assert.equal(
+    await requestMacOSPermissionsFromHost({
+      load: async () => {
+        throw new Error("nope");
+      },
+    }),
+    undefined,
+  );
+  assert.equal(
+    await openMacOSScreenRecordingSettingsPanel({
+      load: async () => {
+        throw new Error("nope");
+      },
+    }),
+    false,
+  );
 });
 
 test("打开设置面板成功返回 true", async () => {
   const calls = [];
   const ok = await openMacOSScreenRecordingSettingsPanel({
     load: async () => ({
-      openMacOSScreenRecordingSettings: async () => { calls.push("open"); },
+      openMacOSScreenRecordingSettings: async () => {
+        calls.push("open");
+      },
     }),
   });
   assert.equal(ok, true);
@@ -55,7 +68,9 @@ test("打开设置面板成功返回 true", async () => {
 test("打开设置面板抛错时吞掉并返回 false", async () => {
   const ok = await openMacOSScreenRecordingSettingsPanel({
     load: async () => ({
-      openMacOSScreenRecordingSettings: async () => { throw new Error("denied"); },
+      openMacOSScreenRecordingSettings: async () => {
+        throw new Error("denied");
+      },
     }),
   });
   assert.equal(ok, false);

@@ -9,12 +9,12 @@
 
 被否决的候选：
 
-| 候选                        | 否决理由                                                                 |
-| --------------------------- | ------------------------------------------------------------------------ |
-| 自研 `desk-pilot`（Rust）   | 重复实现；四平台后端 + Wayland portal/libei 从零做，无 E2E 证据          |
-| `lahfir/agent-desktop`      | 实际仅 macOS：`crates/linux`、`crates/windows` 是空壳（各 13 文件）      |
+| 候选                              | 否决理由                                                                      |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| 自研 `desk-pilot`（Rust）         | 重复实现；四平台后端 + Wayland portal/libei 从零做，无 E2E 证据               |
+| `lahfir/agent-desktop`            | 实际仅 macOS：`crates/linux`、`crates/windows` 是空壳（各 13 文件）           |
 | `iFurySt/open-codex-computer-use` | 模型面与 Codex 同构，但 Windows/Linux 是"功能性第一版"，成熟度低于 cua-driver |
-| `generic-cua-runtime.md` 方案 | shell 调 `xdotool` 等，等于自研原生层，且 Wayland 无输入路径             |
+| `generic-cua-runtime.md` 方案     | shell 调 `xdotool` 等，等于自研原生层，且 Wayland 无输入路径                  |
 
 选 cua-driver 的决定性证据：
 
@@ -47,13 +47,13 @@
 
 **唯一所有者**
 
-| 状态                     | 所有者                                            | 其他层                                |
-| ------------------------ | ------------------------------------------------- | ------------------------------------- |
-| 桌面观察 / snapshot / ref | cua-driver（唯一）                                | bridge 不缓存，每次向 driver 取当前值 |
-| 输入投递 / 后台/前台策略  | cua-driver                                        | runtime 只透传                        |
-| session / 多调用标签      | cua-driver `start_session` / `end_session`        | runtime 把 `context.sessionId` 映射之 |
-| 权限授权（macOS TCC）     | **ZCode.app**（cua-driver 嵌入继承，不自建信任链） | `check_permissions` 只报告            |
-| workspace / subagent / trace | ZCode bridge + runtime context                  | driver 不感知                         |
+| 状态                         | 所有者                                             | 其他层                                |
+| ---------------------------- | -------------------------------------------------- | ------------------------------------- |
+| 桌面观察 / snapshot / ref    | cua-driver（唯一）                                 | bridge 不缓存，每次向 driver 取当前值 |
+| 输入投递 / 后台/前台策略     | cua-driver                                         | runtime 只透传                        |
+| session / 多调用标签         | cua-driver `start_session` / `end_session`         | runtime 把 `context.sessionId` 映射之 |
+| 权限授权（macOS TCC）        | **ZCode.app**（cua-driver 嵌入继承，不自建信任链） | `check_permissions` 只报告            |
+| workspace / subagent / trace | ZCode bridge + runtime context                     | driver 不感知                         |
 
 不新增第二条写入路径：runtime 不缓存窗口列表、坐标、剪贴板。
 
@@ -61,13 +61,13 @@
 
 - **推荐路径始终是 cua-driver 原生**，覆盖 Ubuntu 24.04+ / GNOME 45+（官方台账含 GNOME 46）。
 - **兼容层（compatible）** 只服务老 GNOME（Ubuntu 22.04 / GNOME 42，portal v1 无 libei、元素 `frame` 坐标系错位）：
-  `click / type_text / hotkey / press_key / scroll / drag` 兜底到 
+  `click / type_text / hotkey / press_key / scroll / drag` 兜底到
   **mutter 直连注入 + WinRects 扩展**；观察与语义（`get_window_state` / `list_windows` / `set_value`）仍只走 cua-driver。
   兼容层放 `packages/zcode-cua/compatible/`，默认不加载，仅在原生不可用时启用。
-路由已接入：`createComputerUseRuntime({ client, compat })`，`compat.applies` 为真且工具属输入类时
-走 `compatible/executor.js`；观察/语义始终走 cua-driver。
-完整接口、坐标公式、键盘/文本映射、helper 进程与验证记录见 `.agents/specs/computer-use-wayland-input.md`。
-全平台（Windows / macOS / Linux X11 / 各 Wayland 合成器）的机制与计划见 `.agents/specs/computer-use-platform-architecture.md`。
+  路由已接入：`createComputerUseRuntime({ client, compat })`，`compat.applies` 为真且工具属输入类时
+  走 `compatible/executor.js`；观察/语义始终走 cua-driver。
+  完整接口、坐标公式、键盘/文本映射、helper 进程与验证记录见 `.agents/specs/computer-use-wayland-input.md`。
+  全平台（Windows / macOS / Linux X11 / 各 Wayland 合成器）的机制与计划见 `.agents/specs/computer-use-platform-architecture.md`。
 
 ## 接口
 
@@ -101,13 +101,13 @@ createComputerUseRuntime(options?: {
 
 ## 失败路径
 
-| 场景                   | 行为                                                            |
-| ---------------------- | --------------------------------------------------------------- |
-| driver 不存在/未授权   | `createComputerUseRuntime` 返回 fail-closed runtime，原因可达模型 |
-| 平台不支持某原语       | 透传 cua-driver 的结构化 refusal，`actionSent:false`             |
-| 动作可能已下发         | `actionSent:true`，不自动重试                                    |
-| 参数校验失败           | `actionSent:false`                                              |
-| abort                  | 传播 `AbortError`，不产生新副作用                                |
+| 场景                 | 行为                                                              |
+| -------------------- | ----------------------------------------------------------------- |
+| driver 不存在/未授权 | `createComputerUseRuntime` 返回 fail-closed runtime，原因可达模型 |
+| 平台不支持某原语     | 透传 cua-driver 的结构化 refusal，`actionSent:false`              |
+| 动作可能已下发       | `actionSent:true`，不自动重试                                     |
+| 参数校验失败         | `actionSent:false`                                                |
+| abort                | 传播 `AbortError`，不产生新副作用                                 |
 
 ## 迁移边界
 
@@ -121,14 +121,14 @@ createComputerUseRuntime(options?: {
 
 ## 实施顺序
 
-| 阶段 | 内容                                                                 | 状态   |
-| ---- | -------------------------------------------------------------------- | ------ |
-| P0   | `createComputerUseRuntime` 适配器 + 注入点 + 假 client 单测 | 已完成（13/13 单测；已用真实 driver 验证） |
-| P1   | Desktop 嵌入 cua-driver（bin + TS SDK）、打包、macOS 权限继承         | 未开始 |
-| P2   | bridge/broker 与 runtime 接线，删 `ZCODE_CUA_PERMISSION_BROKER_SOCKET` 依赖 | 未开始 |
-| P3   | 模型面 / SKILL / docs 对齐 cua-driver 工具；UI 工具渲染块复核         | 未开始 |
-| P4   | 清理 Helper 残留；NOTICE / 第三方清单                                 | 未开始 |
-| P5   | E2E：macOS/Windows 截图→元素点击→输入→再观察闭环                      | 未开始 |
+| 阶段 | 内容                                                                        | 状态                                       |
+| ---- | --------------------------------------------------------------------------- | ------------------------------------------ |
+| P0   | `createComputerUseRuntime` 适配器 + 注入点 + 假 client 单测                 | 已完成（13/13 单测；已用真实 driver 验证） |
+| P1   | Desktop 嵌入 cua-driver（bin + TS SDK）、打包、macOS 权限继承               | 未开始                                     |
+| P2   | bridge/broker 与 runtime 接线，删 `ZCODE_CUA_PERMISSION_BROKER_SOCKET` 依赖 | 未开始                                     |
+| P3   | 模型面 / SKILL / docs 对齐 cua-driver 工具；UI 工具渲染块复核               | 未开始                                     |
+| P4   | 清理 Helper 残留；NOTICE / 第三方清单                                       | 未开始                                     |
+| P5   | E2E：macOS/Windows 截图→元素点击→输入→再观察闭环                            | 未开始                                     |
 
 ## 验收场景
 

@@ -86,22 +86,40 @@ export function resolvePlatformPath({
   const desktop = `${env.XDG_CURRENT_DESKTOP ?? ""}${env.XDG_SESSION_DESKTOP ?? ""}`;
   const base = { platform, session, desktop };
 
-  if (platform === "darwin") return { ...base, path: "native", reason: "cua-driver native (macOS)" };
-  if (platform === "win32") return { ...base, path: "native", reason: "cua-driver native (Windows)" };
+  if (platform === "darwin")
+    return { ...base, path: "native", reason: "cua-driver native (macOS)" };
+  if (platform === "win32")
+    return { ...base, path: "native", reason: "cua-driver native (Windows)" };
   if (platform !== "linux") return { ...base, path: "native", reason: "cua-driver native" };
-  if (session !== "wayland") return { ...base, path: "native", reason: "X11 native (XSendEvent/XTest)" };
+  if (session !== "wayland")
+    return { ...base, path: "native", reason: "X11 native (XSendEvent/XTest)" };
 
   if (/gnome/i.test(desktop)) {
-    const compat = detectWaylandCompat({ platform, env, gnomeShellVersion, portalRemoteDesktopVersion, winRectsVersion });
+    const compat = detectWaylandCompat({
+      platform,
+      env,
+      gnomeShellVersion,
+      portalRemoteDesktopVersion,
+      winRectsVersion,
+    });
     if (compat.applies) return { ...base, path: "compat", reason: compat.reason };
-    if (/WinRects/.test(compat.reason)) return { ...base, path: "unavailable", reason: compat.reason };
+    if (/WinRects/.test(compat.reason))
+      return { ...base, path: "unavailable", reason: compat.reason };
     return { ...base, path: "native", reason: "GNOME native (portal/libei or winrects@cua)" };
   }
   if (KDE.test(desktop)) {
-    return { ...base, path: "unavailable", reason: "KWin target-addressable adapter is not provided upstream" };
+    return {
+      ...base,
+      path: "unavailable",
+      reason: "KWin target-addressable adapter is not provided upstream",
+    };
   }
   if (WLR_COMPOSITORS.test(desktop) || HYPRLAND.test(desktop)) {
-    return { ...base, path: "native", reason: "wlroots/Hyprland native (virtual-pointer/keyboard)" };
+    return {
+      ...base,
+      path: "native",
+      reason: "wlroots/Hyprland native (virtual-pointer/keyboard)",
+    };
   }
   return { ...base, path: "native", reason: "cua-driver native (probe)" };
 }

@@ -45,5 +45,6 @@ export interface IAstrBotBridgeService {
   ackDeliveryByFrameId(deliveryId: string): void;
 }
 
-export const IAstrBotBridgeService =
-  createServiceDescriptor<IAstrBotBridgeService>(ServiceChannels.AstrBotBridge);
+export const IAstrBotBridgeService = createServiceDescriptor<IAstrBotBridgeService>(
+  ServiceChannels.AstrBotBridge,
+);

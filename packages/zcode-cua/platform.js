@@ -36,7 +36,18 @@ export function probeGnomeEnvironment() {
     try {
       const out = execFileSync(
         "gdbus",
-        ["call", "--session", "--dest", dest, "--object-path", "/org/freedesktop/portal/desktop", "--method", "org.freedesktop.DBus.Properties.Get", iface, "version"],
+        [
+          "call",
+          "--session",
+          "--dest",
+          dest,
+          "--object-path",
+          "/org/freedesktop/portal/desktop",
+          "--method",
+          "org.freedesktop.DBus.Properties.Get",
+          iface,
+          "version",
+        ],
         { encoding: "utf8" },
       );
       return /uint32 (\d+)/.exec(out)?.[1];
@@ -44,11 +55,23 @@ export function probeGnomeEnvironment() {
       return undefined;
     }
   };
-  probes.portalRemoteDesktopVersion = property("org.freedesktop.portal.Desktop", "org.freedesktop.portal.RemoteDesktop");
+  probes.portalRemoteDesktopVersion = property(
+    "org.freedesktop.portal.Desktop",
+    "org.freedesktop.portal.RemoteDesktop",
+  );
   try {
     const out = execFileSync(
       "gdbus",
-      ["call", "--session", "--dest", "org.cua.WinRects", "--object-path", "/org/cua/WinRects", "--method", "org.cua.WinRects.GetVersion"],
+      [
+        "call",
+        "--session",
+        "--dest",
+        "org.cua.WinRects",
+        "--object-path",
+        "/org/cua/WinRects",
+        "--method",
+        "org.cua.WinRects.GetVersion",
+      ],
       { encoding: "utf8" },
     );
     probes.winRectsVersion = /uint32 (\d+)/.exec(out)?.[1];
@@ -74,7 +97,11 @@ export function describeCompatReadiness(probes = {}) {
     probes.winRectsVersion !== null &&
     String(probes.winRectsVersion).trim() !== "";
   if (reachable) {
-    return { ready: true, needsExtension: false, reason: "compat ready (org.cua.WinRects reachable)" };
+    return {
+      ready: true,
+      needsExtension: false,
+      reason: "compat ready (org.cua.WinRects reachable)",
+    };
   }
   return {
     ready: false,
@@ -127,7 +154,11 @@ export function assembleComputerUseRuntime({
   const requiresMacOsPermissions = path.path === "native" && platform === "darwin";
 
   if (path.path === "unavailable") {
-    return { path, runtime: createUnavailableRuntime(path.reason), requiresMacOsPermissions: false };
+    return {
+      path,
+      runtime: createUnavailableRuntime(path.reason),
+      requiresMacOsPermissions: false,
+    };
   }
 
   let driverClient = client;
@@ -141,13 +172,17 @@ export function assembleComputerUseRuntime({
   if (!driverClient) {
     return {
       path,
-      runtime: createUnavailableRuntime(`Computer Use unavailable: no cua-driver client for ${path.path} path`),
+      runtime: createUnavailableRuntime(
+        `Computer Use unavailable: no cua-driver client for ${path.path} path`,
+      ),
       requiresMacOsPermissions,
     };
   }
 
   const compatOptions =
-    path.path === "compat" ? (compat ?? createCompatRuntimeOptions({ client: driverClient })) : undefined;
+    path.path === "compat"
+      ? (compat ?? createCompatRuntimeOptions({ client: driverClient }))
+      : undefined;
   return {
     path,
     runtime: createComputerUseRuntime({ client: driverClient, compat: compatOptions }),
@@ -181,7 +216,9 @@ export async function assembleComputerUseRuntimeAsync({
   const CuaDriver = driverModule ?? (await loadCuaDriver());
   const connectDriver = CuaDriver
     ? (path) =>
-        path && typeof CuaDriver.connect === "function" ? CuaDriver.connect(path) : CuaDriver.create?.(undefined)
+        path && typeof CuaDriver.connect === "function"
+          ? CuaDriver.connect(path)
+          : CuaDriver.create?.(undefined)
     : undefined;
   return assembleComputerUseRuntime({ platform, env, probes, socketPath, compat, connectDriver });
 }
