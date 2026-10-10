@@ -37,6 +37,12 @@ a closed app. If the app has several windows, inspect
 `await cua.computer.list_windows({ app_ref: { pid } })` and pin the intended window
 with `await cua.getWindow({ pid }, windowId)`.
 
+Copy an application name character-for-character from `listApps()`: do not
+translate, localize, shorten or drop a suffix. `{"name":"网易云音乐app"}` is not
+`{"name":"网易云音乐"}`, and a rewritten name resolves to another app or to
+nothing. If the exact string does not resolve, call `listApps()` once and use the
+identifier it returns instead of guessing a variation.
+
 ```js
 // Replace the example PID with the one returned for the requested application.
 const app = await cua.getApp({ pid: 1234 });
@@ -46,6 +52,21 @@ await app.getAXState();
 Binding performs a hidden observation to validate the app. Call `getAXState()`
 to actually show the tree. Element numbers belong to the latest observation of
 that window; never reuse numbers from another app or infer them from a screenshot.
+
+`await app.elements()` returns every element with its index, including the ones a
+trimmed tree omitted — filter it in JavaScript instead of guessing an index.
+
+The tree comes back as a diff against a tree this cell already showed: unchanged
+rows are omitted and their indices stay valid. The first tree after binding, and the
+first after `getScreenshot()` or `elements()`, is always complete, so pass
+`{ disableDiffing: true }` only when you need a full tree at another point. A large
+tree is trimmed by priority and the header says so, which is why indices then skip
+numbers.
+
+A capture is scoped to one window. Without a pinned `window_id` the main window is
+re-resolved on every observation, so a modal that just opened becomes the captured
+window: read the returned `window`, act on it or dismiss it, then observe again. A
+missing element is not proof that an action worked.
 
 ## Observe, act, check
 
@@ -73,7 +94,7 @@ Do not silently fall back to another field if the target is unavailable.
 | Method                                        | Behavior                                                                                                                                                                                                                                                      |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `getAXState(options?)`                        | Shows the accessibility tree and returns its text. `{ emit: false }` suppresses text display; `{ disableDiffing: true }` requests the full tree.                                                                                                              |
-| `getScreenshot(options?)`                     | Returns screenshot bytes. The host already forwards the image; do not emit it twice.                                                                                                                                                                          |
+| `getScreenshot(options?)`                     | Returns screenshot bytes; the host forwards the image itself.                                                                                                                                                                                                |
 | `getAXStateAndScreenshot(options?)`           | Returns `{ state, screenshot? }`, showing the tree and forwarding any available image.                                                                                                                                                                        |
 | `click(target, options?)`                     | `target` is an element number or `[x, y]`; options include `mouseButton`, `clickCount`, and `modifiers`.                                                                                                                                                      |
 | `drag(from, to, options?)`                    | Both endpoints use element numbers or `[x, y]`. First obtain a screenshot; an element endpoint needs usable geometry in that same observation. `deliveryMode: "foreground"` explicitly permits the driver to activate the target and restore the prior focus. |
@@ -87,6 +108,30 @@ Do not silently fall back to another field if the target is unavailable.
 but currently return `ACTION_UNAVAILABLE` from the runtime. Do not plan a task
 around them or invent action names.
 
+## Other entry points
+
+- `await cua.getState()` / `await cua.listApps()` — the app inventory; both display
+  their own result.
+- `await agent.documentation.get("computer-use")` — the full API reference
+  (argument shapes, response fields, error codes). Read it on demand instead of
+  guessing an argument; the host does not push it into the conversation.
+- `await cua.requestAccess(capabilities?)` — reports the permissions the runtime
+  currently holds. Loading the SDK grants nothing.
+- `await cua.stop(reason?)` — ends the control session. Stop immediately after a
+  permission refusal or a non-retryable error instead of switching to another
+  UI-automation technology.
+- `await cua.computer.<tool>(args)` — the low-level surface. Prefer the bound-object
+  API above; reach for a tool only for what the API does not express.
+
+An observation displays itself; never pass its return value to `nodeRepl.write` or
+`nodeRepl.emitImage` as well. A second raster in one result breaks the one-raster
+rule and the frame is removed entirely, leaving no picture at all. Action methods
+display nothing.
+
+Never use AppleScript, `osascript`, JXA, System Events or shell commands to drive an
+application, and do not use Computer Use for anything inside a web page — that
+belongs to Browser Use.
+
 For coordinate actions, use non-negative integer pixels inside the returned
 image. Desktop coordinates and window bounds are not screenshot pixels,
 especially with display scaling. A new observation invalidates an older frame;
@@ -97,13 +142,22 @@ valid; their validity is checked by the driver.
 
 ## Failures and permissions
 
-- `STALE_STATE` / `STRUCTURED_STATE_UNAVAILABLE`: observe the correct window again.
-- `ELEMENT_UNAVAILABLE`: inspect the updated UI; do not guess another element.
-- `PERMISSION_DENIED` / `NOT_AUTHORIZED`: explain the required local permission.
-- `ACTION_UNAVAILABLE`: the operation is unsupported; choose another supported
-  interaction or explain the limitation.
-- `Computer Use runtime bridge is unavailable`: enable the plugin or restore the
-  bundled runtime. Never fetch an official binary to work around this error.
+A failed action throws with `code`, `actionSent` and `retry`. Read `retry` before
+repeating anything.
+
+| Code | What to do |
+| --- | --- |
+| `STALE_STATE`, `STRUCTURED_STATE_UNAVAILABLE` | Observe the correct window again |
+| `ELEMENT_UNAVAILABLE` | Inspect the updated UI; do not guess another element |
+| `PERMISSION_DENIED`, `NOT_AUTHORIZED` | Explain the required local permission |
+| `ACTION_UNAVAILABLE` | Unsupported; choose another interaction or explain the limitation |
+| `INVALID_APP`, `LAUNCH_FAILED` | Resolve the app through `listApps()` and retry once |
+| `NOT_SETTABLE`, `NOT_SELECTABLE` | The element does not support that edit |
+| `FOREGROUND_REQUIRED` | The app ignores background input; decide deliberately |
+| `CONTROLLER_BUSY` | Another live session owns input: report the owner and stop |
+| `HELPER_UNAVAILABLE`, `VERSION_MISMATCH` | Enable the plugin or restore the bundled runtime; never fetch an official binary |
+| `TIMEOUT` | The runtime did not become ready; do not loop |
+| `INTERNAL` | Unclassified; re-observe and report if it repeats |
 
 An error with `actionSent: true` may have changed the UI. Re-observe before
 retrying to avoid duplicate clicks, typing, or submissions. Do not add your own
