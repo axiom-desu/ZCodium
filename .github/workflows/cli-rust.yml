@@ -46,3 +46,17 @@ jobs:
         run: cargo clippy --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --all-targets -- -D warnings
       - name: Cargo test
         run: pnpm test:zcode-cli-rust
+
+  # 契约漂移检测与 Rust 构建分开：rust job 刻意不装 node_modules（Rust 构建不需要），
+  # 而这里必须跑 TS zod 契约，因此单独一个装了依赖的 job，互不拖慢。
+  protocol-schema:
+    name: Protocol contract drift
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+      - name: Protocol contract drift
+        run: pnpm check:zcode-cli-rust-protocol-schema
