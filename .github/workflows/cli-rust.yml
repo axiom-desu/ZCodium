@@ -1,0 +1,48 @@
+name: CLI Rust CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-rust-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+env:
+  HUSKY: "0"
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      # Rust 构建不需要 node_modules，但命令走 pnpm script（单一事实来源），
+      # 所以要 pnpm 与 node 而跳过依赖安装。install-pnpm 必须显式为 true：
+      # setup-workspace 原本把「装 pnpm」与「装依赖」绑在同一个开关上。
+      - uses: ./.github/actions/setup-workspace
+        with:
+          install-dependencies: "false"
+          install-pnpm: "true"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cargo build
+        run: pnpm build:zcode-cli-rust
+      # 边界检查必须在 fmt/clippy 之前：违规的依赖方向会让后续检查的输出难以归因。
+      - name: Crate boundaries
+        run: node scripts/check-zcode-cli-rust-boundaries.mjs
+      - name: Cargo fmt
+        run: cargo fmt --manifest-path apps/zcode-cli-rust/Cargo.toml --all --check
+      - name: Cargo clippy
+        run: cargo clippy --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --all-targets -- -D warnings
+      - name: Cargo test
+        run: pnpm test:zcode-cli-rust

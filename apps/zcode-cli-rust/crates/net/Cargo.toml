@@ -1,0 +1,16 @@
+[package]
+name = "zcode-cli-net"
+description = "出站 HTTP：连接复用、TLS、代理与超时策略"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zcode-cli-protocol.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-core-api.workspace = true
