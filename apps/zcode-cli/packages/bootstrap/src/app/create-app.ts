@@ -631,6 +631,9 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
                 // request 在这里只是工厂签名的占位：opts 为空即「不覆盖任何东西」。
                 request: { opts: {} } as never,
                 traceContext,
+                // 子代理的 Browser Use：父会话的端口，由工厂经 forChildSession 派生子端口（tab 归属是
+                // actor 自己的 sessionId）。actor runtime 关闭时连 tab 一起关并撤销登记。
+                ...(browserControlPort === undefined ? {} : { browserControlPort }),
                 // submit profile → submit_result 形态：
                 // `untyped` 不注入端口（core 的注册门是端口在场，于是没有这个工具——全 untyped 的子代理
                 // 本来就无处可提交）；`mono` 注入端口 + typed 声明；`generic` 只注入端口（通用声明）。

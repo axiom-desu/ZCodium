@@ -127,12 +127,29 @@ test("first-start seed carries native dependencies, excludes workspace modules a
     "../../apps/zcode-cli/packages/bootstrap/src/app/bundled-plugins.ts",
     import.meta.url,
   );
+  const { OFFICIAL_PLUGIN_DEFINITIONS } = await tsImport(
+    "../../apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts",
+    import.meta.url,
+  );
+  // 缓存目录取的是官方 seed 定义里的 version，不是 fixture 自己写的那个——两者不一致时
+  // 这里会直接找不到目录。所以从定义取值，不写死字面量。
+  const definition = OFFICIAL_PLUGIN_DEFINITIONS.find((entry) => entry.name === "node-repl-host");
+  assert.ok(definition, "node-repl-host must have an official plugin definition");
+  // 五处版本一致（package.json / manifest / serverInfo / 定义 / SEA 清单）里的前三处：
+  // manifest 是真实读盘的那份，与定义逐字一致才不会让官方 seed 继续加载旧缓存目录。
+  const manifest = JSON.parse(
+    await readFile(
+      resolve("apps/zcode-cli/packages/node-repl-host/.zcodium-plugin/plugin.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(manifest.version, definition.version);
   const root = await fixture(t);
   const source = join(root, "packages/node-repl-host");
   await mkdir(join(source, ".zcodium-plugin"), { recursive: true });
   await writeFile(
     join(source, ".zcodium-plugin/plugin.json"),
-    JSON.stringify({ name: "node-repl-host", version: "0.6.0" }),
+    JSON.stringify({ name: "node-repl-host", version: definition.version }),
   );
   await stageCuaDriverRuntime(source);
   await writeFile(join(source, "dist/mcp/server.js"), "// seed fixture");
@@ -143,7 +160,10 @@ test("first-start seed carries native dependencies, excludes workspace modules a
   try {
     const storageRoot = join(root, "storage");
     resolveOfficialPluginRoots({ storageRoot });
-    const cache = join(storageRoot, "cache/zcode-plugins-official/node-repl-host/0.6.0");
+    const cache = join(
+      storageRoot,
+      `cache/zcode-plugins-official/node-repl-host/${definition.version}`,
+    );
     for (const path of cuaRuntimeRequiredPaths(process.platform, process.arch)) {
       assert.deepEqual(await readFile(join(cache, path)), await readFile(join(source, path)));
     }
