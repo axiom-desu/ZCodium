@@ -48,6 +48,23 @@ export const BUILTIN_PLUGIN_SEED_PATHS = {
     "skills/web-gui-tester/SKILL.md",
   ],
   "node-repl-host": ["dist/mcp/server.js"],
+  "android-emulator-plugin": [
+    "dist/mcp/server.js",
+    ".mcp.json",
+    "commands/android-dev.md",
+    "hooks/hooks.json",
+    "skills/android-dev/INSTALL_ENVIRONMENT.md",
+    "skills/android-dev/SKILL.md",
+    "templates/compose-app/README.md",
+  ],
+  "ios-simulator-plugin": [
+    "dist/mcp/server.js",
+    ".mcp.json",
+    "commands/ios-dev.md",
+    "hooks/hooks.json",
+    "skills/ios-dev/SKILL.md",
+    "templates/swiftui-app/README.md",
+  ],
   // Bugfix：上游 662c30bea（UI plugins / Gen UI）把 visualize-plugin 加进了 staged 官方
   // 插件清单，但那次 cherry-pick（6bb868c）只搬了插件源码，没有搬这份注册表——
   // 本仓库的清单是派生自这里的（BUILTIN_PLUGIN_ASSETS 由本表的键生成），上游则是内联
@@ -243,10 +260,27 @@ export interface BuiltinPluginAsset {
   runtimeBuildScript: string;
 }
 
+/**
+ * 打包期生成运行时用的脚本（相对插件根目录），`requiresRuntime` 以此为唯一依据。
+ *
+ * 为什么需要这张表：`bootstrap:with-remote` 的等价构建路径会在插件目录里先跑 `tsc`，
+ * 再 `node <runtimeBuildScript>`；脚本名必须真实存在。node-repl-host 与 browser-use
+ * 用 `scripts/build.mjs`，而 android / ios emulator 两个插件的打包脚本叫
+ * `scripts/build-mcp.mjs`（esbuild 把 `src/mcp/server.ts` 打成自包含的 `dist/mcp/server.js`）。
+ * 不加这两个插件的话，它们的 seed 清单里的 `dist/mcp/server.js` 永远不会被构建。
+ */
+const RUNTIME_BUILD_SCRIPTS: Partial<Record<keyof typeof BUILTIN_PLUGIN_SEED_PATHS, string>> = {
+  "browser-use-plugin": "scripts/build.mjs",
+  "node-repl-host": "scripts/build.mjs",
+  "android-emulator-plugin": "scripts/build-mcp.mjs",
+  "ios-simulator-plugin": "scripts/build-mcp.mjs",
+};
+
 export const BUILTIN_PLUGIN_ASSETS: readonly BuiltinPluginAsset[] = (
   Object.keys(BUILTIN_PLUGIN_SEED_PATHS) as Array<keyof typeof BUILTIN_PLUGIN_SEED_PATHS>
 ).map((directory) => {
-  const requiresRuntime = directory === "browser-use-plugin" || directory === "node-repl-host";
+  const runtimeBuildScript = RUNTIME_BUILD_SCRIPTS[directory];
+  const requiresRuntime = runtimeBuildScript !== undefined;
   return {
     directory,
     packageName: `@zcode/${directory}`,
@@ -255,7 +289,7 @@ export const BUILTIN_PLUGIN_ASSETS: readonly BuiltinPluginAsset[] = (
     requiredSeedPaths: BUILTIN_PLUGIN_SEED_PATHS[directory],
     requiresRuntime,
     requiredRuntimePaths: requiresRuntime ? BUILTIN_PLUGIN_SEED_PATHS[directory] : [],
-    runtimeBuildScript: "scripts/build.mjs",
+    runtimeBuildScript: runtimeBuildScript ?? "scripts/build.mjs",
   };
 });
 

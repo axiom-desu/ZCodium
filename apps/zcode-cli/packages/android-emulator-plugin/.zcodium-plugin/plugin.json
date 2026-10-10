@@ -2,18 +2,16 @@
   "name": "android-emulator",
   "version": "0.1.0",
   "description": "Provides Android development workflows and emulator automation for ZCode.",
-  "author": { "name": "ZCodium" },
+  "author": { "name": "Z.ai" },
   "license": "MIT",
   "skills": "skills",
   "commands": "commands",
   "mcpServers": {
     "android-emulator": {
       "command": "node",
-      "args": ["${ZCODE_PLUGIN_ROOT}/scripts/mcp/server.mjs"],
+      "args": ["${ZCODE_PLUGIN_ROOT}/dist/mcp/server.js"],
       "cwd": "${ZCODE_PROJECT_DIR}",
       "env": {
-        "ANDROID_PLUGIN_ADB": "${user_config.adb_path}",
-        "ANDROID_PLUGIN_EMULATOR": "${user_config.emulator_path}",
         "ANDROID_PLUGIN_DATA": "${ZCODE_PLUGIN_DATA}",
         "ANDROID_PLUGIN_SDK_PATH": "${user_config.sdk_path}",
         "ANDROID_PLUGIN_DEFAULT_AVD": "${user_config.default_avd}",
@@ -30,16 +28,6 @@
       "type": "string",
       "default": "",
       "description": "Optional Android SDK root directory. When empty, falls back to ANDROID_HOME, ANDROID_SDK_ROOT, or common system paths."
-    },
-    "adb_path": {
-      "type": "string",
-      "default": "adb",
-      "description": "adb executable: a bare name resolved on PATH, or an absolute path inside an SDK."
-    },
-    "emulator_path": {
-      "type": "string",
-      "default": "emulator",
-      "description": "emulator executable: a bare name resolved on PATH, or an absolute path inside an SDK."
     },
     "default_avd": {
       "type": "string",
