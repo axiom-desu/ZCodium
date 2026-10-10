@@ -1,0 +1,425 @@
+{
+  "commands": [
+    {
+      "name": "uuid-nil",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"ttft\":{\"version\":1,\"observationId\":\"00000000-0000-0000-0000-000000000000\"}}",
+      "ok": true,
+      "parsed": {
+        "ttft": {
+          "version": 1,
+          "observationId": "00000000-0000-0000-0000-000000000000"
+        },
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "sendText",
+        "payload": {
+          "text": "hello"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "uuid-max",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"ttft\":{\"version\":1,\"observationId\":\"ffffffff-ffff-ffff-ffff-ffffffffffff\"}}",
+      "ok": true,
+      "parsed": {
+        "ttft": {
+          "version": 1,
+          "observationId": "ffffffff-ffff-ffff-ffff-ffffffffffff"
+        },
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "sendText",
+        "payload": {
+          "text": "hello"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "uuid-ordinary",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"ttft\":{\"version\":1,\"observationId\":\"01890a5d-ac96-774b-bcce-b302099a8057\"}}",
+      "ok": true,
+      "parsed": {
+        "ttft": {
+          "version": 1,
+          "observationId": "01890a5d-ac96-774b-bcce-b302099a8057"
+        },
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "sendText",
+        "payload": {
+          "text": "hello"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "uuid-invalid",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"ttft\":{\"version\":1,\"observationId\":\"01890a5d-ac96-074b-bcce-b302099a8057\"}}",
+      "ok": false
+    },
+    {
+      "name": "uuid-braces",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"ttft\":{\"version\":1,\"observationId\":\"{01890a5d-ac96-774b-bcce-b302099a8057}\"}}",
+      "ok": false
+    },
+    {
+      "name": "uuid-unicode",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"ttft\":{\"version\":1,\"observationId\":\"😀1890a5d-ac96-774b-bcce-b302099a8057\"}}",
+      "ok": false
+    },
+    {
+      "name": "send-text-offpeak-command-id",
+      "raw": "{\"commandId\":\"offpeak-legacy\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1}",
+      "ok": false
+    },
+    {
+      "name": "send-text-offpeak-command-id-whitespace",
+      "raw": "{\"commandId\":\"  offpeak-legacy  \",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1}",
+      "ok": false
+    },
+    {
+      "name": "send-text-command-id-whitespace",
+      "raw": "{\"commandId\":\"  command-1  \",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1}",
+      "ok": true,
+      "parsed": {
+        "commandId": "  command-1  ",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "sendText",
+        "payload": {
+          "text": "hello"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "json-number-integer-literal",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "sendText",
+        "payload": {
+          "text": "hello"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "json-number-decimal-literal",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1.0}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "sendText",
+        "payload": {
+          "text": "hello"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "base-revision-one",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"setFollowupMode\",\"payload\":{\"mode\":\"queue\"},\"issuedAt\":1,\"baseRevision\":1}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "baseRevision": 1,
+        "type": "setFollowupMode",
+        "payload": {
+          "mode": "queue"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "base-revision-one-decimal",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"setFollowupMode\",\"payload\":{\"mode\":\"queue\"},\"issuedAt\":1,\"baseRevision\":1.0}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "baseRevision": 1,
+        "type": "setFollowupMode",
+        "payload": {
+          "mode": "queue"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "base-revision-negative",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"setFollowupMode\",\"payload\":{\"mode\":\"queue\"},\"issuedAt\":1,\"baseRevision\":-1}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "baseRevision": -1,
+        "type": "setFollowupMode",
+        "payload": {
+          "mode": "queue"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "base-revision-fractional",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"setFollowupMode\",\"payload\":{\"mode\":\"queue\"},\"issuedAt\":1,\"baseRevision\":1.5}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "baseRevision": 1.5,
+        "type": "setFollowupMode",
+        "payload": {
+          "mode": "queue"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "create-session-strip-unknown",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"createSession\",\"payload\":{\"workspaceId\":\"workspace\",\"unexpected\":true,\"config\":{\"mode\":\"build\",\"ignored\":true}},\"issuedAt\":1}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "createSession",
+        "payload": {
+          "workspaceId": "workspace",
+          "config": {
+            "mode": "build"
+          }
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "send-text-strict",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\",\"extra\":true},\"issuedAt\":1}",
+      "ok": false
+    },
+    {
+      "name": "send-text-model-execution-without-selection",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\",\"modelExecution\":{\"selectionScope\":\"execution\"}},\"issuedAt\":1}",
+      "ok": false
+    },
+    {
+      "name": "send-text-off-peak-refinement",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\",\"toolDisallowlist\":[\"OffPeakCreate\"]},\"issuedAt\":1}",
+      "ok": false
+    },
+    {
+      "name": "cas-missing-base-revision",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"setFollowupMode\",\"payload\":{\"mode\":\"queue\"},\"issuedAt\":1}",
+      "ok": false
+    },
+    {
+      "name": "cas-with-base-revision",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"setFollowupMode\",\"payload\":{\"mode\":\"queue\"},\"issuedAt\":1,\"baseRevision\":7}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "baseRevision": 7,
+        "type": "setFollowupMode",
+        "payload": {
+          "mode": "queue"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "optional-fields-preserved",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"ttft\":{\"version\":1,\"observationId\":\"01890a5d-ac96-774b-bcce-b302099a8057\"},\"baseRevision\":9,\"baseLogEpoch\":\"epoch-1\"}",
+      "ok": true,
+      "parsed": {
+        "ttft": {
+          "version": 1,
+          "observationId": "01890a5d-ac96-774b-bcce-b302099a8057"
+        },
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "baseRevision": 9,
+        "baseLogEpoch": "epoch-1",
+        "type": "sendText",
+        "payload": {
+          "text": "hello"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "base-log-epoch-padded",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"baseLogEpoch\":\"  epoch-1  \"}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "baseLogEpoch": "epoch-1",
+        "type": "sendText",
+        "payload": {
+          "text": "hello"
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "base-log-epoch-null",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"baseLogEpoch\":null}",
+      "ok": false
+    },
+    {
+      "name": "base-log-epoch-only-whitespace",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"hello\"},\"issuedAt\":1,\"baseLogEpoch\":\"  ﻿   \"}",
+      "ok": false
+    },
+    {
+      "name": "side-session-first-input-trim",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"createSelectionSideSession\",\"payload\":{\"firstInput\":{\"text\":\"  hello  \"}},\"issuedAt\":1}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "createSelectionSideSession",
+        "payload": {
+          "firstInput": {
+            "text": "hello"
+          }
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "send-text-model-and-browser-context",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"sendText\",\"payload\":{\"text\":\"  preserve text  \",\"modelSelection\":{\"providerId\":\" p \",\"modelId\":\" m \",\"options\":{\"reasoningLevel\":\" deep \"}},\"browserAmbientContext\":{\"tabCount\":1,\"currentUrl\":\" https://example.invalid/path \"},\"context_refs\":[{\"kind\":\"shared_context_import\",\"context_id\":\" ref-1 \"}]},\"issuedAt\":1}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "sendText",
+        "payload": {
+          "text": "  preserve text  ",
+          "browserAmbientContext": {
+            "tabCount": 1,
+            "currentUrl": "https://example.invalid/path"
+          },
+          "context_refs": [
+            {
+              "kind": "shared_context_import",
+              "context_id": "ref-1"
+            }
+          ],
+          "modelSelection": {
+            "providerId": "p",
+            "modelId": "m",
+            "options": {
+              "reasoningLevel": "deep"
+            }
+          }
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "workspace-hook-review-trimmed-identifiers",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"respondWorkspaceHookReview\",\"payload\":{\"sessionId\":\" session \",\"taskId\":\" task \",\"runId\":\" run \",\"workspaceIdentity\":\" identity \",\"bundleDigest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"reviewFlowId\":\" flow \",\"generation\":1,\"interactionId\":\" interaction \",\"decision\":{\"action\":\"trust_selected\",\"reviewItemIds\":[\" item-1 \"]}},\"issuedAt\":1}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "respondWorkspaceHookReview",
+        "payload": {
+          "sessionId": "session",
+          "taskId": "task",
+          "runId": "run",
+          "workspaceIdentity": "identity",
+          "bundleDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "reviewFlowId": "flow",
+          "generation": 1,
+          "interactionId": "interaction",
+          "decision": {
+            "action": "trust_selected",
+            "reviewItemIds": ["item-1"]
+          }
+        },
+        "issuedAt": 1
+      }
+    },
+    {
+      "name": "create-session-mcp-union-and-strip",
+      "raw": "{\"commandId\":\"command-1\",\"clientId\":\"client-1\",\"sessionId\":\"session-1\",\"type\":\"createSession\",\"payload\":{\"workspaceId\":\"workspace\",\"ignored\":\"stripped\",\"mcpServers\":[{\"name\":\" local \",\"command\":\" run \",\"args\":[],\"env\":[{\"name\":\" KEY \",\"value\":\"unchanged\"}]},{\"name\":\" remote \",\"type\":\"http\",\"url\":\" https://example.invalid \",\"headers\":[],\"oauth\":{\"type\":\"authorization_code\",\"clientId\":\" id \",\"clientName\":\" name \",\"redirectPath\":\" /callback \"}}]},\"issuedAt\":1}",
+      "ok": true,
+      "parsed": {
+        "commandId": "command-1",
+        "clientId": "client-1",
+        "sessionId": "session-1",
+        "type": "createSession",
+        "payload": {
+          "workspaceId": "workspace",
+          "mcpServers": [
+            {
+              "name": "local",
+              "command": "run",
+              "args": [],
+              "env": [
+                {
+                  "name": "KEY",
+                  "value": "unchanged"
+                }
+              ]
+            },
+            {
+              "name": "remote",
+              "type": "http",
+              "url": "https://example.invalid",
+              "headers": [],
+              "oauth": {
+                "type": "authorization_code",
+                "clientId": "id",
+                "clientName": "name",
+                "redirectPath": "/callback"
+              }
+            }
+          ]
+        },
+        "issuedAt": 1
+      }
+    }
+  ],
+  "acknowledgements": [
+    {
+      "raw": "{\"commandId\":\"failed-command\",\"status\":\"failed\",\"reasonCode\":\"runtime.failed\",\"message\":\"failed\",\"revisionAtDecision\":12,\"memoryEnabled\":true,\"ttftExcluded\":\"capacity\"}",
+      "parsed": {
+        "memoryEnabled": true,
+        "ttftExcluded": "capacity",
+        "commandId": "failed-command",
+        "status": "failed",
+        "reasonCode": "runtime.failed",
+        "message": "failed",
+        "revisionAtDecision": 12
+      }
+    }
+  ]
+}

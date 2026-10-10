@@ -11,7 +11,23 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-zcode-cli-protocol.workspace = true
-zcode-cli-domain.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+url.workspace = true
+rusqlite.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+uuid.workspace = true
 zcode-cli-core-api.workspace = true
+zcode-cli-domain.workspace = true
 zcode-cli-host.workspace = true
+zcode-cli-protocol.workspace = true
+
+[dev-dependencies]
+image.workspace = true
+tempfile.workspace = true

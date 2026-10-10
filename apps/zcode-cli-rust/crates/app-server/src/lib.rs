@@ -1,4 +1,14 @@
-//! stdio framing、RPC 路由、startup/storage handshake、snapshot/resync 与 App projection。
-//!
-//! crate 边界与依赖方向见 .agents/specs/cli-rust-runtime.md；边界由
-//! scripts/check-zcode-cli-rust-boundaries.mjs 在 CI 中强制。
+//! App Server frontend: stdio framing, JSON-RPC routing, V4 topic delivery and
+//! host bridging over the runtime transport contract. It owns no session facts.
+use zcode_cli_core_api as contract;
+use zcode_cli_domain as domain;
+mod codec;
+mod delivery;
+mod routes;
+mod server;
+mod sink;
+pub mod stdio;
+mod subscription;
+pub use server::serve;
+pub use sink::Sink;
+pub use stdio::{finish, start, storage_prepare};

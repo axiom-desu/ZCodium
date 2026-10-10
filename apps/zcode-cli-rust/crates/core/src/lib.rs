@@ -1,4 +1,6 @@
-//! Session actor、Agent loop、command admission、commit barrier、recovery 与 projection。
-//!
-//! crate 边界与依赖方向见 .agents/specs/cli-rust-runtime.md；边界由
-//! scripts/check-zcode-cli-rust-boundaries.mjs 在 CI 中强制。
+pub use zcode_cli_core_api as contract;
+pub use zcode_cli_domain as domain;
+
+#[path = "app/mod.rs"]
+pub mod app;
+pub use app::Engine;

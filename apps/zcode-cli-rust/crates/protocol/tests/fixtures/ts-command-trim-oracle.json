@@ -1,0 +1,2527 @@
+{
+  "uniquePaths": 63,
+  "leafBranches": 70,
+  "leaves": [
+    {
+      "path": "envelope.baseLogEpoch",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.firstInput.modelSelection.providerId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.firstInput.modelSelection.modelId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.firstInput.modelSelection.options.reasoningLevel",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.config.modelSelection.providerId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.config.modelSelection.modelId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.config.modelSelection.options.reasoningLevel",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].name",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].command",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].env[].name",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].name",
+      "branch": 2,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].url",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].headers[].name",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].oauth.clientId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].oauth.clientSecret",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].oauth.clientName",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].oauth.clientId",
+      "branch": 2,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].oauth.clientSecret",
+      "branch": 2,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].oauth.clientName",
+      "branch": 2,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSession.mcpServers[].oauth.redirectPath",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSelectionSideSession.firstInput.text",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSelectionSideSession.firstInput.modelSelection.providerId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSelectionSideSession.firstInput.modelSelection.modelId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "createSelectionSideSession.firstInput.modelSelection.options.reasoningLevel",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendText.browserAmbientContext.currentUrl",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendText.context_refs[].context_id",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendText.modelSelection.providerId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendText.modelSelection.modelId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendText.modelSelection.options.reasoningLevel",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendText.botDeliveryTarget.botId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendText.botDeliveryTarget.providerUserId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendGoalCommand.modelSelection.providerId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendGoalCommand.modelSelection.modelId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "sendGoalCommand.modelSelection.options.reasoningLevel",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "forkAssistant.target.entityId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "applyFileRewind.target.entityId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "editUserQuery.target.entityId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "retryTurn.target.entityId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "setAssistantFeedback.target.entityId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "respondWorkspaceHookReview.sessionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "respondWorkspaceHookReview.taskId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "respondWorkspaceHookReview.runId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "respondWorkspaceHookReview.remoteSessionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "respondWorkspaceHookReview.workspaceIdentity",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "respondWorkspaceHookReview.reviewFlowId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "respondWorkspaceHookReview.interactionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "respondWorkspaceHookReview.decision.reviewItemIds[]",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "toggleWorkspaceHookReviewItem.sessionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "toggleWorkspaceHookReviewItem.taskId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "toggleWorkspaceHookReviewItem.runId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "toggleWorkspaceHookReviewItem.remoteSessionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "toggleWorkspaceHookReviewItem.workspaceIdentity",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "toggleWorkspaceHookReviewItem.reviewFlowId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "toggleWorkspaceHookReviewItem.interactionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "toggleWorkspaceHookReviewItem.reviewItemId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.sessionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.taskId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.runId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.remoteSessionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.workspaceIdentity",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.reviewFlowId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.interactionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.reviewItemIds[]",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.sessionId",
+      "branch": 2,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.remoteSessionId",
+      "branch": 2,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "revokeWorkspaceHookTrust.workspaceIdentity",
+      "branch": 2,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "requestWorkspaceHookReview.sessionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "requestWorkspaceHookReview.remoteSessionId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "requestWorkspaceHookReview.workspaceIdentity",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "discardSharedContext.contextId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    }
+  ]
+}

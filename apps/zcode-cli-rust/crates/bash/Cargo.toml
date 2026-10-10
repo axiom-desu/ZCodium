@@ -11,7 +11,10 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-zcode-cli-protocol.workspace = true
-zcode-cli-domain.workspace = true
-zcode-cli-core-api.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 zcode-cli-bash-parse.workspace = true
+zcode-cli-domain.workspace = true
+zcode-cli-protocol.workspace = true
+zcode-cli-core-api.workspace = true
