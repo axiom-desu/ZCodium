@@ -106,6 +106,11 @@ export function MobileApp() {
     if (!client) return;
     let cancelled = false;
     const load = async () => {
+      // rpc-frame 只有桌面 bridge 存在时才被接收，先握手再取服务代理。
+      await client.ensureWorkspaceBridge({
+        workspaceKey: view.task.workspaceKey,
+        taskId: view.task.taskId,
+      });
       const { zcodeSessionService: sessionService } = client.createServiceAccessor();
       const workspace = bootstrap?.workspaces.find(
         (item) => item.workspaceKey === view.task.workspaceKey,
@@ -138,6 +143,10 @@ export function MobileApp() {
     const workspace = bootstrap?.workspaces.find(
       (item) => item.workspaceKey === view.task.workspaceKey,
     );
+    await client.ensureWorkspaceBridge({
+      workspaceKey: view.task.workspaceKey,
+      taskId: view.task.taskId,
+    });
     const { zcodeTaskService: taskService } = client.createServiceAccessor();
     setDraft("");
     setMessages((current) => [

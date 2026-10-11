@@ -82,7 +82,10 @@ export class MobileRemoteControlClient {
   private rpcSeq = 0;
   private rpcStreamId = `mobile-${Math.random().toString(36).slice(2)}`;
   /** 桌面 → 手机方向的装配器；单槽、只装期望的 seq（与桌面侧同一份实现）。 */
-  private readonly rpcAssembler = new WebRemoteControlRpcAssembler();
+  private rpcAssembler = new WebRemoteControlRpcAssembler();
+  /** 已握手成功的 workspace bridge（桌面按 workspaceKey 路由，rpc-frame 只有在 bridge 存在时才被接收）。 */
+  private bridgeReadyWorkspaceKey: string | null = null;
+  private serviceAccessorInstance: ReturnType<typeof connectViaProtocol> | null = null;
   private onRpcMessage: ((data: unknown) => void) | null = null;
 
   constructor(
@@ -112,6 +115,9 @@ export class MobileRemoteControlClient {
     });
     socket.addEventListener("close", (event) => {
       this.setState("closed", { closeCode: event.code, reason: event.reason });
+      // bridge 与 socket 同生共死；accessor 里可能还有在途请求，一并作废。
+      this.bridgeReadyWorkspaceKey = null;
+      this.serviceAccessorInstance = null;
       this.failPending(new Error(`mobile connection closed: ${event.code}`));
     });
     socket.addEventListener("error", () => {
@@ -120,6 +126,8 @@ export class MobileRemoteControlClient {
   }
 
   dispose(): void {
+    this.bridgeReadyWorkspaceKey = null;
+    this.serviceAccessorInstance = null;
     this.socket?.close();
     this.socket = null;
     this.failPending(new Error("mobile client disposed"));
@@ -178,11 +186,51 @@ export class MobileRemoteControlClient {
   }
 
   /**
+   * 打开当前 workspace 的 RPC bridge。
+   *
+   * 桌面侧 `payloadRouter` 对 `rpc-frame` 只做 `runtime.bridge?.acceptFrame(...)`：bridge 不存在
+   * 时帧被静默丢弃，手机端的服务调用会一直挂起。所以用 rpc 服务代理之前必须先握手：
+   * 发 `workspace-bridge-open`（桌面按 `workspaceKey` 在窗口运行时里反查目标），等
+   * `workspace-bridge-ready` / `workspace-bridge-error`。
+   */
+  async ensureWorkspaceBridge(params: { workspaceKey: string; taskId?: string }): Promise<void> {
+    if (this.bridgeReadyWorkspaceKey === params.workspaceKey) return;
+    const requestId = `bridge-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const response = await this.request({
+      zcode_type: "workspace-bridge-open",
+      requestId,
+      workspaceKey: params.workspaceKey,
+      ...(params.taskId ? { taskId: params.taskId } : {}),
+      bridgeSessionId: this.rpcStreamId,
+    } as WebRemoteControlAppPayload & { requestId: string });
+    if (response.zcode_type === "workspace-bridge-error") {
+      throw new Error(`workspace bridge rejected: ${response.reason}`);
+    }
+    if (response.zcode_type !== "workspace-bridge-ready") {
+      throw new Error(`unexpected workspace bridge response: ${response.zcode_type}`);
+    }
+    // 桌面每次 openBridge 都会新建 hostBridge（内部装配器从 seq 1 开始），换 workspace 时
+    // 我们必须同时重置出站序号与装配器，否则新 bridge 收到 seq>1 会判成 rpc-frame-gap。
+    this.rpcSeq = 0;
+    this.rpcAssembler = new WebRemoteControlRpcAssembler();
+    this.bridgeReadyWorkspaceKey = params.workspaceKey;
+  }
+
+  /**
    * 把配对 WS 包装成 @zcode/rpc 的 IMessagePassingProtocol（结构化声明，避免浏览器包
    * 直接依赖 @zcode/rpc / @zcode/services），经 @zcode/client 的 connectViaProtocol
    * 拿到与桌面同构的 service 代理。
+   *
+   * 按实例记忆化：每次调用都新建会把 protocol 的单槽 `onRpcMessage` 覆盖掉，
+   * 上一个 accessor 的在途请求再也收不到回复（任务视图每 4s 拉一次，必现）。
    */
   createServiceAccessor(): ReturnType<typeof connectViaProtocol> {
+    if (this.serviceAccessorInstance) return this.serviceAccessorInstance;
+    this.serviceAccessorInstance = this.buildServiceAccessor();
+    return this.serviceAccessorInstance;
+  }
+
+  private buildServiceAccessor(): ReturnType<typeof connectViaProtocol> {
     return connectViaProtocol({
       onMessage: (listener) => {
         this.onRpcMessage = (data) => {
