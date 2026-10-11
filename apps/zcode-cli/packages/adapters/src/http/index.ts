@@ -4,8 +4,8 @@
 
 import http from "node:http";
 import https from "node:https";
-import { Readable } from "node:stream";
 import { ProxyAgent } from "proxy-agent";
+import { readIncomingResponse, toWebResponse } from "../network/incoming-response.js";
 import {
   createHttpClientError,
   isHttpClientPortError,
@@ -199,24 +199,16 @@ function fetchHttpResponse(
         lookup: proxyUrl ? undefined : lookup,
       },
       (message) => {
-        const responseHeaders = new Headers();
-        for (const [name, value] of Object.entries(message.headers)) {
-          if (Array.isArray(value)) {
-            for (const item of value) {
-              responseHeaders.append(name, item);
-            }
-          } else if (value !== undefined) {
-            responseHeaders.append(name, String(value));
-          }
+        // 同 proxy-fetch：回调里抛 RangeError 没人接得住，会把 agent 进程带走。
+        let response: Response;
+        try {
+          response = toWebResponse(readIncomingResponse(message));
+        } catch (error) {
+          message.destroy();
+          reject(error);
+          return;
         }
-
-        resolve(
-          new Response(Readable.toWeb(message) as ReadableStream<Uint8Array>, {
-            headers: responseHeaders,
-            status: message.statusCode ?? 502,
-            statusText: message.statusMessage,
-          }),
-        );
+        resolve(response);
       },
     );
 

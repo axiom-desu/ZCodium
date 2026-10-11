@@ -8,6 +8,8 @@ import {
   resolveTlsCaCertFile,
 } from "./http-config.js";
 
+import { readIncomingResponse, toWebResponse } from "./incoming-response.js";
+
 type NetworkFetch = typeof globalThis.fetch;
 
 interface NetworkProxyFetchOptions {
@@ -166,25 +168,18 @@ function fetchWithAgent(
         responseMessage = message;
         responseMessage.once("close", cleanupAll);
         responseMessage.once("error", onResponseError);
-        const headers = new Headers();
-        for (const [name, value] of Object.entries(message.headers)) {
-          if (Array.isArray(value)) {
-            for (const item of value) {
-              headers.append(name, item);
-            }
-          } else if (value !== undefined) {
-            headers.append(name, String(value));
-          }
+        // 回调里抛出的东西没人接得住、会打死整个 agent 进程（见 network/incoming-response.ts）：
+        // 表示不了的状态码只让这一次请求失败。
+        let response: Response;
+        try {
+          response = toWebResponse(readIncomingResponse(message));
+        } catch (error) {
+          message.destroy();
+          rejectOnce(error);
+          return;
         }
-
         settled = true;
-        resolve(
-          new Response(Readable.toWeb(message) as ReadableStream<Uint8Array>, {
-            headers,
-            status: message.statusCode ?? 502,
-            statusText: message.statusMessage,
-          }),
-        );
+        resolve(response);
       },
     );
 
