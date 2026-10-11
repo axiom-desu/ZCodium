@@ -196,7 +196,8 @@ function buildBootstrapResult(runtime: WebRemoteControlRuntime) {
   };
 }
 
-function buildWorkspaceListResult(runtime: WebRemoteControlRuntime) {
+/** 供 workspace-list-request 的响应与 workspace-list-updated 的主动推送共用。 */
+export function buildWorkspaceListResult(runtime: WebRemoteControlRuntime) {
   return {
     workspaces: runtime.workspaces,
     tasks: runtime.tasks,

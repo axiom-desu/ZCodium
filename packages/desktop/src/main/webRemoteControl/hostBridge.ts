@@ -15,6 +15,7 @@ import {
   IModelSelectionService,
 } from "@zcode/services";
 import type { WebRemoteControlLogger } from "./logger.js";
+import type { WindowHostAttachmentScope } from "@zcode/shared";
 import {
   encodeWebRemoteControlRpcFrames,
   WebRemoteControlRpcAssembler,
@@ -59,6 +60,23 @@ export function attachWorkspaceHostPort(params: {
   if (!hostProcess) {
     throw new Error("Web remote control host process is unavailable for this window");
   }
+  // 远端 workspace 必须绑到它自己的 remote session host：绑成 local 会把手机远控挂到本地
+  // host 上，目标 workspace 的会话/文件全都对不上。remote scope 三项都是必填（见
+  // shared/validation.ts 的 windowHostAttachmentScopeSchema），缺 identity 就明确失败，
+  // 不做「按路径回退」——同路径可能属于不同 identity。
+  if (params.remoteSessionId && !params.workspaceIdentity) {
+    throw new Error(
+      "Remote web remote control attachment requires workspaceIdentity alongside remoteSessionId",
+    );
+  }
+  const scope: WindowHostAttachmentScope = params.remoteSessionId
+    ? {
+        kind: "remote",
+        remoteSessionId: params.remoteSessionId,
+        workspacePath: params.workspacePath,
+        workspaceIdentity: params.workspaceIdentity!,
+      }
+    : { kind: "local" };
   const attachmentId = randomUUID();
   const { port1, port2 } = new MessageChannelMain();
   hostProcess.postMessage(
@@ -68,7 +86,7 @@ export function attachWorkspaceHostPort(params: {
       attachmentId,
       // 手机链路必须是 replayable：与桌面 continuous 语义分离（AGENTS.md 硬约束）。
       clientMode: "web-remote-replayable",
-      scope: { kind: "local" },
+      scope,
     },
     [port2],
   );

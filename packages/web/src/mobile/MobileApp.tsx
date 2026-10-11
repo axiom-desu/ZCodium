@@ -92,6 +92,20 @@ export function MobileApp() {
     };
   }, [params]);
 
+  // 网络恢复 / 页面回到前台时立刻补一次重连；其余情况交给客户端内部的退避重连。
+  useEffect(() => {
+    const onOnline = () => clientRef.current?.retryNow();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") clientRef.current?.retryNow();
+    };
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
   useEffect(() => {
     if (connection !== "paired" || bootstrap) return;
     void refreshBootstrap().catch((error) =>

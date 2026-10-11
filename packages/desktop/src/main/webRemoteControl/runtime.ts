@@ -39,6 +39,8 @@ export interface WebRemoteControlRuntime {
   pendingTimer?: NodeJS.Timeout;
   workspaces: WebRemoteControlWorkspaceRef[];
   tasks: WebRemoteControlTaskRef[];
+  /** 最近一次推给手机的清单签名；用于避免每 4s 同步都发一遍同样的 payload。 */
+  lastWorkspaceListSignature?: string;
   bridge?: WebRemoteControlBridgeState;
 }
 

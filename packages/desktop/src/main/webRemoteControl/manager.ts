@@ -22,7 +22,7 @@ import {
   type WebRemoteControlDeviceTransportEvents,
 } from "./relayTransport.js";
 import { buildStatusSnapshot, type WebRemoteControlRuntime } from "./runtime.js";
-import { routeMobilePayload } from "./payloadRouter.js";
+import { buildWorkspaceListResult, routeMobilePayload } from "./payloadRouter.js";
 import { clearPendingOutbound, flushPendingOutbound, sendAppPayload } from "./outboundBuffer.js";
 import { clearGraceTimer, mapTransportState } from "./transportState.js";
 import { createStartAuthorizationStore, type StartAuthorization } from "./authorization.js";
@@ -111,6 +111,29 @@ export interface WebRemoteControlManager {
   syncWorkspaces(windowId: number, workspaces: WebRemoteControlWorkspaceRef[]): void;
   syncTasks(windowId: number, tasks: WebRemoteControlTaskRef[]): void;
   disposeWindow(windowId: number): Promise<void>;
+}
+
+/**
+ * 清单变化时主动推给手机。
+ *
+ * 手机只在配对时拉一次 bootstrap；远端工作区重连会换 `remoteSessionId`，不推送的话手机端会一直
+ * 拿着旧 identity 去请求（服务调用打到已经失效的 session 上）。未配对时不推，避免占满出站缓冲——
+ * 配对那一刻的 bootstrap 会拉全量。
+ */
+function pushWorkspaceListIfChanged(
+  runtime: WebRemoteControlRuntime,
+  logger: WebRemoteControlLogger,
+): void {
+  const result = buildWorkspaceListResult(runtime);
+  const signature = JSON.stringify(result);
+  if (runtime.lastWorkspaceListSignature === signature) return;
+  runtime.lastWorkspaceListSignature = signature;
+  if (!runtime.mobileConnected) return;
+  sendAppPayload(
+    runtime,
+    { zcode_type: "workspace-list-updated", result } as WebRemoteControlAppPayload,
+    logger,
+  );
 }
 
 export function createWebRemoteControlManager(
@@ -374,11 +397,15 @@ export function createWebRemoteControlManager(
     },
     syncWorkspaces(windowId, workspaces) {
       const runtime = runtimes.get(windowId);
-      if (runtime) runtime.workspaces = workspaces;
+      if (!runtime) return;
+      runtime.workspaces = workspaces;
+      pushWorkspaceListIfChanged(runtime, deps.logger);
     },
     syncTasks(windowId, tasks) {
       const runtime = runtimes.get(windowId);
-      if (runtime) runtime.tasks = tasks;
+      if (!runtime) return;
+      runtime.tasks = tasks;
+      pushWorkspaceListIfChanged(runtime, deps.logger);
     },
     async disposeWindow(windowId) {
       await stopRuntime(windowId, "window-disposed");

@@ -87,6 +87,9 @@ export class MobileRemoteControlClient {
   private bridgeReadyWorkspaceKey: string | null = null;
   private serviceAccessorInstance: ReturnType<typeof connectViaProtocol> | null = null;
   private onRpcMessage: ((data: unknown) => void) | null = null;
+  private disposed = false;
+  private reconnectTimer: number | null = null;
+  private connectAttempt = 0;
 
   constructor(
     private readonly params: MobilePairingParams & { wsUrl: string },
@@ -94,9 +97,34 @@ export class MobileRemoteControlClient {
   ) {}
 
   connect(): void {
+    this.disposed = false;
+    this.openSocket();
+  }
+
+  /**
+   * 网络切换 / 息屏回前台后立刻重连。
+   *
+   * 只在确实断开（closed/error，且当前 socket 不处于 OPEN/CONNECTING）时动手：首屏 pageshow
+   * 也会触发这个入口，那时正在连接中，强行重连反而会把刚建立的链路踢掉。
+   */
+  retryNow(): void {
+    if (this.disposed) return;
+    const readyState = this.socket?.readyState;
+    if (readyState === WebSocket.OPEN || readyState === WebSocket.CONNECTING) return;
+    if (this.state !== "closed" && this.state !== "error") return;
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.connectAttempt = 0;
+    this.openSocket();
+  }
+
+  private openSocket(): void {
     const socket = new WebSocket(this.params.wsUrl);
     this.socket = socket;
     socket.addEventListener("open", () => {
+      this.connectAttempt = 0;
       this.setState("authenticating");
       this.send({
         type: "auth_init",
@@ -114,18 +142,44 @@ export class MobileRemoteControlClient {
       void this.handleMessage(event.data);
     });
     socket.addEventListener("close", (event) => {
-      this.setState("closed", { closeCode: event.code, reason: event.reason });
-      // bridge 与 socket 同生共死；accessor 里可能还有在途请求，一并作废。
+      if (this.socket !== socket) return;
+      // bridge 与 socket 同生共死；accessor 里可能还有在途请求，连同 RPC 序号一起作废。
       this.bridgeReadyWorkspaceKey = null;
       this.serviceAccessorInstance = null;
+      this.rpcSeq = 0;
+      this.rpcAssembler = new WebRemoteControlRpcAssembler();
       this.failPending(new Error(`mobile connection closed: ${event.code}`));
+      if (this.disposed) {
+        this.setState("closed", { closeCode: event.code, reason: event.reason });
+        return;
+      }
+      this.scheduleReconnect(event);
     });
     socket.addEventListener("error", () => {
       this.setState("error");
     });
   }
 
+  /** 指数退避 + 抖动重连（上限 30s）；重连后走同一条 auth_init，配对信息不丢。 */
+  private scheduleReconnect(event: CloseEvent): void {
+    if (this.reconnectTimer !== null) return;
+    this.connectAttempt += 1;
+    const backoff = Math.min(30_000, 1_000 * 2 ** Math.min(this.connectAttempt - 1, 5));
+    const delay = backoff + Math.floor(Math.random() * 1_000);
+    // 状态回到 connecting：UI 的「正在自动重连」才与实际行为一致。
+    this.setState("connecting", { closeCode: event.code, reason: event.reason });
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.disposed) this.openSocket();
+    }, delay);
+  }
+
   dispose(): void {
+    this.disposed = true;
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.bridgeReadyWorkspaceKey = null;
     this.serviceAccessorInstance = null;
     this.socket?.close();
