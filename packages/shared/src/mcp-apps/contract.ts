@@ -143,23 +143,11 @@ export const MCP_APPS_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
  * 页面发起的 `resources/read`（`mcp/uiReadResource`）单次结果总大小上限，以及 mimeType 白名单。
  * 白名单项以 `/` 结尾表示前缀匹配（如 `text/`），否则精确匹配（忽略参数与大小写）。
  */
-export const MCP_APPS_UI_READ_RESOURCE_MAX_BYTES = 8 * 1024 * 1024;
-export const MCP_APPS_UI_READ_RESOURCE_MIME_ALLOWLIST: readonly string[] = [
-  "text/",
-  "application/json",
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "model/gltf-binary",
-  "application/octet-stream",
-];
-export function isMcpAppsUiReadResourceMimeAllowed(mimeType: string): boolean {
-  const essence = mimeType.split(";")[0]!.trim().toLowerCase();
-  if (!essence) return false;
-  return MCP_APPS_UI_READ_RESOURCE_MIME_ALLOWLIST.some((entry) =>
-    entry.endsWith("/") ? essence.startsWith(entry) : essence === entry,
-  );
-}
+export {
+  MCP_APPS_UI_READ_RESOURCE_MAX_BYTES,
+  MCP_APPS_UI_READ_RESOURCE_MIME_ALLOWLIST,
+  isMcpAppsUiReadResourceMimeAllowed,
+} from "./resourceMime.js";
 
 /**
  * `hostCapabilities.experimental` 里 ZCode 扩展的键。官方 SDK 的 zod 会剥掉标准位之外的未知能力键，

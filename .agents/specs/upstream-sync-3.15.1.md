@@ -455,6 +455,70 @@ RET-001/002/003/004/005/008/009/011）。`@zcode/contracts` 此前没有测试�
 桌面端 71 个候选抽样以接口/导出扩展为主，未发现必须跟的行为修复；主进程与 Host 的大改文件
 多已被我们改过，需另做定界审计。
 
+### 第三轮：换口径复查（两边都改过的文件 / 上游删除 / 依赖与配置 / 技能包）
+
+第二轮的口径是「上游改过、我们没碰过」，**正好排除了两边都改过的文件**。第三轮补上这个盲区，
+并顺带查了上游删除、依赖漂移、根配置与技能包。
+
+```bash
+# 两边都改过：1,412 个文件
+comm -12 <(git diff --name-only 872ad960 main | sort) \
+         <(git diff --name-only 872ad960 aac47556 | sort) | wc -l
+```
+
+对这批跑启发式（上游新增的实质代码行有多少已经出现在我们的同名文件里；命中率低 = 疑似没搬）：
+
+```bash
+xargs -d '\n' -n 150 git diff -U0 872ad960 aac47556 -- < /tmp/both.txt > /tmp/both.diff
+# 再按文件统计：上游新增行 ∩ 我们文件内容 / 上游新增行
+```
+
+结论：**剩下的量集中在「我们也改过的文件」里，而且不能整文件照搬。**
+
+| 类别                                                                                          | 数量                                             | 处理                                |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------- |
+| 我们也在维护的路径里带上游修复注释的文件                                                      | **178 个（614 条 `修复原因/Bugfix/根因` 注释）** | 排队按文件取 hunk，见下面的优先队列 |
+| 其中商业侧（`services/src/bots/**`）                                                          | 95 + 30 + 9 + 8 + 6 + 6 条注释                   | 不跟（bot 通道属于商业/协作面）     |
+| 其中上游自带的 e2e fixture（`desktop/scripts/mcp-apps-host-fixture/**`、`gen-ui-fixture/**`） | 约 90 条                                         | 不跟（上游 vitest/wdio 基建的夹具） |
+| 插件技能/文档类（`/skills/`、`i18n/locales`、notices）                                        | 大多数                                           | 不等价于修复，忽略                  |
+
+#### 本轮从这批里搬掉的
+
+| 项                            | 上游改动                                                           | 我们为什么确实缺                                                                                                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| MCP Apps 页面资源 MIME 白名单 | `packages/shared/src/mcp-apps/resourceMime.ts`（新增）+ 拆出该模块 | 我们的白名单只有 **7 项、没有 PDF**，正是上游注释写的那个 bug（「原列表遗漏 PDF 等常见资源，导致插件已握手却读不到文件」）。已补齐到 54 项，并**照上游同样理由拆出 `resourceMime.ts`**——我们的契约文件有 300 行上限，直接加会触发 `max-contract-lines` |
+| 白名单用例                    | 上游 `contract.test.ts` 的 `it.each`                               | 补了 13 条接纳用例 + 8 条「必须仍拒绝」反例（`application/pdf-malware`、逗号拼接、空串等）                                                                                                                                                             |
+| `ackWatchdogMs`               | 我们在第二轮重写 `rpcTransport.ts` 时把它删掉了                    | 这是契约面不是实现：恢复该字段，并注明「半开探测」仍是后续工作（上游对应物是 `web-remote-control-heartbeat.ts` 的 `HEARTBEAT_ACK_TIMEOUT_MS`）                                                                                                         |
+
+#### 复查后明确不跟的
+
+| 项                                                                                                                                                                                                  | 依据                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 上游删除但仍在我们树里的 9 个文件                                                                                                                                                                   | 全部仍被引用（`workflow-concurrency-ceiling` 7 处、`sessionCreateSource` 4 处、`endpointHostname`/`webThemeSeed`/`profile-model-selection` 各 2 处）。上游删它们是因为改了语义（并发上限改成「默认并发」、`SessionCreateSource` 退休），我们的行为不同，保留 |
+| 依赖版本漂移                                                                                                                                                                                        | **没有漂移**：逐包核对 `electron 41.0.3`、`react/react-dom ^19.2.4`、`vite ^8.0.2`、`zod 4.6.5`、`typescript ^6.0.2/^5.9.0` 与上游 3.15.1 完全一致。`pnpm-lock.yaml` 的上游 3,283 行差异是重解析/顺序，不是版本                                              |
+| `config/provider/zcode-builtin.json`                                                                                                                                                                | 上游只加了 highspeed 商业条目（`zcode.z.ai/api/v1/highspeed/*`、`account:*highspeed-card` 下的 GLM-5.3 / GLM-5.3-Flash）；非 highspeed 侧两版本一致                                                                                                          |
+| `.env.production`                                                                                                                                                                                   | 上游加了官方 OAuth/business 常量（`chat.z.ai`、`api.z.ai`、client_id），属于商业面                                                                                                                                                                           |
+| `mise.toml` 的 `dev-remote` 任务                                                                                                                                                                    | 依赖上游新增的 `pnpm dev:web-remote-control` 脚本，我们没有这个脚本，加了就是死任务（可作为独立的小项：补一个移动端远控的本地 dev 入口）                                                                                                                     |
+| `pnpm-workspace.yaml` 的 `apps/dev-docs`                                                                                                                                                            | 上游文档站包，我们不 vendor                                                                                                                                                                                                                                  |
+| `skills-lock.json`、`lint-staged.config.mjs`、`Dockerfile.desktop-e2e`、`.env.e2e.local.example`、`patches/vitest@4.1.7.patch`、`patches/wdio-electron-service@9.2.1.patch`、`dependency-graph.mmd` | 上游新增的 vitest/wdio 基建与生成物；`skills-lock.json` 连上游自己都没有任何引用                                                                                                                                                                             |
+| `.agents/skills/{react-best-practices,ai-elements}` 的内容刷新                                                                                                                                      | 预演（`git checkout aac47556 -- <dir>` + `oxfmt`）后发现真实内容差异只有 10 个文件，且多为**把相对链接改成上游文档站的绝对路径**（`/components/conversation`、`./async-defer-await.md`，而文件在 `rules/` 下，在我们布局里是坏链）。已还原，不跟             |
+
+#### 仍然是队列的（按价值排序，均在「我们也改过」的文件里）
+
+| 文件                                                                      | 上游修复注释        | 建议                                                                                                                                |
+| ------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/ui/src/WebRemoteControlDialog.tsx`                              | 10                  | 「仅凭 sessionId 判定同一目标，会把其他 workspace 的旧会话误复用」——正落在我们刚做的远控面                                          |
+| `packages/web/src/main.tsx`                                               | 12                  | 「同路径 remote workspace 可能属于不同 identity，禁止误用当前 bridge 写另一条连接」——与 `AGENTS.md` 的 workspaceIdentity 规则同一条 |
+| `packages/ui/src/v4/SessionPane.tsx`                                      | 15                  | 手机 Plan 回执 ACK 与 replayable 清场分两条异步路径的时序修复                                                                       |
+| `apps/zcode-cli/packages/bootstrap/.../commands/handlers/session-flow.ts` | 6                   | 「旧校验只看正文，UI 已允许的 attachment-only query 会在 CLI 被误判为空」——输入校验，改动面小                                       |
+| `apps/zcode-cli/packages/bootstrap/.../product-projection.ts`             | 7                   | 混合 Turn 卡过期后切换 provider 时的重试/超时判定                                                                                   |
+| `packages/ui/src/lib/taskListMetaSync.ts`                                 | 13                  | task 列表 meta 收敛（含「重启恢复时 workspace store 还没有当前 task」）                                                             |
+| `packages/ui/src/styles.css`                                              | 21                  | KaTeX 缺少 CSS 时 MathML 与 HTML 双层同显                                                                                           |
+| `packages/ui/src/settings/AutomationEditView.tsx`                         | 11（上游仅 +13 行） | 纯样式修复，改动面最小                                                                                                              |
+| `packages/services/src/zcode-agent/zcodeTaskServiceAdapter.ts`            | 6                   | 旧 ACP task 只落在 `~/.zcode/v2/sessions/*.json` 的迁移路径（与本仓库 `restore-legacy-sessions` 同一批数据）                        |
+
+UI/desktop/web 的其余修复属于我们的产品面演进；bots、fixture、商业面不进队列。
+
 ### 工作项 4 的构成分析（先看构成，再决定取不取）
 
 ```bash

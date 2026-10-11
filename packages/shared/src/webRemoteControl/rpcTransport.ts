@@ -31,6 +31,12 @@ export const WEB_REMOTE_CONTROL_RPC_LIMITS = {
   assemblyTimeoutMs: PROTOCOL_V4_LIMITS.logicalFrameAssemblyTimeoutMs,
   /** 吞吐饱和前允许在途未确认帧数。 */
   maxInFlightFrames: 64,
+  /**
+   * ack 看门狗：超过这么多毫秒没有推进 ack 视为半开（relay 静默死亡时不会触发 close）。
+   * 与上游 `web-remote-control-heartbeat.ts` 的 `HEARTBEAT_ACK_TIMEOUT_MS` 同值；
+   * 目前只作为契约面与观测依据，接半开探测是后续工作。
+   */
+  ackWatchdogMs: 30_000,
   /** streamId 等传输身份的长度上限。 */
   transportIdMaxChars: PROTOCOL_V4_LIMITS.transportEnvelopeIdMaxChars,
 } as const;
