@@ -320,14 +320,14 @@ CI 守护（会红，必须一起处理）：
 
 ### 故意不跟、且要一直不跟的（下次同步别再引入）
 
-| 类别                                             | 上游文件 / 目录                                                                                                                                                                                    | 为什么不要                                                                                                                        |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 遥测与内容录制                                   | `packages/shared/src/{telemetry,telemetryRedaction,remoteUsageTelemetry,sessionCreateTelemetry,rendererActionTrace}.ts`、`api-key-usage-scene.ts`；`packages/services/src/usage-stats`、`feedback` | 本仓库已有 `TELEMETRY_REMOVAL.md`：官方与专有上报实现、自动身份归因、内容录制均已删除，只保留本地诊断与用户可显式开启的 OTLP 出口 |
-| 商业与增长                                       | `coding-plan-subscription.ts`、`rewardsBridge.ts`、`rewardsEmbedded.ts`、`marketingTouch.ts`、`highspeed.ts` 及其 services 侧同名目录                                                              | 订阅/奖励/推广不属于本 fork 的产品面                                                                                              |
-| 闲时任务（off-peak）                             | `zcodeOffPeak*` 协议族（create / list / permission mode / task snapshot / tool policy）、`contracts/src/interfaces/off-peak.port.ts`、`contracts/src/tools/off-peak.ts` | 本仓库已主动退休：协议侧 `retiredIdleExecutionGuardSchema` 用 `z.never()` 拒绝 `offPeakTaskId`/`offPeakRunType`，`assertNoRetiredIdleExecution` 拒绝 `offpeak-` 前缀输入 id 与 `OffPeakCreate` 工具；闲时算力需要订阅账号与服务端调度 |
-| `packages/zcode-cua/**` 的 broker 与 pip-session | `broker-*.js`、`pip-session*.js`                                                                                                                                                                   | 本仓库已删该层，改用 `@trycua/cua-driver`（见工作项 3）                                                                           |
-| 上游 vendoring 的 superpowers 快照               | `superpowers-plugin/hooks/**` 等                                                                                                                                                                   | 那份比我们旧，而且 hooks 在我们这边不会被加载（见工作项 2 的例外段）                                                              |
-| 测试入口差异                                     | 上游根的 `vitest.config.ts` / `vitest.setup.ts` / 根 `specs/`                                                                                                                                      | 本仓库用 `node:test`（含 `scripts/ci/*.test.mjs`）与 `.agents/specs/`；不为了对齐上游而再引入一套 runner                          |
+| 类别                                             | 上游文件 / 目录                                                                                                                                                                                    | 为什么不要                                                                                                                                                                                                                            |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 遥测与内容录制                                   | `packages/shared/src/{telemetry,telemetryRedaction,remoteUsageTelemetry,sessionCreateTelemetry,rendererActionTrace}.ts`、`api-key-usage-scene.ts`；`packages/services/src/usage-stats`、`feedback` | 本仓库已有 `TELEMETRY_REMOVAL.md`：官方与专有上报实现、自动身份归因、内容录制均已删除，只保留本地诊断与用户可显式开启的 OTLP 出口                                                                                                     |
+| 商业与增长                                       | `coding-plan-subscription.ts`、`rewardsBridge.ts`、`rewardsEmbedded.ts`、`marketingTouch.ts`、`highspeed.ts` 及其 services 侧同名目录                                                              | 订阅/奖励/推广不属于本 fork 的产品面                                                                                                                                                                                                  |
+| 闲时任务（off-peak）                             | `zcodeOffPeak*` 协议族（create / list / permission mode / task snapshot / tool policy）、`contracts/src/interfaces/off-peak.port.ts`、`contracts/src/tools/off-peak.ts`                            | 本仓库已主动退休：协议侧 `retiredIdleExecutionGuardSchema` 用 `z.never()` 拒绝 `offPeakTaskId`/`offPeakRunType`，`assertNoRetiredIdleExecution` 拒绝 `offpeak-` 前缀输入 id 与 `OffPeakCreate` 工具；闲时算力需要订阅账号与服务端调度 |
+| `packages/zcode-cua/**` 的 broker 与 pip-session | `broker-*.js`、`pip-session*.js`                                                                                                                                                                   | 本仓库已删该层，改用 `@trycua/cua-driver`（见工作项 3）                                                                                                                                                                               |
+| 上游 vendoring 的 superpowers 快照               | `superpowers-plugin/hooks/**` 等                                                                                                                                                                   | 那份比我们旧，而且 hooks 在我们这边不会被加载（见工作项 2 的例外段）                                                                                                                                                                  |
+| 测试入口差异                                     | 上游根的 `vitest.config.ts` / `vitest.setup.ts` / 根 `specs/`                                                                                                                                      | 本仓库用 `node:test`（含 `scripts/ci/*.test.mjs`）与 `.agents/specs/`；不为了对齐上游而再引入一套 runner                                                                                                                              |
 
 ## 验收场景
 
@@ -340,17 +340,17 @@ CI 守护（会红，必须一起处理）：
 
 ## 进度
 
-| 工作项                            | 状态                                                                                                                                                                                                                              |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 工作项                            | 状态                                                                                                                                                                                                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. 协议 delta                     | **已核对（第二轮补全口径，见「补充清单」）**：MCP UI 实例与 MCP resource read 两边都有；`zcode-protocol/trace.ts` 只是上游拆了文件（我们的 `zcodeProtocolTraceSchema` 内联在 `index.ts:285`，字段一致）；其余新增面逐项判定为「不跟（我方没有的产品能力）」或「归入工作项 6」 |
-| 2. 插件换上游（含前置 diff 判断） | **本轮做完 12 个**：skill-creator、visualize、plugin-creator、zcode-guide、pdf、documents、presentations、spreadsheets、android-emulator（+构建）、ios-simulator（+构建）、restore-legacy-sessions、superpowers（改为整理，不换） |
-| 3. CUA 只取文本                   | **已做**（早已执行 + 本轮按缺口补，见工作项 3）                                                                                                                                                                                   |
-| 4. 核心包判断                     | 待做（**构成分析已完成**，见「补充清单」工作项 4：`dynamic-workflow` 2,058 个文件里 1,575 个是图分析期望输出快照，源码只有 120 个 `.ts/.tsx`） |
-| 5. Browser 放开 subagent          | **已做**（`58b4952a`，设计见 `browser-subagent-shared-tabs.md`）                                                                                                                                                                  |
-| 6. 远控分片与确认式中继           | **已评估，未实现**（见 `web-remote-control-acked-relay.md`：这是我们自己注释里写明的 P5，上游已实现，建议单独立项）                                                                                                               |
-| 清单与契约同步                    | **本轮同步做了 5 类**：`builtinPluginAssets.ts` 的 seed 清单、`official-plugin-definitions.ts` 的三处版本、`requiresRuntime` 与构建脚本、根 `NOTICE.md`、`third-party/copied-components.json` 台账                                |
-| `.zcodium-plugin` 改名            | **已定：保留我们的名字**（上游用 `.zcode-plugin`），本轮所有新换插件都改回 `.zcodium-plugin`，此项结束                                                                                                                            |
-| spec 标历史快照                   | 待做                                                                                                                                                                                                                              |
+| 2. 插件换上游（含前置 diff 判断） | **本轮做完 12 个**：skill-creator、visualize、plugin-creator、zcode-guide、pdf、documents、presentations、spreadsheets、android-emulator（+构建）、ios-simulator（+构建）、restore-legacy-sessions、superpowers（改为整理，不换）                                             |
+| 3. CUA 只取文本                   | **已做**（早已执行 + 本轮按缺口补，见工作项 3）                                                                                                                                                                                                                               |
+| 4. 核心包判断                     | 待做（**构成分析已完成**，见「补充清单」工作项 4：`dynamic-workflow` 2,058 个文件里 1,575 个是图分析期望输出快照，源码只有 120 个 `.ts/.tsx`）                                                                                                                                |
+| 5. Browser 放开 subagent          | **已做**（`58b4952a`，设计见 `browser-subagent-shared-tabs.md`）                                                                                                                                                                                                              |
+| 6. 远控分片与确认式中继           | **已评估，未实现**（见 `web-remote-control-acked-relay.md`：这是我们自己注释里写明的 P5，上游已实现，建议单独立项）                                                                                                                                                           |
+| 清单与契约同步                    | **本轮同步做了 5 类**：`builtinPluginAssets.ts` 的 seed 清单、`official-plugin-definitions.ts` 的三处版本、`requiresRuntime` 与构建脚本、根 `NOTICE.md`、`third-party/copied-components.json` 台账                                                                            |
+| `.zcodium-plugin` 改名            | **已定：保留我们的名字**（上游用 `.zcode-plugin`），本轮所有新换插件都改回 `.zcodium-plugin`，此项结束                                                                                                                                                                        |
+| spec 标历史快照                   | 待做                                                                                                                                                                                                                                                                          |
 
 ### 本轮新增的两个决定
 
@@ -404,11 +404,11 @@ diff -q <(git show $M:"$f" | tr -d '[:space:]') <(git show $A:"$f" | tr -d '[:sp
 
 ### 本轮补搬的三项（附我们已有的那一半）
 
-| 项 | 上游改动 | 我们这边的状态 | 处理 |
-| --- | --- | --- | --- |
-| 内存 event store 的 `model_request` 驻留瘦身 | `session-event-retention.ts` 新增 `slimRetainedModelRequest`，`in-memory-session-event-store.ts` 在淘汰节拍使用 | 我们已自修「推给桌面」那一半（映射只留 `messageCount`）；驻留副本仍带全量 `messages`，随轮次线性涨 | 搬，并**同时**改 `mapModelRequestPayload` 认 `messageCount`，否则条数会被读成 0 |
-| `isMainAgentToolProjectionSource` 识别 Claude 子代理 | 读 `_meta.claudeCode.parentToolUseId` | 只认顶层 `parentToolUseId`，子代理 TodoWrite 会覆盖主任务摘要 | 搬 |
-| TUI 分发 smoke | 匹配前 `stripVTControlCharacters` | 原始 PTY 文本里提示词被 SGR 序列打断，CI 会假超时 | 搬 |
+| 项                                                   | 上游改动                                                                                                        | 我们这边的状态                                                                                     | 处理                                                                            |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 内存 event store 的 `model_request` 驻留瘦身         | `session-event-retention.ts` 新增 `slimRetainedModelRequest`，`in-memory-session-event-store.ts` 在淘汰节拍使用 | 我们已自修「推给桌面」那一半（映射只留 `messageCount`）；驻留副本仍带全量 `messages`，随轮次线性涨 | 搬，并**同时**改 `mapModelRequestPayload` 认 `messageCount`，否则条数会被读成 0 |
+| `isMainAgentToolProjectionSource` 识别 Claude 子代理 | 读 `_meta.claudeCode.parentToolUseId`                                                                           | 只认顶层 `parentToolUseId`，子代理 TodoWrite 会覆盖主任务摘要                                      | 搬                                                                              |
+| TUI 分发 smoke                                       | 匹配前 `stripVTControlCharacters`                                                                               | 原始 PTY 文本里提示词被 SGR 序列打断，CI 会假超时                                                  | 搬                                                                              |
 
 同时把上游对应测试搬进 `apps/zcode-cli/packages/contracts/test/`（node:test，19 例：
 RET-001/002/003/004/005/008/009/011）。`@zcode/contracts` 此前没有测试也没有 `test` 脚本，
@@ -420,21 +420,21 @@ RET-001/002/003/004/005/008/009/011）。`@zcode/contracts` 此前没有测试�
 
 ### 有实质改动但我们不搬（逐项理由）
 
-| 文件 / 区域 | 上游改动 | 不搬的理由 |
-| --- | --- | --- |
-| `packages/shared/src/errors.ts` | 新增 `isNonRetryableWorkspacePrepareError` 等 | 消费者是 `ui/src/lib/workspacePrepareRetry.ts`，我们仓库没有该文件也没有对应预热路径 |
-| `server/src/remote/create-backend.ts`、`shared/src/remoteEnvironmentKey.ts` | 新增 `server` target 分支 | 我们的 `RemoteTarget = SSH \| WSL \| Docker`，没有 `server` 种类 |
-| `shared/src/zcode-protocol-v4/workflow-run-settings-command.ts` | 注释语义改为「默认并发、无上限」 | 我们的实现仍按本机上限钳制，照抄注释会写反我们的行为 |
-| `shared/src/conversation-message-projection-policy.ts`、`zcode-protocol-legacy-types.ts` | 新增 `agent_listing_delta` / `bot_topic_context` synthetic source | 全仓 0 命中，没有生产者；属于上游 agent listing / bot topic 能力 |
-| `shared/src/providers.ts` | `ZCODE_PROVIDERS` 加 `export` | 无消费者，纯 API 面扩张 |
-| `scripts/third-party-npm.mjs` | 改为按锁文件 `os/cpu/libc` 过滤生产依赖 | 我们的 notices/licenses 不在 CI 门禁（`licenses.mjs` 的 `check` 是手动门禁），且需要 `yaml` 与 `supportedArchitectures` 支持；单独评估 |
-| `browser-use-plugin/scripts/build.mjs` | `external: ["sharp"]` | 我们的依赖图里没有 `sharp`（锁文件 0 命中），改了是空操作 |
-| `browser-use-plugin/{README,package.json}` | license Apache-2.0 → MIT、加 vitest | 许可事实不能随构建配置默认接受；测试入口按本仓库口径 |
+| 文件 / 区域                                                                                                | 上游改动                                                                               | 不搬的理由                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/errors.ts`                                                                            | 新增 `isNonRetryableWorkspacePrepareError` 等                                          | 消费者是 `ui/src/lib/workspacePrepareRetry.ts`，我们仓库没有该文件也没有对应预热路径                                                                                    |
+| `server/src/remote/create-backend.ts`、`shared/src/remoteEnvironmentKey.ts`                                | 新增 `server` target 分支                                                              | 我们的 `RemoteTarget = SSH \| WSL \| Docker`，没有 `server` 种类                                                                                                        |
+| `shared/src/zcode-protocol-v4/workflow-run-settings-command.ts`                                            | 注释语义改为「默认并发、无上限」                                                       | 我们的实现仍按本机上限钳制，照抄注释会写反我们的行为                                                                                                                    |
+| `shared/src/conversation-message-projection-policy.ts`、`zcode-protocol-legacy-types.ts`                   | 新增 `agent_listing_delta` / `bot_topic_context` synthetic source                      | 全仓 0 命中，没有生产者；属于上游 agent listing / bot topic 能力                                                                                                        |
+| `shared/src/providers.ts`                                                                                  | `ZCODE_PROVIDERS` 加 `export`                                                          | 无消费者，纯 API 面扩张                                                                                                                                                 |
+| `scripts/third-party-npm.mjs`                                                                              | 改为按锁文件 `os/cpu/libc` 过滤生产依赖                                                | 我们的 notices/licenses 不在 CI 门禁（`licenses.mjs` 的 `check` 是手动门禁），且需要 `yaml` 与 `supportedArchitectures` 支持；单独评估                                  |
+| `browser-use-plugin/scripts/build.mjs`                                                                     | `external: ["sharp"]`                                                                  | 我们的依赖图里没有 `sharp`（锁文件 0 命中），改了是空操作                                                                                                               |
+| `browser-use-plugin/{README,package.json}`                                                                 | license Apache-2.0 → MIT、加 vitest                                                    | 许可事实不能随构建配置默认接受；测试入口按本仓库口径                                                                                                                    |
 | `core` 四项：`compact-active-helpers`、`prompt-admission`、`tool-event-mirror`、`permission-input-recheck` | 分别是常量导出、`requireQueue`（Highspeed 路径）、dwf actor 用的导出、guard 上下文重构 | 全部绑定我们没有的功能（Highspeed / guarded / dwf）或我们已有的等价行为；`permission-capability` 的 `mode`/`bashShellSelection` 也只在 guarded 复用重判路径上才成为问题 |
-| `permission-rules-persistence.ts` 的 session scope 分支与 `applyGrantedPermissionUpdates` | 群协作/session 级授权规则 | `PermissionRuleset.scope`、`approvalMode`、`inputAdjustments`、`registered` 都是 dwf/群协作契约；持久化与失败转错误我们 flow 里已有 |
-| `services/.../claudeNativeSessionImportParser.ts` 新增导出、`importedClaudeHistoryRepair.ts` | 轮次选择 / 未知命令诊断 / 导出放宽 / 改 `readFileSync` | 新导出**上游自己也没有消费者**（`git grep` 只命中定义处）；`readFileSync`+`existsSync` 还与我们「异步 IO」规则相反，不跟 |
-| `ui/src/lib/chatAttachments.ts` | 新增 `restoreChatComposerAttachment`（含大小/缺内容校验） | 我们没有这个恢复入口（`rg 'restoreChatComposerAttachment'` 0 命中）；`MissingInline*` 错误类与 v4 composer 的 catch 分支我们已有，但抛点不存在 |
-| `ui/src/lib/zcodeSessionProjection.ts` | 3,433 行改动 | 是上游 UI 的整体演进，不是单个修复；里面的会话投影修复要单独取 hunk |
+| `permission-rules-persistence.ts` 的 session scope 分支与 `applyGrantedPermissionUpdates`                  | 群协作/session 级授权规则                                                              | `PermissionRuleset.scope`、`approvalMode`、`inputAdjustments`、`registered` 都是 dwf/群协作契约；持久化与失败转错误我们 flow 里已有                                     |
+| `services/.../claudeNativeSessionImportParser.ts` 新增导出、`importedClaudeHistoryRepair.ts`               | 轮次选择 / 未知命令诊断 / 导出放宽 / 改 `readFileSync`                                 | 新导出**上游自己也没有消费者**（`git grep` 只命中定义处）；`readFileSync`+`existsSync` 还与我们「异步 IO」规则相反，不跟                                                |
+| `ui/src/lib/chatAttachments.ts`                                                                            | 新增 `restoreChatComposerAttachment`（含大小/缺内容校验）                              | 我们没有这个恢复入口（`rg 'restoreChatComposerAttachment'` 0 命中）；`MissingInline*` 错误类与 v4 composer 的 catch 分支我们已有，但抛点不存在                          |
+| `ui/src/lib/zcodeSessionProjection.ts`                                                                     | 3,433 行改动                                                                           | 是上游 UI 的整体演进，不是单个修复；里面的会话投影修复要单独取 hunk                                                                                                     |
 
 ### 未立项区域（UI / Desktop / Services）的判定：部分跟
 
@@ -472,13 +472,13 @@ git ls-tree -r --name-only main -- apps/zcode-cli/packages/dynamic-workflow | wc
 
 ### 本轮仍未做
 
-| 项 | 说明 |
-| --- | --- |
+| 项                               | 说明                                                                                                                                                                                                                                                     |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 工作项 6（远控分片与确认式中继） | 仍是最大缺口：协议 `TOPIC_RESOURCE_RELAY_*` + 4 个 schema、`zcodeEndpoint.ts` 的 relay WS 地址解析、`server/src/stdio.ts` 的 reverse ChannelClient、client 侧 ≈989 行、shared 侧 766 行。开工前必须先定 `web-remote-control-acked-relay.md` 里的三条前置 |
-| 工作项 4 | 取不取 `dynamic-workflow` 的 `src` 增量 |
-| spec 标历史快照 | 8 份 backfill spec |
-| `third-party-npm.mjs` 平台过滤 | 单独评估（会影响生成 `THIRD-PARTY-NOTICES.md` 的路径） |
-| 包级测试接进 CI | 见上文「注意」 |
+| 工作项 4                         | 取不取 `dynamic-workflow` 的 `src` 增量                                                                                                                                                                                                                  |
+| spec 标历史快照                  | 8 份 backfill spec                                                                                                                                                                                                                                       |
+| `third-party-npm.mjs` 平台过滤   | 单独评估（会影响生成 `THIRD-PARTY-NOTICES.md` 的路径）                                                                                                                                                                                                   |
+| 包级测试接进 CI                  | 见上文「注意」                                                                                                                                                                                                                                           |
 
 ## 附：测量口径
 
