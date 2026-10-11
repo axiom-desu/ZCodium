@@ -285,6 +285,35 @@ IPC 面（preload ↔ main，`packages/shared/src/channels.ts` 新增）：
   序号 + 命令格式）。
 - 重连：visibility/online 事件驱动；`recoveryId` 续配后拉 snapshot 回放。
 
+### 会话实时流：Host 事件流订阅（不再周期轮询）
+
+手机任务视图的消息更新走 Host 已有的 replayable 事件流，不再 4s 轮询 `readSessionMessages`：
+
+- **订阅入口**：打开任务后先 `await ensureWorkspaceBridge({workspaceKey, taskId})`，
+  bridge 就绪后再经 service accessor 调
+  `zcodeTaskService.onDynamicTaskEvent({workspacePath, workspaceIdentity, taskId,
+deliveryKind: "replayable"})`；`replayable` ⇒ Host `includeSnapshot` 语义。
+  链路仍是 `web-remote-replayable`，不改 `clientMode`。
+- **传输复用**：动态事件与 `onRpcMessage` 共用同一条 `rpc-frame`（ProxyChannel 的
+  `EventListen` / `EventFire`），不新增协议信封、不改 `packages/shared`。
+- **订阅所有者**：订阅状态由 Host 与手机两端持有，Main 只透明转发；Main 与 relay 都不保存
+  session 事实，也不替手机建立/销毁订阅。
+- **快照屏障**：进入任务、断线重订、收到 `task_snapshot_updated` 或 `bridge-degraded` 时置
+  `awaitingSnapshot`；屏障期间丢弃 `agent_message_chunk` 增量，只读一次
+  `readSessionMessages` 作为权威快照落地（`applySnapshot` 解除屏障），
+  避免迟到的流式碎片覆盖已恢复历史。
+- **按 `messageId` 幂等 upsert**：`agent_message_chunk` 按 `messageId`（缺失时退回 `traceId`）
+  归并到同一条 assistant 气泡；重复到达不新增气泡、不重复正文；累计式正文覆盖，
+  增量正文追加。
+- **降级恢复**：`bridge-degraded` / 断档 / 断线重连 → 置 `needsResync` 清本地增量 →
+  重开 bridge → 重订阅 → 重读快照；恢复路径不依赖传输层 replay。
+- **代际防迟到**：`MobileRemoteControlClient` 在 socket `close` / `dispose()` /
+  `ensureWorkspaceBridge` 换 workspace 时自增 bridge 代际并释放旧订阅；订阅回调与
+  `await` 返回点都按代际 + scope 校验，切换后旧 workspace/task 的迟到事件被丢弃。
+  切 workspace 先 dispose 旧订阅，再开新 bridge。
+- **错误处理**：订阅 / 快照 / 发送失败不再静默吞掉，上抛到 `notice`，日志经
+  `packages/ui/src/logger.ts` 输出，不用 `console.*`。
+
 ## relay 需求（用户自托管，摘要）
 
 完整 FR/NFR/AC 见本次讨论定稿（随本 spec 归档），要点：
@@ -351,6 +380,12 @@ IPC 面（preload ↔ main，`packages/shared/src/channels.ts` 新增）：
     `attachmentState === "attachable"`）→ 即使 UI 载荷未带正确 `connectionState`，bridge
     仍可开；未 attach / 拿不到权威态 → 明确返回 `invalidMobileConnection`（不挂起）；
     本地 workspace 行为不变。
+16. 手机打开任务：首屏只读一次 `readSessionMessages` 快照，之后由 Host replayable 事件流
+    增量更新；不出现 4s 周期 `setInterval(readSessionMessages)` 轮询。
+17. 同一 `messageId` 的 chunk 重复到达或乱序交错：仍只有一条 assistant 气泡，正文不重复；
+    快照屏障落地前的增量被丢弃，快照落地后正常追加。
+18. 断线重连 / 切 workspace：旧订阅先 dispose（代际失效），恢复路径 = 重开 bridge +
+    重订阅 + 重读快照；旧 task 的迟到事件不进入新会话。
 
 ## 分期
 

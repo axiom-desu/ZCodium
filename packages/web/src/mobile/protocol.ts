@@ -3,6 +3,7 @@ import { connectViaProtocol } from "@zcode/client";
 import { VSBuffer } from "@zcode/rpc";
 import {
   encodeWebRemoteControlRpcFrames,
+  generateTraceId,
   parseWebRemoteControlRpcAckFrame,
   type WebRemoteControlAppPayload,
   WebRemoteControlRpcAckScheduler,
@@ -13,6 +14,8 @@ import {
   type WebRemoteControlRpcAssemblyEvent,
   type WebRemoteControlRpcMessageFrame,
   type WebRemoteControlRpcTransportFrame,
+  type ZCodeMessageWithParts,
+  type ZCodeStreamEvent,
 } from "@zcode/shared";
 
 /**
@@ -44,6 +47,30 @@ export interface MobileClientEvents {
   ): void;
   onPayload(payload: WebRemoteControlAppPayload): void;
 }
+
+/** `subscribeTaskStream` 参数：`workspaceKey` 供 Host 路由 bridge，路径/身份供 Host 过滤流。 */
+export interface TaskStreamParams {
+  workspaceKey: string;
+  workspacePath: string;
+  workspaceIdentity?: string;
+  taskId: string;
+}
+
+/** 事件流订阅句柄；dispose 幂等，socket 已断时 dispose 帧自然丢弃。 */
+export interface TaskStreamSubscription {
+  dispose(): void;
+}
+
+/** 读 task 快照 / 发 prompt 的公共参数（路径与身份由 task 反查传入）。 */
+export interface TaskAccessParams {
+  workspaceKey: string;
+  taskId: string;
+  workspacePath?: string;
+  workspaceIdentity?: string;
+  remoteSessionId?: string;
+}
+
+const NOOP_TASK_STREAM_SUBSCRIPTION: TaskStreamSubscription = { dispose() {} };
 
 interface PendingRequest {
   resolve(payload: WebRemoteControlAppPayload): void;
@@ -101,6 +128,15 @@ export class MobileRemoteControlClient {
   private assemblySweepTimer: number | null = null;
   /** 已握手成功的 workspace bridge（桌面按 workspaceKey 路由，rpc-frame 只有在 bridge 存在时才被接收）。 */
   private bridgeReadyWorkspaceKey: string | null = null;
+  /** 同一 workspace 的在途 bridge 握手：订阅与快照读取并发时共用同一次 open，避免重复开桥互相作废。 */
+  private bridgeOpenPromise: { workspaceKey: string; promise: Promise<void> } | null = null;
+  /**
+   * bridge 代际：socket 重连、`dispose()`、`ensureWorkspaceBridge` 换 workspace 时自增。
+   * 订阅回调与 `await` 返回点都按代际校验，拦截旧 bridge 的迟到事件。
+   */
+  private bridgeGeneration = 0;
+  /** 当前 socket/bridge 生命周期内的任务事件流订阅；换代际时统一释放。 */
+  private taskStreamSubscriptions = new Set<{ generation: number; dispose(): void }>();
   private serviceAccessorInstance: ReturnType<typeof connectViaProtocol> | null = null;
   private onRpcMessage: ((data: unknown) => void) | null = null;
   private disposed = false;
@@ -161,6 +197,7 @@ export class MobileRemoteControlClient {
     socket.addEventListener("close", (event) => {
       if (this.socket !== socket) return;
       // bridge 与 socket 同生共死；accessor 里可能还有在途请求，连同 RPC 序号一起作废。
+      this.rotateBridgeGeneration();
       this.bridgeReadyWorkspaceKey = null;
       this.serviceAccessorInstance = null;
       this.rpcSeq = 0;
@@ -196,6 +233,7 @@ export class MobileRemoteControlClient {
 
   dispose(): void {
     this.disposed = true;
+    this.rotateBridgeGeneration();
     if (this.reconnectTimer !== null) {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -208,6 +246,100 @@ export class MobileRemoteControlClient {
     this.socket?.close();
     this.socket = null;
     this.failPending(new Error("mobile client disposed"));
+  }
+
+  /**
+   * 换代际：自增 `bridgeGeneration` 并释放当前所有任务流订阅。
+   * socket 关闭、客户端 dispose、以及 `ensureWorkspaceBridge` 换 workspace 都走这里，
+   * 保证旧订阅回调（迟到事件）无法写进新会话。
+   */
+  private rotateBridgeGeneration(): void {
+    this.bridgeGeneration += 1;
+    for (const subscription of this.taskStreamSubscriptions) {
+      try {
+        subscription.dispose();
+      } catch {
+        // socket 已断时 EventDispose 帧发不出去，dispose 只回收本地引用，忽略异常。
+      }
+    }
+    this.taskStreamSubscriptions.clear();
+  }
+
+  /**
+   * 订阅指定 task 的 replayable 事件流。
+   *
+   * 必须先握手 workspace bridge：`rpc-frame` 只有 bridge 存在时才被 Host 接收，
+   * 否则动态事件订阅会挂起。`await` 返回点与回调都做代际 + 作用域校验，
+   * 断线/换 workspace 后旧订阅自动失效，由上层重订阅 + 重读快照恢复。
+   */
+  async subscribeTaskStream(
+    params: TaskStreamParams,
+    onEvent: (event: ZCodeStreamEvent) => void,
+  ): Promise<TaskStreamSubscription> {
+    if (this.disposed) return NOOP_TASK_STREAM_SUBSCRIPTION;
+    await this.ensureWorkspaceBridge({
+      workspaceKey: params.workspaceKey,
+      taskId: params.taskId,
+    });
+    if (this.disposed) return NOOP_TASK_STREAM_SUBSCRIPTION;
+    // await 期间可能已断线或切 workspace：bridge 已作废就不订阅。
+    if (this.bridgeReadyWorkspaceKey !== params.workspaceKey) {
+      return NOOP_TASK_STREAM_SUBSCRIPTION;
+    }
+    const generation = this.bridgeGeneration;
+    const { zcodeTaskService } = this.createServiceAccessor();
+    const disposable = zcodeTaskService.onDynamicTaskEvent({
+      workspacePath: params.workspacePath,
+      ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
+      taskId: params.taskId,
+      deliveryKind: "replayable",
+    })((event) => {
+      if (this.disposed || generation !== this.bridgeGeneration) return;
+      if (this.bridgeReadyWorkspaceKey !== params.workspaceKey) return;
+      onEvent(event);
+    });
+    let active = true;
+    const subscription: { generation: number; dispose(): void } = {
+      generation,
+      dispose: () => {
+        if (!active) return;
+        active = false;
+        disposable.dispose();
+        this.taskStreamSubscriptions.delete(subscription);
+      },
+    };
+    this.taskStreamSubscriptions.add(subscription);
+    return subscription;
+  }
+
+  /** 读一次 task 权威快照；先握手 bridge，避免服务调用挂起。 */
+  async readTaskSnapshot(
+    params: TaskAccessParams & { limit?: number },
+  ): Promise<ZCodeMessageWithParts[]> {
+    await this.ensureWorkspaceBridge({ workspaceKey: params.workspaceKey, taskId: params.taskId });
+    const { zcodeSessionService } = this.createServiceAccessor();
+    return zcodeSessionService.readSessionMessages({
+      sessionId: params.taskId,
+      workspacePath: params.workspacePath ?? "",
+      workspaceIdentity: params.workspaceIdentity,
+      remoteSessionId: params.remoteSessionId,
+      limit: params.limit,
+    });
+  }
+
+  /** 发送一条 prompt；clientMode 固定 `web-remote-replayable`（与桌面 continuous 语义分离）。 */
+  async sendTaskPrompt(params: TaskAccessParams & { content: string }): Promise<void> {
+    await this.ensureWorkspaceBridge({ workspaceKey: params.workspaceKey, taskId: params.taskId });
+    const { zcodeTaskService } = this.createServiceAccessor();
+    // workspace 归属由 taskId 反查（task meta 持久化 workspacePath/Identity）；
+    // 远端工作区的 session 路由显式带上 remoteSessionId。
+    await zcodeTaskService.sendPrompt({
+      taskId: params.taskId,
+      traceId: generateTraceId(params.taskId),
+      content: params.content,
+      clientMode: "web-remote-replayable",
+      remoteSessionId: params.remoteSessionId,
+    });
   }
 
   getState(): MobileConnectionState {
@@ -323,6 +455,27 @@ export class MobileRemoteControlClient {
    */
   async ensureWorkspaceBridge(params: { workspaceKey: string; taskId?: string }): Promise<void> {
     if (this.bridgeReadyWorkspaceKey === params.workspaceKey) return;
+    // 同一 workspace 的并发调用复用同一次 open：桌面每次 open 都会 dispose 旧 bridge，
+    // 重复开桥会让先建好的订阅挂到已被替换的 bridge 上。
+    const inFlight = this.bridgeOpenPromise;
+    if (inFlight && inFlight.workspaceKey === params.workspaceKey) return inFlight.promise;
+    // 换 workspace（或首次挂 bridge）先换代际：旧 bridge 的事件流订阅立即失效，
+    // 避免旧 workspace 的迟到事件写进新会话。
+    this.rotateBridgeGeneration();
+    const promise = this.openWorkspaceBridge(params);
+    this.bridgeOpenPromise = { workspaceKey: params.workspaceKey, promise };
+    try {
+      await promise;
+    } finally {
+      if (this.bridgeOpenPromise?.promise === promise) this.bridgeOpenPromise = null;
+    }
+  }
+
+  private async openWorkspaceBridge(params: {
+    workspaceKey: string;
+    taskId?: string;
+  }): Promise<void> {
+    const generation = this.bridgeGeneration;
     const requestId = `bridge-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const response = await this.request({
       zcode_type: "workspace-bridge-open",
@@ -337,6 +490,8 @@ export class MobileRemoteControlClient {
     if (response.zcode_type !== "workspace-bridge-ready") {
       throw new Error(`unexpected workspace bridge response: ${response.zcode_type}`);
     }
+    // 握手期间已断线/切 workspace（代际已变）→ 本次 open 作废，不写回 bridge 状态。
+    if (this.disposed || generation !== this.bridgeGeneration) return;
     // 桌面每次 openBridge 都会新建 hostBridge（内部装配器从 seq 1 开始），换 workspace 时
     // 我们必须同时重置出站序号、装配器与重传/ack 状态，否则新 bridge 收到 seq>1 会判成 rpc-frame-gap。
     this.rpcSeq = 0;
@@ -352,7 +507,7 @@ export class MobileRemoteControlClient {
    * 拿到与桌面同构的 service 代理。
    *
    * 按实例记忆化：每次调用都新建会把 protocol 的单槽 `onRpcMessage` 覆盖掉，
-   * 上一个 accessor 的在途请求再也收不到回复（任务视图每 4s 拉一次，必现）。
+   * 上一个 accessor 的在途请求再也收不到回复（快照读取与发送都会调用，必现）。
    */
   createServiceAccessor(): ReturnType<typeof connectViaProtocol> {
     if (this.serviceAccessorInstance) return this.serviceAccessorInstance;

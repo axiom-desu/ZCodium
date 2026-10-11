@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { generateTraceId } from "@zcode/shared";
+/* eslint-disable max-lines -- 手机远控壳层：home 列表 + task 会话 + 订阅/快照生命周期同属一个 React 组件树，拆文件会把 reducer 分发、代际校验与 notice 的所有者分叉（与 protocol.ts 同一口径）。 */
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   MobileRemoteControlClient,
   readPairingParamsFromLocation,
   type MobileConnectionState,
+  type TaskStreamSubscription,
 } from "./protocol.js";
+import {
+  conversationMessagesFromSnapshot,
+  conversationReducer,
+  initialConversationState,
+  type ConversationScope,
+} from "./conversationReducer.js";
+import { logger } from "../../../ui/src/logger.js";
 import type {
   WebRemoteControlBootstrapResult,
   WebRemoteControlAppPayload,
@@ -16,14 +24,22 @@ import type {
  * 移动端远控应用：mobileHome（工作区/任务列表） + mobileShell（任务会话）。
  * 会话内容经 rpc 桥读桌面 Host；发送走 IZCodeTaskService.sendPrompt，
  * clientMode 固定 web-remote-replayable（与桌面 continuous 语义分离）。
+ *
+ * 实时更新走 Host replayable 事件流订阅（`onDynamicTaskEvent`），不再周期轮询：
+ * 首次/恢复只读一次 `readSessionMessages` 作为快照屏障，之后由事件流增量 upsert。
  */
 
 type View = { kind: "home" } | { kind: "task"; task: WebRemoteControlTaskRef };
 
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function findWorkspace(
+  bootstrap: WebRemoteControlBootstrapResult | null,
+  workspaceKey: string,
+): WebRemoteControlWorkspaceRef | undefined {
+  return bootstrap?.workspaces.find((item) => item.workspaceKey === workspaceKey);
 }
 
 export function MobileApp() {
@@ -38,29 +54,37 @@ export function MobileApp() {
   const [organize, setOrganize] = useState<"timeline" | "workspace">("timeline");
   const [sortBy, setSortBy] = useState<"created" | "updated">("updated");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversation, dispatchConversation] = useReducer(
+    conversationReducer,
+    initialConversationState,
+  );
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  // 传输降级回调由「订阅 effect」注册：`onPayload` 在 client 构造时绑定，
+  // 之后通过 ref 把 bridge-degraded 路由到当前 task 的 resync。
+  const onTransportDegradedRef = useRef<() => void>(() => {});
+
+  const reportError = useCallback((message: string, error: unknown) => {
+    logger.error(message, error);
+    setNotice(describeError(error));
+  }, []);
 
   useEffect(() => {
     try {
       setParams(readPairingParamsFromLocation());
     } catch (error) {
-      setParamsError(error instanceof Error ? error.message : String(error));
+      setParamsError(describeError(error));
     }
   }, []);
 
   const refreshBootstrap = useCallback(async () => {
     const client = clientRef.current;
     if (!client) return;
-    const requestId = `bootstrap-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const response = await client.request({
       zcode_type: "bootstrap-request",
-      requestId,
+      requestId: `bootstrap-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     });
-    if (response.zcode_type === "bootstrap-response") {
-      setBootstrap(response.result);
-    }
+    if (response.zcode_type === "bootstrap-response") setBootstrap(response.result);
   }, []);
 
   useEffect(() => {
@@ -79,9 +103,8 @@ export function MobileApp() {
               : current,
           );
         }
-        if (payload.zcode_type === "app-error") {
-          setNotice(payload.error ?? payload.reason);
-        }
+        if (payload.zcode_type === "bridge-degraded") onTransportDegradedRef.current();
+        if (payload.zcode_type === "app-error") setNotice(payload.error ?? payload.reason);
       },
     });
     clientRef.current = client;
@@ -108,75 +131,122 @@ export function MobileApp() {
 
   useEffect(() => {
     if (connection !== "paired" || bootstrap) return;
-    void refreshBootstrap().catch((error) =>
-      setNotice(error instanceof Error ? error.message : String(error)),
-    );
-  }, [connection, bootstrap, refreshBootstrap]);
+    void refreshBootstrap().catch((error) => reportError("[mobile] bootstrap 拉取失败", error));
+  }, [connection, bootstrap, refreshBootstrap, reportError]);
 
-  // 任务视图：拉历史 + 周期刷新（实时流接入见 spec 分期 P3 后续）。
+  // 任务视图订阅：进入任务即订阅 Host replayable 事件流；退出/换 workspace 释放旧订阅。
+  // 断线重连（connection 重新变 paired）会重跑本 effect：重开 bridge + 重订阅 + 重读快照。
   useEffect(() => {
-    if (view.kind !== "task") return;
+    if (view.kind !== "task" || connection !== "paired") return;
     const client = clientRef.current;
     if (!client) return;
-    let cancelled = false;
-    const load = async () => {
-      // rpc-frame 只有桌面 bridge 存在时才被接收，先握手再取服务代理。
-      await client.ensureWorkspaceBridge({
-        workspaceKey: view.task.workspaceKey,
-        taskId: view.task.taskId,
-      });
-      const { zcodeSessionService: sessionService } = client.createServiceAccessor();
-      const workspace = bootstrap?.workspaces.find(
-        (item) => item.workspaceKey === view.task.workspaceKey,
+    const { workspaceKey, taskId } = view.task;
+    const scope: ConversationScope = { workspaceKey, taskId };
+    const workspace = findWorkspace(bootstrap, workspaceKey);
+    let disposed = false;
+    let subscription: TaskStreamSubscription | null = null;
+
+    // beginScope 首次重置、重连时保留气泡并置快照屏障（快照落地前丢弃增量）。
+    dispatchConversation({ type: "beginScope", scope });
+    onTransportDegradedRef.current = () => dispatchConversation({ type: "resync", scope });
+
+    void (async () => {
+      await client.ensureWorkspaceBridge({ workspaceKey, taskId });
+      if (disposed) return;
+      const handle = await client.subscribeTaskStream(
+        {
+          workspaceKey,
+          workspacePath: workspace?.workspacePath ?? "",
+          workspaceIdentity: workspace?.workspaceIdentity,
+          taskId,
+        },
+        (event) => dispatchConversation({ type: "streamEvent", scope, event }),
       );
-      const taskId = view.task.taskId;
-      const read = await sessionService.readSessionMessages({
-        sessionId: taskId,
+      if (disposed) {
+        handle.dispose();
+        return;
+      }
+      subscription = handle;
+    })().catch((error) => {
+      if (!disposed) reportError("[mobile] 任务事件流订阅失败", error);
+    });
+
+    return () => {
+      disposed = true;
+      subscription?.dispose();
+      subscription = null;
+      onTransportDegradedRef.current = () => {};
+    };
+  }, [view, bootstrap, connection, reportError]);
+
+  // 快照屏障：needsResync / awaitingSnapshot 为真时读一次权威历史，覆盖本地增量。
+  useEffect(() => {
+    if (view.kind !== "task" || connection !== "paired") return;
+    if (!conversation.needsResync && !conversation.awaitingSnapshot) return;
+    const client = clientRef.current;
+    if (!client) return;
+    const { workspaceKey, taskId } = view.task;
+    const scope: ConversationScope = { workspaceKey, taskId };
+    const workspace = findWorkspace(bootstrap, workspaceKey);
+    let cancelled = false;
+
+    void client
+      .readTaskSnapshot({
+        workspaceKey,
+        taskId,
         workspacePath: workspace?.workspacePath ?? "",
         workspaceIdentity: workspace?.workspaceIdentity,
         remoteSessionId: workspace?.remoteSessionId,
         limit: 100,
+      })
+      .then((read) => {
+        if (cancelled) return;
+        dispatchConversation({
+          type: "applySnapshot",
+          scope,
+          messages: conversationMessagesFromSnapshot(read),
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) reportError("[mobile] 会话快照读取失败", error);
       });
-      if (cancelled) return;
-      setMessages(
-        read.map((message) => toChatMessage(message as Parameters<typeof toChatMessage>[0])),
-      );
-    };
-    void load().catch(() => undefined);
-    const timer = window.setInterval(() => void load().catch(() => undefined), 4000);
+
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
     };
-  }, [view, bootstrap]);
+  }, [
+    view,
+    bootstrap,
+    connection,
+    conversation.needsResync,
+    conversation.awaitingSnapshot,
+    reportError,
+  ]);
 
   const sendPrompt = useCallback(async () => {
     const client = clientRef.current;
     const content = draft.trim();
     if (!client || view.kind !== "task" || !content) return;
-    const workspace = bootstrap?.workspaces.find(
-      (item) => item.workspaceKey === view.task.workspaceKey,
-    );
-    await client.ensureWorkspaceBridge({
-      workspaceKey: view.task.workspaceKey,
-      taskId: view.task.taskId,
-    });
-    const { zcodeTaskService: taskService } = client.createServiceAccessor();
+    const { workspaceKey, taskId } = view.task;
+    const workspace = findWorkspace(bootstrap, workspaceKey);
     setDraft("");
-    setMessages((current) => [
-      ...current,
-      { id: `local-${Date.now()}`, role: "user", text: content },
-    ]);
-    // workspace 归属由 taskId 反查（task meta 持久化 workspacePath/Identity）；
-    // 远端工作区的 session 路由显式带上 remoteSessionId。
-    await taskService.sendPrompt({
-      taskId: view.task.taskId,
-      traceId: generateTraceId(view.task.taskId),
-      content,
-      clientMode: "web-remote-replayable",
-      remoteSessionId: workspace?.remoteSessionId,
+    dispatchConversation({
+      type: "appendOptimisticUserMessage",
+      scope: { workspaceKey, taskId },
+      id: `local-${Date.now()}`,
+      text: content,
     });
-  }, [draft, view, bootstrap]);
+    try {
+      await client.sendTaskPrompt({
+        workspaceKey,
+        taskId,
+        content,
+        remoteSessionId: workspace?.remoteSessionId,
+      });
+    } catch (error) {
+      reportError("[mobile] 发送消息失败", error);
+    }
+  }, [draft, view, bootstrap, reportError]);
 
   const groupedWorkspaces = useMemo(() => {
     const workspaces = bootstrap?.workspaces ?? [];
@@ -185,9 +255,7 @@ export function MobileApp() {
       if (sortBy === "updated") return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
       return (b.createdAt ?? 0) - (a.createdAt ?? 0);
     });
-    if (organize === "timeline") {
-      return [{ key: "timeline", label: null, tasks: sorted }];
-    }
+    if (organize === "timeline") return [{ key: "timeline", label: null, tasks: sorted }];
     return workspaces.map((workspace) => ({
       key: workspace.workspaceKey,
       label: workspace.label ?? workspace.workspacePath,
@@ -214,7 +282,7 @@ export function MobileApp() {
         notice={notice}
       >
         <div className="flex flex-col gap-3 pb-24">
-          {messages.map((message) => (
+          {conversation.messages.map((message) => (
             <div
               key={message.id}
               className={
@@ -226,7 +294,7 @@ export function MobileApp() {
               {message.text}
             </div>
           ))}
-          {messages.length === 0 ? (
+          {conversation.messages.length === 0 ? (
             <p className="text-center text-ui-base text-foreground-subtle">暂无消息</p>
           ) : null}
         </div>
@@ -255,7 +323,9 @@ export function MobileApp() {
   return (
     <Shell
       connection={connection}
-      onRefresh={() => void refreshBootstrap().catch(() => undefined)}
+      onRefresh={() =>
+        void refreshBootstrap().catch((error) => reportError("[mobile] 刷新工作区失败", error))
+      }
       notice={notice}
     >
       <section className="space-y-1">
@@ -360,31 +430,6 @@ function taskStatusLabel(status: WebRemoteControlTaskRef["displayStatus"]): stri
     default:
       return "空闲";
   }
-}
-
-/** ZCodeMessageWithParts → 移动端纯文本气泡（v1 只渲染文本 part）。 */
-function toChatMessage(message: {
-  id?: string;
-  role?: string;
-  parts?: unknown[];
-  text?: string;
-}): ChatMessage {
-  const record = message;
-  const text =
-    typeof record.text === "string"
-      ? record.text
-      : (record.parts ?? [])
-          .map((part) => {
-            const item = part as { type?: string; text?: string };
-            return item.type === "text" && typeof item.text === "string" ? item.text : "";
-          })
-          .filter(Boolean)
-          .join("\n");
-  return {
-    id: record.id ?? `msg-${Math.random().toString(36).slice(2)}`,
-    role: record.role === "user" ? "user" : "assistant",
-    text,
-  };
 }
 
 function Shell(props: {
