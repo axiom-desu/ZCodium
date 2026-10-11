@@ -239,10 +239,13 @@ export class MobileRemoteControlClient {
    * 只有整条消息装配成功才交付并排 ack（ack 语义 = 已连续装配到的逻辑 seq，走批量调度）。
    */
   acceptRpcFrame(frame: WebRemoteControlRpcTransportFrame): void {
-    // ack 帧不进装配器：推进重传窗口，并重发仍未确认的帧（幂等）。
+    // ack 帧不进装配器：前向 ack 的语义是「桌面已连续装配到的 seq」，只推进窗口、释放
+    // 已确认前缀；正常流水下 ack 必然滞后于 lastSentSeq（批量合并 + 在途帧），若在此按
+    // (ackSeq, lastSentSeq] 重发，每个正常 ack 都会触发一次无意义重传。丢片重传由对端
+    // nudge（gap / buffer-timeout）驱动，见 handleRpcAssemblyEvents。
     const ack = parseWebRemoteControlRpcAckFrame(frame);
     if (ack) {
-      this.emitRpcFrames(this.rpcReplayBuffer.acknowledge(ack.ackSeq));
+      this.rpcReplayBuffer.acknowledge(ack.ackSeq);
       return;
     }
     this.handleRpcAssemblyEvents(this.rpcAssembler.push(frame));

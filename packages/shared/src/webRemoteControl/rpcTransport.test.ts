@@ -297,6 +297,27 @@ describe("web remote control rpc transport · 重传缓冲", () => {
     expect(buffer.pendingMessageCount).toBe(2);
   });
 
+  it("ack 只释放已确认前缀，不改变未确认尾部", () => {
+    const buffer = new WebRemoteControlRpcReplayBuffer();
+    const seq1 = encode({ n: 1 }, 1);
+    const seq2 = encode({ n: 2 }, 2);
+    const seq3 = encode({ n: 3 }, 3);
+    buffer.record(1, seq1);
+    buffer.record(2, seq2);
+    buffer.record(3, seq3);
+    expect(buffer.pendingMessageCount).toBe(3);
+    expect(buffer.replayUnacknowledged()).toEqual([...seq1, ...seq2, ...seq3]);
+
+    // acknowledge 的返回值不是重传信号：发送侧只保留其副作用（释放已确认前缀）。
+    buffer.acknowledge(1);
+    expect(buffer.ackedSeq).toBe(1);
+    expect(buffer.pendingMessageCount).toBe(2);
+    // 未确认尾部原样保留，不被清空或提前释放；重传仍由 gap/timeout nudge 触发。
+    expect(buffer.replayUnacknowledged()).toEqual([...seq2, ...seq3]);
+    expect(buffer.pendingBytes).toBeGreaterThan(0);
+    expect(buffer.lastSentSeq).toBe(3);
+  });
+
   it("重传帧幂等：已装配过的 seq 再次到达不重复交付", () => {
     const assembler = new WebRemoteControlRpcAssembler();
     const buffer = new WebRemoteControlRpcReplayBuffer();
