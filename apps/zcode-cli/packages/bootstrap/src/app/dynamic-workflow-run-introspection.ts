@@ -33,6 +33,7 @@ import {
   type RunRegistryEntry,
 } from "./dynamic-workflow-run-observation.js";
 import { replayRunProgressFromEvents } from "./dynamic-workflow-run-replay.js";
+import { runHolesOf } from "./dynamic-workflow-run-holes.js";
 import { buildWorkflowRunRoster } from "./dynamic-workflow-run-roster.js";
 import type { WorkflowEscalationRegistry } from "./workflow-escalation-registry.js";
 
@@ -156,6 +157,7 @@ export function createRunIntrospectionMethods(
           actors: [],
           logTail: [],
           ...gapRoster,
+          ...runHolesField(runId, entry, journal),
           ...terminalResultField(gapSummary.status, entry),
           ...terminalErrorField(gapSummary.status, entry),
           // 这条间隙分支正是「run 在飞、journal 行还没落」的那一刻，也就是问题**最可能**
@@ -227,6 +229,8 @@ export function createRunIntrospectionMethods(
         ...(pendingQuestions === undefined || pendingQuestions.length === 0
           ? {}
           : { pendingQuestions }),
+        // 留白：与快照**同源同投影**（`runHolesOf`），热条目读控制面停驻表，冷行从事件重建。
+        ...runHolesField(runId, entry, journal),
         // 产物截面：任意状态都附，含 failed / cancelled
         // ——一个死在第 12 步的 run 仍然交付了它前面产出的那张图。与 `listArtifacts` 和终态
         // 快照走**同一个** artifactsOf，三处给出同一份清单（三处各归并一份，迟早会在
@@ -235,6 +239,18 @@ export function createRunIntrospectionMethods(
       };
     },
   };
+}
+
+/**
+ * `getRunDetail` 的 holes 切片：与快照（{@link runHolesOf}）同一条投影，零条时整字段缺席。
+ */
+function runHolesField(
+  runId: string,
+  entry: RunRegistryEntry | undefined,
+  journal: JournalStorePort,
+): Pick<DynamicWorkflowRunDetail, "holes"> {
+  const holes = runHolesOf(runId, entry, journal);
+  return holes.length === 0 ? {} : { holes };
 }
 
 /**

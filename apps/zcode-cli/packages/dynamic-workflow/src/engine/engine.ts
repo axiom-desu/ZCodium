@@ -55,87 +55,22 @@ import type {
   WorldReadOp,
 } from "./types.js";
 import { refToString, WorkflowError } from "./types.js";
-import { runLaunchedEvent, type RunLaunchConfig } from "./engine-launch.js";
+import { runLaunchedEvent } from "./engine-launch.js";
 import { enrichProviderStopPhase, stampBirthPhase } from "./engine-phase-stamp.js";
-
-/** 引擎构造配置。 */
-export interface EngineConfig {
-  runId: string;
-  driver: WorkflowDriver;
-  caps: Caps;
-  /**
-   * 每 ask 站点的静态规格（typed + schema）。**必须覆盖脚本里的每一个 ask 站点**——
-   * 站点表与 schema 合成来自同一次编译，因此缺席只可能是接线错误，引擎按硬错误处理
-   * （MissingAskSpec）。untyped 站点要显式记为 `{ typed: false }`。
-   */
-  askSpecs: ReadonlyMap<string, AskSpec>;
-  /** 注入的 schema 校验器（核心不 import schema 实现）。 */
-  validate: ValidateFn;
-  /** run 元数据（落 dwf_run，仅在本次 createRun 时写入；resume 时不覆写记录）。 */
-  scriptText?: string;
-  /**
-   * run 的展示名（`CreateWorkflow` 的可选 `input.name`）。引擎不读它，只在建 run 时随
-   * `scriptText` 一起落库——宿主的枚举面据它给 run 起标签。见 {@link RunRecord.name}。
-   */
-  name?: string;
-  /**
-   * 脚本文本的哈希。resume 时与 journal 记录里的值比对：两侧都有且不同即拒绝本次 resume
-   * （V1 的 resume 只对逐字节相同的脚本有效）。
-   */
-  scriptHash?: string;
-  /**
-   * 本次 run 的实参（已校验回填）。引擎不读它，只在建 run 时随 `scriptText` 一起落库；
-   * 沙箱侧的注入走 harness 的 spawn payload，不经引擎。见 {@link RunRecord.args}。
-   */
-  args?: Record<string, unknown>;
-  parentSessionId?: string;
-  cwd?: string;
-  /**
-   * 发起 run 的 CreateWorkflow 工具调用 id（见 {@link RunRecord.toolCallId}）。
-   * 引擎不读它，只随其余元数据在 createRun 时落库。
-   */
-  toolCallId?: string;
-  /**
-   * 本次 run 修订自哪个前驱 run（见 {@link RunRecord.resumedFrom}）。引擎不读它，
-   * 只随其余元数据在 createRun 时落库——导入缓存的构建在 run service，不在核心。
-   */
-  resumedFrom?: string;
-  /**
-   * 发起 run 那一轮的锚点。引擎不读它，只在建 run 那一世
-   * 紧跟首条 `run-started` 记一条 `run-launched`；resume 命中既有行时不再记（锚点跨生命周期唯一）。
-   * `phaseNames` 随锚点同车：脚本声明的阶段表，引擎同样不读，只落 journal。`phaseAlongside`
-   * 与它按位置对齐（下标指向同一张表），同车同规。
-   * `subagentModel` 也同车：本 run 子代理的选型（规范 picker 串），引擎同样不读——模型面整个
-   * 在宿主侧（bootstrap 的 workflow-actor-model.ts），宿主从这条事件读回它，零 SQL。
-   * `scriptPath` 同车同规：本 run 的脚本来自哪个文件（绝对路径），引擎不读，宿主从这条事件
-   * 读回它交给模型面。
-   */
-  launch?: RunLaunchConfig;
-  /**
-   * 建 run 时的用量起点：前驱 run 的 `spentTokens`。amend 路径给出，全新 submit 缺席（= 从零起账），
-   * resume 路径给了也无用——命中既有行时用量从行里恢复。
-   *
-   * 语义是「本 run 报的是整条 lineage 的花费」：每个前驱的数字本身已是累计值，所以链式修订
-   * 按构造求和，没人需要走 `resumed_from` 链。命中缓存不再加钱（那笔账就在这个继承值里），
-   * 只有本次现跑的 live turn 往上加。
-   */
-  inheritedTokens?: number;
-  /**
-   * amend-resume 的导入缓存（{@link ImportedRunCache}）。**纯数据注入**——核心因此仍是
-   * 零 I/O 的确定性状态机：读前驱 journal、走 `resumed_from` 链、解析转录源，全部发生在
-   * run service，引擎只拿到一张构建好的表并按运行期身份（actor 名 + persona、
-   * `{op,args}` 内容 + 出现序）比对。缺席即本次不是修订续跑。
-   */
-  importedCache?: ImportedRunCache;
-}
+import {
+  HoleRegistry,
+  fillHole as fillHoleBody,
+  reachHole,
+  type FilledHole,
+  type FillHoleResult,
+  type HoleFill,
+  type OpenHole,
+} from "./engine-holes.js";
+import type { EngineConfig } from "./engine-config.js";
+import { normalizePersona } from "./persona.js";
 
 /** run 的最终结算（定义随结算模块的接缝迁到 engine-state.ts，这里原地再导出）。 */
 export type { RunSettlement } from "./engine-state.js";
-
-interface SettledDeferred {
-  promise: Promise<RunSettlement>;
-  resolve: (value: RunSettlement) => void;
-}
 
 export class WorkflowEngine implements WorkflowHostApi, WorkflowReportSink {
   private readonly runId: string;
@@ -147,9 +82,13 @@ export class WorkflowEngine implements WorkflowHostApi, WorkflowReportSink {
    * caps 必须保持它们被记下时的样子（调用方递进来的那个对象同理不被回写）。
    */
   private caps: Caps;
-  private readonly askSpecs: ReadonlyMap<string, AskSpec>;
+  private askSpecs: ReadonlyMap<string, AskSpec>;
   private readonly validate: ValidateFn;
   private readonly scheduler: AskScheduler;
+  /** 站点 → 词法出生阶段（见 {@link EngineConfig.sitePhases}）。可变，与 `askSpecs` 同一条路换表。 */
+  private sitePhases: ReadonlyMap<string, string>;
+  /** 留白的停驻表与本世的补全记忆（engine-holes.ts）。 */
+  private readonly holes: HoleRegistry;
 
   /** 每站点执行序号计数器（ask / world-read / actor 共用，站点 id 互不相同）。 */
   private readonly ordinals = new Map<string, number>();
@@ -219,7 +158,8 @@ export class WorkflowEngine implements WorkflowHostApi, WorkflowReportSink {
   private runSettled = false;
   private runFailure?: WorkflowError;
 
-  private readonly settledDeferred: SettledDeferred;
+  private readonly settledPromise: Promise<RunSettlement>;
+  private resolveSettled!: (value: RunSettlement) => void;
   /** 兄弟模块自由函数读写私有状态的接缝（构造函数里用箭头闭包装配，见 engine-state.ts）。 */
   private readonly state: EngineState;
 
@@ -233,12 +173,12 @@ export class WorkflowEngine implements WorkflowHostApi, WorkflowReportSink {
     this.validate = config.validate;
     this.importedCache = config.importedCache;
     this.importedWorld = new ImportedWorldQueue(config.importedCache?.world ?? new Map());
+    this.sitePhases = config.sitePhases ?? new Map();
+    this.holes = new HoleRegistry(config.now ?? Date.now);
 
-    let resolve!: (value: RunSettlement) => void;
-    const promise = new Promise<RunSettlement>((res) => {
-      resolve = res;
+    this.settledPromise = new Promise<RunSettlement>((res) => {
+      this.resolveSettled = res;
     });
-    this.settledDeferred = { promise, resolve };
 
     this.state = {
       runId: this.runId,
@@ -270,8 +210,12 @@ export class WorkflowEngine implements WorkflowHostApi, WorkflowReportSink {
         // 永不兑现（沙箱会被关掉，但同进程跑脚本的装配就此挂死）。
         this.replaySettleOrder.open();
       },
-      abortInFlight: (error, emitCancelled) => this.scheduler.abortInFlight(error, emitCancelled),
-      resolveSettled: (settlement) => this.settledDeferred.resolve(settlement),
+      abortInFlight: (error, emitCancelled) => {
+        this.scheduler.abortInFlight(error, emitCancelled);
+        // 停在留白上的分支与在飞 ask 同一笔拒绝：结算之后没有什么可以再补全它。
+        this.holes.rejectAll(error);
+      },
+      resolveSettled: (settlement) => this.resolveSettled(settlement),
     };
 
     // caps 对调度器是**现读**：setMaxConcurrency 整份换掉 this.caps，而派发判据必须看见新值
@@ -385,7 +329,7 @@ export class WorkflowEngine implements WorkflowHostApi, WorkflowReportSink {
 
   /** run 结算 promise：完成/失败/取消时兑现。 */
   get settled(): Promise<RunSettlement> {
-    return this.settledDeferred.promise;
+    return this.settledPromise;
   }
 
   /** 当前 run 状态。 */
@@ -506,6 +450,33 @@ export class WorkflowEngine implements WorkflowHostApi, WorkflowReportSink {
     // 此后铸造的实例都出生在这个阶段。
     this.currentPhase = trimmed;
     this.record({ type: "phase-entered", name: trimmed, ordinal });
+  }
+
+  /** 脚本到达一处未补全的留白（Boundary A 的 `hole`）：方法体在 engine-holes.ts 的 reachHole。 */
+  hole(siteId: string, name: string, prompt?: string): Promise<{ code: string }> {
+    return reachHole(this.state, this.holes, siteId, name, prompt);
+  }
+
+  /**
+   * 主代理补全一处留白（docs/execution-engine.md「The engine's part」）：一个同步步骤里换掉规格表
+   * 与阶段表、写回有效脚本、记 `hole-filled`、记住代码、放行停驻的每一个分支。方法体在
+   * engine-holes.ts 的 fillHole；两条 no-op（`not_waiting` / `settled`）不写不发。
+   */
+  fillHole(fill: HoleFill): FillHoleResult {
+    return fillHoleBody(this.state, this.holes, fill, (askSpecs, sitePhases) => {
+      this.askSpecs = askSpecs;
+      this.sitePhases = sitePhases;
+    });
+  }
+
+  /** 仍在等的留白（快照投影：事件之外还要问引擎，进程死过之后没有 promise 在等）。 */
+  openHoles(): OpenHole[] {
+    return this.holes.open();
+  }
+
+  /** 本世已补全的留白。 */
+  filledHoles(): FilledHole[] {
+    return this.holes.filledList();
   }
 
   /** 发布一条中间结果（Boundary A 的 `report`）：方法体在 engine-report.ts 的 publishReport。 */
@@ -685,8 +656,10 @@ export class WorkflowEngine implements WorkflowHostApi, WorkflowReportSink {
   private nextOrdinal(siteId: string): number {
     const next = (this.ordinals.get(siteId) ?? 0) + 1;
     this.ordinals.set(siteId, next);
-    if (this.currentPhase !== undefined)
-      this.instancePhases.set(refToString({ siteId, ordinal: next }), this.currentPhase);
+    // 词法优先、动态兜底：编译期表里的阶段才是确认图上用户看到的那个。
+    const phase = this.sitePhases.get(siteId) ?? this.currentPhase;
+    if (phase !== undefined)
+      this.instancePhases.set(refToString({ siteId, ordinal: next }), phase);
     return next;
   }
 
@@ -713,14 +686,4 @@ export class WorkflowEngine implements WorkflowHostApi, WorkflowReportSink {
     this.journal.appendEvent(this.runId, stamped);
     this.driver.emit(stamped);
   }
-}
-
-/** persona 规范化：字符串视为 system prompt；display name 落到 persona.name。 */ function normalizePersona(
-  name: string | undefined,
-  persona: string | PersonaSpec | undefined,
-): PersonaSpec {
-  const base: PersonaSpec =
-    typeof persona === "string" ? { system: persona } : persona ? { ...persona } : {};
-  if (base.name === undefined && name !== undefined) base.name = name;
-  return base;
 }

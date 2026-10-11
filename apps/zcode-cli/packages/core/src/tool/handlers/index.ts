@@ -58,6 +58,7 @@ import { taskOutputToolEntry } from "./task-output.js";
 import { taskStopToolEntry } from "./task-stop.js";
 import { readSessionContextToolEntry } from "./read-session-context.js";
 import { amendWorkflowToolEntry } from "./amend-workflow.js";
+import { fillWorkflowHoleToolEntry } from "./fill-workflow-hole.js";
 import { createWorkflowToolEntry } from "./create-workflow.js";
 import { saveWorkflowToolEntry } from "./save-workflow.js";
 import { listSavedWorkflowsToolEntry } from "./list-saved-workflows.js";
@@ -108,6 +109,8 @@ export const builtInTools: ToolEntry[] = [
   jsToolEntry,
   createWorkflowToolEntry,
   amendWorkflowToolEntry,
+  // 留白补全：与 AmendWorkflow 同族的执行工具（run_id 键、alwaysAsk），但不启动任何东西。
+  fillWorkflowHoleToolEntry,
   // 保存的定义：写侧 gate 与 CreateWorkflow 同档（alwaysAsk），读侧无 gate。
   saveWorkflowToolEntry,
   // workflow 创作的实验通道：同步、只读（v1）、完全瞬态。

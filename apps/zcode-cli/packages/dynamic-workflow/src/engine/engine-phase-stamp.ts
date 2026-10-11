@@ -48,6 +48,11 @@ export function stampBirthPhase(event: RunEvent, instancePhases: InstancePhases)
     const phaseName = instancePhases.get(refToString(event.instance));
     return phaseName === undefined ? event : { ...event, phaseName };
   }
+  // 留白的到达也是一次出生：序号与节点同族铸造，出生阶段同一张表——没有行，事件是它唯一的坐标。
+  if (event.type === "hole-reached") {
+    const phaseName = instancePhases.get(refToString(event.instance));
+    return phaseName === undefined ? event : { ...event, phaseName };
+  }
   return event;
 }
 

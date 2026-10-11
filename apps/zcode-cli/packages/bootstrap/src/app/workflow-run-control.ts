@@ -14,6 +14,7 @@
 // 顺序是载荷性的：**引擎先**。引擎的布尔值就是这次命令的裁决（已结算 / 值没变 ⇒ false，什么也
 // 没发生），闸门若抢在前面换了上界，一个已经结算的 run 就会留下一个与 journal 行不符的内存上界。
 
+import type { FillHoleResult, HoleFill, OpenHole } from "@zcode/dynamic-workflow";
 import type { RunControlBinding } from "@zcode/dynamic-workflow-runtime";
 import type { WorkflowRunSeatGate } from "./workflow-seat-gate.js";
 
@@ -25,10 +26,24 @@ export interface WorkflowRunControl extends RunControlBinding {
   setMaxConcurrency(maxConcurrency: number): boolean;
   /** launch 造好座位闸门之后接上去；缺席即这个 run 只有调度器一个执行点。 */
   bindSeatGate(gate: Pick<WorkflowRunSeatGate, "setLimit">): void;
+  /**
+   * 给一处正在等的留白送去有效脚本里它的函数体（`docs/execution-engine.md`「The engine's part」）。
+   * 引擎还没接上时回 `undefined`——与 `setMaxConcurrency` 的 false 同义：这一刻没有引擎可命令，
+   * 补全服务据此报 `hole_not_waiting`。留白只有引擎一个执行点，闸门不参与。
+   */
+  fillHole(fill: HoleFill): FillHoleResult | undefined;
+  /**
+   * 引擎此刻停驻的留白（快照投影 `waiting` 的唯一来源）。引擎还没接上时回 `undefined`，与
+   * 「没有引擎在等」对读面是同一件事。
+   */
+  openHoles(): readonly OpenHole[] | undefined;
 }
 
+/** 控制面握着的引擎切面：两条命令（上界、补全）与一条查询（停驻的留白）。 */
+type BoundEngine = Parameters<RunControlBinding["bind"]>[0];
+
 export function createWorkflowRunControl(): WorkflowRunControl {
-  let engine: { setMaxConcurrency(maxConcurrency: number): boolean } | undefined;
+  let engine: BoundEngine | undefined;
   let seatGate: Pick<WorkflowRunSeatGate, "setLimit"> | undefined;
   return {
     bind: (bound) => {
@@ -37,6 +52,8 @@ export function createWorkflowRunControl(): WorkflowRunControl {
     bindSeatGate: (gate) => {
       seatGate = gate;
     },
+    fillHole: (fill) => engine?.fillHole(fill),
+    openHoles: () => engine?.openHoles(),
     setMaxConcurrency: (maxConcurrency) => {
       if (engine === undefined) return false;
       if (!engine.setMaxConcurrency(maxConcurrency)) return false;

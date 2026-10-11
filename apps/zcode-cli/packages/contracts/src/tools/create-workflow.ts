@@ -502,6 +502,20 @@ export const CreateWorkflowOutputSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * `FillWorkflowHole` 补的是哪处留白：站点 id 与**名字**，外加草稿路径与行号。成功与被拒都在场，
+     * **跨 v4**——display 投影原样带上它，工具行靠它给自己起名。不能从行的入参读：transcript 存的是
+     * 模型自己的入参，resolveInput 回填的 `hole` 块到不了行。
+     */
+    fill: z
+      .object({
+        siteId: z.string().min(1).max(64),
+        name: z.string().min(1).max(128),
+        draftPath: z.string().min(1).optional(),
+        line: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

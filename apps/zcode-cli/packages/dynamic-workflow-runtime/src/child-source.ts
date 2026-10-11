@@ -90,6 +90,8 @@ export function childMain(deps: ChildMainDeps): Promise<void> {
 var __nextLocal = 0;
 var __nextReq = 0;
 var __pending = new Map();
+// 本世已补全的留白：站点 id → 体的文本。同一站点再次到达（循环）时直接求值，不再过线。
+var __fills = new Map();
 
 function __emit(obj) {
   __send(JSON.stringify(obj));
@@ -107,6 +109,37 @@ function __ask(siteId, actor, instructions) {
   return new Promise(function (resolve, reject) {
     __pending.set(id, { resolve: resolve, reject: reject });
     __emit({ kind: "request", id: id, type: "ask", siteId: siteId, actor: actor, instructions: instructions });
+  });
+}
+
+function __evaluateFill(evaluate, code) {
+  // evaluate 是 lowering 在站点处发出的 (__src) => eval(__src)：直接 eval，闭包住作者代码在
+  // 那一点的全部绑定（__host 在内），求出 (async () => { … }) 这个函数；调它，结果即留白的值。
+  // 每次到达都新造一个 evaluate，循环里的留白因此看见各轮自己的绑定。求值失败（语法错）与体的
+  // 拒绝都在这条 promise 上冒出，落在站点处，脚本可以 catch。
+  return Promise.resolve().then(function () {
+    return evaluate(code)();
+  });
+}
+
+function __hole(siteId, name, prompt, evaluate, body) {
+  // 已补全（体就在脚本里）：直接调体，不过线。同步抛出转成拒绝，与 future 同规。
+  if (body !== undefined) {
+    try {
+      return Promise.resolve(body());
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+  var remembered = __fills.get(siteId);
+  if (remembered !== undefined) return __evaluateFill(evaluate, remembered);
+  var id = "r" + (++__nextReq);
+  return new Promise(function (resolve, reject) {
+    __pending.set(id, { resolve: resolve, reject: reject });
+    __emit({ kind: "request", id: id, type: "hole", siteId: siteId, name: name, prompt: prompt });
+  }).then(function (answer) {
+    __fills.set(siteId, answer.code);
+    return __evaluateFill(evaluate, answer.code);
   });
 }
 
@@ -170,6 +203,7 @@ globalThis.__host = {
   report: __report,
   log: __log,
   enterPhase: __enterPhase,
+  hole: __hole,
 };
 
 // —— 入站 response 消费（由外层 realm 以行字符串调用）——

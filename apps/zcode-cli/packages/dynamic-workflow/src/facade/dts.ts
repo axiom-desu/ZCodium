@@ -12,6 +12,8 @@
  * 单个换行开头结尾，段间拼接自然形成原有的空行分隔。
  */
 
+import { FACADE_HOLE_SEGMENT } from "./dts-hole.js";
+
 export const FACADE_FILE_NAME = "workflow-facade.d.ts";
 
 /** actor 族：Node / AgentPersona / Agent / agent()。snippet 刻意不含。 */
@@ -431,6 +433,9 @@ export const FACADE_DTS =
   FACADE_REPORT_SEGMENT +
   FACADE_ARTIFACT_SEGMENT +
   FACADE_PHASE_SEGMENT +
+  // 留白段只进完整 facade（docs/dynamic-workflow/authoring.md「Holes」）：片段没有 run，也就
+  // 没有可等主代理补全的东西，snippet 里的 `hole(...)` 得到 TS2304，教删除。
+  FACADE_HOLE_SEGMENT +
   FACADE_WORLD_SEGMENT +
   FACADE_WORLD_RUN_SEGMENT;
 

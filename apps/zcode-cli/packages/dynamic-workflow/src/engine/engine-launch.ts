@@ -20,6 +20,8 @@ export interface RunLaunchConfig {
   /** 本 run 脚本文件的绝对路径。 */
   scriptPath?: string;
   phaseAlongside?: number[][];
+  /** `phaseNames` 里未补全留白的下标；脚本没有留白时缺席。 */
+  holes?: number[];
 }
 
 /**
@@ -30,7 +32,7 @@ export function runLaunchedEvent(
   launch: RunLaunchConfig,
   origin: { toolCallId?: string | undefined; parentSessionId?: string | undefined },
 ): RunEvent {
-  const { inputId, phaseNames, subagentModel, scriptPath, phaseAlongside } = launch;
+  const { inputId, phaseNames, subagentModel, scriptPath, phaseAlongside, holes } = launch;
   return {
     type: "run-launched",
     inputId,
@@ -40,5 +42,6 @@ export function runLaunchedEvent(
     ...(subagentModel === undefined ? {} : { subagentModel }),
     ...(scriptPath === undefined ? {} : { scriptPath }),
     ...(phaseAlongside === undefined ? {} : { phaseAlongside }),
+    ...(holes === undefined ? {} : { holes }),
   };
 }

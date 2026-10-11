@@ -7,7 +7,7 @@
 // 但它们共享同一份注册表、同一张停驻表与同一条结算簿记——这三样经
 // {@link DynamicWorkflowRunEntryContext} 从 service 显式递进来，本文件不持有任何自己的状态。
 
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type {
   DynamicWorkflowRunAmendRequest,
   DynamicWorkflowRunAmendResult,
@@ -17,16 +17,9 @@ import type {
   TraceContext,
 } from "@zcode/contracts";
 import {
-  buildAskSpecs,
   collectDiagnostics,
-  collectSites,
-  collectWorldRunCommands,
   createWorkflowProgram,
-  deriveActorSubmitProfilesFor,
-  lowerWorkflow,
-  synthesizeAskSchemas,
   type Caps,
-  type CompileDiagnostic,
   type ImportedRunCache,
   type RunSettlement,
   type WorkflowProgram,
@@ -38,10 +31,13 @@ import {
   preflightAmendImport,
   rebuildImportedCacheForResume,
 } from "./dynamic-workflow-import.js";
+import { launchDynamicWorkflowRun } from "./dynamic-workflow-run-launch.js";
 import {
-  launchDynamicWorkflowRun,
-  type CompiledDynamicWorkflowScript,
-} from "./dynamic-workflow-run-launch.js";
+  boundedResumeDiagnostics,
+  compileOnce,
+  compileProgram,
+} from "./dynamic-workflow-run-compile.js";
+import { openHoleIndexes, phaseNamesFromEvents, readRunHoleEvents } from "./dynamic-workflow-run-holes.js";
 import {
   readRunLaunchAnchor,
   readRunScriptPath,
@@ -310,6 +306,12 @@ function startNewRun(ctx: DynamicWorkflowRunEntryContext, input: StartNewRunInpu
     // 零 SQL——它活在这条事件里，`dwf_run` 上没有对应的列。
     ...(input.scriptPath === undefined ? {} : { scriptPath: input.scriptPath }),
     ...(input.phaseAlongside === undefined ? {} : { phaseAlongside: input.phaseAlongside }),
+    // 阶段表里哪些站是开放的留白（execution-engine.md「Holes」）：留白按名字站在提交方给的
+    // 声明表里（9012 保证名字互不重复），按编译产物的开放留白名对出下标。没有留白即字段缺席。
+    ...(() => {
+      const holes = openHoleIndexes(input.phaseNames, compiled.holes);
+      return holes === undefined ? {} : { holes };
+    })(),
   };
 
   // 注册必须先于启动：取消可能在 submit 返回后的任意时刻到达，而后台追踪器也会
@@ -330,6 +332,9 @@ function startNewRun(ctx: DynamicWorkflowRunEntryContext, input: StartNewRunInpu
     cwd: input.cwd,
     ...(input.name === undefined ? {} : { name: input.name }),
     scriptText: input.scriptText,
+    // 留白事实表与阶段表（见 RunRegistryEntry.holes / phaseNames）：一次补全会把两者换成有效脚本的。
+    holes: compiled.holes,
+    ...(input.phaseNames === undefined ? {} : { phaseNames: input.phaseNames }),
     // 生效的并发上界（= 落库那一份）。同一条间隙论证：`AmendWorkflow` 的 resolveInput 读
     // getTask 判「沿用什么」，而修订一个刚起步的 run 恰好会落在这个间隙里。
     maxConcurrency: caps.maxConcurrency,
@@ -470,6 +475,8 @@ export async function resumeDynamicWorkflowRun(
   // 必须先于 launch（文件头不变式 5：条目是 watcher 的前提）。
   const resumedSubagentModel = readRunSubagentModel(deps.journal, runId);
   const resumedScriptPath = readRunScriptPath(deps.journal, runId);
+  // 此刻生效的阶段表：补全过就是最后一条 `hole-filled` 上的，否则是 `run-launched` 的声明表。
+  const resumedPhaseNames = phaseNamesFromEvents(readRunHoleEvents(deps.journal, runId));
   const controller = new AbortController();
   // 与 submit 路同规：新条目 = 新 AbortController + 新控制面。上一世的句柄绑的是已经结算的那个
   // 引擎，留着它会让 retune 对一个死引擎说话。
@@ -489,6 +496,9 @@ export async function resumeDynamicWorkflowRun(
     cwd: record.cwd ?? process.cwd(),
     ...(record.name === undefined ? {} : { name: record.name }),
     scriptText: record.scriptText,
+    // 留白事实表来自对行里（有效）脚本的这次编译；阶段表从事件读回（补全过的 run 是 `hole-filled` 的那张）。
+    holes: compiled.holes,
+    ...(resumedPhaseNames === undefined ? {} : { phaseNames: resumedPhaseNames }),
     // 子代理模型：读一次事件头抄进条目（见 RunRegistryEntry.subagentModel）。值在建 run 那一世
     // 就写死在 `run-launched` 上、本 run 余生不变，所以抄下来不会与事件分叉；抄了之后两条读面
     // 只剩一条规则——有条目就读条目，只有冷行才去扫事件。
@@ -542,92 +552,6 @@ export async function resumeDynamicWorkflowRun(
     ok: true,
     runId,
     ...(record.toolCallId === undefined ? {} : { toolCallId: record.toolCallId }),
-  };
-}
-
-/**
- * 编译一次：一个 ts.Program 同时喂站点表、schema 合成与 lowering。
- *
- * 脏脚本在这里硬失败且**不建 run**：handler 只在 `ok` 时才调 submit，所以走到这里的脏脚本
- * 只可能是接线错误。防御性检查读的是同一次编译的程序诊断，不再起第二个 Program
- * （那会破坏「编译一次」）。resume 用同一个函数重编 journal 里的原文——byte-identical 的
- * 脚本必然重新通过同一套检查。
- */
-function compileOnce(scriptText: string): CompiledDynamicWorkflowScript {
-  return compileProgram(scriptText, createWorkflowProgram(scriptText));
-}
-
-/** resume 拒绝文案里诊断的上限（与中枢直接启动的 compile_failed 同一量级）。 */
-const RESUME_DIAGNOSTICS_MAX_CHARS = 2000;
-
-/** compile_failed 的人可读诊断：一行一条 `L:C message`，整体有界。 */
-function boundedResumeDiagnostics(runId: string, diagnostics: CompileDiagnostic[]): string {
-  const body = [
-    `The stored script of run ${runId} no longer compiles against the current workflow facade:`,
-    ...diagnostics.map(
-      (diagnostic) => `L${diagnostic.line}:C${diagnostic.column} ${diagnostic.message}`,
-    ),
-  ].join("\n");
-  return body.length > RESUME_DIAGNOSTICS_MAX_CHARS
-    ? `${body.slice(0, RESUME_DIAGNOSTICS_MAX_CHARS - 1)}…`
-    : body;
-}
-
-/**
- * compileOnce 的后半段：对**已建好的** Program 做站点表 / schema 合成 / lowering。resume 先用同一个
- * Program 取诊断再交到这里，仍是「编译一次」（Program 缓存自己的诊断，重读不重算）。
- */
-function compileProgram(
-  scriptText: string,
-  workflow: WorkflowProgram,
-): CompiledDynamicWorkflowScript {
-  const diagnostics = [
-    ...workflow.program.getSyntacticDiagnostics(),
-    ...workflow.program.getSemanticDiagnostics(),
-  ];
-  if (diagnostics.length > 0) {
-    throw new Error(
-      `dynamic workflow submit received a script that does not typecheck (${diagnostics.length} diagnostics); no run was created`,
-    );
-  }
-
-  const table = collectSites(workflow);
-  const { diagnostics: schemaDiagnostics, schemas } = synthesizeAskSchemas(workflow, table);
-  if (schemaDiagnostics.length > 0) {
-    throw new Error(
-      `dynamic workflow submit received a script with unsupported ask result types: ${schemaDiagnostics
-        .map((diagnostic) => `L${diagnostic.line}:C${diagnostic.column} ${diagnostic.message}`)
-        .join("; ")}`,
-    );
-  }
-  // world.run 的命令集在同一次编译里收集（授权面：编译期字面量 + 确认窗展示 + driver 复验）。
-  // 非字面量 cmd 在 handler 的 analyze 阶段已经挡回；到这里还出现即接线错误，硬失败不建 run。
-  const worldRun = collectWorldRunCommands(workflow, table);
-  if (worldRun.diagnostics.length > 0) {
-    throw new Error(
-      `dynamic workflow submit received a script with non-literal world.run commands (${worldRun.diagnostics.length} diagnostics); no run was created`,
-    );
-  }
-
-  // buildAskSpecs 是 askSpecs 的唯一正确构造：untyped 站点显式记 {typed:false}。
-  // 用 schemas 的键去构造会让 untyped 站点整个缺席，而引擎把缺席当接线错误硬失败。
-  const askSpecs = buildAskSpecs(table, schemas);
-
-  return {
-    askSpecs,
-    // 每个 actor 站点的 submit profile：在**同一个**
-    // Program 上做解释 + 站点图投影（analyzeWorkflowScript 在 handler 的 analyze 阶段已对同一份文本
-    // 跑过这两步），仍是「编译一次」。resume 用同一函数对 byte-identical 文本重算，确定性成立。
-    actorSubmitProfiles: deriveActorSubmitProfilesFor(workflow, table, askSpecs),
-    declaredRunCommands: new Set(worldRun.commands),
-    lowered: lowerWorkflow(workflow, table).code,
-    // scriptHash 的所有权在**这里**，不在 harness。harness 同时收 scriptText 与 lowered，
-    // 且刻意不校验两者是否自洽——校验等于把编译再跑一遍，正是「编译一次」要省掉的那次
-    // （harness.ts 把这条写成了调用方的不变式）。所以哈希必须算在作者原文上：
-    // 若让 harness 哈希「它看到的文本」，lowered 路径落库的就是 lowered 函数体的哈希，
-    // 而 resume 比对的是作者原文 —— 比对对象会静默错位。本函数从同一次编译里同时产出
-    // lowered 与 hash，两者按构造自洽。
-    scriptHash: createHash("sha256").update(scriptText, "utf8").digest("hex"),
   };
 }
 

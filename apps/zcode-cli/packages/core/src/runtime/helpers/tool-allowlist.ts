@@ -1,6 +1,7 @@
 import {
   AMEND_WORKFLOW_TOOL_NAME,
   CREATE_WORKFLOW_TOOL_NAME,
+  FILL_WORKFLOW_HOLE_TOOL_NAME,
   RESOLVE_WORKFLOW_QUESTION_TOOL_NAME,
   RESPOND_TO_COORDINATOR_TOOL_NAME,
   RESUME_WORKFLOW_RUN_TOOL_NAME,
@@ -27,6 +28,9 @@ const WORKFLOW_CHILD_DISALLOWED_TOOLS = [
   CREATE_WORKFLOW_TOOL_NAME,
   // AmendWorkflow 与 CreateWorkflow 同一道 alwaysAsk 门、同一种嵌套编排，因同一个根因入列。
   AMEND_WORKFLOW_TOOL_NAME,
+  // FillWorkflowHole 同上：alwaysAsk 的补全确认在 child 里同样无窗可弹，且它与 AmendWorkflow
+  // 同族（内联提交会改写 run 的脚本与草稿）。
+  FILL_WORKFLOW_HOLE_TOOL_NAME,
   // SaveWorkflow 因**同一个**根因入列：它也声明了 alwaysAsk，所以在 child 里同样会发出一个
   // 父界面看不到的确认请求并挂到超时。ListSavedWorkflows 不在列——那条禁令的理由是无窗可弹，
   // 只读查询不适用（与两个 run 内省工具同理）。

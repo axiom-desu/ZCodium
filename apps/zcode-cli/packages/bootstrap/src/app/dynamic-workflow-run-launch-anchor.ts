@@ -38,6 +38,8 @@ export interface RunLaunch extends RunLaunchAnchor {
   scriptPath?: string;
   /** 与 `phaseNames` 按位置对齐的「同时在跑」表（下标指向同一张表）；同样只在建 run 那一世落 journal。 */
   phaseAlongside?: number[][];
+  /** `phaseNames` 里哪些下标是**未补全的留白**（侧栏据此画虚线站）；无留白时缺席。 */
+  holes?: number[];
 }
 
 /**

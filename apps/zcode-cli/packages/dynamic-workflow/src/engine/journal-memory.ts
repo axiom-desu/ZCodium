@@ -93,6 +93,15 @@ export class InMemoryJournalStore implements JournalStorePort {
     r.caps = clone(caps);
   }
 
+  updateRunScript(runId: string, scriptText: string, scriptHash: string): void {
+    const r = this.runs.get(runId);
+    if (r === undefined) throw new Error(`journal: unknown run ${runId}`);
+    // 两列同一笔写：resume 拿行里的哈希对行里的文本，拆开写就会出现一个自相矛盾的行。
+    // 只碰这两列，状态 / 用量 / 上界 / 结算袋一律不动（与 updateRunUsage 同族）。
+    r.scriptText = scriptText;
+    r.scriptHash = scriptHash;
+  }
+
   putActor(record: ActorRecord): void {
     const bucket = this.requireActorBucket(record.runId);
     bucket.set(key(record.siteId, record.ordinal), clone(record));

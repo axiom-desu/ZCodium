@@ -203,6 +203,18 @@ class SqliteDwfJournalStore implements JournalStorePort, DwfRunIntrospectionQuer
   }
 
   /**
+   * 把**有效脚本**写回 run 行。`script_text` / `script_hash` 在 `createRun` 之后只由本方法写，
+   * 且两列**同一笔**：resume 拿行里的哈希对行里的文本，分两条 UPDATE 会开出
+   * 「哈希已更新而文本未更新」的崩溃窗口。与 `updateRunUsage` 同族的窄写入，其余列一律不碰。
+   */
+  updateRunScript(runId: string, scriptText: string, scriptHash: string): void {
+    const { changes } = this.db
+      .prepare("update dwf_run set script_text = ?, script_hash = ?, time_updated = ? where id = ?")
+      .run(scriptText, scriptHash, Date.now(), runId);
+    this.assertRunTouched(changes, runId);
+  }
+
+  /**
    * 某个父会话名下所有**非终态**的 run。刻意不在 `JournalStorePort` 上：引擎从不按父会话找
    * run，这条查询只服务于宿主侧的孤儿收敛——一个进程被杀掉的 run 会永远停在 `running`，
    * 由下一次同会话的 app 构造把它收敛掉（`bootstrap/src/app/dynamic-workflow-run-service.ts`，

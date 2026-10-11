@@ -19,6 +19,7 @@
     "build": "node scripts/generate-libs.mjs && tsc",
     "charts": "node scripts/generate-libs.mjs && tsc && node scripts/generate-mermaid.mjs",
     "clean": "node ../../scripts/clean-dist.mjs",
+    "test": "node --import tsx --test --test-isolation=none test/*.test.ts",
     "typecheck": "node scripts/generate-libs.mjs && tsc --noEmit",
     "lint": "oxlint src",
     "lint:fix": "oxlint --write src"
@@ -27,6 +28,7 @@
     "typescript": "^5.9.0"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0"
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0"
   }
 }

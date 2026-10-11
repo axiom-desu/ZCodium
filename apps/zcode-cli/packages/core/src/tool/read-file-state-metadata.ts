@@ -10,7 +10,8 @@ export type PersistedReadFileStateTool =
   | "Write"
   | "Edit"
   | "CreateWorkflow"
-  | "AmendWorkflow";
+  | "AmendWorkflow"
+  | "FillWorkflowHole";
 
 export interface PersistedReadFileStateMetadata {
   schemaVersion: typeof READ_FILE_STATE_METADATA_SCHEMA_VERSION;
@@ -135,7 +136,8 @@ function isPersistedReadFileStateTool(value: unknown): value is PersistedReadFil
     value === "Write" ||
     value === "Edit" ||
     value === "CreateWorkflow" ||
-    value === "AmendWorkflow"
+    value === "AmendWorkflow" ||
+    value === "FillWorkflowHole"
   );
 }
 

@@ -30,6 +30,9 @@ export * from "./submit-result.js";
 export * from "./websearch.js";
 export * from "./workflow.js";
 export * from "./create-workflow.js";
+// 补全入口：给一个正在等代码的留白补上函数体。名字常量被 core 的分派、权限服务的 owner 规则
+// 与 bootstrap 的 actor 禁用名单读走，漏掉这行消费方拿不到 schema 与 FILL_WORKFLOW_HOLE_TOOL_NAME。
+export * from "./fill-workflow-hole.js";
 // 修订入口：名字常量被 core 的
 // 分派、权限服务的 owner 规则、bootstrap 的 actor 禁用名单与 TUI/headless 旁路读走。
 export * from "./amend-workflow.js";

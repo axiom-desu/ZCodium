@@ -149,8 +149,12 @@ export function isArtifactPresetOp(op: string): op is ArtifactPresetOp {
  */
 const ASK_MEMBER = { container: "Agent", member: "ask" } as const;
 
-/** 顶层 facade 函数中产生站点的那些（无容器）。`log` 不产生站点，故不在此。 */
-const SITE_PRODUCING_FUNCTIONS = ["agent", "report"] as const;
+/**
+ * 顶层 facade 函数中产生站点的那些（无容器）。`log` 不产生站点，故不在此。`hole` 在此：留白
+ * 有站点 id（名字键 `hole#<hash>`）与 host 调用，身份同样按**声明文件**判定——脚本自己的 `hole`
+ * 函数是别人的函数。
+ */
+const SITE_PRODUCING_FUNCTIONS = ["agent", "report", "hole"] as const;
 
 /**
  * 顶层产生站点的 facade 函数名。`sites.ts` 的裸 callee 分支按它分派，所以"哪个顶层函数

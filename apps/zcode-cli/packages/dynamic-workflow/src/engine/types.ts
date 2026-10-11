@@ -244,6 +244,18 @@ export interface WorkflowHostApi {
    */
   enterPhase(name: string): void;
   /**
+   * 脚本到达一处**未补全的留白**。Boundary A 的调用，与 ask
+   * 同姿态、少一个 driver：引擎铸序号、盖出生阶段、记 `hole-reached`、把 promise 停在站点下，
+   * 直到主代理经 {@link import("./engine.js").WorkflowEngine.fillHole} 送来有效脚本里这处留白的
+   * 体（`{code}`，lowering 的 `holeBodies[siteId]`）。**不落 journal 行**：留白不是会自己结算的
+   * 节点，补全产出的东西已经以有效脚本的身份在 run 行上了。
+   *
+   * 已补全的站点（cell 的 fill 表命中、或引擎本世已记住代码）不该再走到这里；引擎仍以记住的
+   * 代码立刻作答、不停驻、不记事件，作为防御。`prompt` 记录前被截到
+   * {@link import("./engine-holes.js").HOLE_PROMPT_MAX_CHARS}。
+   */
+  hole(siteId: string, name: string, prompt?: string): Promise<{ code: string }>;
+  /**
    * 发布一个**内容产物**（`artifact.file` / `artifact.markdown`）。效应：经 driver 把字节拷进
    * store，落一行 journal，成功兑现 {@link ArtifactRef}、失败**可 catch 地拒绝**。
    *
@@ -498,6 +510,12 @@ export type RunEvent =
       subagentModel?: string;
       scriptPath?: string;
       phaseAlongside?: number[][];
+      /**
+       * `phaseNames` 里哪些下标是**未补全的留白**：留白按名字
+       * 占它在阶段表里的位置，侧栏据此把那一站画成虚线。与 `phaseAlongside` 同规对齐、同车同规
+       * （提交方给出、引擎不读）；脚本没有留白时缺席。
+       */
+      holes?: number[];
     }
   /**
    * `phaseName` 记录实例出生时最近一次 `enterPhase` 指定的阶段名。
@@ -609,6 +627,38 @@ export type RunEvent =
       instance: InstanceRef;
       cause: ImportCloseCause;
       actorName?: string;
+    }
+  /**
+   * 脚本到达一处未补全的留白。`instance` 是
+   * `<留白 id>@ordinal`——序号与节点同族铸造，但**没有 journal 行**；`phaseName` 是出生阶段，
+   * 与 `node-queued` 同一张表打戳。`prompt` 已截到 4000 字符。resume 后一个仍在等的留白会被
+   * 脚本重新到达、再记一条（没有行、没有序号可撞）。
+   */
+  | {
+      type: "hole-reached";
+      instance: InstanceRef;
+      name: string;
+      prompt?: string;
+      phaseName?: string;
+    }
+  /**
+   * `fillHole`：有效脚本已写回 run 行、停驻的分支已放行。`phaseNames` 是有效脚本的阶段表
+   * （留白按名字占位），`holes` 是其中仍未补全的留白下标（与 `run-launched.holes` 同规对齐），
+   * 侧栏据此重画站点而不必等展示载荷；`filledBy` 是补全它的会话。
+   */
+  | {
+      type: "hole-filled";
+      siteId: string;
+      filledAt: number;
+      filledBy?: string;
+      phaseNames: string[];
+      holes?: number[];
+      /**
+       * 这次补全给一个原本没有草稿的 run 铸下的草稿。`run-launched.scriptPath` 只在建 run 那一世写一次，冷读面若只看它，重启后
+       * 就找不到补全铸的那份——所以后铸的路径随这条事件落 journal，冷读取最后一条在场的。
+       * 原本就有草稿的补全（就地改写、路径不变）不带它。
+       */
+      scriptPath?: string;
     }
   /**
    * 控制流经过了一个 `phase("…")` 标记。**无站点、无 journal 行、无 driver 往返**——标记不是一步工作，它只是
@@ -891,6 +941,14 @@ export interface JournalStorePort {
    * 修订就地作用在活着的 run 上，而 resume 沿用行里的 caps——不落库，恢复出来的就还是旧上界。
    */
   updateRunCaps(runId: string, caps: Caps): void;
+  /**
+   * 把**有效脚本**写回 run 行（`dwf_run.script_text` / `script_hash`）。它是这两列在
+   * {@link createRun} 之后的第二个写入者：一次补全把留白的体接进
+   * 脚本，此后 resume 拿行里的哈希对行里的文本，所以两列**必须同一笔写**。未知 runId 必须抛错；
+   * 行上其余一切（状态、用量、上界、结算袋、元数据）都不在这条写入的范围里，与
+   * {@link updateRunUsage} 同族。
+   */
+  updateRunScript(runId: string, scriptText: string, scriptHash: string): void;
 
   putActor(record: ActorRecord): void;
   getActor(runId: string, siteId: string, ordinal: number): ActorRecord | undefined;

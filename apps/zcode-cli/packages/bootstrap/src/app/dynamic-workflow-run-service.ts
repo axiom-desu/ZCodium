@@ -51,7 +51,9 @@ import type {
   DynamicWorkflowRunWorkspaceNodeResultQuery,
   DynamicWorkflowRunEventPage,
   DynamicWorkflowResolveQuestionResult,
+  DynamicWorkflowRunFillHoleRequest,
   DynamicWorkflowRunPort,
+  FillWorkflowHoleResult,
   DynamicWorkflowRunProgressPayload,
   DynamicWorkflowRunResumeResult,
   DynamicWorkflowRunRetuneRequest,
@@ -115,6 +117,10 @@ import {
   type DynamicWorkflowRunSettledNotice,
 } from "./dynamic-workflow-run-lifecycle.js";
 import { retuneRunConcurrency } from "./dynamic-workflow-run-retune.js";
+import {
+  fillDynamicWorkflowHole,
+  type DynamicWorkflowRunFillContext,
+} from "./dynamic-workflow-run-fill.js";
 import type { ActorTranscriptStore } from "./workflow-actor-transcript.js";
 import {
   clampRunConcurrency,
@@ -299,6 +305,12 @@ export function createDynamicWorkflowRunService(
 ): DynamicWorkflowRunService {
   const runs = new Map<string, RunRegistryEntry>();
   /**
+   * 每个 run 的补全串行链（见 {@link fillDynamicWorkflowHole}）：runId → 该 run 最后一次排进去的
+   * 补全。链排空即删键，不随 run 的一生常驻。
+   */
+  const fillQueues = new Map<string, Promise<unknown>>();
+  const fillContext: DynamicWorkflowRunFillContext = { deps, runs, fillQueues };
+  /**
    * 升级问答的停驻表。**一张，跨本服务名下所有在飞 run**：
    * qid 全局唯一正是为此——`resolveQuestion` 只收一个不透明 token，多 run 并发时让模型自己配对
    * `(runId, qid)` 是错配的温床。纯内存，与停驻的 deferred 同命（进程亡故即清空，靠 resume
@@ -399,6 +411,17 @@ export function createDynamicWorkflowRunService(
       request: DynamicWorkflowRunRetuneRequest,
     ): Promise<DynamicWorkflowRunRetuneResult> {
       return retuneRunConcurrency({ runs, journal: deps.journal, concurrencyCeiling }, request);
+    },
+
+    /**
+     * 就地给一处正在等的留白补上函数体（端口契约见
+     * {@link DynamicWorkflowRunPort.fillHole}；实现体在 dynamic-workflow-run-fill.ts）。
+     *
+     * 刻意**不过关闭门**与 retune 同规：它一个 run 都不铸，只对已经存在的引擎说话；存活判定在
+     * 填充实现体里（不在飞即 `hole_not_waiting`）。
+     */
+    async fillHole(request: DynamicWorkflowRunFillHoleRequest): Promise<FillWorkflowHoleResult> {
+      return fillDynamicWorkflowHole(fillContext, request);
     },
 
     async resume(runId: string): Promise<DynamicWorkflowRunResumeResult> {

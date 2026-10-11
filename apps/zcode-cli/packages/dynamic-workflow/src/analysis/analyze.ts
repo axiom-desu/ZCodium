@@ -5,6 +5,7 @@ import { collectFacadeMisuse } from "./facade-misuse.js";
 import { collectWorldRunCommands } from "./world-run.js";
 import { collectArtifactDeclarations, type DeclaredArtifact } from "./artifacts.js";
 import { collectPhaseMarkerDiagnostics } from "./phases.js";
+import { collectHoleDiagnostics } from "./hole-sites.js";
 import { collectDuplicateActorNames, FANOUT_ACTOR_NAME_CODE } from "./actor-names.js";
 import { interpret } from "./interpret.js";
 import { projectSiteGraph } from "./graph.js";
@@ -88,6 +89,9 @@ export function analyzeWorkflowScript(scriptText: string): AnalyzeResult {
     ...artifacts.diagnostics,
     ...collectPhaseMarkerDiagnostics(workflow, table),
     ...collectDuplicateActorNames(workflow, table),
+    // 留白的编译期规则（9012）同席：缺类型实参 / 名字非字面量 / 未 await / 落在 fan-out 回调里 /
+    // 函数体非内联 / 函数体引用晚声明绑定——任一条都让脚本不可提交。
+    ...collectHoleDiagnostics(workflow, table),
   ];
   // fan-out 里的静态 actor 名（9006）是这批里唯一**不扣下图**的一条：它说的是这个脚本跑起来
   // 会撞 DuplicateActorName，而不是「这段代码没法分析」——形状本身完全可分析，把图扣下来只会

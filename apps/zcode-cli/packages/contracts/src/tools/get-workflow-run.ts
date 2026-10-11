@@ -90,6 +90,35 @@ export const GetWorkflowRunPendingQuestionSchema = z
   })
   .strict();
 
+/** `holes` 的上界，与 display 契约的留白上界同值。 */
+export const GET_WORKFLOW_RUN_MAX_HOLES = 32;
+
+/**
+ * 一处留白。`waiting` 的在等主代理用
+ * `FillWorkflowHole` 补上函数体，`filled` 的已经补过；`since` / `filledAt` 与 createdAt 同一把尺。
+ * 与升级问题一样，这是通知丢失后模型侧唯一的发现面。
+ */
+export const GetWorkflowRunHoleSchema = z
+  .object({
+    /** 留白的站点 id（`hole#21b40fca`，名字键），`FillWorkflowHole` 的 `hole_id` 就是它。 */
+    siteId: z.string(),
+    ordinal: z.number(),
+    /** 留白的字面名。 */
+    name: z.string(),
+    /** 类型实参原文（`Verdict`）。 */
+    type: z.string(),
+    state: z.enum(["waiting", "filled"]),
+    /** 到达时刻（epoch ms）；`waiting` 时在场。 */
+    since: z.number().optional(),
+    /** 补全时刻（epoch ms）；`filled` 时在场。 */
+    filledAt: z.number().optional(),
+    /** 补全它的会话。 */
+    filledBy: z.string().optional(),
+  })
+  .strict();
+
+export type GetWorkflowRunHole = z.infer<typeof GetWorkflowRunHoleSchema>;
+
 /**
  * 一件**用户面产物**：脚本经 `artifact.*` 发布给用户看的
  * 产出，此刻已经作为卡片摆在用户面前。
@@ -226,6 +255,11 @@ export const GetWorkflowRunOutputSchema = WorkflowRunSummarySchema.extend({
    * 读侧据此让整块 pending 区消失，而不是渲染一个空节。
    */
   pendingQuestions: z.array(GetWorkflowRunPendingQuestionSchema).optional(),
+  /**
+   * 本 run 的留白：到达过的每一处，`waiting` 的在等主代理的函数体，`filled` 的已经补上。
+   * 与 pendingQuestions 同规：**零条时整字段缺席**、有界 32；它是留白通知丢失后的查询兜底。
+   */
+  holes: z.array(GetWorkflowRunHoleSchema).max(GET_WORKFLOW_RUN_MAX_HOLES).optional(),
   /**
    * 本 run 已发布的用户面产物，按首次发布顺序，**任意状态都附**（一个还在跑的 run 也可能
    * 已经交付了第一张图）。**零件时整字段缺席**，与 pendingQuestions 同规。有界 32

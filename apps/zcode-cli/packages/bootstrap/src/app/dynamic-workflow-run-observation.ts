@@ -27,6 +27,7 @@ import type {
   WorkflowErrorJson,
 } from "@zcode/dynamic-workflow";
 import { artifactsOf } from "./dynamic-workflow-run-artifact-projection.js";
+import { runHolesOf, type CompiledHole } from "./dynamic-workflow-run-holes.js";
 import { runLineageActiveMs } from "./dynamic-workflow-run-elapsed.js";
 import { readRunScriptPath, readRunSubagentModel } from "./dynamic-workflow-run-launch-anchor.js";
 import { resolveDynamicWorkflowRunLabel } from "./dynamic-workflow-run-label.js";
@@ -55,6 +56,17 @@ export interface RunRegistryEntry {
   cwd: string;
   name?: string;
   scriptText: string;
+  /**
+   * **此刻有效脚本**的留白事实表（execution-engine.md「Holes」）：快照的 `type` / `line` 与
+   * 进度载荷的 `type` 读它。三条建条目的路都从编译产物落值；一次补全把它换成有效脚本的表——
+   * 嵌套在函数体里的新留白由此出现。与 `scriptText` 同步换，两者描述的必须是同一份脚本。
+   */
+  holes?: readonly CompiledHole[];
+  /**
+   * 此刻生效的阶段表（留白按名字占位）：submit / amend 抄提交方给的声明表，resume 从事件读回，
+   * 补全后换成有效脚本的表（引擎在 `hole-filled` 上记的同一张）。快照的 before / after 读它。
+   */
+  phaseNames?: readonly string[];
   /**
    * 本 run 实际生效的并发上界（`dwf_run.caps_max_concurrency` 的内存副本，同一条间隙论证）。
    * submit / amend 落值，**resume 不落**——那条路沿用 journal 记录里的 caps，而它的行早就在了。
@@ -205,8 +217,14 @@ export function snapshotOf(
     ...(activeDurationMs === undefined ? {} : { activeDurationMs }),
     ...(entry?.completedAt === undefined ? {} : { completedAt: entry.completedAt }),
     ...(error === undefined ? {} : { error }),
-    // 零条时整字段缺席（与 reports 同规）：读侧据此让整块 pending 区消失，不渲染空节。
+    // 零条时整字段缺席（与 reports / pendingQuestions 同规）：读侧据此让整块 pending 区消失。
     ...(pendingQuestions.length === 0 ? {} : { pendingQuestions }),
+    // 留白（execution-engine.md「The run snapshot」）：与 pendingQuestions 同规，零条整字段
+    // 缺席；`waiting` 从引擎的停驻表投影而不是单靠事件重放。
+    ...(() => {
+      const holes = runHolesOf(taskId, entry, journal);
+      return holes.length === 0 ? {} : { holes };
+    })(),
     ...reportsOf(nodes),
     // 用户面产物。⚠ 与紧邻的 `output`
     // （`entry.terminal.artifact` = 脚本顶层返回值，引擎内部也叫 artifact）是**两件不同的东西**：

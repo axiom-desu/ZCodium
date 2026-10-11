@@ -16,6 +16,11 @@ import type {
   DynamicWorkflowRunWorkspaceNodeResult,
   DynamicWorkflowRunWorkspaceNodeResultQuery,
 } from "./dynamic-workflow-run-workspace.port.js";
+import type {
+  DynamicWorkflowRunFillHoleRequest,
+  DynamicWorkflowRunHole,
+  FillWorkflowHoleResult,
+} from "./dynamic-workflow-run-hole.port.js";
 import type { DynamicWorkflowRunProgressPayload } from "../events/session.events.js";
 import type { ModelSelection } from "../model/model.js";
 import type { SessionId, ToolCallId } from "./shared.js";
@@ -265,6 +270,12 @@ export type DynamicWorkflowRunSnapshot = Omit<WorkflowTaskSnapshot, "output"> & 
    * 时候都能经既有观察面重新发现待答问题。零条时整字段缺席（不发空数组）。
    */
   pendingQuestions?: readonly DynamicWorkflowRunPendingQuestion[];
+  /**
+   * 本 run 的留白（{@link DynamicWorkflowRunHole}）：到达过的每一处，等着的与补过的。与
+   * `pendingQuestions` 同规——零条整字段缺席、`waiting` 从引擎的停驻表投影而不是单靠事件重放；
+   * 留白通知的发射器与 `FillWorkflowHole` 的 resolveInput 都读它。
+   */
+  holes?: readonly DynamicWorkflowRunHole[];
   /**
    * 本 run 发布的**用户面产物**，按首次出现顺序，来自
    * journal 的 `kind = "artifact"` 行——那是版本历史的持久家（`workflowRuns.artifacts` 只带
@@ -677,6 +688,18 @@ export interface DynamicWorkflowRunPort {
    */
   resolveQuestion?(qid: string, answer: string): Promise<DynamicWorkflowResolveQuestionResult>;
   /**
+   * 给一个正在等的留白补上函数体。服务 `FillWorkflowHole` 工具。
+   *
+   * 实现侧一条龙：读 run 存档的脚本 → 按站点 id 找到留白调用、把函数体拼成它的最后一个实参 →
+   * 整体编译（诊断 → `compile_failed`，坐标按 `inFill` 分到函数体内 / 脚本）→ 站点稳定性检查
+   * （→ `fill_ids_unstable`）→ 引擎 `fillHole`（→ `hole_not_waiting`）→ 把 run 的草稿就地改写成
+   * 有效脚本。**拒绝即零副作用**：留白照旧在等。
+   *
+   * **可选成员**（消费方 `typeof` 探测），理由同 {@link resolveQuestion}：端口 stub 不必为它陪跑；
+   * 对消费方「端口缺席」与「方法缺席」是同一个业务失败（本会话不能补全留白）。
+   */
+  fillHole?(request: DynamicWorkflowRunFillHoleRequest): Promise<FillWorkflowHoleResult>;
+  /**
    * 本 run 的用户面产物清单（journal `kind = "artifact"` 行按 id 分组、版本升序）。UI 冷恢复与中枢详情的 durable 读法。
    * 未知 runId 返回 `undefined`。**可选成员**，理由同 {@link listRuns}（journal 带产物
    * 读面时才提供；消费方 `typeof` 探测）。
@@ -898,6 +921,9 @@ export type * from "./dynamic-workflow-run-retune.port.js";
 // 工作区 transcript 的六个类型住在 dynamic-workflow-run-workspace.port.ts，同上原样再导出。
 export type * from "./dynamic-workflow-run-workspace.port.js";
 
+// 留白（快照条目、fillHole 的请求 / 结果）的类型住在 dynamic-workflow-run-hole.port.ts，同一条拆分先例。
+export type * from "./dynamic-workflow-run-hole.port.js";
+
 /** 单 run 详情：共同截面 + 进度 + 情势截面 + 按终态分叉的产物 / 失败。 */
 export interface DynamicWorkflowRunDetail extends DynamicWorkflowRunSummary {
   usage: DynamicWorkflowRunUsage;
@@ -959,6 +985,11 @@ export interface DynamicWorkflowRunDetail extends DynamicWorkflowRunSummary {
    * 缺了它，那两处承诺都会指向一个什么都不返回的工具。
    */
   pendingQuestions?: readonly DynamicWorkflowRunPendingQuestion[];
+  /**
+   * 本 run 的留白，与 {@link DynamicWorkflowRunSnapshot.holes} **同源同投影**（零条整字段缺席），
+   * 只是换了一条读面：本字段服务 `GetWorkflowRun`——留白通知丢失后模型侧唯一的发现面。
+   */
+  holes?: readonly DynamicWorkflowRunHole[];
   /**
    * 本 run 的用户面产物（任意状态都附；journal-backed，与 {@link DynamicWorkflowRunSnapshot.artifacts}
    * 同源）。`GetWorkflowRun` 据此告诉模型「这些已经以卡片呈现给用户了，按标题引用即可」。

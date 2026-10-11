@@ -39,6 +39,7 @@ import {
 import { runWorkflowScript } from "@zcode/dynamic-workflow-runtime";
 import { createJournalSequenceCapture } from "./dynamic-workflow-run-sequence-capture.js";
 import { isResumableSettlement } from "./dynamic-workflow-run-observation.js";
+import type { CompiledHole } from "./dynamic-workflow-run-holes.js";
 import {
   readRunLaunchAnchor,
   readRunSubagentModel,
@@ -64,6 +65,13 @@ export interface CompiledDynamicWorkflowScript {
   declaredRunCommands: ReadonlySet<string>;
   /** 每个 actor 站点的 submit profile。 */
   actorSubmitProfiles: ReadonlyMap<string, ActorSubmitProfile>;
+  /**
+   * 已补全留白的函数体文本（站点 id → `(async () => { … })`；execution-engine.md「The text
+   * that runs」）。补全服务把 `holeBodies[siteId]` 交给引擎作为那处留白的 `code`。
+   */
+  holeBodies: Readonly<Record<string, string>>;
+  /** 脚本里每处留白的编译期事实（开放与已补全都在，源码序）：快照与进度载荷的 type / line 来源。 */
+  holes: readonly CompiledHole[];
 }
 
 interface LaunchDynamicWorkflowRunInput {

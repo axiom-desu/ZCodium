@@ -2,7 +2,9 @@
  * @zcode/dynamic-workflow 执行引擎核心的模块导出。
  */
 
-export { WorkflowEngine, type EngineConfig, type RunSettlement } from "./engine.js";
+export { WorkflowEngine, type RunSettlement } from "./engine.js";
+// 配置面随留白拆到 engine-config.ts（max-lines 门），公开名不变。
+export type { EngineConfig } from "./engine-config.js";
 export { InMemoryJournalStore } from "./journal-memory.js";
 export {
   ConcurrencyController,
@@ -14,6 +16,13 @@ export {
   type ConcurrencyControllerSnapshot,
   type ConcurrencyThrottleReason,
 } from "./concurrency.js";
+export {
+  HOLE_PROMPT_MAX_CHARS,
+  type FilledHole,
+  type FillHoleResult,
+  type HoleFill,
+  type OpenHole,
+} from "./engine-holes.js";
 export { canonicalJson, fnv1a, inputHash } from "./hash.js";
 export {
   WorkflowError,

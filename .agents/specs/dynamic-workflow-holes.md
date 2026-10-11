@@ -242,7 +242,129 @@ P1 完成前不落 P2，P2 完成前不落 P3；每期各自补测试与验收�
 8. **诊断日志词表**：`diagnosticLogCatalog.ts` 的生成脚本扫描全仓源码；留白新增的日志模块命名与
    前缀如何登记，会不会触发词表校验，需要确认。
 
+## 定案（P1 开始前）
+
+所有者叫「开始编码」后，对上面 8 条待确认问题逐条取保守结论。原问题保留，结论如下。
+
+1. **id 形状：与上游逐字节一致。** 保持 `hole#<8 位十六进制>`，名字 trim 后按 Unicode 码点做
+   FNV-1a 32 位哈希（`analysis/hole-id.ts` 的 `holeSiteId`）。理由：与上游 journal 对照保持锚点，
+   且名字键是补全前后站点稳定的根基。哈希撞车沿用上游语义——9012 报错、绝不猜；两个不同名字
+   撞到同一 id 时脚本不可提交。本仓库别处不依赖该形状（`FillWorkflowHole` / `HOLE_CODE` 在基线
+   0 命中）。
+2. **与 Rust 重写的关系：P1 只做 Node 侧。** Rust 是否等价实现待定，不影响本期；本期交付的契约
+   与线协议不假设 Rust 会重写。
+3. **fill 文件落地：P1 不涉及（属 P2）。** 只记录方向——被拒的内联提交写成 fill 文件时，用
+   `packages/shared/src/appDirNames.ts` 的数据根，不放 run 草稿旁；保留时长与清理策略留到 P2 定。
+4. **权限 / 确认：P1 只落契约与端口。** 是否免确认留到 P2；P1 **不引入新的 approval 路径**，
+   `FillWorkflowHole` 的 handler 与权限判定不在本期。
+5. **UI 展示：P3 再定。** P1/P2 不做 UI（v4 归约、时间线虚线灯、通知行、确认窗都留到 P3）。
+6. **测试与 CI：新写 `node:test`，不 vendor 上游 `tests/**`快照。** 用例放在`apps/zcode-cli/packages/dynamic-workflow/test/_.test.ts`，并给该包加 `test`脚本，风格与`apps/zcode-cli/packages/contracts/package.json`一致：`node --import tsx --test --test-isolation=none test/_.test.ts`。这样它会被 CI 里已有的
+`pnpm -r --filter './apps/zcode-cli/packages/_' test`步骤自动拾取。不接入`scripts/ci/_.test.mjs`。
+7. **诊断日志词表：新增/删除源码文件后必须重跑** `node scripts/diagnostic-log-catalog.mjs`。
+   留白本身不新增日志模块；若脚本扫描变化，则重跑生成并跑 oxfmt。
+8. **站点表 / 阶段表：按上游语义。** 两个阶段标记同名是**一个**阶段（名字继续同一阶段）；两个
+   留白同名是**两个**缺口，被 9012 拒绝。留白按名字占阶段表的一个位置。
+
+以上结论不改变本文前面对能力边界、所有者与分期计划的定义。
+
 ## 当前状态
 
-**未实现。** 本文仅完成立项与边界对齐；上面「待确认问题清单」逐条有结论之前，不开始编码。
-实现时须先更新本 spec（能力边界 / 验收 / 所有者），再按 P1→P2→P3 推进。
+**P2 实现中。** 本文的 8 条待确认问题已在上面的「定案（P1 开始前）」逐条收敛；P1（契约 + 编译 +
+引擎 + 线协议）与 P2（bootstrap 驱动 + core 工具与通知）按下面的「移植记录」推进。P3（展示）未开始。
+
+### P1 移植记录（与上游 `aac47556` 对照）
+
+**整文件移植（内容与上游一致，导入路径按本仓库规范、去掉遥测/商业引用）：**
+
+- `dynamic-workflow/src/analysis/hole-id.ts`
+- `dynamic-workflow/src/analysis/hole-sites.ts`
+- `dynamic-workflow/src/analysis/hole-splice.ts`
+- `dynamic-workflow/src/engine/engine-holes.ts`
+- `dynamic-workflow/src/facade/dts-hole.ts`（只进完整 facade，不进 snippet facade）
+- `dynamic-workflow-runtime` 的 `protocol.ts` / `harness.ts` / `child-source.ts` 的 hole hunk
+- `contracts/src/interfaces/dynamic-workflow-run-hole.port.ts`
+- `contracts/src/tools/fill-workflow-hole.ts`
+
+**hunk 合并（同名文件只取留白相关改动，其余本仓库自有改动保留）：**
+
+- `analysis/sites-labels.ts`（`Counter` → `SiteCounters`）、`analysis/sites.ts`（留白站点条目）、
+  `analysis/facade-misuse.ts`、`analysis/analyze.ts`
+- `compiler/compile.ts`（`SCRIPT_PRELUDE_LENGTH`）、`facade/registry.ts`（`hole` 进站点函数清单）、
+  `facade/dts.ts`（拼入 `FACADE_HOLE_SEGMENT`）
+- `lowering/lower.ts`、`engine/engine.ts`、`engine/engine-state.ts`（仅 `journal.updateRunScript` 接缝）、
+  `engine/engine-phase-stamp.ts`、`engine/engine-launch.ts`、`engine/journal-memory.ts`、
+  `engine/types.ts`
+- `contracts/src/interfaces/dynamic-workflow-run.port.ts`、`contracts/src/tools/get-workflow-run.ts`
+- `dynamic-workflow/src/index.ts`、`dynamic-workflow/src/engine/index.ts`
+
+**本期不做（留给后续分期）：** `shared` v4 归约、UI、`analysis/{core,interpret,causality-*,
+flow-graph,site-phases,actor-models}.ts` 的图/阶段集成、fill 文件落地策略与权限。
+
+### P2 移植记录（与上游 `aac47556` 对照）
+
+**新增文件：**
+
+- `bootstrap/src/app/dynamic-workflow-run-holes.ts` — 纯合成规则：`compiledHolesOf`、
+  `openHoleIndexes`、`readRunHoleEvents`、`phaseNamesFromEvents`、`projectRunHoles`、
+  `coldCompiledHoles`、`runHolesOf`、`mapFillDiagnostics`。无 I/O、无状态。
+- `bootstrap/src/app/dynamic-workflow-run-compile.ts` — 把 `compileOnce` / `compileProgram` /
+  `boundedResumeDiagnostics` 从 `dynamic-workflow-run-submit.ts` 拆出，并新增
+  `collectSitePhasesOf` / `phaseNamesOfFlow` 两条宿主侧投影；`CompiledDynamicWorkflowScript`
+  补 `holeBodies` / `holes`。
+- `bootstrap/src/app/dynamic-workflow-run-fill.ts` — `fillDynamicWorkflowHole`：同一 run 的补全
+  串行化、拼接 / 编译 / 稳定性校验 / 交引擎 / 改草稿。拒绝即零副作用。
+- `core/src/tool/handlers/fill-workflow-hole.ts` / `-description.ts` / `-resolve.ts` /
+  `-splice.ts` — 工具声明、描述、`resolveInput`、`path` 来源归一化与确认窗预览。
+- `core/src/runtime/methods/dynamic-workflow-run-hole-notification.ts` — `hole-reached` →
+  恰好一条模型可见通知；`hole-filled` 不发。
+
+**hunk 合并（本仓库自有改动保留）：**
+
+- `bootstrap/src/app/workflow-run-control.ts`（控制面加 `fillHole` / `openHoles`）
+- `bootstrap/src/app/dynamic-workflow-run-observation.ts`（`RunRegistryEntry.holes` /
+  `phaseNames`、快照 `holes[]` 投影）
+- `bootstrap/src/app/dynamic-workflow-run-introspection.ts`（详情面 `holes[]`）
+- `bootstrap/src/app/dynamic-workflow-run-service.ts`（端口 `fillHole` + `fillQueues`）
+- `bootstrap/src/app/dynamic-workflow-run-submit.ts`（`run-launched.holes`、条目 `holes` /
+  `phaseNames`、resume 从事件读回阶段表）
+- `bootstrap/src/app/dynamic-workflow-run-launch.ts`（`CompiledDynamicWorkflowScript` 新字段）
+- `contracts/src/tools/create-workflow.ts`（`CreateWorkflowOutput.fill`）
+- `core/src/tool/handlers/get-workflow-run.ts`（模型面 `holes[]`）
+- `core/src/tool/handlers/{workflow-path-source,workflow-drafts,workflow-draft-read-state}.ts`
+  与 `core/src/tool/read-file-state-metadata.ts`（导出补全需要的路径/铸名函数，登记
+  `FillWorkflowHole` 为作者工具）、`core/src/tool/handlers/index.ts`（注册工具）、
+  `core/src/runtime/methods/dynamic-workflow-run-progress.ts`（接上留白通知）
+- `core/src/runtime-task/workflow-notification-copy.ts`（`formatWorkflowHoleNotification`）
+
+**与上游的偏差（先记 spec、再改代码）：**
+
+1. **缺 `collectSitePhases` / `collectPhaseNames`（P1 分析层未落）。** 上游在
+   `dynamic-workflow/src/analysis/site-phases.ts` 导出这两条；本仓库 P1 没落该文件。P2 在宿主侧
+   实现等价投影：`collectSitePhasesOf(core)` 与 `phaseNamesOfFlow(flow)`（bootstrap 的
+   `dynamic-workflow-run-compile.ts`）。
+2. **`ActorEvent` 还没有 `phase` 字段。** 上游的 `collectSitePhases` 对 issue 与 spawn 都做
+   词法盖戳；本仓库 `causality-order-types.ts` 的 `ActorEvent` 只有 `actor` / `regions`，所以
+   `collectSitePhasesOf` 只对 issue 事件盖戳；actor 站点仍退回动态当前阶段，与 P1 行为一致。
+   补 `ActorEvent.phase` 属 P3 的分析层集成。
+3. **`flow-graph.ts` 还没有 `FlowHole` / `collectFlowHoles`，且分析层的留白集成未落。** 阶段表
+   （因果图 / 控制流投影）目前**不含留白名**，所以 `openHoleIndexes(phaseNames, holes)` 对现有脚本
+   会回 `undefined`，`run-launched.holes` 与 `hole-filled.holes` 暂时缺席；开放留白的阶段下标因此
+   用「留白名对表」从宿主侧算，不读 `flow.holes`。两条规则在 9012「留白名唯一且占一个阶段」下等价，
+   但要让阶段表真含留白名（侧栏虚线站在位）需要 P3 的分析层集成。
+4. **`CreateWorkflowOutput` 只加 `fill` 块，不加 `holes[]` / `Step.fill` / `phaseStreams`。**
+   图展示面（display 契约）属 P3。
+5. **通知只发模型可见文本，不带 `workflowNotification` manifest。** manifest 的 `kind: "hole"`
+   要 shared v4 schema 同步（属 P3）；P2 只落 `formatWorkflowHoleNotification` 文本。
+6. **fill 文件落地、权限确认窗与 `model_bindings` 检查未落。** P2 的 `resolveInput` 只归一 `script`
+   / `path` 与 `hole` 事实块、拼确认窗预览；内联提交写 fill 文件、`fill_unchanged` 之外的 fill 文件
+   生命周期、`allScriptModelsBound` 与权限 owner 放行留到 P3（见报告）。
+7. **`run-launched.holes` 由提交方按编译产物与声明表算出**（`openHoleIndexes`），与上游同规；
+   resume 的阶段表从 `run-launched` / 最后一条 `hole-filled` 读回。
+
+**P2 测试：**
+
+- `bootstrap/test/dynamic-workflow-run-holes.test.ts` — 补全成功路径、`run_not_found`、
+  `hole_not_waiting`（未知 id / 已补 / not live）、`compile_failed` 草稿不动、`checkSiteStability`
+  的 `fill_ids_unstable` 判据、快照 `holes[]` 两态与 32 条上限、`compiledHolesOf`。
+- `core/test/dynamic-workflow-run-hole-notification.test.ts` — 每条 `hole-reached` 恰好一条通知、
+  `hole-filled` 不发、端口缺席时通知照发。

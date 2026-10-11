@@ -16,6 +16,7 @@ import {
   ASK_USER_QUESTION_TOOL_NAME,
   ENTER_PLAN_MODE_TOOL_NAME,
   EXIT_PLAN_MODE_TOOL_NAME,
+  FILL_WORKFLOW_HOLE_TOOL_NAME,
   READ_SESSION_CONTEXT_TOOL_NAME,
   RESOLVE_WORKFLOW_QUESTION_TOOL_NAME,
 } from "@zcode/contracts";
@@ -37,6 +38,8 @@ const ACTOR_DISALLOWED_TOOLS: readonly string[] = [
   "CreateWorkflow",
   // 修订入口与 CreateWorkflow 同一种嵌套编排，同一个根因入列。
   "AmendWorkflow",
+  // 补全入口与 AmendWorkflow 同族（内联提交会改写 run 的脚本与草稿），同样不该由 actor 发起。
+  FILL_WORKFLOW_HOLE_TOOL_NAME,
   READ_SESSION_CONTEXT_TOOL_NAME,
   // 子代理不许替主代理回答升级问题。
   // 与上面几条的根因不同：这不是悬挂也不是越权读，而是**身份**——升级的整个意义是把判断权

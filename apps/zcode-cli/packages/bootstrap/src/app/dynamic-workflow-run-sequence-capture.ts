@@ -25,6 +25,8 @@ export function createJournalSequenceCapture(journal: JournalStorePort): {
       journal.updateRunStatus(runId, status, settlement),
     updateRunUsage: (runId, spentTokens) => journal.updateRunUsage(runId, spentTokens),
     updateRunCaps: (runId, caps) => journal.updateRunCaps(runId, caps),
+    updateRunScript: (runId, scriptText, scriptHash) =>
+      journal.updateRunScript(runId, scriptText, scriptHash),
     putActor: (record) => journal.putActor(record),
     getActor: (runId, siteId, ordinal) => journal.getActor(runId, siteId, ordinal),
     listActors: (runId) => journal.listActors(runId),

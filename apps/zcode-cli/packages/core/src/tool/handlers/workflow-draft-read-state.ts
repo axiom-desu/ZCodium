@@ -16,7 +16,7 @@ import { createReadFileStateMetadataFromEntry } from "../read-file-state-metadat
 import { createReadFileStateKey, normalizeReadFileStateMtimeMs } from "../read-file-state.js";
 import type { ReadFileStateEntry, ToolExecutionContext } from "../types.js";
 
-export type WorkflowDraftAuthoringTool = "CreateWorkflow" | "AmendWorkflow";
+export type WorkflowDraftAuthoringTool = "CreateWorkflow" | "AmendWorkflow" | "FillWorkflowHole";
 
 const CRLF_PATTERN = /\r\n/gu;
 const LF = "\n";

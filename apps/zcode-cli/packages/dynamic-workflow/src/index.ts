@@ -32,7 +32,21 @@ export {
   type WorkflowProgram,
 } from "./compiler/compile.js";
 export { analyzeWorkflowScript, type AnalyzeResult } from "./analysis/analyze.js";
-export { collectSites, type SiteTable } from "./analysis/sites.js";
+export { collectSites, type SiteTable, type HoleSite } from "./analysis/sites.js";
+// 留白：id 键（名字的 FNV-1a 哈希）、编译规则 9012、补全服务的拼接与稳定性复核。
+export {
+  HOLE_SITE_ID_PATTERN,
+  holePrefixOf,
+  holeSiteId,
+  isHoleSiteId,
+} from "./analysis/hole-id.js";
+export { collectHoleDiagnostics, HOLE_CODE, HOLE_NAME_MAX_CHARS } from "./analysis/hole-sites.js";
+export {
+  checkSiteStability,
+  spliceHoleBody,
+  type SiteStability,
+  type SplicedHoleBody,
+} from "./analysis/hole-splice.js";
 export {
   collectWorldRunCommands,
   WORLD_RUN_LITERAL_CODE,
@@ -241,4 +255,11 @@ export {
   CONCURRENCY_INCREASE_STEP,
   type ConcurrencyControllerSnapshot,
   type ConcurrencyThrottleReason,
+} from "./engine/index.js";
+export {
+  HOLE_PROMPT_MAX_CHARS,
+  type FilledHole,
+  type FillHoleResult,
+  type HoleFill,
+  type OpenHole,
 } from "./engine/index.js";

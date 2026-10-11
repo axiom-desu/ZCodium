@@ -8,6 +8,7 @@ import {
   formatWorkflowStallNotification,
 } from "../../runtime-task/notification.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { notifyHoleReached } from "./dynamic-workflow-run-hole-notification.js";
 
 /**
  * 把一条 workflow run 进度事件追加到**父会话**（run 自己没有会话）。
@@ -37,6 +38,7 @@ export async function recordDynamicWorkflowRunProgress(
   );
   notifyEscalationRaised.call(this, payload, traceContext);
   notifyRunStalled.call(this, payload, traceContext);
+  await notifyHoleReached.call(this, payload, traceContext);
 }
 
 /** run 级停滞的事件种类（引擎的 `RunEvent.type`）。 */

@@ -16,6 +16,7 @@
 // 刻意**不做** wait/block 语义：等待是 TaskOutput 的活，这里是即时快照。
 
 import {
+  GET_WORKFLOW_RUN_MAX_HOLES,
   GET_WORKFLOW_RUN_TOOL_NAME,
   GetWorkflowRunInputJsonSchema,
   GetWorkflowRunInputSchema,
@@ -152,6 +153,21 @@ const getWorkflowRunHandler: ToolHandler = async (input, context) => {
             question: pending.question,
             ...(pending.context === undefined ? {} : { context: pending.context }),
             askedAt: pending.askedAt,
+          })),
+        }),
+    // 留白：与 pendingQuestions 同规，零条时整字段缺席；上界 32 与 display 契约的留白上界同值。
+    ...(detail.holes === undefined || detail.holes.length === 0
+      ? {}
+      : {
+          holes: detail.holes.slice(0, GET_WORKFLOW_RUN_MAX_HOLES).map((hole) => ({
+            siteId: hole.siteId,
+            ordinal: hole.ordinal,
+            name: hole.name,
+            type: hole.type,
+            state: hole.state,
+            ...(hole.since === undefined ? {} : { since: hole.since }),
+            ...(hole.filledAt === undefined ? {} : { filledAt: hole.filledAt }),
+            ...(hole.filledBy === undefined ? {} : { filledBy: hole.filledBy }),
           })),
         }),
     // 用户面产物。零件时整字段缺席；上界 32 与
