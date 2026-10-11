@@ -53,6 +53,11 @@ jobs:
         id: agent-build
         # 根安装采用 hoisted 布局；从子 workspace 启动会丢失根目录的工具路径。
         run: pnpm -r --filter './apps/zcode-cli/packages/*' build
+      - name: Agent package tests
+        if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
+        # 这些包的测试是 node:test、入口在各自的包级 test 脚本里；根 CI 此前只跑了 scripts/ci 与 zcode-cua，
+        # 新增（如 @zcode/contracts）的包级测试不会进入门禁，因此在这里补一道。
+        run: pnpm -r --filter './apps/zcode-cli/packages/*' test
       - name: Release tests
         if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
         run: node --test --test-isolation=none scripts/ci/*.test.mjs

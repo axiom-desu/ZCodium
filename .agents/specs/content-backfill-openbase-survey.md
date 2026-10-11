@@ -1,5 +1,10 @@
 # A5a：内容插件补全开源基座普查（Content Backfill Open-base Survey）
 
+> [!WARNING]
+> **历史快照，不反映当前实现。**
+> 上游 3.15.1 同步已把 pdf / presentations / spreadsheets / documents 四个内容插件换成上游版本（清单目录仍沿用本仓库的 `.zcodium-plugin`），本文描述的 backfill / clean-room 构建方式已不再是当前实现；其中的键级判定、许可排查与被排除基座等查证结论仍有参考价值。
+> 取代背景与决策依据见 [`upstream-sync-3.15.1.md`](./upstream-sync-3.15.1.md)。
+
 2026-09-23，GitHub 仓库搜索 API（未认证，10 次/分）+ repos API 核实 license 字段。
 目的：为「pdf / presentations / spreadsheets / documents 四个内容插件」的
 技能内容层寻找可借用的宽松许可基座。更早的普查见

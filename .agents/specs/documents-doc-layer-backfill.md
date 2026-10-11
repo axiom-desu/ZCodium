@@ -1,5 +1,10 @@
 # documents-plugin 文档层补全（A1b）
 
+> [!WARNING]
+> **历史快照，不反映当前实现。**
+> 上游 3.15.1 同步已把这批插件换成上游版本（清单目录仍沿用本仓库的 `.zcodium-plugin`），本文描述的 backfill / clean-room 构建方式已不再是当前实现；其中的键级判定、许可排查与被排除基座等查证结论仍有参考价值。
+> 取代背景与决策依据见 [`upstream-sync-3.15.1.md`](./upstream-sync-3.15.1.md)。
+
 ## 背景
 
 `documents-plugin` 的 `SKILL.md` 与 `agents/visual-judge.md` 已就位并回到四处契约。

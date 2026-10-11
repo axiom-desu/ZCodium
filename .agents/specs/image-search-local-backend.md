@@ -1,5 +1,10 @@
 # image-search 后端指向本地
 
+> [!NOTE]
+> **本规格仍然有效，只是不再是 backfill 阶段的记录。**
+> 上游 3.15.1 同步把其余插件换成了上游版本，但 image-search 未换：上游那版指向官方搜图服务并用 ZCode JWT 鉴权，本仓库仍按本文只连用户自己配置的本地端点，能力现在仍在用。
+> 相关决策依据见 [`upstream-sync-3.15.1.md`](./upstream-sync-3.15.1.md)。
+
 ## 背景
 
 `@zcode/image-search-plugin` 是官方内置的搜图 MCP 插件。开源移植时它的 `.mcp.json`
