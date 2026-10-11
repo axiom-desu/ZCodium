@@ -1,6 +1,11 @@
 import { connectViaProtocol } from "@zcode/client";
 import { VSBuffer } from "@zcode/rpc";
-import type { WebRemoteControlAppPayload } from "@zcode/shared";
+import {
+  encodeWebRemoteControlRpcFrames,
+  type WebRemoteControlAppPayload,
+  WebRemoteControlRpcAssembler,
+  type WebRemoteControlRpcTransportFrame,
+} from "@zcode/shared";
 
 /**
  * 移动端配对协议客户端：与桌面 LAN 端点（`LanRemoteControlEndpoint`）按同一份
@@ -75,8 +80,9 @@ export class MobileRemoteControlClient {
   private requestSeq = 0;
   private pending = new Map<string, PendingRequest>();
   private rpcSeq = 0;
-  private expectedRpcSeq = 1;
   private rpcStreamId = `mobile-${Math.random().toString(36).slice(2)}`;
+  /** 桌面 → 手机方向的装配器；单槽、只装期望的 seq（与桌面侧同一份实现）。 */
+  private readonly rpcAssembler = new WebRemoteControlRpcAssembler(this.rpcStreamId);
   private onRpcMessage: ((data: unknown) => void) | null = null;
 
   constructor(
@@ -143,21 +149,32 @@ export class MobileRemoteControlClient {
     this.send({ type: "data", payload });
   }
 
-  /** 桌面 → 手机的 rpc-frame 装配器入口：保序校验后交给协议监听者。 */
-  acceptRpcFrame(frame: {
-    streamId: string;
-    seq: number;
-    kind: "message" | "ack" | "flow";
-    message?: unknown;
-  }): void {
-    if (frame.kind === "ack" || frame.kind === "flow") return;
-    if (frame.seq !== this.expectedRpcSeq) {
-      console.warn("[mobile-remote] rpc frame out of order", frame.seq, this.expectedRpcSeq);
-      return;
+  /**
+   * 桌面 → 手机的 rpc-frame 入口：交给装配器（分片还原 + CRC32 校验），
+   * 只有整条消息装配成功才交付并回 ack（ack 语义 = 已连续装配到的逻辑 seq）。
+   */
+  acceptRpcFrame(frame: WebRemoteControlRpcTransportFrame): void {
+    for (const event of this.rpcAssembler.push(frame)) {
+      if (event.kind === "message") {
+        this.onRpcMessage?.(decodeRpcMessage(event.message));
+        this.send({
+          type: "data",
+          payload: {
+            zcode_type: "rpc-frame",
+            frame: { streamId: this.rpcStreamId, seq: event.seq, kind: "ack", ackSeq: event.seq },
+          },
+        });
+        continue;
+      }
+      if (event.kind === "fault") {
+        console.warn("[mobile-remote] rpc transport fault", event.reasonCode, event.seq);
+        this.events.onPayload?.({
+          zcode_type: "bridge-degraded",
+          bridgeSessionId: this.rpcStreamId,
+          reason: event.reasonCode,
+        } as WebRemoteControlAppPayload);
+      }
     }
-    this.expectedRpcSeq += 1;
-    const decoded = decodeRpcMessage(frame.message);
-    this.onRpcMessage?.(decoded);
   }
 
   /**
@@ -181,18 +198,22 @@ export class MobileRemoteControlClient {
       },
       send: (buffer) => {
         this.rpcSeq += 1;
-        this.send({
-          type: "data",
-          payload: {
-            zcode_type: "rpc-frame",
-            frame: {
+        let frames;
+        try {
+          frames = encodeWebRemoteControlRpcFrames(
+            encodeRpcMessage(new Uint8Array(buffer.buffer)),
+            {
               streamId: this.rpcStreamId,
               seq: this.rpcSeq,
-              kind: "message",
-              message: encodeRpcMessage(new Uint8Array(buffer.buffer)),
             },
-          },
-        });
+          );
+        } catch (error) {
+          console.warn("[mobile-remote] rpc message rejected", error);
+          return;
+        }
+        for (const frame of frames) {
+          this.send({ type: "data", payload: { zcode_type: "rpc-frame", frame } });
+        }
       },
     });
   }

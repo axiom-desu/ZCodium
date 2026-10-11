@@ -16,7 +16,10 @@ import {
 } from "@zcode/services";
 import type { WebRemoteControlLogger } from "./logger.js";
 import {
-  WEB_REMOTE_CONTROL_RPC_LIMITS,
+  encodeWebRemoteControlRpcFrames,
+  WebRemoteControlRpcAssembler,
+  WebRemoteControlRpcEncodingError,
+  type WebRemoteControlRpcMessageFrame,
   type WebRemoteControlRpcTransportFrame,
 } from "@zcode/shared";
 
@@ -109,17 +112,6 @@ function decodePortMessage(value: unknown): unknown {
   return value;
 }
 
-function measureMessageBytes(message: unknown): number {
-  if (message === undefined) return 0;
-  if (message instanceof Uint8Array) return message.byteLength;
-  if (message instanceof ArrayBuffer) return message.byteLength;
-  try {
-    return Buffer.byteLength(JSON.stringify(message));
-  } catch {
-    return Number.MAX_SAFE_INTEGER;
-  }
-}
-
 export interface OpenHostBridgeParams {
   attachment: WebRemoteControlHostAttachment;
   /** 桌面 → 手机：把 rpc-frame 信封交给传输层。 */
@@ -145,7 +137,7 @@ export interface OpenHostBridgeResult {
 export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): OpenHostBridgeResult {
   const streamId = params.attachment.attachmentId;
   let outboundSeq = 0;
-  let expectedInboundSeq = 1;
+  const assembler = new WebRemoteControlRpcAssembler(streamId);
   let disposed = false;
   const messageListeners = new Set<(event: { data: MessagePortPayload }) => void>();
 
@@ -160,22 +152,36 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
     },
     postMessage(data) {
       if (disposed) return;
-      if (measureMessageBytes(data) > WEB_REMOTE_CONTROL_RPC_LIMITS.maxMessageBytes) {
-        params.onDegraded("rpc-transport-oversize");
+      outboundSeq += 1;
+      let frames: WebRemoteControlRpcMessageFrame[];
+      try {
+        // 分片与超限判定都在共享编码器里（限额单一来源 PROTOCOL_V4_LIMITS）。
+        frames = encodeWebRemoteControlRpcFrames(encodePortMessage(data), {
+          streamId,
+          seq: outboundSeq,
+        });
+      } catch (error) {
+        const reasonCode =
+          error instanceof WebRemoteControlRpcEncodingError
+            ? error.reasonCode
+            : "rpc-transport-fault";
+        params.logger.warn("[web-remote-control] rpc message rejected", {
+          attachmentId: streamId,
+          seq: outboundSeq,
+          reasonCode,
+        });
+        params.onDegraded(reasonCode);
         return;
       }
-      outboundSeq += 1;
-      const frame: WebRemoteControlRpcTransportFrame = {
-        streamId,
-        seq: outboundSeq,
-        kind: "message",
-        message: encodePortMessage(data),
-      };
-      if (!params.emitFrame({ zcode_type: "rpc-frame", frame })) {
+      for (const [index, frame] of frames.entries()) {
+        if (params.emitFrame({ zcode_type: "rpc-frame", frame })) continue;
         params.logger.warn("[web-remote-control] rpc frame dropped: mobile not attached", {
           attachmentId: streamId,
           seq: outboundSeq,
+          fragmentIndex: index,
+          fragmentCount: frames.length,
         });
+        break;
       }
     },
     start() {
@@ -206,25 +212,33 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
   const bridge: WebRemoteControlRpcBridge = {
     acceptFrame(frame) {
       if (disposed) return;
-      if (frame.kind === "ack" || frame.kind === "flow") {
-        // v1 不据此做在途清理/背压；语义保留给 relay 传输（P5）。
-        return;
+      // 装配状态的唯一所有者在这里：单槽、只装期望的 seq，装配成功才 ack。
+      for (const event of assembler.push(frame)) {
+        switch (event.kind) {
+          case "message": {
+            const decoded = decodePortMessage(event.message);
+            const payload = { data: decoded as MessagePortPayload };
+            for (const listener of messageListeners) {
+              listener(payload);
+            }
+            bridge.emitAck(event.seq);
+            break;
+          }
+          case "fault": {
+            params.logger.warn("[web-remote-control] rpc transport fault", {
+              attachmentId: streamId,
+              seq: event.seq,
+              reasonCode: event.reasonCode,
+              expected: assembler.acknowledgedSeq + 1,
+            });
+            params.onDegraded(event.reasonCode);
+            break;
+          }
+          case "pending":
+          case "ignored":
+            break;
+        }
       }
-      if (frame.seq !== expectedInboundSeq) {
-        params.logger.warn("[web-remote-control] rpc frame out of order dropped", {
-          attachmentId: streamId,
-          expected: expectedInboundSeq,
-          received: frame.seq,
-        });
-        return;
-      }
-      expectedInboundSeq += 1;
-      const decoded = decodePortMessage(frame.message);
-      const event = { data: decoded as MessagePortPayload };
-      for (const listener of messageListeners) {
-        listener(event);
-      }
-      bridge.emitAck(frame.seq);
     },
     emitAck(seq) {
       if (disposed) return;

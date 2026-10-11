@@ -3,6 +3,7 @@ import type {
   WebRemoteControlFailure,
   WebRemoteControlMobileDeviceInfo,
   WebRemoteControlMobileViewState,
+  WebRemoteControlRpcTransportFrame,
   WebRemoteControlStatusSnapshot,
   WebRemoteControlStatusState,
   WebRemoteControlTaskRef,
@@ -45,12 +46,8 @@ export interface WebRemoteControlBridgeState {
   bridgeSessionId: string;
   workspaceKey: string;
   attachmentId: string;
-  acceptFrame(frame: {
-    streamId: string;
-    seq: number;
-    kind: "message" | "ack" | "flow";
-    message?: unknown;
-  }): void;
+  /** RPC 帧契约的唯一定义在 shared（含分片字段），这里不再复制一份字段表。 */
+  acceptFrame(frame: WebRemoteControlRpcTransportFrame): void;
   emitAck(seq: number): void;
   dispose(): void;
   readyAnnounced: boolean;
