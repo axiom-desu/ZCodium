@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/toast.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import {
+  isReusableWebRemoteControlSession,
+  isSameWebRemoteControlTarget,
+} from "@/lib/webRemoteControlTarget.js";
 import { usePlatform } from "./usePlatform.js";
 import type {
   WebRemoteControlStatusSnapshot,
@@ -30,6 +34,7 @@ export function useWebRemoteControl(params: {
   open: boolean;
   workspacePath: string;
   workspaceIdentity?: string;
+  remoteSessionId?: string;
   /** 开层期间周期性同步窗口内工作区/任务清单（弹层用 task service 提供）。 */
   loadSyncPayload?: () => Promise<{
     workspaces: WebRemoteControlWorkspaceSync["workspaces"];
@@ -59,13 +64,23 @@ export function useWebRemoteControl(params: {
         const current = await platform.getWebRemoteControlStatus();
         if (cancelled) return;
         setSnapshot(current);
-        const needsStart = current.status === "idle" || current.status === "error";
+        // 仅当快照属于同一目标、或已连上手机（跨 workspace 也要保住链路）时才复用，
+        // 否则为当前 workspace 重新 start；避免其他 workspace 的旧会话把状态卡在 starting。
+        const isReusableTarget =
+          isSameWebRemoteControlTarget(
+            current,
+            params.workspacePath,
+            params.workspaceIdentity,
+            params.remoteSessionId,
+          ) || isReusableWebRemoteControlSession(current);
+        const needsStart = !isReusableTarget;
         if (needsStart && openedRef.current) {
           setBusy(true);
           try {
             const started = await platform.startWebRemoteControl({
               workspacePath: params.workspacePath,
               workspaceIdentity: params.workspaceIdentity,
+              remoteSessionId: params.remoteSessionId,
             });
             if (!cancelled) {
               setSnapshot(started.status === "cancelled" ? { status: "idle" } : started);
@@ -102,7 +117,14 @@ export function useWebRemoteControl(params: {
       disposeStatus?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 开层时按当前 workspace 同步一次
-  }, [params.open, params.workspacePath, params.workspaceIdentity, platform, intl]);
+  }, [
+    params.open,
+    params.workspacePath,
+    params.workspaceIdentity,
+    params.remoteSessionId,
+    platform,
+    intl,
+  ]);
 
   // 清单同步：远控运行期间每 5s 把当前窗口的工作区/任务推给桌面运行时，
   // 移动端 bootstrap / workspace-list 才能看到「当前设备上的工作区和任务」。
@@ -162,6 +184,7 @@ export function useWebRemoteControl(params: {
       const started = await platform.startWebRemoteControl({
         workspacePath: params.workspacePath,
         workspaceIdentity: params.workspaceIdentity,
+        remoteSessionId: params.remoteSessionId,
       });
       setSnapshot(started.status === "cancelled" ? { status: "idle" } : started);
     } catch (error) {
@@ -170,7 +193,7 @@ export function useWebRemoteControl(params: {
     } finally {
       setBusy(false);
     }
-  }, [platform, params.workspacePath, params.workspaceIdentity, intl]);
+  }, [platform, params.workspacePath, params.workspaceIdentity, params.remoteSessionId, intl]);
 
   const stop = useCallback(async () => {
     setBusy(true);
