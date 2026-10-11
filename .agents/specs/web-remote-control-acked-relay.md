@@ -29,8 +29,11 @@
    `webRemoteControlRpcTransportFrameSchema` 的 `streamId`/`seq`/`kind` 语义，只把
    `kind=message` 的**物理承载**改成分片（逻辑消息先 UTF-8 JSON 再 base64 分片）。
    `envelope.ts` 的 `rpc-frame` 信封结构不变。
-2. **装配状态的唯一所有者：接收侧，每个 `streamId` 一份单装配槽。** 只装配「下一个期望的
+2. **装配状态的唯一所有者：接收侧，每个方向一份单装配槽。** 只装配「下一个期望的
    `seq`」；其他 `seq` 的帧不缓存（`rpc-frame-gap`）。超时与丢弃由接收侧判定。
+   身份校验用「**按第一片锁定**」而不是构造时绑定：两端各自用自己的 id 标注出站帧
+   （桌面 `attachmentId`、手机 `mobile-*`），链路是点对点单流，因此只需保证同一装配器里
+   身份不中途切换；需要严格绑定时可显式传 `streamId`。
 3. **限额单一来源：`PROTOCOL_V4_LIMITS`。** 物理帧上限直接取 `maxFrameBytes`，消息上限取
    `logicalFrameAssemblyMaxBytes`，装配超时取 `logicalFrameAssemblyTimeoutMs`，
    id 长度取 `transportEnvelopeIdMaxChars`；RPC 专有的分片数上限（64）与在途帧上限（64）写在
@@ -87,15 +90,15 @@
 
 已完成（同一提交内，两端一起切，不存在版本偏斜：手机页面由桌面 `mobileAppAssets` 随包提供）：
 
-| 位置                                                        | 改动                                                                                                                                                                                                                                                                     |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/shared/src/webRemoteControl/rpcTransport.ts`      | 帧契约加分片字段（`fragmentIndex/Count`、`messageBytes`、`checksum`、`dataBase64`）并强制极性；`encodeWebRemoteControlRpcFrames`（单帧快路径 + 二分片长 + fail closed）；`WebRemoteControlRpcAssembler`（单槽、乱序归位、CRC32/UTF-8/JSON 全通过才交付、超时清扫、幂等） |
-| `packages/desktop/src/main/webRemoteControl/hostBridge.ts`  | 发送侧走编码器（超限不再静默丢弃，按 `reasonCode` 降级）；接收侧走装配器，装配成功才 ack                                                                                                                                                                                 |
-| `packages/desktop/src/main/webRemoteControl/runtime.ts`     | 删掉手写的那份帧字段表，改引用 shared 的 `WebRemoteControlRpcTransportFrame`（契约单一来源）                                                                                                                                                                             |
-| `packages/web/src/mobile/protocol.ts`                       | 手机侧同构：发送侧编码、接收侧装配、装配成功回 ack；fault 上报 `bridge-degraded`                                                                                                                                                                                         |
-| `packages/shared/src/webRemoteControl/rpcTransport.test.ts` | 14 例：限额单源、schema 极性、canonical base64、单帧快路径、分片往返一致、超限 fail closed、乱序装配、gap、幂等、CRC 拒绝、超时释放、跨 streamId 拒绝                                                                                                                    |
+| 位置                                                        | 改动                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/shared/src/webRemoteControl/rpcTransport.ts`      | 帧契约加分片字段（`fragmentIndex/Count`、`messageBytes`、`checksum`、`dataBase64`）并强制极性；`encodeWebRemoteControlRpcFrames`（单帧快路径 + 二分片长 + fail closed）；`WebRemoteControlRpcAssembler`（单槽、身份按第一片锁定、乱序归位、CRC32/UTF-8/JSON 全通过才交付、超时清扫、幂等） |
+| `packages/desktop/src/main/webRemoteControl/hostBridge.ts`  | 发送侧走编码器（超限不再静默丢弃，按 `reasonCode` 降级）；接收侧走装配器，装配成功才 ack                                                                                                                                                                                                   |
+| `packages/desktop/src/main/webRemoteControl/runtime.ts`     | 删掉手写的那份帧字段表，改引用 shared 的 `WebRemoteControlRpcTransportFrame`（契约单一来源）                                                                                                                                                                                               |
+| `packages/web/src/mobile/protocol.ts`                       | 手机侧同构：发送侧编码、接收侧装配、装配成功回 ack；fault 上报 `bridge-degraded`                                                                                                                                                                                                           |
+| `packages/shared/src/webRemoteControl/rpcTransport.test.ts` | 15 例：限额单源、schema 极性、canonical base64、单帧快路径、分片往返一致、超限 fail closed、乱序装配、gap、幂等、CRC 拒绝、超时释放、跨 streamId 拒绝                                                                                                                                      |
 
-验证：vitest 14 例通过；`pnpm typecheck`、`pnpm lint`（51 warnings / 0 errors，与基线一致）、`pnpm fmt:check`、`pnpm architecture:check --changed`（new: 0）通过；`packages/web` 构建与 `@zcode/desktop build:no-runtime-assets` 通过；`packages/desktop` 的 `tsconfig.main.json` 错误数 63 = 基线（未新增）。
+验证：vitest 15 例通过；`pnpm typecheck`、`pnpm lint`（51 warnings / 0 errors，与基线一致）、`pnpm fmt:check`、`pnpm architecture:check --changed`（new: 0）通过；`packages/web` 构建与 `@zcode/desktop build:no-runtime-assets` 通过；`packages/desktop` 的 `tsconfig.main.json` 错误数 63 = 基线（未新增）。
 
 本层仍未做：
 

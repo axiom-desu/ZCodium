@@ -82,7 +82,7 @@ export class MobileRemoteControlClient {
   private rpcSeq = 0;
   private rpcStreamId = `mobile-${Math.random().toString(36).slice(2)}`;
   /** 桌面 → 手机方向的装配器；单槽、只装期望的 seq（与桌面侧同一份实现）。 */
-  private readonly rpcAssembler = new WebRemoteControlRpcAssembler(this.rpcStreamId);
+  private readonly rpcAssembler = new WebRemoteControlRpcAssembler();
   private onRpcMessage: ((data: unknown) => void) | null = null;
 
   constructor(

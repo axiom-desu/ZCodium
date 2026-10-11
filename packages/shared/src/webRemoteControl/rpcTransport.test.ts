@@ -101,7 +101,7 @@ describe("web remote control rpc transport · 编码", () => {
       );
     }
 
-    const assembler = new WebRemoteControlRpcAssembler(STREAM);
+    const assembler = new WebRemoteControlRpcAssembler();
     const events = assembleAll(assembler, frames);
     const delivered = events.filter((event) => event.kind === "message");
     expect(delivered).toHaveLength(1);
@@ -140,7 +140,7 @@ describe("web remote control rpc transport · 装配", () => {
     const message = { content: "z".repeat(3 * 1024 * 1024) };
     const frames = encode(message);
     const shuffled = [...frames].reverse();
-    const assembler = new WebRemoteControlRpcAssembler(STREAM);
+    const assembler = new WebRemoteControlRpcAssembler();
 
     const first = assembler.push(shuffled[0]);
     expect(first.filter((event) => event.kind === "pending")).toHaveLength(1);
@@ -153,7 +153,7 @@ describe("web remote control rpc transport · 装配", () => {
 
   it("非期望 seq 不缓存：给 rpc-frame-gap 且不推进期望值", () => {
     const frames = encode({ late: true }, 2);
-    const assembler = new WebRemoteControlRpcAssembler(STREAM);
+    const assembler = new WebRemoteControlRpcAssembler();
     const events = assembleAll(assembler, frames);
     expect(events.some((event) => event.kind === "fault")).toBe(true);
     expect(
@@ -170,7 +170,7 @@ describe("web remote control rpc transport · 装配", () => {
   it("重复分片与已装配过的 seq 幂等忽略，不重复交付", () => {
     const message = { content: "w".repeat(3 * 1024 * 1024) };
     const frames = encode(message);
-    const assembler = new WebRemoteControlRpcAssembler(STREAM);
+    const assembler = new WebRemoteControlRpcAssembler();
     assembleAll(assembler, frames);
     const replay = assembleAll(assembler, frames);
     expect(replay.filter((event) => event.kind === "message")).toHaveLength(0);
@@ -193,7 +193,7 @@ describe("web remote control rpc transport · 装配", () => {
       decoded[0] = (decoded[0]! + 1) % 256;
       return { ...frame, dataBase64: encodeWireBytesBase64(decoded) };
     });
-    const assembler = new WebRemoteControlRpcAssembler(STREAM);
+    const assembler = new WebRemoteControlRpcAssembler();
     const events = assembleAll(assembler, corrupted);
     expect(
       events.some(
@@ -209,7 +209,7 @@ describe("web remote control rpc transport · 装配", () => {
   it("装配槽超时后释放并上报 buffer-timeout", () => {
     let nowMs = 0;
     const frames = encode({ content: "t".repeat(3 * 1024 * 1024) });
-    const assembler = new WebRemoteControlRpcAssembler(STREAM, { now: () => nowMs });
+    const assembler = new WebRemoteControlRpcAssembler({ now: () => nowMs });
     assembler.push(frames[0]);
     expect(assembler.pendingFragments).not.toBeNull();
     expect(assembler.sweep(nowMs + 1_000)).toHaveLength(0);
@@ -225,7 +225,7 @@ describe("web remote control rpc transport · 装配", () => {
   });
 
   it("结构非法的帧给 rpc-transport-fault；ack/flow 被忽略", () => {
-    const assembler = new WebRemoteControlRpcAssembler(STREAM);
+    const assembler = new WebRemoteControlRpcAssembler();
     expect(assembler.push({ nonsense: true })[0]).toMatchObject({
       kind: "fault",
       reasonCode: WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.transportFault,
@@ -239,7 +239,7 @@ describe("web remote control rpc transport · 装配", () => {
     });
   });
 
-  it("别的 streamId 的帧被拒绝", () => {
+  it("显式绑定 streamId 时，别的 streamId 的帧被拒绝", () => {
     const frames = encodeWebRemoteControlRpcFrames(
       { hello: 1 },
       {
@@ -248,8 +248,29 @@ describe("web remote control rpc transport · 装配", () => {
         measurePhysicalFrameBytes: relayEnvelopeBytes,
       },
     );
-    const assembler = new WebRemoteControlRpcAssembler(STREAM);
+    const assembler = new WebRemoteControlRpcAssembler({ streamId: STREAM });
     expect(assembler.push(frames[0])[0]).toMatchObject({
+      kind: "fault",
+      reasonCode: WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.transportFault,
+    });
+  });
+
+  it("缺省按第一片锁定身份：中途换身份 fail closed", () => {
+    // 两端各自用自己的 id 标注出站帧（桌面 attachmentId、手机 mobile-*），
+    // 所以缺省模式必须接受链路上先出现的那个 id；但同一装配器里出现第二种身份就是串流，必须拒绝。
+    const assembler = new WebRemoteControlRpcAssembler();
+    const local = encode({ hello: 1 });
+    expect(assembler.push(local[0]).filter((event) => event.kind === "message")).toHaveLength(1);
+
+    const foreign = encodeWebRemoteControlRpcFrames(
+      { hello: 2 },
+      {
+        streamId: "other-stream",
+        seq: 2,
+        measurePhysicalFrameBytes: relayEnvelopeBytes,
+      },
+    );
+    expect(assembler.push(foreign[0])[0]).toMatchObject({
       kind: "fault",
       reasonCode: WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.transportFault,
     });

@@ -137,7 +137,7 @@ export interface OpenHostBridgeResult {
 export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): OpenHostBridgeResult {
   const streamId = params.attachment.attachmentId;
   let outboundSeq = 0;
-  const assembler = new WebRemoteControlRpcAssembler(streamId);
+  const assembler = new WebRemoteControlRpcAssembler();
   let disposed = false;
   const messageListeners = new Set<(event: { data: MessagePortPayload }) => void>();
 

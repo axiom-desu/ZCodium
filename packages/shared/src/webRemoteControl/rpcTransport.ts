@@ -328,6 +328,12 @@ interface AssemblySlot {
 }
 
 export interface WebRemoteControlRpcAssemblerOptions {
+  /**
+   * 期望的 streamId。缺省表示「按第一片锁定」：两端各自用自己的 id 标注出站帧
+   * （桌面用 attachmentId、手机用 `mobile-*`），链路是点对点且单流，因此只校验
+   * 身份在流中途不发生切换；需要严格绑定时再显式传这个字段。
+   */
+  streamId?: string;
   /** 期望的下一条逻辑 seq（含）。默认 1，与 hostBridge/protocol 的起始序号一致。 */
   expectedSeq?: number;
   now?: () => number;
@@ -349,11 +355,11 @@ export class WebRemoteControlRpcAssembler {
   private readonly assemblyTimeoutMs: number;
   private readonly maxStagedBytes: number;
   private slot: AssemblySlot | undefined;
+  /** 锁定的对端流身份；显式传入即固定，否则由第一片决定。 */
+  private lockedStreamId: string | undefined;
 
-  constructor(
-    readonly streamId: string,
-    options: WebRemoteControlRpcAssemblerOptions = {},
-  ) {
+  constructor(options: WebRemoteControlRpcAssemblerOptions = {}) {
+    this.lockedStreamId = options.streamId;
     this.expectedSeq = options.expectedSeq ?? 1;
     this.now = options.now ?? (() => Date.now());
     this.assemblyTimeoutMs =
@@ -385,7 +391,7 @@ export class WebRemoteControlRpcAssembler {
     return [
       {
         kind: "fault",
-        streamId: this.streamId,
+        streamId: this.lockedStreamId ?? "",
         seq,
         reasonCode: WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.bufferTimeout,
       },
@@ -398,17 +404,20 @@ export class WebRemoteControlRpcAssembler {
       return [
         {
           kind: "fault",
-          streamId: this.streamId,
+          streamId: this.lockedStreamId ?? "",
           reasonCode: WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.transportFault,
         },
       ];
     }
     const value = parsed.data;
-    if (value.streamId !== this.streamId) {
+    if (this.lockedStreamId === undefined) {
+      this.lockedStreamId = value.streamId;
+    } else if (value.streamId !== this.lockedStreamId) {
+      // 流中途换身份：宁可 fail closed，也不能把两个流混进同一个单槽装配器。
       return [
         {
           kind: "fault",
-          streamId: this.streamId,
+          streamId: this.lockedStreamId,
           seq: value.kind === "message" ? value.seq : undefined,
           reasonCode: WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.transportFault,
         },
