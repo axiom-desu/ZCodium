@@ -94,7 +94,15 @@ export async function hydrateMessageHistoryFromSession(input: {
       // user <system-reminder>，后续 mid-conversation system projection 会失去 attachment source。
       const syntheticAttachment = syntheticSystemReminderAttachmentFromParts(parts);
       if (syntheticAttachment) {
-        input.history.addAttachment(syntheticAttachment.source, syntheticAttachment.content);
+        // 保留 part 上的完整 metadata（含 inputPresentation）；只留 source 会在恢复后丢掉
+        // 附件来源，mid-conversation system projection 也跟着失效。
+        input.history.addEntries([
+          {
+            kind: "attachment",
+            content: syntheticAttachment.content,
+            metadata: syntheticAttachment.metadata,
+          },
+        ]);
         appliedMessageCount++;
         continue;
       }
@@ -278,9 +286,11 @@ async function userEntriesFromParts(
     if (part.type === "text" && !part.ignored) {
       const syntheticAttachment = syntheticSystemReminderAttachmentFromTextPart(part);
       if (syntheticAttachment) {
-        syntheticAttachmentEntries.push(
-          systemReminderAttachmentEntry(syntheticAttachment.source, syntheticAttachment.content),
-        );
+        syntheticAttachmentEntries.push({
+          kind: "attachment",
+          content: syntheticAttachment.content,
+          metadata: syntheticAttachment.metadata,
+        });
         continue;
       }
       promptBlocks.push({ type: "text", text: textPartToProviderText(part) });
@@ -419,7 +429,7 @@ function textPartToProviderText(part: Extract<MessagePart, { type: "text" }>): s
 }
 
 interface SyntheticSystemReminderAttachment {
-  source: SystemReminderSource;
+  metadata: RuntimeMessageMetadata;
   content: string;
 }
 
@@ -444,7 +454,7 @@ function syntheticSystemReminderAttachmentFromTextPart(
   if (!isRestorableSystemReminderAttachmentSource(metadata.source)) return undefined;
 
   return {
-    source: metadata.source,
+    metadata,
     content: part.text,
   };
 }
