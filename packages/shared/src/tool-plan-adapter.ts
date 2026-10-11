@@ -109,6 +109,23 @@ export function isTodoPlanToolName(value: string | null | undefined): boolean {
   return typeof value === "string" && TODO_TOOL_NAME_PATTERN.test(value.trim());
 }
 
+/**
+ * Claude Code 以 `_meta.claudeCode.parentToolUseId` 标记子代理发起的工具调用。
+ * 只认 `parentToolUseId` 顶层字段会把它误判为主代理工具，从而让子代理的 TodoWrite
+ * 覆盖主任务顶部摘要。
+ */
+function readClaudeParentToolUseId(value: Record<string, unknown>): string | undefined {
+  const meta = value._meta;
+  if (!isRecord(meta)) {
+    return undefined;
+  }
+  const claudeCode = meta.claudeCode;
+  if (!isRecord(claudeCode)) {
+    return undefined;
+  }
+  return readString(claudeCode.parentToolUseId);
+}
+
 export function isMainAgentToolProjectionSource(...candidates: unknown[]): boolean {
   for (const candidate of candidates) {
     if (!isRecord(candidate)) {
@@ -119,7 +136,11 @@ export function isMainAgentToolProjectionSource(...candidates: unknown[]): boole
     if (readString(candidate.source) === "subagent") {
       return false;
     }
-    if (readString(candidate.parentToolCallId) || readString(candidate.parentToolUseId)) {
+    if (
+      readString(candidate.parentToolCallId) ||
+      readString(candidate.parentToolUseId) ||
+      readClaudeParentToolUseId(candidate)
+    ) {
       return false;
     }
   }

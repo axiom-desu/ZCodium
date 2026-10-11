@@ -25,6 +25,27 @@ export function isTransientSessionEvent(event: Pick<SessionEvent, "type">): bool
   return TRANSIENT_SESSION_EVENT_TYPES.has(event.type);
 }
 
+/**
+ * sealed turn 淘汰时 `model_request` 驻留副本的元数据瘦身（上游 spec `session-event-store-retention.md`）。
+ *
+ * 原因：`messages` 是每次模型请求的完整上下文，每个工具迭代一条，且不是瞬态事件，会永久驻留。
+ * compact 只截断后续请求，不回收已驻留事件——长会话实测 event store 驻留随轮次线性增长约 150MB。
+ * 内存 store 的读者只需要条数（bootstrap 的 `mapModelRequestPayload` 本来就只映射 messageCount），
+ * live sink 拿到的是 append 返回的完整对象，因此这里只把**驻留副本**换成 `messageCount`，
+ * 事件 id / seq / 其它 payload 字段保持不变。
+ */
+export function slimRetainedModelRequest(event: SessionEvent): SessionEvent {
+  if (event.type !== SessionEventType.ModelRequest) {
+    return event;
+  }
+  const payload = event.payload as { messages?: unknown } | null | undefined;
+  if (!payload || !Array.isArray(payload.messages)) {
+    return event;
+  }
+  const { messages, ...metadata } = payload;
+  return { ...event, payload: { ...metadata, messageCount: messages.length } } as SessionEvent;
+}
+
 export type SessionEventRetentionMode = "unbounded" | "turn-window";
 
 export interface SessionEventRetentionPolicy {

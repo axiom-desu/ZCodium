@@ -86,6 +86,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "node ../../scripts/clean-dist.mjs",
+    "test": "node --import tsx --test --test-isolation=none test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
     "lint:fix": "oxlint --write src"
@@ -96,6 +97,7 @@
     "zod-to-json-schema": "3.25.2"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0"
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0"
   }
 }
