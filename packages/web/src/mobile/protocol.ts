@@ -1,9 +1,17 @@
+/* eslint-disable max-lines -- 手机配对协议客户端：鉴权/信封收发/装配重传都在同一条 WebSocket 生命周期里，拆分会让序号、缓冲与定时器所有者分叉（与 rpcTransport.ts 同一口径）。 */
 import { connectViaProtocol } from "@zcode/client";
 import { VSBuffer } from "@zcode/rpc";
 import {
   encodeWebRemoteControlRpcFrames,
+  parseWebRemoteControlRpcAckFrame,
   type WebRemoteControlAppPayload,
+  WebRemoteControlRpcAckScheduler,
   WebRemoteControlRpcAssembler,
+  WebRemoteControlRpcReplayBuffer,
+  WEB_REMOTE_CONTROL_RPC_FAULT_REASONS,
+  WEB_REMOTE_CONTROL_RPC_LIMITS,
+  type WebRemoteControlRpcAssemblyEvent,
+  type WebRemoteControlRpcMessageFrame,
   type WebRemoteControlRpcTransportFrame,
 } from "@zcode/shared";
 
@@ -83,6 +91,14 @@ export class MobileRemoteControlClient {
   private rpcStreamId = `mobile-${Math.random().toString(36).slice(2)}`;
   /** 桌面 → 手机方向的装配器；单槽、只装期望的 seq（与桌面侧同一份实现）。 */
   private rpcAssembler = new WebRemoteControlRpcAssembler();
+  /** 手机 → 桌面方向的重传缓冲；单序号空间 `(ackedSeq, lastSentSeq]`。 */
+  private rpcReplayBuffer = new WebRemoteControlRpcReplayBuffer();
+  /** ack 批量调度：合并窗口 + deadline 兜底（远小于对端 ackWatchdogMs）。 */
+  private rpcAckScheduler = new WebRemoteControlRpcAckScheduler({
+    onFlush: (ackSeq) => this.sendAckFrame(ackSeq),
+  });
+  /** 装配槽周期清扫定时器（静默链路也收敛残片）。 */
+  private assemblySweepTimer: number | null = null;
   /** 已握手成功的 workspace bridge（桌面按 workspaceKey 路由，rpc-frame 只有在 bridge 存在时才被接收）。 */
   private bridgeReadyWorkspaceKey: string | null = null;
   private serviceAccessorInstance: ReturnType<typeof connectViaProtocol> | null = null;
@@ -123,6 +139,7 @@ export class MobileRemoteControlClient {
   private openSocket(): void {
     const socket = new WebSocket(this.params.wsUrl);
     this.socket = socket;
+    this.ensureAssemblySweepTimer();
     socket.addEventListener("open", () => {
       this.connectAttempt = 0;
       this.setState("authenticating");
@@ -148,6 +165,9 @@ export class MobileRemoteControlClient {
       this.serviceAccessorInstance = null;
       this.rpcSeq = 0;
       this.rpcAssembler = new WebRemoteControlRpcAssembler();
+      this.rpcReplayBuffer.clear();
+      this.rpcAckScheduler.clear();
+      this.clearAssemblySweepTimer();
       this.failPending(new Error(`mobile connection closed: ${event.code}`));
       if (this.disposed) {
         this.setState("closed", { closeCode: event.code, reason: event.reason });
@@ -180,6 +200,9 @@ export class MobileRemoteControlClient {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.clearAssemblySweepTimer();
+    this.rpcAckScheduler.dispose();
+    this.rpcReplayBuffer.clear();
     this.bridgeReadyWorkspaceKey = null;
     this.serviceAccessorInstance = null;
     this.socket?.close();
@@ -213,19 +236,25 @@ export class MobileRemoteControlClient {
 
   /**
    * 桌面 → 手机的 rpc-frame 入口：交给装配器（分片还原 + CRC32 校验），
-   * 只有整条消息装配成功才交付并回 ack（ack 语义 = 已连续装配到的逻辑 seq）。
+   * 只有整条消息装配成功才交付并排 ack（ack 语义 = 已连续装配到的逻辑 seq，走批量调度）。
    */
   acceptRpcFrame(frame: WebRemoteControlRpcTransportFrame): void {
-    for (const event of this.rpcAssembler.push(frame)) {
+    // ack 帧不进装配器：推进重传窗口，并重发仍未确认的帧（幂等）。
+    const ack = parseWebRemoteControlRpcAckFrame(frame);
+    if (ack) {
+      this.emitRpcFrames(this.rpcReplayBuffer.acknowledge(ack.ackSeq));
+      return;
+    }
+    this.handleRpcAssemblyEvents(this.rpcAssembler.push(frame));
+  }
+
+  /** 装配事件统一入口：装配成功交上层并排 ack；fault 上报降级。 */
+  private handleRpcAssemblyEvents(events: WebRemoteControlRpcAssemblyEvent[]): void {
+    for (const event of events) {
       if (event.kind === "message") {
         this.onRpcMessage?.(decodeRpcMessage(event.message));
-        this.send({
-          type: "data",
-          payload: {
-            zcode_type: "rpc-frame",
-            frame: { streamId: this.rpcStreamId, seq: event.seq, kind: "ack", ackSeq: event.seq },
-          },
-        });
+        // 不逐条立即 ack：交给批量调度，deadline 保证最后一个一定发出。
+        this.rpcAckScheduler.record(event.seq);
         continue;
       }
       if (event.kind === "fault") {
@@ -235,7 +264,49 @@ export class MobileRemoteControlClient {
           bridgeSessionId: this.rpcStreamId,
           reason: event.reasonCode,
         } as WebRemoteControlAppPayload);
+        if (
+          event.reasonCode === WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.frameGap ||
+          event.reasonCode === WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.bufferTimeout
+        ) {
+          // 丢片：把「最后连续装配到的 seq」再 ack 一次，对端据此从 ackSeq+1 重传；
+          // 不新增 wire 帧类型，仍复用单序号空间的 ack。本方向也按窗口 go-back-N，双向收敛。
+          this.rpcAckScheduler.record(this.rpcAssembler.acknowledgedSeq);
+          this.emitRpcFrames(this.rpcReplayBuffer.replayUnacknowledged());
+        }
       }
+    }
+  }
+
+  private sendAckFrame(ackSeq: number): void {
+    this.send({
+      type: "data",
+      payload: {
+        zcode_type: "rpc-frame",
+        frame: { streamId: this.rpcStreamId, seq: ackSeq, kind: "ack", ackSeq },
+      },
+    });
+  }
+
+  /** 按序发出（重传）逻辑帧；socket 非 OPEN 时 `send` 静默丢弃，重连后由同一缓冲重放。 */
+  private emitRpcFrames(frames: readonly WebRemoteControlRpcMessageFrame[]): void {
+    for (const frame of frames) {
+      this.send({ type: "data", payload: { zcode_type: "rpc-frame", frame } });
+    }
+  }
+
+  /** 装配槽周期清扫：链路静默时残片不会永久占槽。 */
+  private ensureAssemblySweepTimer(): void {
+    if (this.assemblySweepTimer !== null) return;
+    this.assemblySweepTimer = window.setInterval(() => {
+      if (this.disposed) return;
+      this.handleRpcAssemblyEvents(this.rpcAssembler.sweep());
+    }, WEB_REMOTE_CONTROL_RPC_LIMITS.assemblySweepIntervalMs);
+  }
+
+  private clearAssemblySweepTimer(): void {
+    if (this.assemblySweepTimer !== null) {
+      window.clearInterval(this.assemblySweepTimer);
+      this.assemblySweepTimer = null;
     }
   }
 
@@ -264,9 +335,11 @@ export class MobileRemoteControlClient {
       throw new Error(`unexpected workspace bridge response: ${response.zcode_type}`);
     }
     // 桌面每次 openBridge 都会新建 hostBridge（内部装配器从 seq 1 开始），换 workspace 时
-    // 我们必须同时重置出站序号与装配器，否则新 bridge 收到 seq>1 会判成 rpc-frame-gap。
+    // 我们必须同时重置出站序号、装配器与重传/ack 状态，否则新 bridge 收到 seq>1 会判成 rpc-frame-gap。
     this.rpcSeq = 0;
     this.rpcAssembler = new WebRemoteControlRpcAssembler();
+    this.rpcReplayBuffer.clear();
+    this.rpcAckScheduler.clear();
     this.bridgeReadyWorkspaceKey = params.workspaceKey;
   }
 
@@ -299,23 +372,28 @@ export class MobileRemoteControlClient {
         };
       },
       send: (buffer) => {
-        this.rpcSeq += 1;
-        let frames;
+        const seq = this.rpcSeq + 1;
+        let frames: WebRemoteControlRpcMessageFrame[];
         try {
           frames = encodeWebRemoteControlRpcFrames(
             encodeRpcMessage(new Uint8Array(buffer.buffer)),
             {
               streamId: this.rpcStreamId,
-              seq: this.rpcSeq,
+              seq,
             },
           );
         } catch (error) {
           console.warn("[mobile-remote] rpc message rejected", error);
           return;
         }
-        for (const frame of frames) {
-          this.send({ type: "data", payload: { zcode_type: "rpc-frame", frame } });
+        // 入队失败就不发出半条：seq 不推进，对端期望值也不会跳过。
+        const recorded = this.rpcReplayBuffer.record(seq, frames);
+        if (!recorded.accepted) {
+          console.warn("[mobile-remote] rpc replay buffer overflow", recorded.reasonCode);
+          return;
         }
+        this.rpcSeq = seq;
+        this.emitRpcFrames(frames);
       },
     });
   }

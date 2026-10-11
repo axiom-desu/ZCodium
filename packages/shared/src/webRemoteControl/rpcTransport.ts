@@ -37,6 +37,18 @@ export const WEB_REMOTE_CONTROL_RPC_LIMITS = {
    * 目前只作为契约面与观测依据，接半开探测是后续工作。
    */
   ackWatchdogMs: 30_000,
+  /** ack 合并窗口：首个待发 ack 入队后至少等这么久再刷，窗口内的多次装配合并成一个 ack。 */
+  ackCoalesceWindowMs: 8,
+  /** ack deadline 兜底：距首个待发 ack 最多这么久必须刷（远小于 ackWatchdogMs）。 */
+  ackDeadlineMs: 250,
+  /** ack 阈值：待发 ack 条数达到即立即刷，不等合并窗口。 */
+  ackMaxPendingCount: 8,
+  /** 装配槽周期清扫间隔；静默链路也据此收敛残片。 */
+  assemblySweepIntervalMs: 5_000,
+  /** 重传缓冲：最多保留多少条已发送未确认的逻辑消息。 */
+  replayBufferMaxMessages: 128,
+  /** 重传缓冲：最多保留多少字节的已发送未确认物理帧。 */
+  replayBufferMaxBytes: 8 * 1024 * 1024,
   /** streamId 等传输身份的长度上限。 */
   transportIdMaxChars: PROTOCOL_V4_LIMITS.transportEnvelopeIdMaxChars,
 } as const;
@@ -53,6 +65,8 @@ export const WEB_REMOTE_CONTROL_RPC_FAULT_REASONS = {
   bufferTimeout: "buffer-timeout",
   /** 单条消息本身超过上限。 */
   oversize: "rpc-transport-oversize",
+  /** 重传缓冲不足以容纳新的未确认消息。 */
+  replayBufferOverflow: "rpc-replay-buffer-overflow",
 } as const;
 export type WebRemoteControlRpcFaultReason =
   (typeof WEB_REMOTE_CONTROL_RPC_FAULT_REASONS)[keyof typeof WEB_REMOTE_CONTROL_RPC_FAULT_REASONS];
@@ -149,6 +163,14 @@ export type WebRemoteControlRpcTransportFrame = z.infer<
   typeof webRemoteControlRpcTransportFrameSchema
 >;
 export type WebRemoteControlRpcMessageFrame = z.infer<typeof messageFrameSchema>;
+
+/** 只解析 ack 帧；非 ack 或结构非法返回 null（收帧方先判 ack 再决定是否进装配器）。 */
+export function parseWebRemoteControlRpcAckFrame(
+  frame: unknown,
+): { streamId: string; ackSeq: number } | null {
+  const parsed = ackFrameSchema.safeParse(frame);
+  return parsed.success ? { streamId: parsed.data.streamId, ackSeq: parsed.data.ackSeq } : null;
+}
 
 export const webRemoteControlRpcFrameEnvelopeSchema = z
   .object({
@@ -577,5 +599,262 @@ export class WebRemoteControlRpcAssembler {
     this.slot = undefined;
     this.expectedSeq = seq + 1;
     return [...events, { kind: "message", streamId: value.streamId, seq, message }];
+  }
+}
+
+export interface WebRemoteControlRpcReplayBufferOptions {
+  /** 同时保留的未确认逻辑消息条数上限。 */
+  maxMessages?: number;
+  /** 同时保留的未确认物理帧字节数上限。 */
+  maxBytes?: number;
+  /** 物理帧计量函数；缺省按 relay wire 信封计量，与编码器同口径。 */
+  measureFrameBytes?: (frame: WebRemoteControlRpcMessageFrame) => number;
+}
+
+export type WebRemoteControlRpcReplayRecordResult =
+  | { accepted: true }
+  | {
+      accepted: false;
+      reasonCode: typeof WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.replayBufferOverflow;
+    };
+
+interface ReplayBufferEntry {
+  seq: number;
+  frames: readonly WebRemoteControlRpcMessageFrame[];
+  bytes: number;
+}
+
+/**
+ * 出站重传缓冲：保存最近已发送、尚未被对端 ack 覆盖的逻辑帧。
+ *
+ * 单序号空间：ack 的语义是「已连续装配到的逻辑 seq」，因此待重传窗口自然是
+ * `(ackedSeq, lastSentSeq]`。只由发送侧拥有；接收侧的装配状态仍归
+ * `WebRemoteControlRpcAssembler`。重复重发是幂等的：同 seq 同片再次到达时装配器判为
+ * `stale`/`duplicate`，不会重复交付。
+ */
+export class WebRemoteControlRpcReplayBuffer {
+  private readonly maxMessages: number;
+  private readonly maxBytes: number;
+  private readonly measureFrameBytes: (frame: WebRemoteControlRpcMessageFrame) => number;
+  /** 已确认前缀用游标推进，避免每次 ack 都 `shift()` 成 O(n²)。 */
+  private entries: Array<ReplayBufferEntry | undefined> = [];
+  private headIndex = 0;
+  private bytes = 0;
+  private acknowledged = 0;
+  private lastSent = 0;
+
+  constructor(options: WebRemoteControlRpcReplayBufferOptions = {}) {
+    this.maxMessages = options.maxMessages ?? WEB_REMOTE_CONTROL_RPC_LIMITS.replayBufferMaxMessages;
+    this.maxBytes = options.maxBytes ?? WEB_REMOTE_CONTROL_RPC_LIMITS.replayBufferMaxBytes;
+    this.measureFrameBytes = options.measureFrameBytes ?? relayEnvelopeByteLength;
+  }
+
+  /** 已确认到的逻辑 seq。 */
+  get ackedSeq(): number {
+    return this.acknowledged;
+  }
+
+  /** 最后一条已发送的逻辑 seq。 */
+  get lastSentSeq(): number {
+    return this.lastSent;
+  }
+
+  /** 当前保留的未确认逻辑消息条数。 */
+  get pendingMessageCount(): number {
+    return this.entries.length - this.headIndex;
+  }
+
+  /** 当前保留的未确认物理帧字节数。 */
+  get pendingBytes(): number {
+    return this.bytes;
+  }
+
+  /**
+   * 记录一条刚发送的逻辑消息。入队前对整批做「条数 + 字节数」admission，
+   * 超限返回 `replayBufferOverflow` 且不改动缓冲，调用方据此降级，不发半条消息。
+   */
+  record(
+    seq: number,
+    frames: readonly WebRemoteControlRpcMessageFrame[],
+  ): WebRemoteControlRpcReplayRecordResult {
+    if (seq <= this.lastSent) return { accepted: true };
+    let bytes = 0;
+    for (const frame of frames) bytes += this.measureFrameBytes(frame);
+    if (this.pendingMessageCount + 1 > this.maxMessages || this.bytes + bytes > this.maxBytes) {
+      return {
+        accepted: false,
+        reasonCode: WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.replayBufferOverflow,
+      };
+    }
+    this.entries.push({ seq, frames: [...frames], bytes });
+    this.bytes += bytes;
+    this.lastSent = seq;
+    return { accepted: true };
+  }
+
+  /**
+   * 对端 ack：推进已确认前缀并返回 `(ackSeq, lastSentSeq]` 的待重传帧。
+   * ack 超过 `lastSentSeq` 属非法输入，不推进（调用方决定是否降级）。
+   */
+  acknowledge(ackSeq: number): WebRemoteControlRpcMessageFrame[] {
+    if (ackSeq > this.lastSent) return [];
+    if (ackSeq > this.acknowledged) this.acknowledged = ackSeq;
+    this.releaseAcknowledgedPrefix();
+    return this.replayUnacknowledged();
+  }
+
+  /** gap / 超时故障：返回窗口内全部待重传帧（扁平、保序、同 seq 同片）。 */
+  replayUnacknowledged(): WebRemoteControlRpcMessageFrame[] {
+    const frames: WebRemoteControlRpcMessageFrame[] = [];
+    for (let index = this.headIndex; index < this.entries.length; index += 1) {
+      const entry = this.entries[index];
+      if (!entry || entry.seq <= this.acknowledged) continue;
+      frames.push(...entry.frames);
+    }
+    return frames;
+  }
+
+  clear(): void {
+    this.entries = [];
+    this.headIndex = 0;
+    this.bytes = 0;
+    this.acknowledged = 0;
+    this.lastSent = 0;
+  }
+
+  private releaseAcknowledgedPrefix(): void {
+    while (this.headIndex < this.entries.length) {
+      const entry = this.entries[this.headIndex];
+      if (!entry || entry.seq > this.acknowledged) break;
+      this.bytes -= entry.bytes;
+      // 确认后立刻断开 payload/frame 引用，不把大消息留在内存里。
+      this.entries[this.headIndex] = undefined;
+      this.headIndex += 1;
+    }
+    // 只推进游标，达到阈值再 compact，避免逐条 ack 触发 O(n²) 搬移。
+    if (this.headIndex > 0 && this.headIndex * 2 >= this.entries.length) {
+      this.entries = this.entries.slice(this.headIndex);
+      this.headIndex = 0;
+    }
+  }
+}
+
+export interface WebRemoteControlRpcAckSchedulerOptions {
+  /** 合并窗口：首个待发 ack 入队后至少等这么久才刷。 */
+  coalesceWindowMs?: number;
+  /** deadline 兜底：距首个待发 ack 最多这么久必须刷。 */
+  deadlineMs?: number;
+  /** 阈值：待发 ack 条数达到即立即刷。 */
+  maxPendingCount?: number;
+  /** ack 发送回调（由平台侧负责真正发帧）。 */
+  onFlush: (ackSeq: number) => void;
+  now?: () => number;
+}
+
+/**
+ * ack 批量调度：把窗口内的多次装配合并成一个 `ackSeq` 再发，避免逐条 ack。
+ *
+ * - 合并：`record` 只在单调推进时更新待发值，窗口内多次装配合并成最高 `ackSeq`；
+ * - 刷新：达到条数阈值立即刷，否则在合并窗口到期时刷；
+ * - deadline 兜底：距首个待发 ack 超过 `deadlineMs` 必刷（远小于对端 `ackWatchdogMs`），
+ *   即使合并窗口被后续 `record` 不断推后也不会漏发最后一个 ack；
+ * - 无变更不刷：定时器只在有待发 ack 时存在，flush 后立即清除。
+ */
+export class WebRemoteControlRpcAckScheduler {
+  private readonly coalesceWindowMs: number;
+  private readonly deadlineMs: number;
+  private readonly maxPendingCount: number;
+  private readonly onFlush: (ackSeq: number) => void;
+  private readonly now: () => number;
+  private pendingAckSeq: number | null = null;
+  private pendingCount = 0;
+  private firstPendingAt = 0;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private timerTargetAt: number | null = null;
+  private disposed = false;
+
+  constructor(options: WebRemoteControlRpcAckSchedulerOptions) {
+    this.coalesceWindowMs =
+      options.coalesceWindowMs ?? WEB_REMOTE_CONTROL_RPC_LIMITS.ackCoalesceWindowMs;
+    this.deadlineMs = options.deadlineMs ?? WEB_REMOTE_CONTROL_RPC_LIMITS.ackDeadlineMs;
+    this.maxPendingCount =
+      options.maxPendingCount ?? WEB_REMOTE_CONTROL_RPC_LIMITS.ackMaxPendingCount;
+    this.onFlush = options.onFlush;
+    this.now = options.now ?? Date.now;
+  }
+
+  get hasPending(): boolean {
+    return this.pendingAckSeq !== null;
+  }
+
+  /** 当前定时器计划刷新的时刻；无定时器为 null（诊断/测试观察点）。 */
+  get nextFlushAt(): number | null {
+    return this.timerTargetAt;
+  }
+
+  /** 记录一次装配完成。返回 true 表示本次已同步刷出。 */
+  record(ackSeq: number): boolean {
+    if (this.disposed) return false;
+    if (this.pendingAckSeq !== null && ackSeq <= this.pendingAckSeq) return false;
+    if (this.pendingAckSeq === null) {
+      this.firstPendingAt = this.now();
+      this.pendingCount = 0;
+    }
+    this.pendingAckSeq = ackSeq;
+    this.pendingCount += 1;
+    if (this.pendingCount >= this.maxPendingCount) {
+      this.flush();
+      return true;
+    }
+    this.armTimer();
+    return false;
+  }
+
+  /** 立即刷出待发 ack（若有）。返回刷出的 `ackSeq` 或 null。 */
+  flush(): number | null {
+    if (this.disposed) return null;
+    const ackSeq = this.pendingAckSeq;
+    this.clearTimer();
+    this.pendingAckSeq = null;
+    this.pendingCount = 0;
+    if (ackSeq === null) return null;
+    this.onFlush(ackSeq);
+    return ackSeq;
+  }
+
+  /** 重连 / 换 workspace：丢弃待发与定时器，但不永久停用。 */
+  clear(): void {
+    this.clearTimer();
+    this.pendingAckSeq = null;
+    this.pendingCount = 0;
+    this.firstPendingAt = 0;
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.clear();
+  }
+
+  private armTimer(): void {
+    const now = this.now();
+    // debounce + maxWait：后续 record 可把合并窗口推后，但绝不越过 deadline。
+    const target = Math.min(now + this.coalesceWindowMs, this.firstPendingAt + this.deadlineMs);
+    if (this.timerTargetAt !== null && this.timerTargetAt >= target) return;
+    this.clearTimer();
+    this.timerTargetAt = target;
+    this.timer = setTimeout(
+      () => {
+        this.timer = null;
+        this.timerTargetAt = null;
+        this.flush();
+      },
+      Math.max(0, target - now),
+    );
+  }
+
+  private clearTimer(): void {
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+    this.timerTargetAt = null;
   }
 }

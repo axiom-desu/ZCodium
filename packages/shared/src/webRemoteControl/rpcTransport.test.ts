@@ -1,12 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PROTOCOL_V4_LIMITS } from "../zcode-protocol-v4/core.js";
 import { decodeWireBase64, encodeWireBytesBase64 } from "../zcode-protocol-v4/wire-binary.js";
 import {
   encodeWebRemoteControlRpcFrames,
   WEB_REMOTE_CONTROL_RPC_FAULT_REASONS,
   WEB_REMOTE_CONTROL_RPC_LIMITS,
+  WebRemoteControlRpcAckScheduler,
   WebRemoteControlRpcAssembler,
   WebRemoteControlRpcEncodingError,
+  WebRemoteControlRpcReplayBuffer,
   webRemoteControlRpcTransportFrameSchema,
 } from "./rpcTransport.js";
 
@@ -274,5 +276,200 @@ describe("web remote control rpc transport · 装配", () => {
       kind: "fault",
       reasonCode: WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.transportFault,
     });
+  });
+});
+
+describe("web remote control rpc transport · 重传缓冲", () => {
+  it("ack 推进窗口，并返回 (ackSeq, lastSentSeq] 的待重传帧", () => {
+    const buffer = new WebRemoteControlRpcReplayBuffer();
+    const seq1 = encode({ n: 1 }, 1);
+    const seq2 = encode({ n: 2 }, 2);
+    const seq3 = encode({ n: 3 }, 3);
+    expect(buffer.record(1, seq1).accepted).toBe(true);
+    expect(buffer.record(2, seq2).accepted).toBe(true);
+    expect(buffer.record(3, seq3).accepted).toBe(true);
+    expect(buffer.ackedSeq).toBe(0);
+    expect(buffer.lastSentSeq).toBe(3);
+
+    const replay = buffer.acknowledge(1);
+    expect(replay).toEqual([...seq2, ...seq3]);
+    expect(buffer.ackedSeq).toBe(1);
+    expect(buffer.pendingMessageCount).toBe(2);
+  });
+
+  it("重传帧幂等：已装配过的 seq 再次到达不重复交付", () => {
+    const assembler = new WebRemoteControlRpcAssembler();
+    const buffer = new WebRemoteControlRpcReplayBuffer();
+    const frames = encode({ again: true }, 1);
+    buffer.record(1, frames);
+    expect(assembler.push(frames[0]).some((event) => event.kind === "message")).toBe(true);
+
+    const events = assembleAll(assembler, buffer.replayUnacknowledged());
+    expect(events.some((event) => event.kind === "message")).toBe(false);
+    expect(events.some((event) => event.kind === "ignored" && event.reason === "stale")).toBe(true);
+  });
+
+  it("丢片 nudge：ack 停留在已装配值后重传可补齐，且不重复交付", () => {
+    const assembler = new WebRemoteControlRpcAssembler();
+    const buffer = new WebRemoteControlRpcReplayBuffer();
+    const seq1 = encode({ n: 1 }, 1);
+    const seq2 = encode({ n: 2 }, 2);
+    const seq3 = encode({ n: 3 }, 3);
+    buffer.record(1, seq1);
+    buffer.record(2, seq2);
+    buffer.record(3, seq3);
+
+    // 对端只收到 seq1；nudge ack=1，要求从 2 起重传。
+    assembleAll(assembler, seq1);
+    const replay = buffer.acknowledge(1);
+    expect(replay).toEqual([...seq2, ...seq3]);
+    expect(assembleAll(assembler, replay).filter((event) => event.kind === "message")).toHaveLength(
+      2,
+    );
+    expect(assembler.acknowledgedSeq).toBe(3);
+    // 同一批重传再来一次仍然幂等。
+    expect(assembleAll(assembler, replay).filter((event) => event.kind === "message")).toHaveLength(
+      0,
+    );
+  });
+
+  it("按条数与字节双封顶：超限返回 replayBufferOverflow 且不变更缓冲", () => {
+    const buffer = new WebRemoteControlRpcReplayBuffer({ maxMessages: 1 });
+    expect(buffer.record(1, encode({ n: 1 }, 1)).accepted).toBe(true);
+    expect(buffer.record(2, encode({ n: 2 }, 2))).toEqual({
+      accepted: false,
+      reasonCode: WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.replayBufferOverflow,
+    });
+    expect(buffer.pendingMessageCount).toBe(1);
+    expect(buffer.lastSentSeq).toBe(1);
+
+    const byteLimited = new WebRemoteControlRpcReplayBuffer({ maxBytes: 1 });
+    expect(byteLimited.record(1, encode({ n: 1 }, 1)).accepted).toBe(false);
+    expect(byteLimited.pendingMessageCount).toBe(0);
+  });
+
+  it("ack 确认后释放缓冲，容量恢复", () => {
+    const buffer = new WebRemoteControlRpcReplayBuffer({ maxMessages: 2 });
+    buffer.record(1, encode({ n: 1 }, 1));
+    buffer.record(2, encode({ n: 2 }, 2));
+    expect(buffer.record(3, encode({ n: 3 }, 3)).accepted).toBe(false);
+    buffer.acknowledge(1);
+    expect(buffer.record(3, encode({ n: 3 }, 3)).accepted).toBe(true);
+    expect(buffer.pendingMessageCount).toBe(2);
+  });
+
+  it("gap 故障全窗口重放；ack 超过 lastSentSeq 不推进", () => {
+    const buffer = new WebRemoteControlRpcReplayBuffer();
+    const seq1 = encode({ n: 1 }, 1);
+    const seq2 = encode({ n: 2 }, 2);
+    buffer.record(1, seq1);
+    buffer.record(2, seq2);
+    expect(buffer.replayUnacknowledged()).toEqual([...seq1, ...seq2]);
+    expect(buffer.acknowledge(5)).toEqual([]);
+    expect(buffer.ackedSeq).toBe(0);
+    expect(buffer.pendingMessageCount).toBe(2);
+  });
+
+  it("重复 record 同 seq 幂等，不重复入队", () => {
+    const buffer = new WebRemoteControlRpcReplayBuffer();
+    const frames = encode({ n: 1 }, 1);
+    buffer.record(1, frames);
+    buffer.record(1, frames);
+    expect(buffer.pendingMessageCount).toBe(1);
+  });
+});
+
+describe("web remote control rpc transport · ack 批量调度", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("合并窗口内多次装配只产生一个 ack，取最高 seq", () => {
+    const flushes: number[] = [];
+    const scheduler = new WebRemoteControlRpcAckScheduler({
+      coalesceWindowMs: 50,
+      deadlineMs: 1_000,
+      maxPendingCount: 10,
+      onFlush: (ackSeq) => flushes.push(ackSeq),
+    });
+    scheduler.record(1);
+    scheduler.record(2);
+    scheduler.record(3);
+    expect(flushes).toEqual([]);
+    vi.advanceTimersByTime(50);
+    expect(flushes).toEqual([3]);
+    scheduler.dispose();
+  });
+
+  it("待发条数达到阈值立即刷", () => {
+    const flushes: number[] = [];
+    const scheduler = new WebRemoteControlRpcAckScheduler({
+      coalesceWindowMs: 1_000,
+      deadlineMs: 5_000,
+      maxPendingCount: 2,
+      onFlush: (ackSeq) => flushes.push(ackSeq),
+    });
+    scheduler.record(1);
+    expect(flushes).toEqual([]);
+    scheduler.record(2);
+    expect(flushes).toEqual([2]);
+    scheduler.dispose();
+  });
+
+  it("deadline 兜底：合并窗口被不断推后也必刷最后一个 ack", () => {
+    const flushes: number[] = [];
+    const scheduler = new WebRemoteControlRpcAckScheduler({
+      coalesceWindowMs: 100,
+      deadlineMs: 250,
+      maxPendingCount: 100,
+      onFlush: (ackSeq) => flushes.push(ackSeq),
+    });
+    scheduler.record(1);
+    vi.advanceTimersByTime(90);
+    scheduler.record(2);
+    vi.advanceTimersByTime(90);
+    scheduler.record(3);
+    // 距首个待发 ack 才 180ms，尚未到 deadline，不应刷。
+    expect(flushes).toEqual([]);
+    vi.advanceTimersByTime(70);
+    expect(flushes).toEqual([3]);
+    scheduler.dispose();
+  });
+
+  it("无变更不刷：没有待发 ack 时空转，flush 后清定时器", () => {
+    const flushes: number[] = [];
+    const scheduler = new WebRemoteControlRpcAckScheduler({
+      coalesceWindowMs: 50,
+      deadlineMs: 500,
+      onFlush: (ackSeq) => flushes.push(ackSeq),
+    });
+    vi.advanceTimersByTime(5_000);
+    expect(flushes).toEqual([]);
+    scheduler.record(1);
+    vi.advanceTimersByTime(50);
+    expect(flushes).toEqual([1]);
+    vi.advanceTimersByTime(5_000);
+    expect(flushes).toEqual([1]);
+    scheduler.dispose();
+  });
+
+  it("clear 取消待发；dispose 后不再刷", () => {
+    const flushes: number[] = [];
+    const scheduler = new WebRemoteControlRpcAckScheduler({
+      coalesceWindowMs: 50,
+      deadlineMs: 500,
+      onFlush: (ackSeq) => flushes.push(ackSeq),
+    });
+    scheduler.record(1);
+    scheduler.clear();
+    vi.advanceTimersByTime(500);
+    expect(flushes).toEqual([]);
+    scheduler.record(2);
+    scheduler.dispose();
+    vi.advanceTimersByTime(500);
+    expect(flushes).toEqual([]);
   });
 });

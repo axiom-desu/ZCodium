@@ -18,8 +18,14 @@ import type { WebRemoteControlLogger } from "./logger.js";
 import type { WindowHostAttachmentScope } from "@zcode/shared";
 import {
   encodeWebRemoteControlRpcFrames,
+  parseWebRemoteControlRpcAckFrame,
+  WebRemoteControlRpcAckScheduler,
   WebRemoteControlRpcAssembler,
   WebRemoteControlRpcEncodingError,
+  WebRemoteControlRpcReplayBuffer,
+  WEB_REMOTE_CONTROL_RPC_FAULT_REASONS,
+  WEB_REMOTE_CONTROL_RPC_LIMITS,
+  type WebRemoteControlRpcAssemblyEvent,
   type WebRemoteControlRpcMessageFrame,
   type WebRemoteControlRpcTransportFrame,
 } from "@zcode/shared";
@@ -156,8 +162,75 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
   const streamId = params.attachment.attachmentId;
   let outboundSeq = 0;
   const assembler = new WebRemoteControlRpcAssembler();
+  // 出站重传缓冲 + ack 批量调度：单序号空间 `(ackedSeq, lastSentSeq]`，与接收侧装配器各自一侧。
+  const replayBuffer = new WebRemoteControlRpcReplayBuffer();
   let disposed = false;
   const messageListeners = new Set<(event: { data: MessagePortPayload }) => void>();
+
+  function sendAck(ackSeq: number): void {
+    if (disposed) return;
+    const ackFrame: WebRemoteControlRpcTransportFrame = {
+      streamId,
+      seq: ackSeq,
+      kind: "ack",
+      ackSeq,
+    };
+    params.emitFrame({ zcode_type: "rpc-frame", frame: ackFrame });
+  }
+
+  const ackScheduler = new WebRemoteControlRpcAckScheduler({ onFlush: sendAck });
+
+  /** 按序发出重传帧；对端未挂载就停下（后续重连再靠同一缓冲重放）。 */
+  function emitReplayFrames(frames: readonly WebRemoteControlRpcMessageFrame[]): void {
+    for (const frame of frames) {
+      if (params.emitFrame({ zcode_type: "rpc-frame", frame })) continue;
+      params.logger.warn("[web-remote-control] rpc replay frame dropped: mobile not attached", {
+        attachmentId: streamId,
+        seq: frame.seq,
+      });
+      return;
+    }
+  }
+
+  /** 接收侧装配事件统一入口：装配成功交上层并排 ack；fault 上报降级。 */
+  function handleAssemblyEvents(events: WebRemoteControlRpcAssemblyEvent[]): void {
+    for (const event of events) {
+      switch (event.kind) {
+        case "message": {
+          const decoded = decodePortMessage(event.message);
+          const payload = { data: decoded as MessagePortPayload };
+          for (const listener of messageListeners) {
+            listener(payload);
+          }
+          // 不逐条立即 ack：交给批量调度，deadline 保证最后一个一定发出。
+          ackScheduler.record(event.seq);
+          break;
+        }
+        case "fault": {
+          params.logger.warn("[web-remote-control] rpc transport fault", {
+            attachmentId: streamId,
+            seq: event.seq,
+            reasonCode: event.reasonCode,
+            expected: assembler.acknowledgedSeq + 1,
+          });
+          params.onDegraded(event.reasonCode);
+          if (
+            event.reasonCode === WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.frameGap ||
+            event.reasonCode === WEB_REMOTE_CONTROL_RPC_FAULT_REASONS.bufferTimeout
+          ) {
+            // 丢片：把「最后连续装配到的 seq」再 ack 一次，对端据此从 ackSeq+1 重传；
+            // 不新增 wire 帧类型，仍复用单序号空间的 ack。本方向也按窗口 go-back-N，双向收敛。
+            ackScheduler.record(assembler.acknowledgedSeq);
+            emitReplayFrames(replayBuffer.replayUnacknowledged());
+          }
+          break;
+        }
+        case "pending":
+        case "ignored":
+          break;
+      }
+    }
+  }
 
   const portLike: MessagePortLike = {
     addEventListener(type, listener) {
@@ -170,13 +243,13 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
     },
     postMessage(data) {
       if (disposed) return;
-      outboundSeq += 1;
+      const seq = outboundSeq + 1;
       let frames: WebRemoteControlRpcMessageFrame[];
       try {
         // 分片与超限判定都在共享编码器里（限额单一来源 PROTOCOL_V4_LIMITS）。
         frames = encodeWebRemoteControlRpcFrames(encodePortMessage(data), {
           streamId,
-          seq: outboundSeq,
+          seq,
         });
       } catch (error) {
         const reasonCode =
@@ -185,22 +258,25 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
             : "rpc-transport-fault";
         params.logger.warn("[web-remote-control] rpc message rejected", {
           attachmentId: streamId,
-          seq: outboundSeq,
+          seq,
           reasonCode,
         });
         params.onDegraded(reasonCode);
         return;
       }
-      for (const [index, frame] of frames.entries()) {
-        if (params.emitFrame({ zcode_type: "rpc-frame", frame })) continue;
-        params.logger.warn("[web-remote-control] rpc frame dropped: mobile not attached", {
+      // 入队失败就不发出半条：seq 不推进，对端期望值也不会跳过。
+      const recorded = replayBuffer.record(seq, frames);
+      if (!recorded.accepted) {
+        params.logger.warn("[web-remote-control] rpc replay buffer overflow", {
           attachmentId: streamId,
-          seq: outboundSeq,
-          fragmentIndex: index,
-          fragmentCount: frames.length,
+          seq,
+          reasonCode: recorded.reasonCode,
         });
-        break;
+        params.onDegraded(recorded.reasonCode);
+        return;
       }
+      outboundSeq = seq;
+      emitReplayFrames(frames);
     },
     start() {
       params.attachment.port.start();
@@ -230,50 +306,33 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
   const bridge: WebRemoteControlRpcBridge = {
     acceptFrame(frame) {
       if (disposed) return;
-      // 装配状态的唯一所有者在这里：单槽、只装期望的 seq，装配成功才 ack。
-      for (const event of assembler.push(frame)) {
-        switch (event.kind) {
-          case "message": {
-            const decoded = decodePortMessage(event.message);
-            const payload = { data: decoded as MessagePortPayload };
-            for (const listener of messageListeners) {
-              listener(payload);
-            }
-            bridge.emitAck(event.seq);
-            break;
-          }
-          case "fault": {
-            params.logger.warn("[web-remote-control] rpc transport fault", {
-              attachmentId: streamId,
-              seq: event.seq,
-              reasonCode: event.reasonCode,
-              expected: assembler.acknowledgedSeq + 1,
-            });
-            params.onDegraded(event.reasonCode);
-            break;
-          }
-          case "pending":
-          case "ignored":
-            break;
-        }
+      // ack 帧不进装配器：推进重传窗口，并从 ackSeq+1 重发仍未确认的帧（幂等）。
+      const ack = parseWebRemoteControlRpcAckFrame(frame);
+      if (ack) {
+        emitReplayFrames(replayBuffer.acknowledge(ack.ackSeq));
+        return;
       }
+      // 装配状态的唯一所有者在这里：单槽、只装期望的 seq，装配成功才 ack（批量调度）。
+      handleAssemblyEvents(assembler.push(frame));
     },
     emitAck(seq) {
-      if (disposed) return;
-      const ackFrame: WebRemoteControlRpcTransportFrame = {
-        streamId,
-        seq,
-        kind: "ack",
-        ackSeq: seq,
-      };
-      params.emitFrame({ zcode_type: "rpc-frame", frame: ackFrame });
+      sendAck(seq);
     },
     dispose() {
       disposed = true;
+      clearInterval(sweepTimer);
+      ackScheduler.dispose();
+      replayBuffer.clear();
       messageListeners.clear();
       protocol.disconnect();
     },
   };
+
+  // 装配槽周期清扫：链路静默时残片不会永久占槽（超时只在有帧到达时不会被评估）。
+  const sweepTimer = setInterval(() => {
+    if (disposed) return;
+    handleAssemblyEvents(assembler.sweep());
+  }, WEB_REMOTE_CONTROL_RPC_LIMITS.assemblySweepIntervalMs);
 
   return {
     bridge,
