@@ -58,6 +58,12 @@ jobs:
         # 这些包的测试是 node:test、入口在各自的包级 test 脚本里；根 CI 此前只跑了 scripts/ci 与 zcode-cua，
         # 新增（如 @zcode/contracts）的包级测试不会进入门禁，因此在这里补一道。
         run: pnpm -r --filter './apps/zcode-cli/packages/*' test
+      - name: Vitest suites
+        if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
+        # 这批测试用 vitest，覆盖远控分片/重传/ack、MCP Apps 契约、adapter 出站响应等回归场景；
+        # 此前 CI 只跑了 scripts/ci 与包级 node:test，这些套件一直没进门禁。
+        # workspace 包的 exports 指向 src，套件不依赖构建产物，因此放在构建步骤之后、Release tests 之前。
+        run: pnpm vitest run packages/shared/src/webRemoteControl packages/shared/src/mcp-apps packages/ui/src/lib/webRemoteControlTarget.test.ts packages/desktop/src/main/webRemoteControl/servicePipe.test.ts apps/zcode-cli/packages/adapters/src/network
       - name: Release tests
         if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
         run: node --test --test-isolation=none scripts/ci/*.test.mjs
