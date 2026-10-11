@@ -68,7 +68,7 @@ git diff --stat 29628c9 upstream/main -- <关注的路径>
 
 新增的协议面（非重命名，是实质新增）：
 
-- **topic resource relay**：分块资源中继，`TOPIC_RESOURCE_RELAY_CHANNEL = "host-topic-resource"`，块大小 `TOPIC_RESOURCE_RELAY_CHUNK_BYTES = 384 * 1024`，配套 `read` / `cancel` / `relayChunk` / `relayMetadata` 四个 schema
+- **topic resource relay**：分块资源中继，`TOPIC_RESOURCE_RELAY_CHANNEL = "host-topic-resource"`，块大小 `TOPIC_RESOURCE_RELAY_CHUNK_BYTES = 384 * 1024`，配套 `read` / `cancel` / `relayChunk` / `relayMetadata` 四个 schema（**判定：不适用**——我们全仓无 producer/consumer，见 `web-remote-control-resource-relay.md`）
 - **MCP UI 实例生命周期**：`zcodeMcpUiOpenInstance` / `zcodeMcpUiCloseInstance`
 - **MCP 资源读取**：`zcodeMcpReadResource` + `zcodeMcpResourceContentSchema`
 
@@ -224,7 +224,7 @@ README 补充：`Computer Use runtime, broker RPC, Helper install/launch/verify,
 
 `packages/zcode-cua/test/**`（7 个测试）与 `scripts/ci/cua-driver-runtime-assets.test.mjs` 是本仓库 CUA 运行时**唯一**的守卫——它会抓出运行时被换成 fail-closed 占位的情况。整段 CUA 操作里不得删除或跳过。
 
-## 工作项 4：核心包（暂缓，需单独判断）
+## 工作项 4：核心包判断（**已完成：判定为不搬**）
 
 上游对 CLI 核心包也大幅扩张：
 
@@ -239,9 +239,28 @@ README 补充：`Computer Use runtime, broker RPC, Helper install/launch/verify,
 | `cli`                      |     99 |         135 |  1.4× |
 | `tui`                      |     95 |         124 |  1.3× |
 
-**暂缓的理由**：这些与本仓库的 Rust 重写直接重叠。全量跟随会让 fork 变成上游镜像，Rust 重写的意义随之消失。
+**判定：不整包搬，也不再把 `src` 增量当成「同步搬运」；其中真正的能力单独立项。**
 
-**待判断**：`dynamic-workflow` 那 2,058 个文件里是否存在本仓库确实需要的能力（注意文件数可能含生成的 fixture，需先看构成）。存在则单独取用，不存在则不动。
+理由：这些与本仓库的 Rust 重写直接重叠。全量跟随会让 fork 变成上游镜像（违背本 spec 的
+Non-goals），Rust 重写的意义随之消失。
+
+复核后的构成（口径：两个包合起来、只看 `src/**` 的 `.ts(x)`；复核命令与输出见
+「补充清单」的「工作项 4 的构成分析」）：
+
+- 上游 `dynamic-workflow` 共 **2,058** 个文件，其中 `src/*.ts(x)` 只有 **120** 个；其余是测试
+  快照与夹具。所以「20.2 倍」不是实现量。
+- 我们树里 `FillWorkflowHole` / `HOLE_CODE` **0 命中**——上游这次的核心新增「留白（Holes）」
+  是一个**我们完全没有的新纵向能力**，不是文件缺失。
+- `src` 增量三类：**(a)** 上游新增且我们没有 **27 个（约 3,264 行）**；**(b)** 两边都改过
+  **20 个（约 +1,610/−474）**；**(c-1)** 上游改过、我们从未动过 **38 个（约 +845/−296）**。
+- 耦合面：`bootstrap` 42 个、`core` 6 个、`adapters` 5 个 `src` 文件引用
+  `@zcode/dynamic-workflow`（`rg -l`）。`packages/shared/src/diagnosticLogCatalog.ts` 由
+  `node scripts/diagnostic-log-catalog.mjs` 扫描生成——新增/删除源码文件必须重跑。
+
+**结论**：只搬包内源码而不落消费者，等于引入 27 个无消费者的文件（`pnpm knip` 会报）。所以
+「留白能力」作为**新功能立项**（规格先行），而不是当成同步搬运。规格：
+[`dynamic-workflow-holes.md`](./dynamic-workflow-holes.md)。触发条件、能力边界、验收与分期
+都在那里。
 
 ## 工作项 5：Browser Use 放开 subagent（已定，本轮执行）
 
@@ -345,12 +364,12 @@ CI 守护（会红，必须一起处理）：
 | 1. 协议 delta                     | **已核对（第二轮补全口径，见「补充清单」）**：MCP UI 实例与 MCP resource read 两边都有；`zcode-protocol/trace.ts` 只是上游拆了文件（我们的 `zcodeProtocolTraceSchema` 内联在 `index.ts:285`，字段一致）；其余新增面逐项判定为「不跟（我方没有的产品能力）」或「归入工作项 6」 |
 | 2. 插件换上游（含前置 diff 判断） | **本轮做完 12 个**：skill-creator、visualize、plugin-creator、zcode-guide、pdf、documents、presentations、spreadsheets、android-emulator（+构建）、ios-simulator（+构建）、restore-legacy-sessions、superpowers（改为整理，不换）                                             |
 | 3. CUA 只取文本                   | **已做**（早已执行 + 本轮按缺口补，见工作项 3）                                                                                                                                                                                                                               |
-| 4. 核心包判断                     | 待做（**构成分析已完成**，见「补充清单」工作项 4：`dynamic-workflow` 2,058 个文件里 1,575 个是图分析期望输出快照，源码只有 120 个 `.ts/.tsx`）                                                                                                                                |
+| 4. 核心包判断                     | **已完成：判定为不搬**。构成 1,575 个为图分析期望输出快照、`src` `.ts(x)` 仅 120 个；`src` 增量三类（a 27 / b 20 / c-1 38），`FillWorkflowHole`/`HOLE_CODE` 我们 0 命中。留白能力单独立项：`dynamic-workflow-holes.md`                                                        |
 | 5. Browser 放开 subagent          | **已做**（`58b4952a`，设计见 `browser-subagent-shared-tabs.md`）                                                                                                                                                                                                              |
-| 6. 远控分片与确认式中继           | **已评估，未实现**（见 `web-remote-control-acked-relay.md`：这是我们自己注释里写明的 P5，上游已实现，建议单独立项）                                                                                                                                                           |
+| 6. 远控分片与确认式中继           | **已完成**：分片/装配/重传/ack 已实现（`web-remote-control-acked-relay.md`）；最后一项「topic resource relay 协议面 + `zcodeEndpoint.ts` relay 地址解析」判定为**不适用**（无 producer/consumer、我们无该地址解析），见 `web-remote-control-resource-relay.md`                |
 | 清单与契约同步                    | **本轮同步做了 5 类**：`builtinPluginAssets.ts` 的 seed 清单、`official-plugin-definitions.ts` 的三处版本、`requiresRuntime` 与构建脚本、根 `NOTICE.md`、`third-party/copied-components.json` 台账                                                                            |
 | `.zcodium-plugin` 改名            | **已定：保留我们的名字**（上游用 `.zcode-plugin`），本轮所有新换插件都改回 `.zcodium-plugin`，此项结束                                                                                                                                                                        |
-| spec 标历史快照                   | 待做                                                                                                                                                                                                                                                                          |
+| spec 标历史快照                   | **已完成**：9 份 backfill/cleanroom spec 已加历史快照标记（`image-search-local-backend.md` 标为「规格仍有效、只是不再是 backfill 记录」）                                                                                                                                     |
 
 ### 本轮新增的两个决定
 
@@ -557,7 +576,7 @@ xargs -d '\n' -n 150 git diff -U0 872ad960 aac47556 -- < /tmp/both.txt > /tmp/bo
 
 UI/desktop/web 的其余修复属于我们的产品面演进；bots、fixture、商业面不进队列。
 
-### 工作项 4 的构成分析（先看构成，再决定取不取）
+### 工作项 4 的构成分析（已判定：不整包搬，留白能力单独立项）
 
 ```bash
 git ls-tree -r --name-only $A -- apps/zcode-cli/packages/dynamic-workflow | wc -l   # 2,058
@@ -570,17 +589,39 @@ git ls-tree -r --name-only main -- apps/zcode-cli/packages/dynamic-workflow | wc
 而是图分析测试快照。我们的包（102 个文件）本来就在跑（`bootstrap`/`cli` 声明依赖，
 `dynamic-workflow-run-launch.ts` 等调用），需要判断的只是 `src` 增量（hole / engine / analysis）。
 
-结论：**不整包搬**；要取就按能力取 `src` 增量，测试快照不 vendor。
+两个包的 `src/**` `.ts(x)` 按 fork 点 `872ad960` 分三类：
+
+| 类别                         | 判定                    | 数量 | 上游行数    |
+| ---------------------------- | ----------------------- | ---: | ----------- |
+| (a) 上游新增、我们没有       | 能力缺口，需立项        |   27 | +3,264      |
+| (b) 两边都改过               | 各自演化，逐文件取 hunk |   20 | +1,610/−474 |
+| (c-1) 上游改过、我们从未动过 | 逐项判定，多为夹具联动  |   38 | +845/−296   |
+
+复核命令（目录限定到两个包，只看 `src`）：
+
+```bash
+P="apps/zcode-cli/packages/dynamic-workflow apps/zcode-cli/packages/dynamic-workflow-runtime"
+git ls-tree -r --name-only $A -- $P | rg '/src/.*\.tsx?$' | sort > /tmp/A.txt
+git ls-tree -r --name-only main -- $P | rg '/src/.*\.tsx?$' | sort > /tmp/main.txt
+comm -23 /tmp/A.txt /tmp/main.txt | wc -l                            # (a) 27
+git diff --name-only $M $A -- $P | rg '/src/.*\.tsx?$' | sort > /tmp/up.txt
+git diff --name-only $M main -- $P | rg '/src/.*\.tsx?$' | sort > /tmp/our.txt
+comm -12 /tmp/up.txt /tmp/our.txt | wc -l                            # (b) 20
+git ls-tree -r --name-only main | sort > /tmp/tree.txt
+comm -23 /tmp/up.txt /tmp/our.txt | grep -Fxf /tmp/tree.txt | wc -l  # (c-1) 38
+```
+
+**结论：不整包搬**；要取就按能力取 `src` 增量，测试快照不 vendor。「留白（Holes）」（上游
+3.15.1 的核心新增，`FillWorkflowHole` / `HOLE_CODE` 我们 0 命中）作为新功能立项：
+[`dynamic-workflow-holes.md`](./dynamic-workflow-holes.md)。
 
 ### 本轮仍未做
 
-| 项                               | 说明                                                                                                                                                                                                                                                     |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 工作项 6（远控分片与确认式中继） | 仍是最大缺口：协议 `TOPIC_RESOURCE_RELAY_*` + 4 个 schema、`zcodeEndpoint.ts` 的 relay WS 地址解析、`server/src/stdio.ts` 的 reverse ChannelClient、client 侧 ≈989 行、shared 侧 766 行。开工前必须先定 `web-remote-control-acked-relay.md` 里的三条前置 |
-| 工作项 4                         | 取不取 `dynamic-workflow` 的 `src` 增量                                                                                                                                                                                                                  |
-| spec 标历史快照                  | 8 份 backfill spec                                                                                                                                                                                                                                       |
-| `third-party-npm.mjs` 平台过滤   | 单独评估（会影响生成 `THIRD-PARTY-NOTICES.md` 的路径）                                                                                                                                                                                                   |
-| 包级测试接进 CI                  | 见上文「注意」                                                                                                                                                                                                                                           |
+| 项                      | 说明                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| 留白能力（Holes）       | 已立项但未实现，见 `dynamic-workflow-holes.md`（需先对齐规格）                     |
+| 手机端实时流            | 现在仍是 4s 轮询（`MobileApp.tsx`）；服务通路已修好（main 透明转发），推送订阅待接 |
+| 远端 workspace 真机验收 | 手机链路没有 E2E 门禁，只能真机手验                                                |
 
 ## 附：测量口径
 
