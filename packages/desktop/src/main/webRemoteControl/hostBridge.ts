@@ -1,20 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { type MessagePortMain, MessageChannelMain } from "electron";
-import {
-  ChannelClient,
-  MessagePortProtocol,
-  ProxyChannel,
-  type MessagePortLike,
-  type MessagePortPayload,
-} from "@zcode/rpc";
+import { type MessagePortLike, type MessagePortPayload } from "@zcode/rpc";
 import { HostMessageTypes } from "@zcode/shared";
-import {
-  IZCodeAgentService,
-  IZCodeSessionService,
-  IZCodeTaskService,
-  IModelSelectionService,
-} from "@zcode/services";
 import type { WebRemoteControlLogger } from "./logger.js";
+import { createWebRemoteControlServicePipe } from "./servicePipe.js";
 import type { WindowHostAttachmentScope } from "@zcode/shared";
 import {
   encodeWebRemoteControlRpcFrames,
@@ -48,7 +37,7 @@ export interface WebRemoteControlHostAttachment {
 export interface WebRemoteControlRpcBridge {
   /** 传输层 → 桌面：手机侧 rpc-frame 进入桥接（ack/flow 帧在此消费）。 */
   acceptFrame(frame: WebRemoteControlRpcTransportFrame): void;
-  /** 桌面 → 传输层：当前只用 ack；消息帧由 port 的 postMessage 路径发出。 */
+  /** 桌面 → 传输层：当前只用 ack；消息帧由 `sendToMobile`（Host port 收到的消息）发出。 */
   emitAck(seq: number): void;
   dispose(): void;
 }
@@ -149,12 +138,6 @@ export interface OpenHostBridgeParams {
 
 export interface OpenHostBridgeResult {
   bridge: WebRemoteControlRpcBridge;
-  services: {
-    zcodeTaskService: IZCodeTaskService;
-    zcodeSessionService: IZCodeSessionService;
-    zcodeAgentService: IZCodeAgentService;
-    modelSelectionService: IModelSelectionService;
-  };
   dispose(): void;
 }
 
@@ -165,7 +148,6 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
   // 出站重传缓冲 + ack 批量调度：单序号空间 `(ackedSeq, lastSentSeq]`，与接收侧装配器各自一侧。
   const replayBuffer = new WebRemoteControlRpcReplayBuffer();
   let disposed = false;
-  const messageListeners = new Set<(event: { data: MessagePortPayload }) => void>();
 
   function sendAck(ackSeq: number): void {
     if (disposed) return;
@@ -180,16 +162,12 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
 
   const ackScheduler = new WebRemoteControlRpcAckScheduler({ onFlush: sendAck });
 
-  /** 按序发出重传帧；对端未挂载就停下（后续重连再靠同一缓冲重放）。 */
-  function emitReplayFrames(frames: readonly WebRemoteControlRpcMessageFrame[]): void {
+  /** 按序发出重传帧；对端未挂载就停下（后续重连再靠同一缓冲重放），返回是否全部发出。 */
+  function emitReplayFrames(frames: readonly WebRemoteControlRpcMessageFrame[]): boolean {
     for (const frame of frames) {
-      if (params.emitFrame({ zcode_type: "rpc-frame", frame })) continue;
-      params.logger.warn("[web-remote-control] rpc replay frame dropped: mobile not attached", {
-        attachmentId: streamId,
-        seq: frame.seq,
-      });
-      return;
+      if (!params.emitFrame({ zcode_type: "rpc-frame", frame })) return false;
     }
+    return true;
   }
 
   /** 接收侧装配事件统一入口：装配成功交上层并排 ack；fault 上报降级。 */
@@ -197,11 +175,9 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
     for (const event of events) {
       switch (event.kind) {
         case "message": {
-          const decoded = decodePortMessage(event.message);
-          const payload = { data: decoded as MessagePortPayload };
-          for (const listener of messageListeners) {
-            listener(payload);
-          }
+          // 透明转发：装配出来的手机消息直接写进 Host port（Host 的 ChannelServer 在另一端），
+          // main 不解析、不代理 service。
+          pipe.acceptMobileMessage(decodePortMessage(event.message) as MessagePortPayload);
           // 不逐条立即 ack：交给批量调度，deadline 保证最后一个一定发出。
           ackScheduler.record(event.seq);
           break;
@@ -232,84 +208,70 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
     }
   }
 
-  const portLike: MessagePortLike = {
-    addEventListener(type, listener) {
-      if (type !== "message") return;
-      messageListeners.add(listener as (event: { data: MessagePortPayload }) => void);
-    },
-    removeEventListener(type, listener) {
-      if (type !== "message") return;
-      messageListeners.delete(listener as (event: { data: MessagePortPayload }) => void);
-    },
-    postMessage(data) {
-      if (disposed) return;
-      const seq = outboundSeq + 1;
-      let frames: WebRemoteControlRpcMessageFrame[];
-      try {
-        // 分片与超限判定都在共享编码器里（限额单一来源 PROTOCOL_V4_LIMITS）。
-        frames = encodeWebRemoteControlRpcFrames(encodePortMessage(data), {
-          streamId,
-          seq,
-        });
-      } catch (error) {
-        const reasonCode =
-          error instanceof WebRemoteControlRpcEncodingError
-            ? error.reasonCode
-            : "rpc-transport-fault";
-        params.logger.warn("[web-remote-control] rpc message rejected", {
-          attachmentId: streamId,
-          seq,
-          reasonCode,
-        });
-        params.onDegraded(reasonCode);
-        return;
-      }
-      // 入队失败就不发出半条：seq 不推进，对端期望值也不会跳过。
-      const recorded = replayBuffer.record(seq, frames);
-      if (!recorded.accepted) {
-        params.logger.warn("[web-remote-control] rpc replay buffer overflow", {
-          attachmentId: streamId,
-          seq,
-          reasonCode: recorded.reasonCode,
-        });
-        params.onDegraded(recorded.reasonCode);
-        return;
-      }
-      outboundSeq = seq;
-      emitReplayFrames(frames);
-    },
-    start() {
-      params.attachment.port.start();
-    },
-    close() {
-      // port 生命周期由 attachment 持有；桥接销毁只停转发。
-    },
-  };
+  /**
+   * Host → 手机方向的唯一出口：编码分片 → 重传入队 → 发射。
+   * 返回是否确实交给了传输层；pipe 用它决定要不要 warn「手机未挂载」。
+   */
+  function sendToMobile(data: MessagePortPayload): boolean {
+    if (disposed) return false;
+    const seq = outboundSeq + 1;
+    let frames: WebRemoteControlRpcMessageFrame[];
+    try {
+      // 分片与超限判定都在共享编码器里（限额单一来源 PROTOCOL_V4_LIMITS）。
+      frames = encodeWebRemoteControlRpcFrames(encodePortMessage(data), {
+        streamId,
+        seq,
+      });
+    } catch (error) {
+      const reasonCode =
+        error instanceof WebRemoteControlRpcEncodingError
+          ? error.reasonCode
+          : "rpc-transport-fault";
+      params.logger.warn("[web-remote-control] rpc message rejected", {
+        attachmentId: streamId,
+        seq,
+        reasonCode,
+      });
+      params.onDegraded(reasonCode);
+      return false;
+    }
+    // 入队失败就不发出半条：seq 不推进，对端期望值也不会跳过。
+    const recorded = replayBuffer.record(seq, frames);
+    if (!recorded.accepted) {
+      params.logger.warn("[web-remote-control] rpc replay buffer overflow", {
+        attachmentId: streamId,
+        seq,
+        reasonCode: recorded.reasonCode,
+      });
+      params.onDegraded(recorded.reasonCode);
+      return false;
+    }
+    outboundSeq = seq;
+    return emitReplayFrames(frames);
+  }
 
-  const protocol = new MessagePortProtocol(portLike);
-  const client = new ChannelClient(protocol);
-  const services = {
-    zcodeTaskService: ProxyChannel.toService<IZCodeTaskService>(
-      client.getChannel(IZCodeTaskService.channelName),
-    ),
-    zcodeSessionService: ProxyChannel.toService<IZCodeSessionService>(
-      client.getChannel(IZCodeSessionService.channelName),
-    ),
-    zcodeAgentService: ProxyChannel.toService<IZCodeAgentService>(
-      client.getChannel(IZCodeAgentService.channelName),
-    ),
-    modelSelectionService: ProxyChannel.toService<IModelSelectionService>(
-      client.getChannel(IModelSelectionService.channelName),
-    ),
-  };
+  // main 只做透明转发：把 Host port 适配成 MessagePortLike，收到的每条 Host 消息走
+  // sendToMobile；手机装配出来的消息由 pipe.acceptMobileMessage 写回 Host port。
+  // 不在 main 建 ChannelClient/ChannelServer：服务端唯一在 Host 进程，流控端到端。
+  const hostPort = wrapElectronPort(params.attachment.port);
+  const pipe = createWebRemoteControlServicePipe({
+    hostPort,
+    sendToMobile,
+    attachmentId: streamId,
+    logger: params.logger,
+  });
+  hostPort.start();
 
   const bridge: WebRemoteControlRpcBridge = {
     acceptFrame(frame) {
       if (disposed) return;
-      // ack 帧不进装配器：推进重传窗口，并从 ackSeq+1 重发仍未确认的帧（幂等）。
+      // ack 帧不进装配器：前向 ack 的语义是「对端已连续装配到的 seq」，只推进窗口、释放
+      // 已确认前缀；正常流水下 ack 必然滞后于 lastSentSeq（批量合并 + 在途帧），若在此按
+      // (ackSeq, lastSentSeq] 重发，每个正常 ack 都会触发一次无意义重传。丢片重传由对端
+      // nudge（gap / buffer-timeout）驱动，见 handleAssemblyEvents。
       const ack = parseWebRemoteControlRpcAckFrame(frame);
       if (ack) {
-        emitReplayFrames(replayBuffer.acknowledge(ack.ackSeq));
+        replayBuffer.acknowledge(ack.ackSeq);
         return;
       }
       // 装配状态的唯一所有者在这里：单槽、只装期望的 seq，装配成功才 ack（批量调度）。
@@ -323,8 +285,7 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
       clearInterval(sweepTimer);
       ackScheduler.dispose();
       replayBuffer.clear();
-      messageListeners.clear();
-      protocol.disconnect();
+      pipe.dispose();
     },
   };
 
@@ -336,10 +297,35 @@ export function openWebRemoteControlHostBridge(params: OpenHostBridgeParams): Op
 
   return {
     bridge,
-    services,
     dispose() {
       bridge.dispose();
       params.attachment.dispose();
+    },
+  };
+}
+
+/**
+ * Electron MessagePortMain → RPC 层 MessagePortLike 的适配（与 host/electronPort.ts 同构）。
+ *
+ * 这里内联一份而不是 import host 目录：`tsconfig.main.json` 的 rootDir 是 `src/main`，
+ * 跨 rootDir 引用会把 host 源文件拉进 main 工程并触发 TS6059。
+ */
+function wrapElectronPort(port: MessagePortMain): MessagePortLike {
+  return {
+    addEventListener(_type, listener) {
+      port.on("message", listener);
+    },
+    removeEventListener(_type, listener) {
+      port.off("message", listener);
+    },
+    postMessage(data) {
+      port.postMessage(data);
+    },
+    start() {
+      port.start();
+    },
+    close() {
+      port.close();
     },
   };
 }
