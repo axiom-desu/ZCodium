@@ -503,6 +503,44 @@ xargs -d '\n' -n 150 git diff -U0 872ad960 aac47556 -- < /tmp/both.txt > /tmp/bo
 | `skills-lock.json`、`lint-staged.config.mjs`、`Dockerfile.desktop-e2e`、`.env.e2e.local.example`、`patches/vitest@4.1.7.patch`、`patches/wdio-electron-service@9.2.1.patch`、`dependency-graph.mmd` | 上游新增的 vitest/wdio 基建与生成物；`skills-lock.json` 连上游自己都没有任何引用                                                                                                                                                                             |
 | `.agents/skills/{react-best-practices,ai-elements}` 的内容刷新                                                                                                                                      | 预演（`git checkout aac47556 -- <dir>` + `oxfmt`）后发现真实内容差异只有 10 个文件，且多为**把相对链接改成上游文档站的绝对路径**（`/components/conversation`、`./async-defer-await.md`，而文件在 `rules/` 下，在我们布局里是坏链）。已还原，不跟             |
 
+#### 第三轮续：定点移植与手机远控修复
+
+从修正后的队列里挑出**能证明我们同样中招**的项，逐条落地（其余为功能面差异，见下）：
+
+| 项                                                    | 结论与证据                                                                                                                                                                                                                                                      | 提交       |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| MCP Apps 页面资源 MIME 白名单                         | 我们只有 7 项、没有 PDF（上游注释里的原 bug）→ 补到 54 项并照上游拆出 `resourceMime.ts`（我们的契约文件有 300 行上限）                                                                                                                                          | `2fd3a749` |
+| adapters 出站响应崩溃                                 | 两处 `new Response(stream, { status })` 会让 999/204 在回调里抛错并带走 agent 进程 → 收口到 `incoming-response.ts`，只让该请求 reject                                                                                                                           | `a8115900` |
+| UI 远控弹层「同一目标」判定                           | 桌面 manager 的 runtimes 按 windowId 索引，切 workspace 不清旧快照；旧逻辑「非 idle/error 就复用」会挡住当前 workspace 的 start。改为 identity 优先 workspaceKey + remoteSessionId（`webRemoteControlTarget.ts`，10 例测试）                                    | `564f526e` |
+| 手机端 RPC bridge 从未握手                            | 桌面 `payloadRouter` 对 `rpc-frame` 只做 `runtime.bridge?.acceptFrame(...)`，bridge 只在收到 `workspace-bridge-open` 时建立；手机端从不发它 → 服务调用恒挂起。补 `ensureWorkspaceBridge()` 并记忆化 service accessor（原来每 4s 重建会覆盖单槽 `onRpcMessage`） | `d73c8f98` |
+| 手机端断线不重连 / 远端 attachment scope / 清单不推送 | ① 指数退避重连 + `online`/`visibilitychange` 触发（只在确实断开时动手，避免首屏 pageshow 误踢）② 远端 workspace 用 remote scope 绑 attachment（缺 identity 直接抛错）③ `syncWorkspaces`/`syncTasks` 变化即推 `workspace-list-updated`                           | `d2d5e767` |
+
+**已核对不成立、不再行动**（各有证据）：
+
+- 上游 `packages/web/src/main.tsx` 的远控 bridge task-read guard：我们的 `main.tsx` 是普通 Web 入口（347 行），无 bridge/远控路径，全仓无 `markCurrentWebRemoteControlBridgeTaskRead`、`resolveWebRemoteControlWorkspaceKey`；桌面侧 manager/payloadRouter/bridgeController 已是 identity 优先。
+- 上游手机端 `webRemoteControlLifecycle`（pageshow 误 recover）与 `webRemoteControlWorkspaceBridgeSession`（bridge 写 remote session store、stale dispose 守卫）：我们的手机端原无 recover 入口、不发 `workspace-bridge-open`、不 import `@/remote-workspace-session-store`，字面语义无落点（bridge 握手已按我们自己的实现补齐）。
+- 上游技能包（`react-best-practices` / `ai-elements`）内容刷新：真实差异只有 10 个文件，且多是把相对链接改成上游文档站的绝对路径（`/components/…`、`./async-defer-await.md`，而文件在 `rules/` 下），在我们布局里是坏链 → 预演后已还原。
+
+**口径修正（重要）**：第二轮统计的「614 条修复注释」被高估了——上游做了一轮把既有注释批量加上 `Bugfix:` 前缀的改动。按「非注释的实质代码行」重算：
+
+```bash
+# 两边都改过（1,415 个），只看我们也在维护的 src 路径，统计上游新增的非注释代码行
+# 与「是否已出现在我们同名文件」的比例
+```
+
+得到 **215 个文件、12,185 行**上游新增实质代码：这是**功能面差异**（如 `web/main.tsx` 1,403 行、
+`SessionPane.tsx` 810、`WebRemoteControlDialog.tsx` 546、`zcodeTaskServiceAdapter.ts` 397），
+不是「一条条修复」。其中已核对并落地的是上表 5 项；其余按 `AGENTS.md` 的「改革线 vs 白拿线」
+判断，整文件跟等于把 fork 变成上游镜像，需要逐能力决策而不是搬运。
+
+**手机远控仍未做（本轮明确记录）**：
+
+| 项                            | 说明                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| 手机端任务视图的实时流        | 目前是 4s 轮询 `readSessionMessages`（spec 的 P3 分期）；分片装配层已就绪，接 replayable 流是下一步 |
+| `remoteSessionId` 贯穿        | 弹层的 `remoteSessionId` 调用方目前都没传（快照恒 undefined），比较暂为 no-op                       |
+| 远端 workspace 的手机链路验收 | remote scope 已绑对，但没有 E2E 门禁覆盖（手机链路只能真机手验）                                    |
+
 #### 仍然是队列的（按价值排序，均在「我们也改过」的文件里）
 
 | 文件                                                                      | 上游修复注释        | 建议                                                                                                                                |
