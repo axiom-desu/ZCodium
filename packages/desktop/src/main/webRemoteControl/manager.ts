@@ -83,6 +83,11 @@ export interface WebRemoteControlManagerDeps {
   /** 请 renderer 重连指定 workspace 的远端会话（workspace-reconnect-request）。 */
   reconnectWorkspace(windowId: number, workspaceKey: string): Promise<void>;
   resolveHostProcess(webContentsId: number): ElectronUtilityProcessLike | undefined;
+  /**
+   * 远端 workspace 连接态的权威解析：由桌面 remote session 路由表裁定。
+   * UI 同步载荷里的 `kind` / `connectionState` 不是事实来源；未注入时保持原值不覆盖。
+   */
+  resolveRemoteWorkspaceConnectionState?: (remoteSessionId: string) => "connected" | "disconnected";
 }
 
 export type WebRemoteControlOpenBridgeResult =
@@ -398,7 +403,17 @@ export function createWebRemoteControlManager(
     syncWorkspaces(windowId, workspaces) {
       const runtime = runtimes.get(windowId);
       if (!runtime) return;
-      runtime.workspaces = workspaces;
+      runtime.workspaces = workspaces.map((workspace) => {
+        // 带 remoteSessionId 的条目连接态归桌面裁定；UI 传来的值不作为事实。
+        // deps 未注入时不覆盖，也不写假值（保持原始条目）。
+        if (!workspace.remoteSessionId || !deps.resolveRemoteWorkspaceConnectionState) {
+          return workspace;
+        }
+        return {
+          ...workspace,
+          connectionState: deps.resolveRemoteWorkspaceConnectionState(workspace.remoteSessionId),
+        };
+      });
       pushWorkspaceListIfChanged(runtime, deps.logger);
     },
     syncTasks(windowId, tasks) {

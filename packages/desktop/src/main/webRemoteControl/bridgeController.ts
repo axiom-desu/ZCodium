@@ -48,8 +48,28 @@ export function openWorkspaceBridge(
       "目标工作区不在当前桌面窗口中，无法创建 Web 远程控制 bridge。",
     );
   }
-  if (target.kind === "remote" && target.connectionState !== "connected") {
-    return fail("invalidMobileConnection", "目标远程工作区尚未连接，请先在桌面端重连。");
+  if (target.kind === "remote") {
+    // 权威态优先取同步时已覆盖的值；缺失时走修因路径重新解析桌面 remote session 路由表，
+    // 既不放行也不默认断开。仍拿不到才 fail-closed，避免用超时/默认值掩盖同步问题。
+    const authoritativeConnectionState =
+      target.connectionState ??
+      (target.remoteSessionId
+        ? deps.resolveRemoteWorkspaceConnectionState?.(target.remoteSessionId)
+        : undefined);
+    if (authoritativeConnectionState === undefined) {
+      deps.logger.warn("[web-remote-control] 无法确认远端连接态，拒绝创建 bridge", {
+        windowId: runtime.windowId,
+        workspaceKey: request.workspaceKey,
+        remoteSessionId: target.remoteSessionId,
+      });
+      return fail(
+        "invalidMobileConnection",
+        "无法确认远程工作区连接态，请稍后重试或先在桌面端重连。",
+      );
+    }
+    if (authoritativeConnectionState !== "connected") {
+      return fail("invalidMobileConnection", "目标远程工作区尚未连接，请先在桌面端重连。");
+    }
   }
   const webContentsId = BrowserWindow.fromId(runtime.windowId)?.webContents.id;
   if (webContentsId === undefined) {

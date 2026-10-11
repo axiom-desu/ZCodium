@@ -53,6 +53,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   settingsButtonMode = "settings",
   workspacePath,
   workspaceIdentity,
+  remoteSessionId,
   isDesktop = false,
   className,
 }: {
@@ -66,6 +67,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   settingsButtonMode?: "settings" | "back";
   workspacePath?: string;
   workspaceIdentity?: string;
+  remoteSessionId?: string;
   isDesktop?: boolean;
   className?: string;
 }) {
@@ -251,6 +253,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
             <WorkspaceWebRemoteControlTrigger
               workspacePath={workspacePath}
               workspaceIdentity={workspaceIdentity}
+              remoteSessionId={remoteSessionId}
               compact
             />
           ) : null}

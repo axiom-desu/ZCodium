@@ -820,6 +820,24 @@ export function createRemoteWorkspaceSessionManager(options: {
     return { process, port: port1, remoteKind: descriptor.target.kind };
   }
 
+  /**
+   * 远端 workspace 连接态的唯一事实来源：remote session 路由表。
+   * `attachmentState === "attachable"` 表示该 remoteSessionId 已挂到窗口 Host 且可 attach；
+   * 传入 webContentsId 时还会校验路由属于该窗口。UI 同步载荷里的连接态不被采信。
+   */
+  function hasAttachableRemoteSession(params: {
+    webContentsId?: number;
+    remoteSessionId: string;
+  }): boolean {
+    const route = routesBySessionId.get(params.remoteSessionId);
+    if (!route) return false;
+    if (route.attachmentState !== "attachable") return false;
+    if (params.webContentsId !== undefined && route.webContentsId !== params.webContentsId) {
+      return false;
+    }
+    return true;
+  }
+
   function hasRemoteWorkspaceSessionForTarget(
     win: BrowserWindow,
     target: RemoteTarget,
@@ -904,6 +922,7 @@ export function createRemoteWorkspaceSessionManager(options: {
     confirmRendererAttachmentReady,
     reattachRemoteWorkspaceSessionsForWindow,
     hasRemoteWorkspaceSessionForTarget,
+    hasAttachableRemoteSession,
     createBotRemoteWorkspaceRuntimePort,
     disposeRemoteWorkspaceSession,
     disposeRemoteWorkspaceSessionsForWindow,

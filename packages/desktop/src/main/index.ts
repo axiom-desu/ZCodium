@@ -1875,6 +1875,10 @@ app.whenReady().then(async () => {
     settingService: mainSettingService,
     credentialService: createCredentialService(),
     resolveHostProcess: (webContentsId) => windowHostProcessMap.get(webContentsId),
+    resolveRemoteWorkspaceConnectionState: (remoteSessionId: string) =>
+      remoteSessionManager.hasAttachableRemoteSession({ remoteSessionId })
+        ? "connected"
+        : "disconnected",
   }).catch((error) => {
     logger.error("[web-remote-control] failed to initialize:", error);
     return null;

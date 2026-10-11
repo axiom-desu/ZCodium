@@ -30,6 +30,12 @@ export interface CreateWebRemoteControlOptions {
   settingService: ISettingService;
   credentialService: ICredentialService;
   resolveHostProcess(webContentsId: number): ElectronUtilityProcessLike | undefined;
+  /**
+   * 远端 workspace 连接态的权威解析（桌面 remote session 路由表）。
+   * 由拥有 `RemoteWorkspaceSessionManager` 实例的 main 组装处注入；
+   * 未注入时 manager 不覆盖 UI 载荷里的 connectionState，bridge 侧会 fail-closed。
+   */
+  resolveRemoteWorkspaceConnectionState?: (remoteSessionId: string) => "connected" | "disconnected";
 }
 
 interface ElectronUtilityProcessLike {
@@ -114,6 +120,7 @@ export async function createWebRemoteControl(
     reconnectWorkspace: (windowId, workspaceKey) =>
       ipcHandle.requestRendererReconnect(windowId, workspaceKey),
     resolveHostProcess: options.resolveHostProcess,
+    resolveRemoteWorkspaceConnectionState: options.resolveRemoteWorkspaceConnectionState,
   });
   managerHolder.manager = manager;
 

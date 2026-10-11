@@ -31,11 +31,13 @@ function triggerStatusLabelId(
 export function WorkspaceWebRemoteControlTrigger({
   workspacePath,
   workspaceIdentity,
+  remoteSessionId,
   compact = false,
   className,
 }: {
   workspacePath: string;
   workspaceIdentity?: string;
+  remoteSessionId?: string;
   compact?: boolean;
   className?: string;
 }) {
@@ -105,6 +107,7 @@ export function WorkspaceWebRemoteControlTrigger({
         onOpenChange={setWebRemoteControlOpen}
         workspacePath={workspacePath}
         workspaceIdentity={workspaceIdentity}
+        remoteSessionId={remoteSessionId}
       />
     </>
   );

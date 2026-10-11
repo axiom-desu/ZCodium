@@ -186,11 +186,34 @@ server→client  error                {code, message}              # KICKED|AUTH
 - 装配器职责：应用消息 ↔ 物理帧的分片与重组（`maxMessageBytes` / `maxFragments` /
   `maxPhysicalFrameBytes`）、`seq` 单调有序、`ack` 确认与超窗回放、帧指纹去重、
   流控（`saturated` / `drained` 背压）、`measureFrameBytes` 度量。
+- **ack 只释放不重传**：`ack` 的语义是「已连续装配到的逻辑 seq（含）」。发送侧收到 ack
+  只做 `replayBuffer.acknowledge(ackSeq)` —— 推进已确认前缀并释放缓冲；**不**在 ack 分支
+  重发 `(ackSeq, lastSentSeq]`。正常流水下 ack 本来就滞后于 `lastSentSeq`（ack 批量合并 +
+  在途帧），按 ack 重发会把每个前向 ack 都变成一次无意义重传（流量随在途规模放大）。
+  丢片重传由接收侧 nudge 驱动：本地装配器报 `rpc-frame-gap` / `buffer-timeout` 时，把最后
+  连续装配到的 `acknowledgedSeq` 再 ack 一次（nudge，复用 ack 帧、不新增 wire 类型），对端
+  据此从 `ackSeq+1` 重传；同时本方向也 `replayUnacknowledged()` 做同向 go-back-N。重发幂等
+  （同 seq 同片由接收侧装配器判 `duplicate` / `stale`，不重复交付）。
 - `readyAnnounced` 之前或 `degraded` 之后不出帧；降级路径发 `bridge-degraded` 并保留
   window 运行时失败状态（不因二次失败覆盖首次 failure）。
 - 断链：装配器标记 degraded → 桌面经端点重连 → `recoveryId` 续配 → 未确认帧回放。
 - 语义归属：`web-remote-replayable`（快照 + 回放），与桌面 `desktop-continuous`
   （实时流）严格分离；`workbenchGroupStore` 等消费方已有 `configureClientMode` 门控。
+
+## 远控弹层「同一目标」判定
+
+打开弹层时，只有当前状态快照属于「当前目标」才复用已有会话，否则为当前目标重新 `start`。
+
+- 目标身份 key 统一为 `workspaceIdentity?.trim() || workspacePath`（`getWorkspaceKey`）。
+- 远端 workspace 在身份 key 一致的前提下还必须比较 `remoteSessionId`：同路径但
+  `remoteSessionId` 不同（远端重连换了连接实例）视为不同目标，不复用；同 identity + 同
+  `remoteSessionId` 才复用。`workspaceIdentity` 缺失时不得只按路径匹配远端目标。
+- `remoteSessionId` 贯穿路径：`WorkspaceShellLayout.workspaceRemoteSessionId` →
+  `WorkspaceSidebar` → `WorkspaceSidebarFooter` → `WorkspaceWebRemoteControlTrigger` →
+  `WebRemoteControlDialog` → `useWebRemoteControl` → `isSameWebRemoteControlTarget` 与
+  `startWebRemoteControl` / `refreshWebRemoteControlPairing`；桌面 `WebRemoteControlRuntime`
+  保存它并随状态快照回传，远端 workspace 的 Host attachment scope 也据它绑定。
+- 身份 key 只用于去重、绑定与缓存；`workspacePath` 仍用于文件操作、命令 cwd、Git 与展示。
 
 ## 桌面运行时（`WebRemoteControlManager`，按窗口）
 
@@ -210,6 +233,19 @@ paired / kicked / error`；`paired` 时若有移动端在途则保持 `active` �
   credential `web-remote-control:external-relay:pass_hash`、
   `webRemoteControlLastEnabledContext`。日志脱敏对齐官方 `safeAuthLogFields`
   （只记 deviceSid 末 6 位、布尔位，不记 secret/hash/proof）。
+
+### 远端 workspace 连接态（安全与生命周期）
+
+- 远端 workspace 的连接态由桌面 main 的 remote session 路由表裁定；UI 同步载荷里的
+  `kind` / `connectionState` 不是事实来源。`WebRemoteControlManager.syncWorkspaces` 对带
+  `remoteSessionId` 的条目，用 `resolveRemoteWorkspaceConnectionState`（由
+  `RemoteWorkspaceSessionManager.hasAttachableRemoteSession` 派生的权威解析：路由存在且
+  `attachmentState === "attachable"`）覆盖 `connectionState`；没有 `remoteSessionId` 的本地
+  条目不动；解析未注入时不覆盖也不写假值。
+- `workspace-bridge-open` 对 `kind === "remote"` 的判定以权威态为准：`connectionState`
+  缺失时通过同一回调重新解析一次修因；仍拿不到则返回 `invalidMobileConnection` 并记 warn
+  （不静默放行、不用超时或默认值掩盖）。明确为 `disconnected` 时同样返回
+  `invalidMobileConnection`。
 
 ## 桌面 UI（扩展现有弹层）
 
@@ -306,6 +342,15 @@ IPC 面（preload ↔ main，`packages/shared/src/channels.ts` 新增）：
     （groups 门控、snapshot/queue/重连语义）。
 11. 日志审计：grep 不到 secret / passHash / proof / 完整 deviceSid；无任何上报请求。
 12. `pnpm typecheck` / `pnpm lint` / 架构检查保持基线。
+13. ack 只释放不重传：正常流水下发送侧收到滞后 ack 不重发未确认尾部；接收侧 gap/timeout 时
+    以 `acknowledgedSeq` nudge，发送侧据此从 `ackSeq+1` 重传，接收侧幂等不重复交付。
+14. 目标判定带 `remoteSessionId`：同路径不同 `remoteSessionId` 不复用（触发重新 start）；
+    同 identity + 同 `remoteSessionId` 复用；`remoteSessionId` 随远端 workspace 进入
+    Host attachment scope。
+15. 远端 workspace 连接态以桌面 remote session 路由表为准：已 attach（路由
+    `attachmentState === "attachable"`）→ 即使 UI 载荷未带正确 `connectionState`，bridge
+    仍可开；未 attach / 拿不到权威态 → 明确返回 `invalidMobileConnection`（不挂起）；
+    本地 workspace 行为不变。
 
 ## 分期
 

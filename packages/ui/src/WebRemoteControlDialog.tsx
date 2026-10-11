@@ -69,11 +69,13 @@ export const WebRemoteControlDialog = memo(function WebRemoteControlDialogCompon
   onOpenChange,
   workspacePath,
   workspaceIdentity,
+  remoteSessionId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspacePath: string;
   workspaceIdentity?: string;
+  remoteSessionId?: string;
 }) {
   const { intl } = useZCodeIntl();
   const [botsDialogOpen, setBotsDialogOpen] = useState(false);
@@ -84,6 +86,7 @@ export const WebRemoteControlDialog = memo(function WebRemoteControlDialogCompon
     open,
     workspacePath,
     workspaceIdentity,
+    remoteSessionId,
     loadSyncPayload: async () => {
       const workspaceKey = workspaceIdentity?.trim() || workspacePath;
       let tasks: WebRemoteControlTaskSync["tasks"] = [];
@@ -110,7 +113,9 @@ export const WebRemoteControlDialog = memo(function WebRemoteControlDialogCompon
             workspaceKey,
             workspacePath,
             ...(workspaceIdentity ? { workspaceIdentity } : {}),
-            kind: "local" as const,
+            ...(remoteSessionId ? { remoteSessionId } : {}),
+            // 远端 workspace 必须带 remoteSessionId，桌面 bridge 才能绑到对应 remote session host。
+            kind: remoteSessionId ? ("remote" as const) : ("local" as const),
           },
         ],
         tasks,

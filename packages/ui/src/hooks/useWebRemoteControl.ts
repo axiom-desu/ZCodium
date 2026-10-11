@@ -215,6 +215,7 @@ export function useWebRemoteControl(params: {
       const refreshed = await platform.refreshWebRemoteControlPairing({
         workspacePath: params.workspacePath,
         workspaceIdentity: params.workspaceIdentity,
+        remoteSessionId: params.remoteSessionId,
       });
       setSnapshot(refreshed.status === "cancelled" ? { status: "idle" } : refreshed);
       toast(intl.formatMessage({ id: "webRemoteControl.refreshQr.success" }));
@@ -224,7 +225,7 @@ export function useWebRemoteControl(params: {
     } finally {
       setBusy(false);
     }
-  }, [platform, params.workspacePath, params.workspaceIdentity, intl]);
+  }, [platform, params.workspacePath, params.workspaceIdentity, params.remoteSessionId, intl]);
 
   const copyLink = useCallback(async () => {
     if (!qrUrl) return;

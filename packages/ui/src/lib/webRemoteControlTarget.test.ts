@@ -63,6 +63,23 @@ describe("isSameWebRemoteControlTarget", () => {
     expect(isSameWebRemoteControlTarget(status, "/a", undefined, "r2")).toBe(false);
   });
 
+  it("同路径不同 remoteSessionId 不复用，同 identity + 同 remoteSessionId 复用", () => {
+    const identity = "remote:ssh:host1:22:user:/a";
+    const status = snapshot({
+      status: "active",
+      workspacePath: "/a",
+      workspaceIdentity: identity,
+      remoteSessionId: "r1",
+      sessionId: "s",
+    });
+    // 同路径 + 同 identity，但远端重连换了连接实例：不复用（当前目标需重新 start）。
+    expect(isSameWebRemoteControlTarget(status, "/a", identity, "r2")).toBe(false);
+    // 同路径 + 同 identity + 同 remoteSessionId：复用。
+    expect(isSameWebRemoteControlTarget(status, "/a", identity, "r1")).toBe(true);
+    // 期望没带 remoteSessionId 时，快照带也不复用，避免把远端会话当成本地目标。
+    expect(isSameWebRemoteControlTarget(status, "/a", identity)).toBe(false);
+  });
+
   it("没有任何会话 id 时不算同一目标", () => {
     expect(isSameWebRemoteControlTarget(snapshot({ workspacePath: "/a" }), "/a")).toBe(false);
   });
