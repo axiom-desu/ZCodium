@@ -416,7 +416,7 @@
                     },
                     "kind": {
                       "type": "string",
-                      "enum": ["ask", "world-read"]
+                      "enum": ["ask", "world-read", "hole"]
                     },
                     "label": {
                       "type": "string",
@@ -469,6 +469,11 @@
                       "maxLength": 64
                     },
                     "phase": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "fill": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 64
@@ -656,6 +661,11 @@
                         "minLength": 1,
                         "maxLength": 64
                       }
+                    },
+                    "fill": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
                     }
                   },
                   "required": ["id"],
@@ -687,6 +697,61 @@
                   "additionalProperties": false
                 }
               },
+              "phaseStreams": {
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "to": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    }
+                  },
+                  "required": ["from", "to"],
+                  "additionalProperties": false
+                }
+              },
+              "holes": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "siteId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "type": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "phase": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "tail": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["siteId", "name", "type"],
+                  "additionalProperties": false
+                }
+              },
               "exits": {
                 "maxItems": 32,
                 "type": "array",
@@ -714,6 +779,38 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "fill": {
+            "type": "object",
+            "properties": {
+              "siteId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "draftPath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "line": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "commitSequence": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["siteId", "name"],
+            "additionalProperties": false
           }
         },
         "required": ["kind", "ok", "errorCount", "diagnostics"],
@@ -914,6 +1011,60 @@
           }
         },
         "required": ["kind", "qid", "actor", "question"]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "hole"
+          },
+          "siteId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "draftPath": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "line": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "before": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "after": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "reachedAt": {
+            "type": "number"
+          }
+        },
+        "required": ["kind", "siteId", "ordinal", "name", "type"]
       },
       {
         "type": "object",
@@ -1522,7 +1673,7 @@
                         },
                         "kind": {
                           "type": "string",
-                          "enum": ["ask", "world-read"]
+                          "enum": ["ask", "world-read", "hole"]
                         },
                         "label": {
                           "type": "string",
@@ -1573,6 +1724,11 @@
                           "maxLength": 64
                         },
                         "phase": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "fill": {
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 64
@@ -1754,6 +1910,11 @@
                           },
                           "minItems": 1,
                           "maxItems": 32
+                        },
+                        "fill": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
                         }
                       },
                       "required": ["id"],
@@ -1786,6 +1947,61 @@
                     },
                     "maxItems": 128
                   },
+                  "phaseStreams": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "to": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        }
+                      },
+                      "required": ["from", "to"],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 128
+                  },
+                  "holes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "siteId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "type": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "phase": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "tail": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["siteId", "name", "type"],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 32
+                  },
                   "exits": {
                     "type": "array",
                     "items": {
@@ -1809,6 +2025,36 @@
                   }
                 },
                 "required": ["steps", "lanes", "participants", "handoffs"],
+                "additionalProperties": false
+              },
+              "fill": {
+                "type": "object",
+                "properties": {
+                  "siteId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "commitSequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "draftPath": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "line": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": ["siteId", "name"],
                 "additionalProperties": false
               },
               "truncated": {
