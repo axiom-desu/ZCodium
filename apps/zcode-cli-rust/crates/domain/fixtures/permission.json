@@ -9413,6 +9413,300 @@
     },
     {
       "context": {
+        "toolName": "FillWorkflowHole",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "build",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": true,
+        "permission": {
+          "permission": "createWorkflow",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": true,
+          "alwaysAsk": true,
+          "askOptions": {
+            "allowAlways": false
+          }
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "ask",
+        "ruleId": "tool.alwaysAsk",
+        "reason": "Tool FillWorkflowHole always requires explicit approval",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "alwaysAsk": true
+      }
+    },
+    {
+      "context": {
+        "toolName": "FillWorkflowHole",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "edit",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": true,
+        "permission": {
+          "permission": "createWorkflow",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": true,
+          "alwaysAsk": true,
+          "askOptions": {
+            "allowAlways": false
+          }
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "ask",
+        "ruleId": "tool.alwaysAsk",
+        "reason": "Tool FillWorkflowHole always requires explicit approval",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "alwaysAsk": true
+      }
+    },
+    {
+      "context": {
+        "toolName": "FillWorkflowHole",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "yolo",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": true,
+        "permission": {
+          "permission": "createWorkflow",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": true,
+          "alwaysAsk": true,
+          "askOptions": {
+            "allowAlways": false
+          }
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "ask",
+        "ruleId": "tool.alwaysAsk",
+        "reason": "Tool FillWorkflowHole always requires explicit approval",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "alwaysAsk": true
+      }
+    },
+    {
+      "context": {
+        "toolName": "FillWorkflowHole",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "auto",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": true,
+        "permission": {
+          "permission": "createWorkflow",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": true,
+          "alwaysAsk": true,
+          "askOptions": {
+            "allowAlways": false
+          }
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "deny",
+        "ruleId": "mode.auto.unimplemented",
+        "reason": "Auto mode is reserved but not implemented yet",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "alwaysAsk": true
+      }
+    },
+    {
+      "context": {
+        "toolName": "FillWorkflowHole",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "build",
+        "planEnabled": true
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": true,
+        "permission": {
+          "permission": "createWorkflow",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": true,
+          "alwaysAsk": true,
+          "askOptions": {
+            "allowAlways": false
+          }
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "ask",
+        "ruleId": "tool.alwaysAsk",
+        "reason": "Tool FillWorkflowHole always requires explicit approval",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "alwaysAsk": true
+      }
+    },
+    {
+      "context": {
+        "toolName": "FillWorkflowHole",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "yolo",
+        "planEnabled": true
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": true,
+        "permission": {
+          "permission": "createWorkflow",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": true,
+          "alwaysAsk": true,
+          "askOptions": {
+            "allowAlways": false
+          }
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "ask",
+        "ruleId": "tool.alwaysAsk",
+        "reason": "Tool FillWorkflowHole always requires explicit approval",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "alwaysAsk": true
+      }
+    },
+    {
+      "context": {
+        "toolName": "FillWorkflowHole",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "edit",
+        "planEnabled": true
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": true,
+        "permission": {
+          "permission": "createWorkflow",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": true,
+          "alwaysAsk": true,
+          "askOptions": {
+            "allowAlways": false
+          }
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "ask",
+        "ruleId": "tool.alwaysAsk",
+        "reason": "Tool FillWorkflowHole always requires explicit approval",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "alwaysAsk": true
+      }
+    },
+    {
+      "context": {
         "toolName": "SaveWorkflow",
         "input": {},
         "riskLevel": "medium",
