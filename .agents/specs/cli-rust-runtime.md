@@ -1,6 +1,6 @@
 # zcode-cli-rust：CLI runtime 的 Rust 重写
 
-> **状态：机械迁移改动仍在当前工作树、尚未提交；受控 case 已验收，M2–M8 / exhaustive 产品 parity 未完成**。Rust 最新测试为 426 passed、1 ignored；29 Command/1 ACK cases 通过 `parse_command` + serde 验证完整 outputs，350 leaf cases 验证 publicNode normalization projection。Linux Node interop 的 alternate/crash/concurrent 场景均通过。以上仅是受控 case，不代表全面 DTO 漂移覆盖或产品 parity。当前边界和证据见 [review status](cli-rust-review-status.md) 与 [CI contract](cli-rust-ci.md)。
+> **状态：机械迁移已提交（`19fc61b5`）；受控 case 已验收，M2–M8 / exhaustive 产品 parity 未完成**。最新 M2–M6 切片和重跑结果见 [handoff](cli-rust-handoff.md)，下述测试计数为此前 checkpoint。Rust 最新测试为 426 passed、1 ignored；29 Command/1 ACK cases 通过 `parse_command` + serde 验证完整 outputs，350 leaf cases 验证 publicNode normalization projection。Linux Node interop 的 alternate/crash/concurrent 场景均通过。以上仅是受控 case，不代表全面 DTO 漂移覆盖或产品 parity。当前边界和证据见 [review status](cli-rust-review-status.md) 与 [CI contract](cli-rust-ci.md)。
 
 ## 背景与动机
 
@@ -146,7 +146,7 @@ M1 正确规则与验收：
 
 ## 落地阶段与验收
 
-阶段顺序为：固定上游快照全源码机械迁移（当前工作树已落入）→ 集中适配 review（包含下列阻碍清单）→ 按 M2–M8 逐门槛验收。schema 纯共享、safe API 替换、真实 TS oracle 与 state 边界改进已有测试，但这些局部结果不代表任一里程碑或产品 parity 完成。文件被复制、Cargo 能解析或编译均不代表对应阶段验收通过。
+阶段顺序为：固定上游快照全源码机械迁移（已提交）→ 集中适配 review（包含下列阻碍清单）→ 按 M2–M8 逐门槛验收。schema 纯共享、safe API 替换、真实 TS oracle 与 state 边界改进已有测试，但这些局部结果不代表任一里程碑或产品 parity 完成。文件被复制、Cargo 能解析或编译均不代表对应阶段验收通过。
 
 ### 后续集中 review 阻碍清单
 

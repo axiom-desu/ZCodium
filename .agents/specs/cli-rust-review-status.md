@@ -1,10 +1,12 @@
 # Rust CLI checkpoint review status
 
+Latest incremental handoff: [M2–M6 scoped work and fresh verification](cli-rust-handoff.md). The older counts below are historical checkpoint evidence, not the latest checkout result.
+
 This checkpoint records current source, test, interop, and CI evidence only. It is not a claim that M2–M8 or exhaustive product parity is complete. The CI handoff contract is in [cli-rust-ci](cli-rust-ci.md).
 
 ## Confirmed completed work
 
-- 当前工作树包含从 `MBearo/ZCode-rs` commit `06ba9781486cffd395d586ec16138c2eeb5edd58` 迁入的 Rust 源码快照，并保留本地 M1 protocol implementation；这些 source migration changes 尚未提交。
+- 当前工作树包含从 `MBearo/ZCode-rs` commit `06ba9781486cffd395d586ec16138c2eeb5edd58` 迁入的 Rust 源码快照，并保留本地 M1 protocol implementation；这些 source migration changes 已由 `19fc61b5` 提交。
 - Schema validator is pure shared code; unsafe API uses have been replaced with safe APIs. Transformation inventory: 63 paths, 70 leaf branches × 5 cases = 350 leaf cases; 29 complete Command cases and 1 ACK case pass through `parse_command` + serde and validate full outputs. The 350 leaf cases validate publicNode normalization projection, not a complete DTO oracle. These controlled cases are not exhaustive product parity or proof of every possible DTO drift.
 - Latest fresh Rust test evidence after schema fix: 426 passed, 1 ignored (`/tmp/zcode-cli-rust-test.log`). The earlier 423 count predates three schema tests and is stale. Rust fmt/clippy/boundaries have passed; current fresh fmt/lint evidence is separately recorded below.
 - Current Node driver entry `pnpm test:zcode-cli-rust-drivers`: 15 cases (local log `/tmp/cli-rust-main-node-tests.log`). Separately, `node --test --test-isolation=none scripts/ci/*.test.mjs` is the CI script regression suite with 256 cases; it is not the scripts/tests driver suite.
