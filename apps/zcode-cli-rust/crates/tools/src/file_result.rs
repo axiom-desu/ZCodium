@@ -54,12 +54,20 @@ pub(super) async fn result(
     let Written { path, old, new, .. } = &w;
     let (patch, additions, deletions) = patch(old, new);
     let hunks = patch.as_array().map_or(0, Vec::len);
+    // 当前 TS Write/Edit 输出保留调用方路径；绝对路径只属于文件操作和 display。
+    let input_path = string(args, "file_path")?;
     let mut data = if name == "Write" {
-        json!({"type":if w.original{"update"}else{"create"},"filePath":path,"content":new,"originalFile":w.original.then_some(old),"structuredPatch":patch,"userModified":false})
+        json!({"type":if w.original{"update"}else{"create"},"filePath":input_path,"content":new,"originalFile":w.original.then_some(old),"structuredPatch":patch,"userModified":false})
     } else {
-        json!({"filePath":path,"oldString":w.search,"newString":w.replacement,"originalFile":old,"structuredPatch":patch,"userModified":false,"replaceAll":w.replace_all,"matchStrategy":w.planned.map(|p|p.0),"matchCandidateCount":w.planned.map(|p|p.1)})
+        json!({"filePath":input_path,"oldString":w.search,"newString":w.replacement,"originalFile":old,"structuredPatch":patch,"userModified":false,"replaceAll":w.replace_all,"matchStrategy":w.planned.map(|p|p.0),"matchCandidateCount":w.planned.map(|p|p.1)})
     };
-    let mut display = json!({"kind":"file_diff","filePath":path,"additions":additions,"deletions":deletions,"structuredPatch":data["structuredPatch"]});
+    // TS Write 新建（包括覆盖空文件）的结果没有 patch，display 仍保留实际变更。
+    if !edit && old.is_empty() {
+        data["type"] = "create".into();
+        data["originalFile"] = Value::Null;
+        data["structuredPatch"] = json!([]);
+    }
+    let mut display = json!({"kind":"file_diff","filePath":path,"additions":additions,"deletions":deletions,"structuredPatch":patch});
     if serde_json::to_vec(&display)?.len() > 32 * 1024 {
         display["structuredPatch"] = json!([]);
         display["truncated"] = true.into();
@@ -71,7 +79,7 @@ pub(super) async fn result(
         // 修复：原先是旧文案 "The file <绝对路径> has been written successfully."；Node
         // formatWriteModelContent 区分新建与覆盖，用模型给出的 file_path，并提示文件状态已在上下文中。
         let path = string(args, "file_path")?;
-        if w.original {
+        if !old.is_empty() {
             format!(
                 "The file {path} has been updated successfully.{}",
                 edit::FRESHNESS_SUFFIX

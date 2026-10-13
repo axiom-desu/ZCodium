@@ -164,7 +164,8 @@ impl FileTools<'_> {
                 }
             }
         }
-        let total = if size == 0 { 0 } else { line };
+        // TS 把首次空文本视图规范化为一行；非首行空视图仍为零行。
+        let total = if size == 0 && start != 1 { 0 } else { line };
         let content = match String::from_utf8(selected) {
             Ok(text) => text,
             Err(e) if truncated && e.utf8_error().error_len().is_none() => {
@@ -173,13 +174,11 @@ impl FileTools<'_> {
             Err(_) => bail!("Read requires valid UTF-8 text"),
         };
         let mut content = content.replace("\r\n", "\n");
-        if start == 1 {
-            content = content.trim_start_matches('\u{feff}').to_owned();
-        }
+        // 当前 TS range reader 保留 UTF-8 BOM；去掉它会改变 Read 内容及模型行文本。
         if content.ends_with('\n') && end <= total {
             content.pop();
         }
-        let count = if content.is_empty() {
+        let count = if content.is_empty() && start > total {
             0
         } else {
             content.split('\n').count()

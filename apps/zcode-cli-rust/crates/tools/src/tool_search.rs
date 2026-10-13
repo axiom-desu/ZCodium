@@ -71,7 +71,11 @@ fn search_sync(
     if name == "Glob" && !root.is_dir() {
         bail!("Glob path must be a directory");
     }
-    let pattern = string(args, "pattern")?;
+    // 当前 TS adapter 会 trim 并拒绝空 pattern，不能把空正则当作全文件匹配。
+    let pattern = string(args, "pattern")?.trim();
+    if pattern.is_empty() {
+        bail!("{name} pattern must not be empty");
+    }
     let glob = if name == "Glob" {
         Some(pattern)
     } else {
@@ -169,24 +173,23 @@ fn search_sync(
     let after = uint(args, "-A", context as u64)?.min(10_000) as usize;
     let mut entries = vec![];
     let mut filenames = BTreeSet::new();
+    let mut file_matches = vec![];
     let mut matched_count = 0;
     let mut seen = 0;
     let mut bytes = 0;
-    let mut push = |text: String, path: String| -> bool {
+    let mut push = |text: String| {
         seen += 1;
         if seen <= offset {
-            return true;
+            return;
         }
         if entries.len() >= limit || bytes + text.len() > 20_000 {
             truncated = true;
-            return false;
+            return;
         }
         bytes += text.len();
         entries.push(text);
-        filenames.insert(path);
-        true
     };
-    'files: for entry in walk.build() {
+    for entry in walk.build() {
         check_cancel(cancel)?;
         let e = entry?;
         if !e.file_type().is_some_and(|t| t.is_file()) {
@@ -220,15 +223,14 @@ fn search_sync(
                 continue;
             }
             matched_count += count;
-            if !push(
-                if mode == "count" {
-                    format!("{path}:{count}")
-                } else {
-                    path.clone()
-                },
-                path,
-            ) {
-                break 'files;
+            filenames.insert(path.clone());
+            if mode == "files_with_matches" {
+                file_matches.push((
+                    e.metadata()?.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+                    path,
+                ));
+            } else {
+                push(format!("{path}:{count}"));
             }
             continue;
         }
@@ -270,18 +272,14 @@ fn search_sync(
             continue;
         }
         matched_count += hits.len();
+        filenames.insert(path.clone());
         if only {
             for (i, m) in only_matches {
-                if !push(
-                    if numbers {
-                        format!("{path}:{}:{m}", i + 1)
-                    } else {
-                        format!("{path}:{m}")
-                    },
-                    path.clone(),
-                ) {
-                    break 'files;
-                }
+                push(if numbers {
+                    format!("{path}:{}:{m}", i + 1)
+                } else {
+                    format!("{path}:{m}")
+                });
             }
         } else {
             let mut visible = BTreeSet::new();
@@ -294,22 +292,39 @@ fn search_sync(
             for i in visible {
                 let Some(line) = lines.get(i) else { continue };
                 let separator = ":";
-                if !push(
-                    if numbers {
-                        format!("{path}{separator}{}{separator}{line}", i + 1)
-                    } else {
-                        format!("{path}{separator}{line}")
-                    },
-                    path.clone(),
-                ) {
-                    break 'files;
-                }
+                push(if numbers {
+                    format!("{path}{separator}{}{separator}{line}", i + 1)
+                } else {
+                    format!("{path}{separator}{line}")
+                });
             }
         }
     }
-    let count = filenames.len();
+    // TS 文件模式先按 mtime 排序再分页；content/count 的 numFiles 与总匹配不受分页影响。
+    if mode == "files_with_matches" {
+        file_matches.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        truncated = file_matches.len().saturating_sub(offset) > limit;
+        entries = file_matches
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|(_, path)| path)
+            .collect();
+    }
+    let count = if mode == "files_with_matches" {
+        entries.len()
+    } else {
+        filenames.len()
+    };
     let text = entries.join("\n");
-    let mut output = json!({"mode":mode,"durationMs":start.elapsed().as_millis() as u64,"numFiles":count,"filenames":if mode=="files_with_matches"{entries.clone()}else{vec![]},"truncated":truncated,"appliedLimit":requested_limit,"appliedOffset":offset,"numMatches":matched_count});
+    let mut output = json!({"mode":mode,"durationMs":start.elapsed().as_millis() as u64,"numFiles":count,"filenames":if mode=="files_with_matches"{entries.clone()}else{vec![]},"truncated":truncated,"numMatches":matched_count});
+    // TS 只在发生截断或 offset > 0 时带分页字段，默认 250/0 不是输出事实。
+    if truncated && requested_limit > 0 {
+        output["appliedLimit"] = requested_limit.into();
+    }
+    if offset > 0 {
+        output["appliedOffset"] = offset.into();
+    }
     if mode != "files_with_matches" {
         output["content"] = text.clone().into();
         if mode == "content" {

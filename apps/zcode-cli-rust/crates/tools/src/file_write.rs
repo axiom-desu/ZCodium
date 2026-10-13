@@ -63,13 +63,22 @@ pub(super) fn patch(old: &str, new: &str) -> (Value, usize, usize) {
         .count();
     let removed = &a[prefix..a.len() - suffix];
     let added = &b[prefix..b.len() - suffix];
-    let lines: Vec<_> = removed
+    // 当前 TS structuredPatch 的 context 为 3；缺少上下文会使同一变更的结果不同。
+    let before = prefix.saturating_sub(3);
+    let after = suffix.min(3);
+    let lines: Vec<_> = a[before..prefix]
         .iter()
-        .map(|s| format!("-{s}"))
+        .map(|s| format!(" {s}"))
+        .chain(removed.iter().map(|s| format!("-{s}")))
         .chain(added.iter().map(|s| format!("+{s}")))
+        .chain(
+            a[a.len() - suffix..a.len() - suffix + after]
+                .iter()
+                .map(|s| format!(" {s}")),
+        )
         .collect();
     (
-        json!([{"oldStart":prefix+1,"oldLines":removed.len(),"newStart":prefix+1,"newLines":added.len(),"lines":lines}]),
+        json!([{"oldStart":before+1,"oldLines":prefix-before+removed.len()+after,"newStart":before+1,"newLines":prefix-before+added.len()+after,"lines":lines}]),
         added.len(),
         removed.len(),
     )
