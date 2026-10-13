@@ -202,3 +202,7 @@ impl Server {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "server_tests.rs"]
+mod tests;

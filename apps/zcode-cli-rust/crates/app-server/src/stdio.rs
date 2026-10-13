@@ -15,37 +15,40 @@ pub fn start(input_closed: CancellationToken) -> mpsc::Receiver<Input> {
     let (in_tx, in_rx) = mpsc::channel(64);
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
-        let mut reader = stdin.lock();
-        let mut line = Vec::new();
-        while let Ok(available) = reader.fill_buf() {
-            if available.is_empty() {
-                if !line.is_empty() {
-                    dispatch(&in_tx, &line);
-                }
-                break;
-            }
-            let take = available
-                .iter()
-                .position(|b| *b == b'\n')
-                .map_or(available.len(), |i| i + 1);
-            if line.len() + take > MAX_REQUEST_BYTES {
-                let _ = in_tx.blocking_send(Input::TooLarge);
-                break;
-            }
-            line.extend_from_slice(&available[..take]);
-            reader.consume(take);
-            if line.last() == Some(&b'\n') {
-                if !dispatch(&in_tx, &line) {
-                    return;
-                }
-                line.clear();
-            }
-        }
+        read_frames(stdin.lock(), &in_tx);
         input_closed.cancel();
         let _ = in_tx.blocking_send(Input::Eof);
     });
     in_rx
 }
+fn read_frames<R: BufRead>(mut reader: R, tx: &mpsc::Sender<Input>) {
+    let mut line = Vec::new();
+    while let Ok(available) = reader.fill_buf() {
+        if available.is_empty() {
+            if !line.is_empty() {
+                dispatch(tx, &line);
+            }
+            break;
+        }
+        let take = available
+            .iter()
+            .position(|b| *b == b'\n')
+            .map_or(available.len(), |i| i + 1);
+        if line.len() + take > MAX_REQUEST_BYTES {
+            let _ = tx.blocking_send(Input::TooLarge);
+            break;
+        }
+        line.extend_from_slice(&available[..take]);
+        reader.consume(take);
+        if line.last() == Some(&b'\n') {
+            if !dispatch(tx, &line) {
+                return;
+            }
+            line.clear();
+        }
+    }
+}
+
 fn dispatch(tx: &mpsc::Sender<Input>, line: &[u8]) -> bool {
     if line.iter().all(u8::is_ascii_whitespace) {
         return true;
@@ -106,5 +109,43 @@ pub async fn storage_prepare(
     match tokio::time::timeout(std::time::Duration::from_secs(30), input.recv()).await? {
         Some(Input::Request(request)) if request.method == "startup/storagePathReady" => Ok(()),
         _ => bail!("Storage preparation handshake failed"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{BufReader, Cursor};
+
+    #[test]
+    fn fragmented_multiframe_input_keeps_bad_frames_isolated_and_dispatches_eof_tail() {
+        let (tx, mut rx) = mpsc::channel(8);
+        let bytes = b"  \nnot-json\n{\"method\":\"one\",\"id\":1}\n{\"method\":\"tail\"}";
+        read_frames(BufReader::with_capacity(2, Cursor::new(bytes)), &tx);
+        assert!(matches!(rx.try_recv(), Ok(Input::Invalid)));
+        assert!(
+            matches!(rx.try_recv(), Ok(Input::Request(r)) if r.method == "one" && r.id == Some(zcode_cli_protocol::RequestId::Number(1)))
+        );
+        assert!(
+            matches!(rx.try_recv(), Ok(Input::Request(r)) if r.method == "tail" && r.id.is_none())
+        );
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn request_size_boundary_is_inclusive_and_oversize_fails_closed() {
+        let (tx, mut rx) = mpsc::channel(4);
+        let mut exact = b"{\"method\":\"x\"}".to_vec();
+        exact.resize(MAX_REQUEST_BYTES - 1, b' ');
+        exact.push(b'\n');
+        read_frames(Cursor::new(exact), &tx);
+        assert!(matches!(rx.try_recv(), Ok(Input::Request(r)) if r.method == "x"));
+
+        let (tx, mut rx) = mpsc::channel(4);
+        let mut over = b"{\"method\":\"x\"}".to_vec();
+        over.resize(MAX_REQUEST_BYTES, b' ');
+        over.push(b'\n');
+        read_frames(Cursor::new(over), &tx);
+        assert!(matches!(rx.try_recv(), Ok(Input::TooLarge)));
     }
 }
