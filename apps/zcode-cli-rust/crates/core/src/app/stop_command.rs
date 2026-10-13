@@ -1,5 +1,11 @@
 use serde_json::Value;
 
+pub(super) fn current_stop_target(active: Option<&super::engine::Active>) -> Option<&str> {
+    active
+        .filter(|active| !active.cancel.is_cancelled())
+        .map(|active| active.run_id.as_str())
+}
+
 pub(super) fn stop_target_changed(expected: Option<&str>, active: Option<&str>) -> bool {
     expected.is_some_and(|target| active != Some(target))
 }

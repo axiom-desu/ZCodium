@@ -1,7 +1,7 @@
 // ZCodium 下游修改，契约/存储/安全边界适配，来源及许可见 Rust 根 NOTICE.md
 use super::{
     Engine,
-    stop_command::{StopAdmission, replay_cached_ack, stop_admission},
+    stop_command::{StopAdmission, current_stop_target, replay_cached_ack, stop_admission},
 };
 use crate::domain::{MAX_TOOL_BYTES, session::Session};
 use anyhow::{Context, Result, bail};
@@ -26,7 +26,8 @@ impl Engine {
             && let Some(expected) = c.payload["expectedForegroundExecutionId"].as_str()
         {
             let id = c.session_id.as_deref().context("Session id required")?;
-            let active = self.active.get(id).map(|active| active.run_id.as_str());
+            // TS 将已 abort 的 execution 视为 idle；Finished 清理前的迟到 stop 不能重复提交状态。
+            let active = current_stop_target(self.active.get(id));
             match stop_admission(cached_ack.clone(), Some(expected), active) {
                 StopAdmission::Replay(ack) => return Ok(ack),
                 StopAdmission::Proceed => {}
@@ -371,7 +372,6 @@ impl Engine {
         Ok(ack)
     }
 }
-
 pub(super) fn queue_item(c: &Command, s: &Session, now: u64) -> Value {
     use crate::domain::execution::{ExecutionState, Mode};
     // 与 Node intent 一致：排队时冻结本次输入的模式与 plan（auto 提交为 build），提升时再应用。

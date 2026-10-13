@@ -249,6 +249,27 @@ async fn idle_and_mismatched_expected_stops_are_real_dispatch_noops() {
 }
 
 #[tokio::test]
+async fn expected_stop_for_cancelled_but_still_registered_run_is_idle_noop() {
+    let (mut engine, store, tools) = engine().await;
+    let token = CancellationToken::new();
+    token.cancel();
+    engine
+        .active
+        .insert(SESSION.into(), active("run-finished", token.clone()));
+    let before = snapshot(&engine);
+    let result = engine
+        .dispatch_command(command("late-stop", Some("run-finished")))
+        .await
+        .unwrap();
+    assert_eq!(result["status"], "noop");
+    assert_eq!(result["reasonCode"], "guard.stopTargetChanged");
+    assert_eq!(snapshot(&engine), before);
+    assert!(token.is_cancelled());
+    assert_eq!(store.commits.load(Ordering::SeqCst), 0);
+    assert_eq!(tools.cancellations.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn matching_active_stop_cancels_and_replays_exact_receipt_after_run_disappears() {
     let (mut engine, store, tools) = engine().await;
     let token = CancellationToken::new();
