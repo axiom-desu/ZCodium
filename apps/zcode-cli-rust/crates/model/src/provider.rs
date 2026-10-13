@@ -383,5 +383,8 @@ impl ModelPort for HttpModel {
 #[path = "provider_auth.rs"]
 mod auth;
 #[cfg(test)]
+#[path = "provider_retry_tests.rs"]
+mod retry_tests;
+#[cfg(test)]
 #[path = "provider_tests.rs"]
 mod tests;
