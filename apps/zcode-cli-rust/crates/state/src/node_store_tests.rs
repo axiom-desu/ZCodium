@@ -6,7 +6,53 @@ use crate::contract::SessionStore;
 use crate::domain::node_journal::{Admission, CompactStart};
 use crate::domain::session::Session;
 use crate::domain::session_listing::ListParams;
+use rusqlite::types::Value as SqlValue;
 use serde_json::json;
+
+type DatabaseSnapshot = (
+    Vec<(String, String, String, Option<String>)>,
+    Vec<(String, Vec<Vec<SqlValue>>)>,
+);
+
+fn database_snapshot(dir: &tempfile::TempDir) -> DatabaseSnapshot {
+    let conn = rusqlite::Connection::open(dir.path().join("db/db.sqlite")).unwrap();
+    let schema = conn
+        .prepare("select type, name, tbl_name, sql from sqlite_master order by type, name")
+        .unwrap()
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let tables: Vec<String> = conn
+        .prepare("select name from sqlite_master where type='table' and name not like 'sqlite_%' order by name")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let rows = tables
+        .into_iter()
+        .map(|table| {
+            let mut statement = conn
+                .prepare(&format!("select * from \"{}\"", table.replace('"', "\"\"")))
+                .unwrap();
+            let column_count = statement.column_count();
+            let rows = statement
+                .query_map([], |row| {
+                    (0..column_count)
+                        .map(|index| row.get(index))
+                        .collect::<rusqlite::Result<Vec<SqlValue>>>()
+                })
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap();
+            (table, rows)
+        })
+        .collect();
+    (schema, rows)
+}
 
 async fn store(dir: &tempfile::TempDir) -> NodeStore {
     let root = dir.path();
@@ -154,6 +200,7 @@ async fn snapshot_read_does_not_recover_admission_or_interrupted_compaction() {
             .collect::<Result<_, _>>()
             .unwrap()
     };
+    let database_before = database_snapshot(&dir);
     let ledger_before = rows(
         "select json_object('id', id, 'session_id', session_id, 'kind', kind, 'delivery', delivery, 'payload', payload, 'admitted_sequence', admitted_sequence, 'promoted_sequence', promoted_sequence, 'promoted_message_id', promoted_message_id, 'status', status, 'status_reason', status_reason, 'time_created', time_created, 'time_updated', time_updated) from session_input order by id",
     );
@@ -161,6 +208,10 @@ async fn snapshot_read_does_not_recover_admission_or_interrupted_compaction() {
         "select json_object('id', id, 'data', data) from part where json_extract(data, '$.type')='timeline' order by id",
     );
     let before = store.read_session("/w", "sess_1").await.unwrap().unwrap();
+    let before_again = store.read_session("/w", "sess_1").await.unwrap().unwrap();
+    assert_eq!(before.messages, before_again.messages);
+    assert_eq!(before.rows, before_again.rows);
+    assert_eq!(database_snapshot(&dir), database_before);
     assert_eq!(
         count("select count(*) from session_input where status='admitted'"),
         1
@@ -197,6 +248,14 @@ async fn snapshot_read_does_not_recover_admission_or_interrupted_compaction() {
         0
     );
     assert_eq!(recovered.messages, before.messages);
+    let after_recovery = store.read_session("/w", "sess_1").await.unwrap().unwrap();
+    assert_eq!(after_recovery.messages, recovered.messages);
+    assert_eq!(
+        count(
+            "select count(*) from session_input where status='discarded' and status_reason='session_resumed'"
+        ),
+        1
+    );
 }
 
 #[tokio::test]
