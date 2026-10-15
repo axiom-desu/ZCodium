@@ -174,3 +174,30 @@ fn backlog_invalidation_recovers_after_relief() {
     d.wake(t0);
     assert_eq!(d.flush_due(t0).recover, vec![(sub.id, TOPIC.to_owned())]);
 }
+
+#[test]
+fn failed_recovery_reply_is_rearmed_for_snapshot_and_respects_pause() {
+    // 真实 assembly 上限触发 apply 编码失败；apply 失败前已把 due 清空。
+    let huge = "x".repeat(crate::codec::MAX_ASSEMBLY_BYTES + 1);
+    let broken = json!({"epoch":"e","seq":5,"mode":"snapshot","snapshot":{"payload":huge}});
+
+    // 非 paused：显式 resync 回复编码失败后必须重新安排快照恢复。
+    let mut d = Delivery::default();
+    let sub = subscribe(&mut d, "c", Profile::Continuous, &snapshot(4));
+    d.resync_started(&sub.id);
+    assert!(d.recovered(&sub.id, "recovery", &broken).is_err());
+    assert!(d.next_due().is_some(), "failed reply must re-arm due");
+    let out = d.flush_due(Instant::now());
+    assert_eq!(out.recover, vec![(sub.id.clone(), TOPIC.to_owned())]);
+
+    // paused：失败不得 arm due，drain 统一唤醒后才发起快照恢复。
+    let mut d = Delivery::default();
+    let sub = subscribe(&mut d, "c", Profile::Continuous, &snapshot(4));
+    d.pause("c");
+    d.resync_started(&sub.id);
+    assert!(d.recovered(&sub.id, "recovery", &broken).is_err());
+    assert_eq!(d.next_due(), None, "paused subscription stays unarmed");
+    d.drain("c", Instant::now());
+    let out = d.flush_due(Instant::now());
+    assert_eq!(out.recover, vec![(sub.id, TOPIC.to_owned())]);
+}

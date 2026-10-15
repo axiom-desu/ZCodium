@@ -146,7 +146,15 @@ impl Delivery {
         sub.recovering = sub.recovering.saturating_sub(1);
         let applied = sub.apply(id, kind, state, true);
         if applied.is_err() {
+            // apply 失败前已清空 buffer 并把 due 置为 None。必须像 recovery_failed 一样
+            // 重新安排一次快照恢复，否则显式 resync 回复编码失败后 due=None 会被
+            // flush_due/next_due 忽略，而 resync 又让 deltas 跳过该订阅，订阅永久停摆。
+            // recovering 已在上面递减一次，这里不重复递减；paused 由 drain 统一唤醒，
+            // 语义与 recovery_failed 保持一致，不新增状态路径。
             sub.resync = true;
+            if !self.paused.contains(&sub.connection) {
+                sub.due = Some(Instant::now());
+            }
         }
         applied
     }

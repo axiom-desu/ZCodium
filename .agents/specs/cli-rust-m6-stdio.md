@@ -16,7 +16,7 @@
 
 ## 完整 loop 测试补充（接续 M6）
 
-仅提取/新增 app-server 内的独立测试文件（每文件不超过 400 行），不改变生产路由或 delivery 行为。现有 `server.rs` 内 ACK 两 profile 测试已具备 `subscriptionId` 关联断言；重订阅失败测试需要以实际 EOF + pin release 收口 runtime，不能等待 `serve` 所持 sender 先关闭，也不能把 initial frame 当作失败后的 online frame。
+优先提取/新增 app-server 内的独立测试文件（每文件尽量不超过 400 行）；仅在回归测试确认缺陷后修改生产逻辑。本轮 delivery 修复及依据见下方独立 review 记录。现有 `server.rs` 内 ACK 两 profile 测试已具备 `subscriptionId` 关联断言；重订阅失败测试需要以实际 EOF + pin release 收口 runtime，不能等待 `serve` 所持 sender 先关闭，也不能把 initial frame 当作失败后的 online frame。
 
 ```text
 内存 Input → serve（pending token / 路由唯一 owner）→ ClientMsg runtime router
@@ -36,8 +36,34 @@ Web:     web-remote-replayable   ─ 仅保留 text           ─┴ 同一 topi
 
 ## 本轮交接范围
 
-已落地完整 loop 测试：两 profile 的 snapshot subscribe ACK/frame 关联和顺序；真实 assembly 超限导致重订阅失败时保留旧 subscriptionId/profile/seq 并释放本次 pin；RPC 逆序 token 回复与通知无响应。上面的其余完整 loop 场景为后续验收要求，尚未新增对应测试，不声称已通过。既有 delivery 层测试不能替代完整端到端验收。
+测试入口位于 `crates/app-server/src/`，共享 `serve` 内存 harness 提取在 `server_harness.rs`（测试充当可控 runtime router，事件同步只用输入/输出/请求通道，timeout 仅作死锁保护；各测试文件均 < 400 行）。
+
+已落地完整 loop 测试：
+
+- 两 profile snapshot subscribe 的 ACK/frame 关联和顺序；真实 assembly 超限（16 MiB 逻辑帧）导致重订阅失败时保留旧 subscriptionId/profile/seq 并释放本次 pin。
+- RPC 逆序 token 回复、未知 method、通知无响应。
+- 两 profile resume subscribe：ACK 先于 initial，profile 过滤不改 `(fromSeq,toSeq]`；在线仅 inputText 的区间在 replayable 仍发空 deltas 帧保 seq。
+- seq gap 后向 runtime 路由 TopicSnapshot（不输出伪连续 delta）；在途增量由 snapshot 回复覆盖，随后增量从 snapshot seq 继续。
+- 显式 resync 校验 connection/topic/subscription owner；回复先 ACK 再 recovery；已对齐 resume 回复也发 `(N,N]` recovery 帧。
+- 首次 subscribe 真实 assembly 超限：释放 TopicOpen pin、不登记订阅；同连接随后成功订阅只产生一个 owner。
+- 成功重订阅释放旧 pin，后续帧只属于新 subscriptionId。
+- HostRequest/HostNotification 投影到 sink、Input::Response → HostReply、Invalid → 后续合法请求、TooLarge → 唯一 Eof 并停止接收。
+- RPC 未知/重复 reply token 无输出；resync 的 connection/topic/subscriptionId owner mismatch 均拒绝且不向 runtime 路由。
+- 两 profile 显式 resync 回复编码失败（真实 16 MiB assembly 超限）后不永久停摆：错误后下一次 flush 向 runtime 请求 TopicSnapshot，正常快照落地后后续增量继续。paused 语义不变：暂停期间失败不 arm due，drain 后才恢复。
+- `Harness::close` 先并发 drain 再 join running：sink 通道容量 32，超过时先 join 会与 serve 的 output 发送互等死锁。
+
+尚未新增完整 loop 验收（仍为后续要求）：V4 framing 的 UTF-8 跨分片边界与重组字节/CRC32 端到端；TTFT 携带、sessions-index/workspace-config 立即 flush、high-watermark 拥塞与 drain 经由完整 loop；真实 Core runtime router 与启动/存储握手。既有 delivery 层测试不能替代完整端到端验收。
+
+## 独立 review 缺陷与修复：显式 resync 编码失败后的恢复
+
+`delivery.rs::recovered()` 在 runtime 回复成功但 `apply` 编码失败时只置 `resync = true`，没有重新安排 `due`。`apply` 失败前已把 `due` 清空，`flush_due`/`next_due` 会跳过 `due = None`，而 `deltas` 又因 `resync` 跳过该订阅，导致显式 resync 遇到超大快照后订阅永久停摆。
+
+修复与既有 `recovery_failed` 路径对齐：`recovered` 已递减一次 `recovering`，失败分支不重复递减；`resync = true` 后，非 paused 连接设 `due = Instant::now()`，复用现有 snapshot 恢复路径，不新增状态字段或接口。paused 连接保持 `due = None`，由 `drain` 统一唤醒。
+
+该修复复用 Rust 既有 TopicSnapshot 恢复语义；TS gateway 的失败路径会 rollback 原订阅状态再安排 online flush，失败之后的具体帧序列尚未通过真实 TS oracle 对齐。这里证明 Rust 不再永久停摆，不宣称该异常路径的跨实现序列 parity。
 
 ## 验证
 
 测试必须实际运行且使用临时/内存数据，不启动真实模型、真实 HOME/DB。仅报告所执行的 Rust 定向测试与可用仓库 gate 真实结果；这批测试不等于 M6 全面产品 parity，也不代表 M7/M8 完成。
+
+本轮执行：`cargo test -p zcode-cli-app-server`（28 passed、0 failed）；`cargo clippy -p zcode-cli-app-server --all-targets` 与 `cargo clippy -p zcode-cli-tools --all-targets` 均无警告；`cargo fmt --check -p zcode-cli-app-server` 通过。生产改动仅 `delivery.rs::recovered()` 失败分支复用既有恢复路径；未改协议。
