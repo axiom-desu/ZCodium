@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 1,
+  "status": "ok",
+  "generatedAt": "2026-10-15T10:22:31.057Z",
+  "protocol": {
+    "createSession": "v4/command:createSession",
+    "subscribe": "v4/conversation/subscribe"
+  },
+  "environment": {
+    "platform": "linux",
+    "kernelRelease": "6.14.11-061411-generic",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Core(TM) Ultra 9 285H",
+    "cpuCount": 16,
+    "totalMemoryMiB": 31518,
+    "nodeVersion": "v24.19.0",
+    "rustcVersion": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "builds": {
+    "node": {
+      "runtime": "node",
+      "label": "Node dist",
+      "artifact": "apps/zcode-cli/packages/cli/dist/zcode.cjs",
+      "artifactScope": "repo-relative",
+      "sha256": "63d57c9420227e77975a7e2e23da1d6c886ae9e3e30e8b65eaff547e015b9d6d",
+      "sizeBytes": 30333596,
+      "buildCommand": "pnpm --filter @zcode/cli build",
+      "profile": "dist bundle (esbuild)",
+      "profileSource": "declared by build command; not verified from artifact"
+    },
+    "rust": {
+      "runtime": "rust",
+      "label": "Rust debug",
+      "artifact": "apps/zcode-cli-rust/target/debug/zcode-cli-rust",
+      "artifactScope": "repo-relative",
+      "sha256": "133665df1de1ba88c5c0a5587630b36b35f3bd6daa8b269f0b3de62de0545c03",
+      "sizeBytes": 504529472,
+      "buildCommand": "pnpm run build:zcode-cli-rust",
+      "profile": "dev (unoptimized + debuginfo)",
+      "profileSource": "declared by build command; not verified from artifact"
+    }
+  },
+  "measurement": {
+    "startupToReady": "performance.now() immediately before startRuntime() until createSession returns result.sessionId",
+    "subscribe": "runtime.subscribe(sessionId) RPC round trip",
+    "idleRss": "wait 1000ms after the subscribe response, then read /proc/<pid>/status VmRSS",
+    "isolatePerRuntime": true,
+    "alternatingStartOrder": true,
+    "rounds": 6,
+    "nonTitleModelRequests": 0,
+    "nonTitleModelRequestsNote": "fixture 的 requests[] 排除标题 sidecar 请求；driver 未发送用户输入（无 sendText/turn），此处只统计非标题请求，不代表模型侧完全没有请求。",
+    "proxy": {
+      "kind": "local fail-closed HTTP proxy",
+      "endpoint": "http://127.0.0.1:34427",
+      "appliesTo": [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy"
+      ],
+      "noProxy": "127.0.0.1,localhost,::1",
+      "limitation": "只约束读取这些环境变量的 HTTP 客户端；不是 OS 级网络沙箱，也不阻止直连 socket 或非 HTTP 流量。"
+    }
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "startOrder": "node->rust",
+      "measurements": {
+        "node": {
+          "startupToReadyMs": 829.518,
+          "subscribeRpcMs": 5.771,
+          "idleRssKiB": 407552,
+          "nonTitleModelRequests": 0
+        },
+        "rust": {
+          "startupToReadyMs": 203.656,
+          "subscribeRpcMs": 2.464,
+          "idleRssKiB": 60108,
+          "nonTitleModelRequests": 0
+        }
+      }
+    },
+    {
+      "round": 2,
+      "startOrder": "rust->node",
+      "measurements": {
+        "node": {
+          "startupToReadyMs": 830.476,
+          "subscribeRpcMs": 4.914,
+          "idleRssKiB": 409252,
+          "nonTitleModelRequests": 0
+        },
+        "rust": {
+          "startupToReadyMs": 202.72,
+          "subscribeRpcMs": 4.576,
+          "idleRssKiB": 59568,
+          "nonTitleModelRequests": 0
+        }
+      }
+    },
+    {
+      "round": 3,
+      "startOrder": "node->rust",
+      "measurements": {
+        "node": {
+          "startupToReadyMs": 818.07,
+          "subscribeRpcMs": 5.206,
+          "idleRssKiB": 410100,
+          "nonTitleModelRequests": 0
+        },
+        "rust": {
+          "startupToReadyMs": 212.63,
+          "subscribeRpcMs": 9.022,
+          "idleRssKiB": 59176,
+          "nonTitleModelRequests": 0
+        }
+      }
+    },
+    {
+      "round": 4,
+      "startOrder": "rust->node",
+      "measurements": {
+        "node": {
+          "startupToReadyMs": 856.892,
+          "subscribeRpcMs": 6.212,
+          "idleRssKiB": 407472,
+          "nonTitleModelRequests": 0
+        },
+        "rust": {
+          "startupToReadyMs": 187.917,
+          "subscribeRpcMs": 8.637,
+          "idleRssKiB": 59604,
+          "nonTitleModelRequests": 0
+        }
+      }
+    },
+    {
+      "round": 5,
+      "startOrder": "node->rust",
+      "measurements": {
+        "node": {
+          "startupToReadyMs": 845.792,
+          "subscribeRpcMs": 6.104,
+          "idleRssKiB": 407768,
+          "nonTitleModelRequests": 0
+        },
+        "rust": {
+          "startupToReadyMs": 206.601,
+          "subscribeRpcMs": 2.302,
+          "idleRssKiB": 59788,
+          "nonTitleModelRequests": 0
+        }
+      }
+    },
+    {
+      "round": 6,
+      "startOrder": "rust->node",
+      "measurements": {
+        "node": {
+          "startupToReadyMs": 845.269,
+          "subscribeRpcMs": 13.82,
+          "idleRssKiB": 407648,
+          "nonTitleModelRequests": 0
+        },
+        "rust": {
+          "startupToReadyMs": 221.642,
+          "subscribeRpcMs": 8.972,
+          "idleRssKiB": 59640,
+          "nonTitleModelRequests": 0
+        }
+      }
+    }
+  ],
+  "medians": {
+    "node": {
+      "startupToReadyMs": 837.8725,
+      "subscribeRpcMs": 5.9375,
+      "idleRssKiB": 407708,
+      "sampleCount": 6
+    },
+    "rust": {
+      "startupToReadyMs": 205.1285,
+      "subscribeRpcMs": 6.6065000000000005,
+      "idleRssKiB": 59622,
+      "sampleCount": 6
+    }
+  },
+  "limits": [
+    "Node 侧是 dist bundle，Rust 侧是 dev (unoptimized + debuginfo) debug 二进制；不是 release 对照。",
+    "只覆盖启动到 createSession、subscribe RPC 往返与静置空闲 RSS；不含模型生成、工具执行或稳态吞吐。",
+    "每个 runtime 独立初始 DB/HOME，交替启动顺序；样本量有限，未做统计显著性检验。",
+    "仅 Linux 实测（/proc/<pid>/status 与 POSIX 进程组清理）；Windows/macOS 未验收。",
+    "本地 fail-closed 代理只覆盖读取 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY/NO_PROXY 的 HTTP 客户端，不是 OS 级网络沙箱，也不阻止直连 socket 或非 HTTP 流量。",
+    "fixture 的 requests[] 排除标题 sidecar 请求；nonTitleModelRequests=0 不代表模型侧完全没有任何请求。"
+  ]
+}
