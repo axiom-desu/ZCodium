@@ -51,7 +51,7 @@ jobs:
   protocol-schema:
     name: Protocol schema and oracle fixtures
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -65,6 +65,11 @@ jobs:
         run: pnpm check:zcode-cli-rust-contract-assets
       - name: Domain fixture drift
         run: pnpm check:zcode-cli-rust-domain-fixtures
+      # M4/M5 driver 会用 --offline 构建 Rust examples；独立 runner 没有 Rust job 的缓存。
+      # 在本 job 准备工具链和锁定依赖，避免本机旧 registry 让缺失前置条件漏检。
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Fetch locked Rust driver dependencies
+        run: cargo fetch --locked --manifest-path apps/zcode-cli-rust/Cargo.toml
       - name: Driver tests
         run: pnpm test:zcode-cli-rust-drivers
 

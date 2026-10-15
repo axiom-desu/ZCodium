@@ -19,7 +19,7 @@ Native compile jobs 的真实证据来自 run 38042550013：macOS 与 Windows na
 - `test:zcode-cli-rust-drivers`: `node --import tsx --test --test-isolation=none scripts/tests/*.test.mjs`，必须保留全量测试 glob 与 isolation 参数。
 - `test:zcode-cli-rust-interop`: `node --import tsx scripts/zcode-cli-rust-node-interop.mjs apps/zcode-cli/packages/cli/dist/zcode.cjs apps/zcode-cli-rust/target/debug/zcode-cli-rust apps/zcode-cli-rust/target/debug/examples/node_read`。
 
-依赖已安装的 `protocol-schema` job 在运行任何 contract checks 前先运行共享的 Node workspace dependency build，再同时运行 driver suite。Linux interop job 安装 workspace dependencies 与 stable Rust，先运行同一 dependency build，再构建 Node CLI 和 Rust binary/reader，最后执行上述脚本。不得依赖 TSX_TSCONFIG_PATH 或旧 tsconfig 路径；无仓库现成 cache action 时不引入/固定新第三方 action。Native compile matrix 仅在 `windows-latest`、`macos-latest` 执行 `cargo check --locked --workspace --all-targets`，Rust-only 环境不安装 Node dependencies，不执行 POSIX interop。
+依赖已安装的 `protocol-schema` job 在运行任何 contract checks 前先运行共享的 Node workspace dependency build，再同时运行 driver suite。新增 M4/M5 driver 实际构建 Rust examples，且使用 `cargo --offline --locked`；该 job 必须自行安装 stable Rust，并在 driver 前执行 `cargo fetch --locked --manifest-path apps/zcode-cli-rust/Cargo.toml`，不能依赖另一个 job 或本机 registry 缓存。为包含 Node 构建、Rust 依赖准备及差分编译，该 job 预算为 30 分钟；不改变测试本身的 deadline 或失败语义。Linux interop job 安装 workspace dependencies 与 stable Rust，先运行同一 dependency build，再构建 Node CLI 和 Rust binary/reader，最后执行上述脚本。不得依赖 TSX_TSCONFIG_PATH 或旧 tsconfig 路径；无仓库现成 cache action 时不引入/固定新第三方 action。Native compile matrix 仅在 `windows-latest`、`macos-latest` 执行 `cargo check --locked --workspace --all-targets`，Rust-only 环境不安装 Node dependencies，不执行 POSIX interop。
 
 ## 所有者、顺序与失败语义
 
@@ -30,9 +30,11 @@ Linux Node interop ───────────────────┘
 Windows/macOS cargo check ──────────── compile evidence only, not runtime evidence
 ```
 
-工作流仅编排验证，不拥有 CLI 产品状态。Driver tests 验证 Node 辅助/转换逻辑；interop 由测试驱动启动各自 runtime、测试 fixture 与 reader，SQLite 是被比较持久化事实源。任意测试失败均令对应 job 失败；不跳过缺失 reader、场景或测试，不以另一 job 的成功抵消。Windows/macOS cargo check 失败（包括 Windows 工具链/runner 环境问题）须作为实际 CI 结果报告，不得将本机 cross-build 阻碍等同原生 job 通过。
+工作流仅编排验证，不拥有 CLI 产品状态。Driver tests 验证 Node 辅助/转换逻辑及真实 TS/Rust model/tool 差分；interop 由测试驱动启动各自 runtime、测试 fixture 与 reader，SQLite 是被比较持久化事实源。任意测试失败均令对应 job 失败；不跳过缺失 reader、场景或测试，不以另一 job 的成功抵消。Windows/macOS cargo check 失败（包括 Windows 工具链/runner 环境问题）须作为实际 CI 结果报告，不得将本机 cross-build 阻碍等同原生 job 通过。
 
 ## 真实证据与非目标
+
+下列 426/15/256、M8 capability 和 lint/fmt 数字是历史 landing checkpoint，不是最新 checkout。最新 M8/default policy 与待测边界见 [handoff](cli-rust-handoff.md)；stack 每层执行证据写入其 PR 描述。新增 CI prerequisite 单测只验证编排，不冒充真实 GitHub clean runner 已通过。
 
 - 当前 checkout Rust 测试在最新 schema fix 后为 426 passed、1 ignored，日志 `/tmp/zcode-cli-rust-test.log`；此前 423 是 schema 新增三项前的旧数，不再引用为最新结果。
 - Node driver 入口 `pnpm test:zcode-cli-rust-drivers` 当前为 15 cases（本地日志 `/tmp/cli-rust-main-node-tests.log`）。另一个 CI 脚本回归套件命令 `node --test --test-isolation=none scripts/ci/*.test.mjs` 当前为 256 cases；256 不是 Node driver 入口的数量。
