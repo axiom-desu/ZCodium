@@ -40,8 +40,8 @@ pub struct ImportedCheckpoint {
 }
 
 /// Applies structured patch hunks (`{oldStart, oldLines, newStart, newLines,
-/// lines}`: jsdiff `structuredPatch`, or Rust's single context-free hunk) to
-/// `before`; `None` when a context or removed line does not match.
+/// lines}`: jsdiff `structuredPatch`) to `before`; `None` when a context or
+/// removed line does not match.
 pub fn apply_patch(before: &str, hunks: &[serde_json::Value]) -> Option<String> {
     let body = before.strip_suffix('\n').unwrap_or(before);
     let mut lines: Vec<String> = if before.is_empty() {

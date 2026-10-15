@@ -8,6 +8,7 @@ mod checkpoint_blobs;
 mod extension_config;
 mod file_changes;
 mod file_checkpoints;
+mod file_diff;
 mod file_result;
 mod file_rewind;
 mod file_write;

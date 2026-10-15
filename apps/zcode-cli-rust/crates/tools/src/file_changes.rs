@@ -1,4 +1,4 @@
-use super::{checkpoint_blobs as blobs, file_write::patch};
+use super::{checkpoint_blobs as blobs, file_diff::patch_async};
 use crate::domain::file_checkpoint::FileCheckpoint;
 use anyhow::{Result, ensure};
 use serde_json::{Value, json};
@@ -19,10 +19,16 @@ pub(super) async fn details(root: &Path, changes: &[FileCheckpoint]) -> Result<V
         };
         let after = blobs::load(root, &group.last().unwrap().after).await?;
         // 只读摘要按原始 checkpoint 聚合，不使用当前磁盘内容推测历史 diff。
-        let (mut patches, added, removed) = patch(
-            std::str::from_utf8(&before)?.trim_start_matches('\u{feff}'),
-            std::str::from_utf8(&after)?.trim_start_matches('\u{feff}'),
-        );
+        // diff 在 blocking 池执行，避免 Myers O(N·D) 占用 tokio worker。
+        let (_, _, mut patches, added, removed) = patch_async(
+            std::str::from_utf8(&before)?
+                .trim_start_matches('\u{feff}')
+                .to_owned(),
+            std::str::from_utf8(&after)?
+                .trim_start_matches('\u{feff}')
+                .to_owned(),
+        )
+        .await?;
         let size = serde_json::to_vec(&patches)?.len();
         if size > patch_budget {
             patches = json!([]);

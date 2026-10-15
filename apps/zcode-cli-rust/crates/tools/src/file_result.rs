@@ -1,7 +1,7 @@
 //! The Write / Edit result (Node `writeEditResult` and Write's result): the
 //! adapter data, the diff display, the model text and the telemetry detail
 //! (Node `ToolExecutionTelemetry` `filesystem` / `patch`).
-use super::file_write::patch;
+use super::file_diff::patch_async;
 use super::tool_edit as edit;
 use super::tool_files::FileTools;
 use super::tools::string;
@@ -51,15 +51,26 @@ pub(super) async fn result(
     timings: Timings,
 ) -> Result<ToolOutput> {
     let edit = name == "Edit";
-    let Written { path, old, new, .. } = &w;
-    let (patch, additions, deletions) = patch(old, new);
+    let Written {
+        path,
+        original,
+        old,
+        new,
+        search,
+        replacement,
+        replace_all,
+        planned,
+    } = w;
+    // Myers diff 是 O(N·D) 且最坏情况大量分配；放到 blocking 池执行，避免占用
+    // tokio worker。5s 预算在 file_diff 内按 TS 语义超时返回空 hunk。
+    let (old, new, patch, additions, deletions) = patch_async(old, new).await?;
     let hunks = patch.as_array().map_or(0, Vec::len);
     // 当前 TS Write/Edit 输出保留调用方路径；绝对路径只属于文件操作和 display。
     let input_path = string(args, "file_path")?;
     let mut data = if name == "Write" {
-        json!({"type":if w.original{"update"}else{"create"},"filePath":input_path,"content":new,"originalFile":w.original.then_some(old),"structuredPatch":patch,"userModified":false})
+        json!({"type":if original{"update"}else{"create"},"filePath":input_path,"content":new,"originalFile":original.then_some(&old),"structuredPatch":patch,"userModified":false})
     } else {
-        json!({"filePath":input_path,"oldString":w.search,"newString":w.replacement,"originalFile":old,"structuredPatch":patch,"userModified":false,"replaceAll":w.replace_all,"matchStrategy":w.planned.map(|p|p.0),"matchCandidateCount":w.planned.map(|p|p.1)})
+        json!({"filePath":input_path,"oldString":search,"newString":replacement,"originalFile":&old,"structuredPatch":patch,"userModified":false,"replaceAll":replace_all,"matchStrategy":planned.map(|p|p.0),"matchCandidateCount":planned.map(|p|p.1)})
     };
     // TS Write 新建（包括覆盖空文件）的结果没有 patch，display 仍保留实际变更。
     if !edit && old.is_empty() {
@@ -74,19 +85,18 @@ pub(super) async fn result(
     }
     let mut content = if edit {
         // Node formatEditModelContent：使用模型给出的 file_path。
-        edit::model_content(string(args, "file_path")?, w.replace_all)
+        edit::model_content(input_path, replace_all)
     } else {
         // 修复：原先是旧文案 "The file <绝对路径> has been written successfully."；Node
         // formatWriteModelContent 区分新建与覆盖，用模型给出的 file_path，并提示文件状态已在上下文中。
-        let path = string(args, "file_path")?;
         if !old.is_empty() {
             format!(
-                "The file {path} has been updated successfully.{}",
+                "The file {input_path} has been updated successfully.{}",
                 edit::FRESHNESS_SUFFIX
             )
         } else {
             format!(
-                "File created successfully at: {path}{}",
+                "File created successfully at: {input_path}{}",
                 edit::FRESHNESS_SUFFIX
             )
         }
