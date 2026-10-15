@@ -68,21 +68,41 @@ fn dispatch(tx: &mpsc::Sender<Input>, line: &[u8]) -> bool {
             })
             .is_ok();
     }
-    let request = {
-        if value["method"] == "startup/storagePathReady" {
-            serde_json::from_value(
-                json!({"method":"startup/storagePathReady","params":{"reuse":value["reuse"]}}),
-            )
-        } else {
-            serde_json::from_value::<Request>(value)
-        }
-    };
+    if value["method"] == "startup/storagePathReady" {
+        // 共享 schema `zcodeStoragePathReadySchema` 是顶层 `{method, reuse?}`：
+        // 非法 reuse 或额外字段不能被当成缺省 false 放行开库。
+        let request = match storage_path_ready(&value) {
+            Some(reuse) => Input::Request(Request {
+                id: None,
+                method: "startup/storagePathReady".into(),
+                params: json!({ "reuse": reuse }),
+                trace: None,
+            }),
+            None => Input::Invalid,
+        };
+        return tx.blocking_send(request).is_ok();
+    }
+    let request = serde_json::from_value::<Request>(value);
     tx.blocking_send(match request {
         Ok(r) if !r.method.trim().is_empty() => Input::Request(r),
         _ => Input::Invalid,
     })
     .is_ok()
 }
+
+/// 严格解析 Host 握手：只接受顶层 `method` 与可选布尔 `reuse`，缺省表示 false。
+fn storage_path_ready(value: &Value) -> Option<bool> {
+    let object = value.as_object()?;
+    if object.keys().any(|key| key != "method" && key != "reuse") {
+        return None;
+    }
+    match object.get("reuse") {
+        None => Some(false),
+        Some(Value::Bool(reuse)) => Some(*reuse),
+        Some(_) => None,
+    }
+}
+
 pub async fn finish(writer: std::thread::JoinHandle<()>) -> Result<()> {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
     while !writer.is_finished() {
@@ -96,19 +116,59 @@ pub async fn finish(writer: std::thread::JoinHandle<()>) -> Result<()> {
         .map_err(|_| anyhow::anyhow!("Protocol writer failed"))
 }
 
+/// Handshake failure carrying Node's existing `DatabaseStartupErrorCode`, so the
+/// `--prepare-storage` path can report a valid failed frame for timeout/EOF.
+#[derive(Debug)]
+pub struct StorageHandshakeError {
+    pub code: &'static str,
+    pub message: &'static str,
+}
+
+impl std::fmt::Display for StorageHandshakeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.message)
+    }
+}
+
+impl std::error::Error for StorageHandshakeError {}
+
+/// Sends `startup/storagePath`, then waits once for the strict
+/// `startup/storagePathReady` ack; returns whether Host granted `reuse`.
 pub async fn storage_prepare(
     path: &std::path::Path,
     input: &mut mpsc::Receiver<Input>,
     output: &mut Sink,
-) -> Result<()> {
+) -> Result<bool> {
     output
         .send_values(vec![
             json!({"method":"startup/storagePath","params":{"path":path}}),
         ])
         .await?;
-    match tokio::time::timeout(std::time::Duration::from_secs(30), input.recv()).await? {
-        Some(Input::Request(request)) if request.method == "startup/storagePathReady" => Ok(()),
-        _ => bail!("Storage preparation handshake failed"),
+    let frame = tokio::time::timeout(std::time::Duration::from_secs(30), input.recv())
+        .await
+        .map_err(|_| StorageHandshakeError {
+            code: "startup_status_timeout",
+            message: "Storage observation handshake timed out",
+        })?;
+    match frame {
+        // `dispatch` 已按共享 schema 归一化为 `{ "reuse": bool }`。
+        Some(Input::Request(request)) if request.method == "startup/storagePathReady" => {
+            Ok(request
+                .params
+                .get("reuse")
+                .and_then(Value::as_bool)
+                .unwrap_or(false))
+        }
+        Some(Input::Eof) | None => Err(StorageHandshakeError {
+            code: "transport_closed",
+            message: "Storage preparation input closed",
+        }
+        .into()),
+        _ => Err(StorageHandshakeError {
+            code: "sql_failed",
+            message: "Storage preparation handshake failed",
+        }
+        .into()),
     }
 }
 

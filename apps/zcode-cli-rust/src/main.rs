@@ -1,6 +1,7 @@
 mod args;
 mod prompt;
 mod runtime;
+mod storage_startup;
 use anyhow::Result;
 use args::{AppServerArgs, Cli, Command};
 use clap::Parser;
@@ -84,17 +85,19 @@ async fn app_server(args: AppServerArgs) -> Result<()> {
     let input_closed = CancellationToken::new();
     let mut input = stdio::start(input_closed.clone());
     let (mut output, writer) = Sink::stdout(cancel.clone());
+    // `--prepare-storage` 只做握手与单次开库/复用，不复用常规 runtime/serve 路径。
+    if args.prepare_storage {
+        let prepared = storage_startup::prepare_storage(&ctx, &path, &mut input, &mut output).await;
+        drop(output);
+        let _ = stdio::finish(writer).await;
+        return prepared;
+    }
+    // 常规启动仍必须先取 owner 锁再开库；握手 reuse 不能绕过该 gate。
+    let _owner =
+        zcode_cli_state::lock_workspace(ctx.data_dir.clone(), ctx.workspace.clone()).await?;
     let attempt = zcode_cli_host::id();
     let database_id = format!("{:x}", Sha256::digest(path.to_string_lossy().as_bytes()));
     let progress = |phase: &str, sequence: u64| json!({"method":"startup/storageState","params":{"schemaVersion":1,"attemptId":attempt,"sequence":sequence,"databaseId":database_id,"databaseKind":"session","phase":phase,"elapsedMs":0}});
-    if args.prepare_storage {
-        stdio::storage_prepare(&path, &mut input, &mut output).await?;
-    }
-    let _owner = if args.prepare_storage {
-        None
-    } else {
-        Some(zcode_cli_state::lock_workspace(ctx.data_dir.clone(), ctx.workspace.clone()).await?)
-    };
     output.send_values(vec![progress("checking", 1)]).await?;
     let store: Arc<dyn SessionStore> = match ctx.node_store().await {
         Ok(store) => Arc::new(store),
@@ -112,27 +115,14 @@ async fn app_server(args: AppServerArgs) -> Result<()> {
         }
     };
     output.send_values(vec![progress("ready", 2)]).await?;
-    if args.prepare_storage {
-        drop(store);
-        output
-            .send_values(vec![
-                json!({"method":"startup/storagePrepared","params":{}}),
-            ])
-            .await?;
-    } else {
-        // Node 的协议会话在首条输入后生成标题（`-p` 不生成）。
-        let engine = ctx
-            .engine(store, args.config.as_ref(), args.surface == "desktop")
-            .await?
-            .with_title_generation(true);
-        // App Server 独占 stdout；返回时已排空 runtime 输出并释放 sink。
-        let served =
-            app_server::serve(move |rx, tx| engine.serve(rx, tx, cancel), input, output).await;
-        // 失败路径同样先等写线程落盘：存储失败的错误响应必须送达 Host 后进程才能退出。
-        stdio::finish(writer).await?;
-        return served;
-    }
-    drop(output);
+    // Node 的协议会话在首条输入后生成标题（`-p` 不生成）。
+    let engine = ctx
+        .engine(store, args.config.as_ref(), args.surface == "desktop")
+        .await?
+        .with_title_generation(true);
+    // App Server 独占 stdout；返回时已排空 runtime 输出并释放 sink。
+    let served = app_server::serve(move |rx, tx| engine.serve(rx, tx, cancel), input, output).await;
+    // 失败路径同样先等写线程落盘：存储失败的错误响应必须送达 Host 后进程才能退出。
     stdio::finish(writer).await?;
-    Ok(())
+    served
 }
