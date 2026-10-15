@@ -2,10 +2,13 @@
 //! `runner-options.ts`, `official-coding-plan-gateway.ts`).
 use super::*;
 use crate::contract::RequestKind;
-use crate::network_status::Attempt;
+use crate::http_fixture::{
+    Bounded, Fixture, Reply, Response, expect_cancelled, expect_text_event, http_model,
+    is_retry_scheduled, model as fixture_http_model, sink,
+};
 use serde_json::json;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use zcode_cli_net::{NetworkPolicy, RuntimeEnv};
+
+const CHAT_OK: &str = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
 
 fn model(api: &str, base: &str, headers: &[(&str, &str)]) -> HttpModel {
     let mut config: ModelConfig = serde_json::from_value(json!({
@@ -17,15 +20,7 @@ fn model(api: &str, base: &str, headers: &[(&str, &str)]) -> HttpModel {
         .iter()
         .map(|(k, v)| ((*k).into(), (*v).into()))
         .collect();
-    let env = RuntimeEnv::from_vars(vec![("ZCODE_APP_VERSION".into(), "2.0.0".into())]);
-    let egress = Egress::new(
-        Arc::new(env),
-        &NetworkPolicy::default(),
-        std::path::Path::new("/nonexistent"),
-        "electron",
-    )
-    .unwrap();
-    HttpModel::new(config, Arc::new(egress))
+    http_model(config)
 }
 
 fn header<'a>(headers: &'a Headers, name: &str) -> Option<&'a str> {
@@ -123,54 +118,29 @@ fn official_coding_plan_endpoints_go_through_the_gateway_without_host() {
 
 #[tokio::test]
 async fn local_sse_fixtures_cover_all_protocols_and_terminal_error() {
-    use crate::contract::{EventSink, ModelPort, RequestOrigin};
-    use tokio::net::TcpListener;
-    use tokio::sync::mpsc;
+    use crate::contract::ModelPort;
     use tokio_util::sync::CancellationToken;
 
     async fn request(api: &str, stream: &'static str) -> Result<serde_json::Value> {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let response = tokio::spawn(async move {
-            let (mut socket, _) = listener.accept().await.unwrap();
-            let mut request = vec![0; 4096];
-            let _ = socket.read(&mut request).await.unwrap();
-            let body = stream.as_bytes();
-            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes()).await.unwrap();
-            // TCP write 边界不等于客户端 read 边界；bytewise 行为由 SseDecoder 单测确定性覆盖。
-            socket.write_all(body).await.unwrap();
-        });
-        let mut config: ModelConfig = serde_json::from_value(json!({"providerId":"fixture","modelId":"fixture","reasoningLevel":"none","baseUrl":format!("http://{addr}"),"apiType":api,"retry":{"maxRetries":0},"streamIdleTimeoutMs":5000})).unwrap();
-        config.retry.max_retries = Some(0);
-        let env = RuntimeEnv::from_vars(vec![]);
-        let egress = Arc::new(
-            Egress::new(
-                Arc::new(env),
-                &NetworkPolicy::default(),
-                std::path::Path::new("/nonexistent"),
-                "test",
-            )
-            .unwrap(),
-        );
-        let model = HttpModel::new(config, egress);
-        let (tx, _rx) = mpsc::channel(128);
-        let sink = EventSink {
-            session_id: "s".into(),
-            run_id: "r".into(),
-            tx,
-            origin: Arc::new(RequestOrigin::default()),
-            request_auth: None,
-        };
-        let result = model
-            .complete(
-                vec![json!({"role":"user","content":"hi"})],
-                &[],
-                &sink,
-                &CancellationToken::new(),
+        let fixture = Fixture::start(move |_| Reply::Close(Response::sse(stream))).await;
+        let deadline = Bounded::new();
+        let (event_sink, _events) = sink();
+        let result = deadline
+            .run(
+                "protocol fixture call",
+                fixture_http_model(fixture.addr(), api, 0).complete(
+                    vec![json!({"role":"user","content":"hi"})],
+                    &[],
+                    &event_sink,
+                    &CancellationToken::new(),
+                ),
             )
             .await
-            .map(|o| o.message);
-        response.await.unwrap();
+            .map(|output| output.message);
+        fixture
+            .finish(&deadline)
+            .await
+            .assert_attempts("protocol fixture", 1, 1);
         result
     }
 
@@ -195,182 +165,79 @@ async fn local_sse_fixtures_cover_all_protocols_and_terminal_error() {
 
 #[tokio::test]
 async fn local_http_retry_then_success_and_inflight_cancellation() {
-    use crate::contract::{EventSink, ModelPort, RequestOrigin};
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use tokio::net::TcpListener;
-    use tokio::sync::{mpsc, oneshot};
+    use crate::contract::ModelPort;
     use tokio_util::sync::CancellationToken;
 
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let requests = Arc::new(AtomicUsize::new(0));
-    let seen = requests.clone();
-    let server = tokio::spawn(async move {
-        for attempt in 0..2 {
-            let (mut socket, _) = listener.accept().await.unwrap();
-            let mut bytes = [0; 2048];
-            let _ = socket.read(&mut bytes).await.unwrap();
-            seen.fetch_add(1, Ordering::SeqCst);
-            if attempt == 0 {
-                socket.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nRetry-After: 0\r\nConnection: close\r\n\r\n").await.unwrap();
-            } else {
-                let body = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
-                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
-            }
+    // 503 后成功：确认恰好 2 次请求。
+    let fixture = Fixture::start(|number| {
+        if number == 0 {
+            Reply::Close(Response::new(503).header("Retry-After", "0"))
+        } else {
+            Reply::Close(Response::sse(CHAT_OK))
         }
-    });
-    let mut config: ModelConfig = serde_json::from_value(json!({"providerId":"fixture","modelId":"fixture","reasoningLevel":"none","baseUrl":format!("http://{addr}"),"retry":{"maxRetries":1,"baseDelayMs":0,"jitter":false},"streamIdleTimeoutMs":5000})).unwrap();
-    config.retry.max_retries = Some(1);
-    config.retry.base_delay_ms = Some(0);
-    config.retry.jitter = Some(false);
-    let egress = Arc::new(
-        Egress::new(
-            Arc::new(RuntimeEnv::from_vars(vec![])),
-            &NetworkPolicy::default(),
-            std::path::Path::new("/nonexistent"),
-            "test",
-        )
-        .unwrap(),
-    );
-    let model = HttpModel::new(config, egress);
-    let (tx, _rx) = mpsc::channel(128);
-    let sink = EventSink {
-        session_id: "s".into(),
-        run_id: "r".into(),
-        tx,
-        origin: Arc::new(RequestOrigin::default()),
-        request_auth: None,
-    };
-    let output = model
-        .complete(
-            vec![json!({"role":"user","content":"hi"})],
-            &[],
-            &sink,
-            &CancellationToken::new(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(output.message["content"], "ok");
-    server.await.unwrap();
-    assert_eq!(requests.load(Ordering::SeqCst), 2);
-
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let cancellation_requests = Arc::new(AtomicUsize::new(0));
-    let server_requests = cancellation_requests.clone();
-    let (call_finished, mut finish_rx) = oneshot::channel();
-    let server = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        let mut bytes = [0; 2048];
-        let _ = socket.read(&mut bytes).await.unwrap();
-        server_requests.fetch_add(1, Ordering::SeqCst);
-        let body = b"data: {\"choices\":[{\"delta\":{\"content\":\"stream started\"}}]}\n\n";
-        socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n").await.unwrap();
-        socket
-            .write_all(format!("{:X}\r\n", body.len()).as_bytes())
-            .await
-            .unwrap();
-        socket.write_all(body).await.unwrap();
-        socket.write_all(b"\r\n").await.unwrap();
-
-        let mut stream_open = true;
-        let mut probe = [0; 1];
-        loop {
-            tokio::select! {
-                _ = &mut finish_rx => break,
-                result = socket.read(&mut probe), if stream_open => {
-                    if result.unwrap() == 0 { stream_open = false; }
-                }
-                accepted = listener.accept() => {
-                    let (mut socket, _) = accepted.unwrap();
-                    let mut bytes = [0; 2048];
-                    let _ = socket.read(&mut bytes).await.unwrap();
-                    server_requests.fetch_add(1, Ordering::SeqCst);
-                }
-            }
-        }
-        // 逻辑调用完成后排空已经到达 accept 队列的请求，避免漏计取消后的重试。
-        let listener = listener.into_std().unwrap();
-        listener.set_nonblocking(true).unwrap();
-        while listener.accept().is_ok() {
-            server_requests.fetch_add(1, Ordering::SeqCst);
-        }
-    });
-    let mut config: ModelConfig = serde_json::from_value(json!({"providerId":"fixture","modelId":"fixture","reasoningLevel":"none","baseUrl":format!("http://{addr}"),"retry":{"maxRetries":3,"baseDelayMs":0},"streamIdleTimeoutMs":5000})).unwrap();
-    config.retry.max_retries = Some(3);
-    let egress = Arc::new(
-        Egress::new(
-            Arc::new(RuntimeEnv::from_vars(vec![])),
-            &NetworkPolicy::default(),
-            std::path::Path::new("/nonexistent"),
-            "test",
-        )
-        .unwrap(),
-    );
-    let model = HttpModel::new(config, egress);
-    let cancel = CancellationToken::new();
-    let request_cancel = cancel.clone();
-    let (event_sink, mut events) = {
-        let (tx, rx) = mpsc::channel(128);
-        (
-            EventSink {
-                session_id: "s".into(),
-                run_id: "r".into(),
-                tx,
-                origin: Arc::new(RequestOrigin::default()),
-                request_auth: None,
-            },
-            rx,
-        )
-    };
-    let call = tokio::spawn(async move {
-        model
-            .complete(
+    })
+    .await;
+    let deadline = Bounded::new();
+    let (event_sink, _events) = sink();
+    let output = deadline
+        .run(
+            "retry then success",
+            fixture_http_model(fixture.addr(), "openai-chat-completions", 1).complete(
                 vec![json!({"role":"user","content":"hi"})],
                 &[],
                 &event_sink,
-                &request_cancel,
-            )
-            .await
-    });
-    let text = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            if let Some(event) = events.recv().await
-                && let crate::contract::Event::Text {
-                    text,
-                    reasoning: false,
-                    ..
-                } = event.event
-            {
-                break text;
-            }
-        }
+                &CancellationToken::new(),
+            ),
+        )
+        .await
+        .expect("retry-then-success call failed");
+    assert_eq!(output.message["content"], "ok");
+    fixture
+        .finish(&deadline)
+        .await
+        .assert_attempts("retry then success", 2, 2);
+
+    // 流中取消：只发生 1 次请求、无 retry；server 干净 join。
+    let fixture = Fixture::start(|_| {
+        Reply::Hold(Response::sse(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"stream started\"}}]}\n\n",
+        ))
     })
-    .await
-    .expect("model text event was not received");
+    .await;
+    let (event_sink, mut events) = sink();
+    let cancel = CancellationToken::new();
+    let request_cancel = cancel.clone();
+    let call = tokio::spawn({
+        let model = fixture_http_model(fixture.addr(), "openai-chat-completions", 3);
+        async move {
+            model
+                .complete(
+                    vec![json!({"role":"user","content":"hi"})],
+                    &[],
+                    &event_sink,
+                    &request_cancel,
+                )
+                .await
+        }
+    });
+    // 以收到模型文本事件作为“已进入流读取”的同步点，不用 sleep。
+    let text = expect_text_event(&deadline, &mut events).await;
     assert_eq!(text, "stream started");
     cancel.cancel();
-    let failure = tokio::time::timeout(std::time::Duration::from_secs(5), call)
-        .await
-        .expect("cancelled model call did not finish")
-        .unwrap();
-    match failure {
-        Ok(_) => panic!("cancelled model call unexpectedly succeeded"),
-        Err(failure) => assert_eq!(failure.reason, "cancelled"),
-    }
+    let failure = expect_cancelled(
+        deadline
+            .run("cancelled inflight call", call)
+            .await
+            .expect("cancelled inflight task panicked"),
+    );
+    assert_eq!(failure.reason, "cancelled");
     while let Ok(event) = events.try_recv() {
-        assert!(!matches!(
-            event.event,
-            crate::contract::Event::ModelStatus(status)
-                if status["type"] == "model_retry_scheduled"
-        ));
+        assert!(!is_retry_scheduled(&event));
     }
-    call_finished.send(()).unwrap();
-    tokio::time::timeout(std::time::Duration::from_secs(5), server)
+    fixture
+        .finish(&deadline)
         .await
-        .expect("fixture server did not shut down")
-        .unwrap();
-    assert_eq!(cancellation_requests.load(Ordering::SeqCst), 1);
+        .assert_attempts("inflight cancellation", 1, 1);
 }
 
 #[test]
