@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve as resolvePath } from "node:path";
 import { ZCODE_AGENT_RUNTIME, ZCODE_USER_DATA_DIR_NAME } from "@zcode/shared";
+import { isEffectiveDevelopmentNodeEnv } from "./nodeEnv.js";
 
 const packagedResourcesPath =
   typeof (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath === "string"
@@ -103,12 +104,9 @@ const CLI_RUST_BINARY_BASE = "zcode-cli-rust";
 /**
  * 查找随包分发的 Rust CLI runtime 可执行文件（resources/rust/zcode-cli-rust）。
  *
- * 只在 Preview（ZCodium Rust）口味里存在：prepare-runtime-assets 仅在
- * `ZCODE_PREVIEW_IDENTITY=1` 时运行 prepare:cli-rust，electron-builder 也只在同一条件下
- * 把 bundled-agents/<platform>/rust 拷进 resources/rust。生产口味没有这个文件，
- * 返回 null 后继续解析 TS bundle，两条链路互不影响。
- *
- * 候选目录与 findZCodeAgentRuntimeNodeBundle 平行，便于 dev 与打包态共用一套解析。
+ * 候选目录与 findZCodeAgentRuntimeNodeBundle 平行，便于 dev 与打包态共用一套解析，
+ * 打包态优先 `process.resourcesPath/rust`。这里只负责「随包/stage 资源」，开发态从
+ * Cargo `target` 发现走 findDevZCodeCliRustBinary，且仅由显式 runtime selector 调用。
  * 不设 env 覆盖：显式覆盖走 ZCODE_AGENT_SERVER_COMMAND，那条路在解析链更前面。
  */
 export function findZCodeCliRustBinary(): string | null {
@@ -125,4 +123,39 @@ export function findZCodeCliRustBinary(): string | null {
     ...legacyRoots.map((root) => (root ? resolvePath(root, ...resourceSegments) : null)),
   ];
   return resolveExistingPath(candidates);
+}
+
+/** 从本文件位置（src/runtime-tools 或 dist/runtime-tools）上溯到仓库根。 */
+function resolveRepoRootFromModuleDir(): string | null {
+  const moduleDir: string | undefined = import.meta.dirname;
+  if (!moduleDir) {
+    return null;
+  }
+  return resolvePath(moduleDir, "..", "..", "..", "..");
+}
+
+/**
+ * 开发态从仓库锚点发现 Cargo 构建产物：target/debug 优先，缺失时后备 target/release。
+ *
+ * Bug 背景：旧解析链只看 `process.cwd()`，既找不到本仓未 stage 的 Cargo 产物，
+ * 又可能把任意 cwd 下的同名程序当成 runtime。这里固定从仓库锚点（import.meta.dirname
+ * 上溯）定位 `apps/zcode-cli-rust/target`，不按 cwd 匹配。
+ *
+ * 该入口只在显式 `ZCODE_AGENT_SERVER_RUNTIME=zcode-cli-rust` 分支被调用，
+ * 且 production/测试默认关闭，避免把 checkout 的调试产物带进打包结果。
+ */
+export function findDevZCodeCliRustBinary(repoRoot?: string): string | null {
+  if (!isEffectiveDevelopmentNodeEnv()) {
+    return null;
+  }
+  const root = repoRoot ?? resolveRepoRootFromModuleDir();
+  if (!root) {
+    return null;
+  }
+  const binaryName =
+    process.platform === "win32" ? `${CLI_RUST_BINARY_BASE}.exe` : CLI_RUST_BINARY_BASE;
+  return resolveExistingPath([
+    resolvePath(root, "apps", "zcode-cli-rust", "target", "debug", binaryName),
+    resolvePath(root, "apps", "zcode-cli-rust", "target", "release", binaryName),
+  ]);
 }

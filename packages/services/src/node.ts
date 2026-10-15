@@ -92,6 +92,7 @@ export type {
   ZCodeAgentCommandResolver,
   ZCodeAgentCommandResolverContext,
   ZCodeAgentProcessManagerOptions,
+  ZCodeAgentStoragePreparation,
 } from "./zcode-agent/zcodeAgentProcessManager.js";
 export { ZCodeProtocolClient } from "./zcode-agent/zcodeProtocolClient.js";
 export type { ZCodeProtocolTransport } from "./zcode-agent/zcodeProtocolTransport.js";
