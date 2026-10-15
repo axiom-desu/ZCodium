@@ -1,6 +1,6 @@
 # Rust CLI runtime：增量交接
 
-最新 M8 接线实现、局部 GUI 证据和用户接手待测清单见 [M8 报告](../../docs/reports/cli-rust-m8-desktop-handoff.md)。本页的 470/50 等计数是 M8 之前的验证基线，不是本轮 M8 的最终总数；runtime/review/README 中的早期 landing 记录亦为历史基线。仍未启用默认 Rust runtime，未访问用户库、未改历史 SQL、未迁移 HOME；`logs/` 保留且不提交。
+最新 M8 接线实现、局部 GUI 证据和用户接手待测清单见 [M8 报告](../../docs/reports/cli-rust-m8-desktop-handoff.md)。本页的 470/50 等计数是 M8 之前的验证基线，不是本轮 M8 的最终总数；runtime/review/README 中的早期 landing 记录亦为历史基线。用户已单独授权打包的 ZCodium Rust 默认 Rust，正式版及开发态仍默认 TS，详见 [默认规则](cli-rust-preview-default.md)；未访问用户库、未改历史 SQL、未迁移 HOME；`logs/` 保留且不提交。
 
 ## 当前进度（不等于 M2–M8 完成）
 

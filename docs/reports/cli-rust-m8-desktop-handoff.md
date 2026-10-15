@@ -2,6 +2,8 @@
 
 ## 结论
 
+最新默认策略已获单独授权并接线：**打包的 ZCodium Rust 默认 Rust，ZCodium Exp 与开发态默认 TS，显式 runtime override 优先，缺 Rust binary 不回退。** 见 [默认规则](../../.agents/specs/cli-rust-preview-default.md)。下文“默认仍 TS”等表述是 M8 当时交接记录，不是该后续策略。未启动 GUI 或安装包验收，用户仍负责历史库接管测试。
+
 **后续需求调整：用户确认只要求 Rust 接管 TS 现有库，最终替代 TS。Rust→TS 切回恢复不再是 M8 阻塞项；下文失败记录只保留为当时测试事实。当前必验收方向为 TS 历史库→Rust 读取、恢复、续写与原数据保全，不等于任意历史库版本均已保证兼容。** 本次仅文档调整，不启动 GUI、不改变默认 runtime。
 
 本轮补上 runtime 显式选择、Desktop 原生存储准备 transport 和 Rust 准备握手/reuse；**真实 App 的 Rust 启动、文本对话和工具显示已有局部运行证据，但切回 TS 恢复没有通过，M8 未验收完成**。

@@ -21,6 +21,7 @@ import {
   resolveZaiOAuthClientId,
   resolveZaiOAuthOrigin,
   sanitizeZCodeRuntimeEnv,
+  type ZCodeProductFlavor,
   type ZCodeRuntimeEnv,
 } from "@zcode/shared";
 import { resolvePlatformKeyForPackagedApp } from "../../scripts/target-platform.mjs";
@@ -31,6 +32,10 @@ import {
   ZCODE_WINDOWS_APP_INSTALL_DIR_ENV,
 } from "@zcode/services/node";
 import { getElectronAppPath, isElectronAppPackaged } from "./desktopElectronApp.js";
+import {
+  ZCODE_AGENT_SERVER_RUNTIME_ENV_KEY,
+  resolveHostProcessAgentServerRuntimeEnv,
+} from "./desktopAgentRuntimeEnv.js";
 
 const isLocalDevelopmentRuntime = !isElectronAppPackaged();
 export const desktopRuntimeEnv: ZCodeRuntimeEnv = isLocalDevelopmentRuntime
@@ -448,13 +453,25 @@ function resolveDynamicWorkflowModeHostEnv(options: {
   return {};
 }
 
-export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>) {
+/**
+ * buildHostProcessEnv 的产品身份决定项。生产调用不传，默认取真实打包状态与构建期 flavor；
+ * 单测可显式注入这两项，从而在不启动 Electron 的前提下验证真实 env 接线。
+ */
+export interface BuildHostProcessEnvOptions {
+  isPackaged?: boolean;
+  productFlavor?: ZCodeProductFlavor;
+}
+
+export function buildHostProcessEnv(
+  hostProcessLocalEnv: Record<string, string>,
+  options: BuildHostProcessEnvOptions = {},
+) {
   // 上游 9976f24 拆除 Computer Use Helper 链路时删除了本声明，但漏删下方
   // resolveDynamicWorkflowModeHostEnv({ isPackaged: packagedDesktop }) 处的引用，
   // 打包产物启动即抛 ReferenceError: packagedDesktop is not defined，
   // 主进程启动链断裂、host 进程不再 spawn，窗口卡在启动页（startup_status_timeout）。
   // 补回声明；isElectronAppPackaged 的 import 本文件本就存在。
-  const packagedDesktop = isElectronAppPackaged();
+  const packagedDesktop = options.isPackaged ?? isElectronAppPackaged();
   const glmBinaryPath = resolveBundledGlmBinaryPath();
   const larkCliBinaryPath = resolveBundledLarkCliBinaryPath();
   const resolvedGlmBinaryPath = resolveHostProcessBinaryEnv(
@@ -477,6 +494,14 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
     ...sanitizeZCodeRuntimeEnv(rawInheritedEnv),
     ...buildZCodeToolEnvPassthroughEnv(rawInheritedEnv),
   });
+  // Agent runtime 产品默认由 Main 决定：打包的 Preview 默认 Rust，其余默认 TS。
+  // 非空显式值（含拼写错误）优先并原样保留，交由 Services resolver 校验/fail-closed；
+  // 读取 rawInheritedEnv 以保持 process.env 覆盖 hostProcessLocalEnv 的既有优先级。
+  const agentServerRuntimeEnv = resolveHostProcessAgentServerRuntimeEnv({
+    inheritedValue: rawInheritedEnv[ZCODE_AGENT_SERVER_RUNTIME_ENV_KEY],
+    isPackaged: packagedDesktop,
+    productFlavor: options.productFlavor ?? ZCODE_PRODUCT_FLAVOR,
+  });
   const dynamicWorkflowModeHostEnv = resolveDynamicWorkflowModeHostEnv({
     inheritedValue: rawInheritedEnv[ZCODE_DYNAMIC_WORKFLOW_MODE_ENV],
     isPackaged: packagedDesktop,
@@ -488,6 +513,7 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
 
   return {
     ...inheritedEnv,
+    ...agentServerRuntimeEnv,
     // ZCode 运行时不再使用 NODE_ENV；它会被用户 shell、包管理器和测试框架复用。
     // 这里显式下发 ZCODE_RUNTIME_ENV，并在继承环境里清掉 NODE_ENV，避免 host/agent/Bash 被污染。
     [ZCODE_RUNTIME_ENV_KEY]: resolveHostProcessNodeEnv(),

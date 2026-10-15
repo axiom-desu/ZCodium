@@ -3,10 +3,11 @@
 import process from "node:process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadBuiltinProviderConfig } from "../../../scripts/builtin-provider-config.mjs";
 import { resolveNativeSearchReleasePlan } from "../../../scripts/native-search-tools-config.mjs";
 import { runCommand } from "../../../scripts/spawn-command.mjs";
 import { getTargetPlatform } from "./target-platform.mjs";
-import { isPreviewIdentityRequested } from "./desktop-product-identity.mjs";
+import { resolveRuntimeAssetsPlan } from "./runtime-assets-plan.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(scriptDir, "..");
@@ -24,9 +25,17 @@ const shouldPrepareWindowsBrowserImportHelper =
 // 到屏幕底部，仍可用），所以无条件挂在 darwin 上不会让构建变脆。
 const shouldPrepareMacosWindowBounds = target.os === "darwin";
 // Rust CLI runtime 只在 Preview（ZCodium Rust）口味随包分发：生产口味继续只带 glm/ 的 JS bundle。
-// 见 packages/desktop/scripts/desktop-product-identity.mjs 的身份注释与
-// .agents/specs/cli-rust-runtime.md 的 D4（默认 runtime 仍为 TS，可回退）。
-const shouldPrepareCliRust = isPreviewIdentityRequested();
+// 修复：这里不能再只看 ZCODE_PREVIEW_IDENTITY。`ZCODE_ENV=test` 经同一 product flavor
+// 解析也是 preview，而打包后的 Main 会按该 flavor 默认选 Rust；只用 flag 会让安装包缺
+// resources/rust，首次启动即报缺 binary。资产决策必须与 tsup/builder 的 identity 同源，
+// 统一走 loadBuiltinProviderConfig().environment + process.env 的 resolveRuntimeAssetsPlan。
+// 见 .agents/specs/cli-rust-preview-default.md 与
+// packages/desktop/scripts/desktop-product-identity.mjs 的身份注释。
+const builtinProviderConfig = await loadBuiltinProviderConfig();
+const runtimeAssetsPlan = resolveRuntimeAssetsPlan({
+  environment: builtinProviderConfig.environment,
+});
+const shouldPrepareCliRust = runtimeAssetsPlan.includeRustCliRuntime;
 
 // 本机桌面包内置 agent 的 JS bundle（prepare:agent-bundle），运行时由 app 的 Electron Node runtime 执行。
 // Linux x64 远端资源由 prepare:remote-assets 生成，两种桌面包消费同一份归档。

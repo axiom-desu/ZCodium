@@ -2,10 +2,10 @@
 
 ## 产品规则与边界（实现前约定）
 
-后续产品决策覆盖原双向要求：Rust 单向接管 TS 库并最终替代 TS；Rust→TS 恢复不再作为必过项。必须验证 TS 历史会话的读取/中断恢复/续写与数据保全；先停止 TS owner，再启动 Rust。该决定不等于修改默认开关或授权访问用户库。
+后续产品决策覆盖原双向要求：Rust 单向接管 TS 库并最终替代 TS；Rust→TS 恢复不再作为必过项。必须验证 TS 历史会话的读取/中断恢复/续写与数据保全；先停止 TS owner，再启动 Rust。随后用户另行授权 ZCodium Rust 打包口味默认 Rust，见 [产品默认规则](cli-rust-preview-default.md)；仍不授权访问用户库。
 
-- 默认仍 TS。`ZCODE_AGENT_SERVER_RUNTIME=zcode-cli-rust` 显式选择 Rust，`ts` 或空值选择 TS；未知值明确失败。显式 `ZCODE_AGENT_SERVER_COMMAND` 保留最高优先级与既有自定义命令语义，不臆测其存储能力。
-- Preview 只负责分发 Rust binary，不因文件存在自动启用。显式 Rust 缺 binary 必须失败，不回退 TS；撤销选择或设为 ts 才是回退。
+- 打包 preview（ZCodium Rust）默认 Rust；production（ZCodium Exp）与未打包开发态默认 TS。Main 注入产品默认，非空显式 `ZCODE_AGENT_SERVER_RUNTIME=ts|zcode-cli-rust` 优先；空值使用产品默认，未知值明确失败。显式 `ZCODE_AGENT_SERVER_COMMAND` 保留最高优先级与既有自定义命令语义，不臆测其存储能力。
+- Preview 按构建 flavor 分发并默认启用 Rust，不以文件是否存在决定默认。显式 Rust 缺 binary 必须失败，不回退 TS；撤销选择或设为 ts 才是回退。
 - Services command resolver 是 runtime 选择/能力描述的唯一 owner。开发环境允许发现本仓当前 Cargo target/debug（后备 release），打包态优先 resources/rust；不能仅按 cwd 命中任意同名外部程序。
 - `ZCodeAgentCommand.storagePreparationEntry` 改成唯一 tagged descriptor `storagePreparation?: {kind:'node-worker';entry:string} | {kind:'native-process'}`。前者运行已知 JS 存储 Worker，后者复用 resolved command/args/cwd/env 启动原生进程并追加 `--prepare-storage --cwd …`。`supportsStorageStartup` 仍说明常规 Agent 会发合法启动状态；未知自定义/旧部署命令不推断能力。开发 tap wrapper 保留该描述。
 - Host 复用同一控制帧解析、pathReady、observePath、preparedPaths、迁移失败报告，不为 Rust另建存储状态。native 只替换 transport，不改变 UI/platform API、schema 或 accepted queue。
@@ -41,4 +41,4 @@ Web replayable ─ snapshot/replay ──┴─ 仍是同一会话 owner，不�
 
 ## 尚未授权扩展
 
-MCP OAuth/CUA/REPL/memory 完整产品补齐、mixed-runtime 同workspace并发owner协调、默认Rust启用、发布切换不在最小闭环内。
+MCP OAuth/CUA/REPL/memory 完整产品补齐、mixed-runtime 同workspace并发owner协调、正式版默认 Rust 与发布切换不在最小闭环内；仅 ZCodium Rust 打包口味默认 Rust 已获单独授权。

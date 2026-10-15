@@ -19,7 +19,7 @@ import { verifyBundledRemoteAssets } from "../../scripts/bundle-remote-assets.mj
 import { noticesFileName, stageElectronNotices } from "../../scripts/third-party-notices.mjs";
 import { resolveNativeSearchReleasePlan } from "../../scripts/native-search-tools-config.mjs";
 import { getBuildMetadata } from "./scripts/build-metadata.mjs";
-import { isPreviewIdentityRequested } from "./scripts/desktop-product-identity.mjs";
+import { resolveRuntimeAssetsPlan } from "./scripts/runtime-assets-plan.mjs";
 import { collectRuntimeModuleClosureEntries } from "./scripts/runtime-dependency-closure.mjs";
 import {
   resolvePackagedNodePtyPrebuildPath,
@@ -85,6 +85,13 @@ const builtinProviderConfig = await loadBuiltinProviderConfig();
 const desktopProductIdentity = resolveDesktopProductIdentity({
   ...process.env,
   ZCODE_ENV: builtinProviderConfig.environment,
+});
+// 随包 Rust 资产与 productName/appId 的 identity 同源：
+// `ZCODE_ENV=test` 也是 preview（ZCodium Rust），而 Main 会按该 flavor 默认选 Rust。
+// 旧实现只看 ZCODE_PREVIEW_IDENTITY，会让 test 后端的包缺 resources/rust 却默认走 Rust。
+// 见 packages/desktop/scripts/runtime-assets-plan.mjs。
+const runtimeAssetsPlan = resolveRuntimeAssetsPlan({
+  environment: builtinProviderConfig.environment,
 });
 const nativeSearchReleasePlan = resolveNativeSearchReleasePlan({
   platform: targetPlatform.os,
@@ -716,7 +723,7 @@ export default {
     // Rust CLI runtime，只在 Preview（ZCodium Rust）口味随包分发，落到 resources/rust。
     // 生产口味不构建也不打包，继续只用上面的 glm/ JS bundle。
     // 目录与 glm/ 平级但分开，保证两套 runtime 的启停与回退互不影响。
-    ...(isPreviewIdentityRequested()
+    ...(runtimeAssetsPlan.includeRustCliRuntime
       ? [
           {
             from: `bundled-agents/${targetPlatform.key}/rust`,

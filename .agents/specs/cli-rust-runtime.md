@@ -25,12 +25,12 @@ Agent CLI 是重复成本最高的一块：
 
 ## 目标与非目标
 
-最新产品决策：Rust 单向接管 TS 现有库，最终替代 TS CLI；Rust→TS 切回恢复不是发布门槛。既有双向互操作测试保留为额外回归，不为反向兼容新增产品逻辑。本次只更新验收规则，不自动切换默认 runtime、不授权访问真实用户库。
+最新产品决策：Rust 单向接管 TS 现有库，最终替代 TS CLI；Rust→TS 切回恢复不是发布门槛。既有双向互操作测试保留为额外回归，不为反向兼容新增产品逻辑。用户另行授权打包的 ZCodium Rust 默认 Rust；正式版与开发态默认 TS，显式 override 优先，详见 [产品默认规则](cli-rust-preview-default.md)。不授权访问真实用户库。
 
 **目标**
 
 1. 用 Rust 实现 Agent CLI runtime，能读取 TS 现有会话库、恢复历史状态并继续执行/持久化，最终替代 TS CLI。
-2. 通过既有环境变量显式选择，默认仍为 TS：`ZCODE_AGENT_SERVER_RUNTIME=zcode-cli-rust`。
+2. 打包的 ZCodium Rust（preview flavor）默认 Rust；ZCodium Exp（production flavor）与开发态默认 TS。显式 `ZCODE_AGENT_SERVER_RUNTIME=ts|zcode-cli-rust` 优先于产品默认，Rust 缺 binary 明确失败。
 3. Rust 直接接管 TS 现有会话库，正确解释既有记录且保留未知字段/原有数据，能恢复并继续对话；不要求 TS 再读取 Rust 后续新增数据。Rust CLI 默认必须对齐当前 TS `DefaultRuntimeConfig.storage` 的有效默认 `~/.zcodium`；shared standalone SQLite store fallback 的 `.zcodium-exp` 是另一条路径约定，需独立决策，不得据此声称 Rust 默认全部使用 `.zcodium-exp` 或擅自迁移用户数据。
 4. Host ↔ CLI 仍走 stdio NDJSON，**协议不改**。
 
@@ -70,11 +70,12 @@ Agent CLI 是重复成本最高的一块：
 2. `prepare-runtime-assets.mjs` 与 `electron-builder.config.js` 的 extraResources：
    preview 才跑、才打包，落到 `resources/rust`。
 3. `zcodeAgentProcessManager.ts` 先处理 custom command，然后读取 `ZCODE_AGENT_SERVER_RUNTIME`。
-   未设置/`ts` 仍走 TS 链；`zcode-cli-rust` 只查 Rust，缺 binary 明确失败，不静默回退。
-   开发态可从仓库锚点发现 Cargo target；随包 Rust 不因文件存在自动启用。
+   Main 按构建 flavor 注入产品默认：打包 preview 为 Rust，其余为 TS；显式 override 优先。
+   Services 只按有效 runtime 解析，Rust 缺 binary 明确失败，不静默回退。
+   开发态可显式选择仓库锚点的 Cargo target；不依据 binary 是否存在决定产品默认。
 
 Rust 是独立可执行文件，不需要 `ELECTRON_RUN_AS_NODE`。M8 的 native storage transport 已实现，
-真实 App 的 TS 历史会话→Rust 恢复/续写验收仍待完成；Rust→TS 切回不再是门槛。本次规则变更不直接修改默认 runtime。
+真实 App 的 TS 历史会话→Rust 恢复/续写验收仍待完成；Rust→TS 切回不再是门槛。产品默认按 [preview default](cli-rust-preview-default.md) 单独接线，不代表历史库全量兼容已验收。
 
 ### D1 依据：为什么移植而不是从零写
 
@@ -155,7 +156,7 @@ M1 正确规则与验收：
 2. 冷读 load 有副作用，需审查读路径是否可变更持久化状态。
 3. TS→Rust 接管必须先结束旧 owner，再启动 Rust，保留 workspace 锁/lease 与 stale-run 防护。同 workspace 两种 runtime 同时运行不是产品目标；既有 interop 并发证据只覆盖不同 workspace/session。
 4. M8 原 capability/native transport 阻碍已有接线实现：使用 tagged storagePreparation 描述并复用 Host 握手；Rust reuse/严格校验已修复。真实 App 的 Rust 基础对话有局部证据，TS→Rust 历史会话接管的完整 E2E 待用户接手；反向切 TS 的未通过步骤不再阻塞；详见 [M8 报告](../../docs/reports/cli-rust-m8-desktop-handoff.md)。
-5. 存储路径必须区分所有者：当前 TS CLI `DefaultRuntimeConfig.storage` 有效默认是 `~/.zcodium`；`packages/shared` standalone SQLite session-store fallback 是 `~/.zcodium-exp`。不得将两者合并描述为单一默认或擅自迁移用户数据；默认 runtime 仍不可启用。
+5. 存储路径必须区分所有者：当前 TS CLI `DefaultRuntimeConfig.storage` 有效默认是 `~/.zcodium`；`packages/shared` standalone SQLite session-store fallback 是 `~/.zcodium-exp`。不得将两者合并描述为单一默认或擅自迁移用户数据；仅 ZCodium Rust 打包口味已授权默认启用 Rust，正式版及开发态仍默认 TS。
 6. Native Windows/macOS runtime 未实际运行；CI native matrix 只检查编译，不作为 runtime 通过证据。Windows 的本地 Linux cross-check 被缺失 native `lib.exe` 阻碍，需等待真实 native CI 结果。
 7. 上游缺少当前产品的 MCP OAuth、browser CUA、Node REPL 与 memory 能力；不将这些功能描述为已迁移或已验收。
 8. 当前 raw-input transformation inventory 与 Linux interop 只证明本 spec 明确列出的受控 case，不构成 exhaustive DTO drift 或产品 parity。
