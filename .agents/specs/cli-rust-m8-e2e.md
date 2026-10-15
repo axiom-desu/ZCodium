@@ -5,6 +5,10 @@
 验收 5（Electron 真机最小闭环），不替代 Rust worker 的 `--prepare-storage` 进程级验收，
 也不替代 services/desktop 的单元与集成验收。
 
+## 当前验收方向调整
+
+用户后续确认只要求 TS 历史库→Rust 读取/恢复/续写，最终由 Rust 替代 TS；下文 Rust→TS restart 是现有驱动的历史测试步骤，已不作为阻塞项。驱动源码本轮不改，可用 `--skip-restart` 跳过反向步骤；这不等于已经新增或跑通 TS→Rust 历史库接管场景，该场景由用户接手补测。现有双向 CLI interop 保留作额外回归。
+
 ## 目标与唯一所有者
 
 - 唯一入口：`scripts/zcode-cli-rust-desktop-smoke.mjs`。

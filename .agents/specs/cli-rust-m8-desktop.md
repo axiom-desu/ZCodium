@@ -2,6 +2,8 @@
 
 ## 产品规则与边界（实现前约定）
 
+后续产品决策覆盖原双向要求：Rust 单向接管 TS 库并最终替代 TS；Rust→TS 恢复不再作为必过项。必须验证 TS 历史会话的读取/中断恢复/续写与数据保全；先停止 TS owner，再启动 Rust。该决定不等于修改默认开关或授权访问用户库。
+
 - 默认仍 TS。`ZCODE_AGENT_SERVER_RUNTIME=zcode-cli-rust` 显式选择 Rust，`ts` 或空值选择 TS；未知值明确失败。显式 `ZCODE_AGENT_SERVER_COMMAND` 保留最高优先级与既有自定义命令语义，不臆测其存储能力。
 - Preview 只负责分发 Rust binary，不因文件存在自动启用。显式 Rust 缺 binary 必须失败，不回退 TS；撤销选择或设为 ts 才是回退。
 - Services command resolver 是 runtime 选择/能力描述的唯一 owner。开发环境允许发现本仓当前 Cargo target/debug（后备 release），打包态优先 resources/rust；不能仅按 cwd 命中任意同名外部程序。
@@ -33,7 +35,7 @@ Web replayable ─ snapshot/replay ──┴─ 仍是同一会话 owner，不�
 1. Resolver：默认/ts 不选随包 Rust；显式 Rust 在有 TS bundle 时仍命中；缺 binary/未知值失败；custom command 优先；Rust descriptor 无 Electron Node env；TS worker 保留。实际执行行为断言，不仅源码字符串。
 2. Host transport：Node Worker 与 native 共享握手验证；ready/prepared/exit0 才成功；abort、invalid/duplicate path、prepared-before-path、observePath失败、failed帧、非零退出、未prepared均失败且清理；同真实路径 reuse、失败不缓存。
 3. Rust 进程：真实 binary `--prepare-storage`、合法/非法握手、reuse不再写/迁移、库打开错误，临时目录验证输出schema与退出码。
-4. 集成：真实 Host prepareSessionStorage + Services resolver + ProcessManager/ZCodeProtocolClient 连接 Rust；创建会话、订阅桌面profile、受控模型文本、文件工具、退出清理；切回TS可读同会话。禁止自造ACK代替真实runtime。
+4. 集成：真实 Host prepareSessionStorage + Services resolver + ProcessManager/ZCodeProtocolClient 连接 Rust；创建会话、订阅桌面profile、受控模型文本、文件工具、退出清理；用 TS 生成的临时历史库（已完成与中断场景）由 Rust 读取/恢复并续写，比较历史内容与必要状态、检查旧数据保全。禁止自造ACK代替真实runtime；不要求切回 TS。
 5. Electron：在隔离 HOME/userData/sessionData/XDG 下启动本轮构建的真实 App，完成数据库启动、基础对话/工具可见；若本机原生依赖/构建/图形环境受阻，精确报告，不能把headless服务集成称为真实App E2E。不操作用户已有App，不下载依赖或访问真实服务。
 6. 全仓 typecheck/lint/architecture、Rust checks/tests、driver tests与可用Desktop检查真实执行。Windows/macOS需原生运行证据，Linux不代替。
 

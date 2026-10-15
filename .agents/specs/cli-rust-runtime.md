@@ -25,11 +25,13 @@ Agent CLI 是重复成本最高的一块：
 
 ## 目标与非目标
 
+最新产品决策：Rust 单向接管 TS 现有库，最终替代 TS CLI；Rust→TS 切回恢复不是发布门槛。既有双向互操作测试保留为额外回归，不为反向兼容新增产品逻辑。本次只更新验收规则，不自动切换默认 runtime、不授权访问真实用户库。
+
 **目标**
 
-1. 用 Rust 实现 Agent CLI runtime，行为与现有 TS CLI 对齐到可交替续写同一会话。
+1. 用 Rust 实现 Agent CLI runtime，能读取 TS 现有会话库、恢复历史状态并继续执行/持久化，最终替代 TS CLI。
 2. 通过既有环境变量显式选择，默认仍为 TS：`ZCODE_AGENT_SERVER_RUNTIME=zcode-cli-rust`。
-3. 与 Node **共用同一个会话库**，记录格式逐字节一致，两个 runtime 可交替打开同一会话继续对话。Rust CLI 默认必须对齐当前 TS `DefaultRuntimeConfig.storage` 的有效默认 `~/.zcodium`；shared standalone SQLite store fallback 的 `.zcodium-exp` 是另一条路径约定，需独立决策，不得据此声称 Rust 默认全部使用 `.zcodium-exp` 或擅自迁移用户数据。
+3. Rust 直接接管 TS 现有会话库，正确解释既有记录且保留未知字段/原有数据，能恢复并继续对话；不要求 TS 再读取 Rust 后续新增数据。Rust CLI 默认必须对齐当前 TS `DefaultRuntimeConfig.storage` 的有效默认 `~/.zcodium`；shared standalone SQLite store fallback 的 `.zcodium-exp` 是另一条路径约定，需独立决策，不得据此声称 Rust 默认全部使用 `.zcodium-exp` 或擅自迁移用户数据。
 4. Host ↔ CLI 仍走 stdio NDJSON，**协议不改**。
 
 **非目标**
@@ -48,7 +50,7 @@ Agent CLI 是重复成本最高的一块：
 | D1   | 代码来源         | **从 MBearo/ZCode-rs 移植并适配**，不从零写。依据见下                                                                                                                               |
 | D2   | 协议漂移如何处理 | 契约驱动：schema 生成器读**本仓库** TS 契约重新生成，Rust 侧测试比对，漂移即失败                                                                                                    |
 | D3   | 存储             | 共用 Node 的 `db.sqlite`，记录格式逐字节一致；Rust CLI effective config 与 TS `DefaultRuntimeConfig.storage` 对齐；standalone store fallback 差异待独立决策；不做导入/备份/反向同步 |
-| D4   | 回退             | 显式 runtime 开关；取消覆盖即回 Node，Node 直接读 Rust 写的会话                                                                                                                     |
+| D4   | 回退             | 现有显式选择开关保留；产品目标为 Rust 单向接管，不要求 TS 读取 Rust 后续写入的会话                                                                                                  |
 | D5   | 会话库锁         | 每 workspace 一个 owner 锁，只用stdlib `File::try_lock`                                                                                                                             |
 | D6   | 工作目录         | `apps/zcode-cli-rust`，独立 Cargo workspace                                                                                                                                         |
 | D7   | 发布             | 不在本 spec 范围；先在开发开关下验证                                                                                                                                                |
@@ -72,7 +74,7 @@ Agent CLI 是重复成本最高的一块：
    开发态可从仓库锚点发现 Cargo target；随包 Rust 不因文件存在自动启用。
 
 Rust 是独立可执行文件，不需要 `ELECTRON_RUN_AS_NODE`。M8 的 native storage transport 已实现，
-真实 App 切回 TS 恢复与完整回退验收尚未通过，不把本次接线视为默认启用授权。
+真实 App 的 TS 历史会话→Rust 恢复/续写验收仍待完成；Rust→TS 切回不再是门槛。本次规则变更不直接修改默认 runtime。
 
 ### D1 依据：为什么移植而不是从零写
 
@@ -151,8 +153,8 @@ M1 正确规则与验收：
 
 1. stale stop/idle 状态语义需要与当前 runtime 对齐验证。
 2. 冷读 load 有副作用，需审查读路径是否可变更持久化状态。
-3. mixed-runtime owner 协同尚未实现；interop 只覆盖不同 workspace/session 并发与同 workspace/session 顺序交替，不覆盖同 workspace 混合 owner 并发。
-4. M8 原 capability/native transport 阻碍已有接线实现：使用 tagged storagePreparation 描述并复用 Host 握手；Rust reuse/严格校验已修复。真实 App 的 Rust 基础对话有局部证据，切回 TS 恢复未通过、完整 E2E 待用户接手；详见 [M8 报告](../../docs/reports/cli-rust-m8-desktop-handoff.md)。
+3. TS→Rust 接管必须先结束旧 owner，再启动 Rust，保留 workspace 锁/lease 与 stale-run 防护。同 workspace 两种 runtime 同时运行不是产品目标；既有 interop 并发证据只覆盖不同 workspace/session。
+4. M8 原 capability/native transport 阻碍已有接线实现：使用 tagged storagePreparation 描述并复用 Host 握手；Rust reuse/严格校验已修复。真实 App 的 Rust 基础对话有局部证据，TS→Rust 历史会话接管的完整 E2E 待用户接手；反向切 TS 的未通过步骤不再阻塞；详见 [M8 报告](../../docs/reports/cli-rust-m8-desktop-handoff.md)。
 5. 存储路径必须区分所有者：当前 TS CLI `DefaultRuntimeConfig.storage` 有效默认是 `~/.zcodium`；`packages/shared` standalone SQLite session-store fallback 是 `~/.zcodium-exp`。不得将两者合并描述为单一默认或擅自迁移用户数据；默认 runtime 仍不可启用。
 6. Native Windows/macOS runtime 未实际运行；CI native matrix 只检查编译，不作为 runtime 通过证据。Windows 的本地 Linux cross-check 被缺失 native `lib.exe` 阻碍，需等待真实 native CI 结果。
 7. 上游缺少当前产品的 MCP OAuth、browser CUA、Node REPL 与 memory 能力；不将这些功能描述为已迁移或已验收。
@@ -173,7 +175,7 @@ M1 正确规则与验收：
 2. `pnpm check:zcode-cli-rust`（cargo fmt + clippy `-D warnings` + Rust 源码边界检查）
 3. `pnpm test:zcode-cli-rust`（cargo 单测 + Node 驱动集成测试）
 4. **契约漂移测试**：TS 改字段而 Rust 未同步时必须失败
-5. **共库互操作**：Node 与 Rust 交替续写同一会话、崩溃后由对方恢复、两进程并发写不同会话
+5. **历史库接管**：TS 生成的已完成/中断会话由 Rust 正确读取、恢复并续写，冷读不改原记录，接管无并行 owner。双向互操作保留作额外回归，不是反向产品承诺
 6. **真实库比对**：用户现有库逐会话冷读取两端相等
 7. 性能对照报告写入 `docs/reports/`，不能凭语言宣称更快
 
@@ -189,7 +191,7 @@ M1 正确规则与验收：
 | M5     | `tools`：Read/Write/Edit/Glob/Grep/Bash、权限模式、hooks                             | 与 TS 逐项差分                            |
 | M6     | `app-server`：stdio framing、RPC 路由、V4 投影                                       | 集成测试跑通                              |
 | M7     | 扩展：MCP、Skill、子代理、Goal、compact                                              | 差分 + E2E                                |
-| M8     | 桌面接入与回退验收                                                                   | 真实 App 基础对话/工具/附件/问答          |
+| M8     | 桌面接入与 TS→Rust 接管验收                                                          | 真实 App 基础对话/工具/附件/问答          |
 
 M0–M2 不涉及行为，可先行；M3 起每个里程碑都要过共库互操作。
 
@@ -197,7 +199,7 @@ M0–M2 不涉及行为，可先行；M3 起每个里程碑都要过共库互操
 
 - Historical landing evidence was 426 passed / 1 ignored after the schema fix; earlier 423 count predates three schema tests. At that checkpoint, `pnpm test:zcode-cli-rust-drivers` had 15 cases. Separately, `node --test --test-isolation=none scripts/ci/*.test.mjs` is the CI script regression suite with 256 cases, not the driver suite.
 - Linux interop evidence: alternate 1/1, crash recovery 4/4, different-workspace concurrent 2/2; every DB comparison has matching sessions/read/equal counts and unchanged source hashes. Scope is controlled-case acceptance, not exhaustive parity.
-- The former M8 capability/native-transport blocker is implemented in the latest M8 slice; full desktop recovery/rollback acceptance remains pending. See the [M8 handoff](../../docs/reports/cli-rust-m8-desktop-handoff.md).
+- The former M8 capability/native-transport blocker is implemented in the latest M8 slice; TS→Rust desktop takeover acceptance remains pending; reverse Rust→TS recovery is no longer required. See the [M8 handoff](../../docs/reports/cli-rust-m8-desktop-handoff.md).
 - Native Windows/macOS runtime remains untested. Native CI performs compile checks only; do not infer runtime success from remote compile results.
 - Root `pnpm lint` has 51 TypeScript warnings. Rust clippy (`-D warnings`) passed with no warnings, and `cargo fmt --all --check` passed. At the historical landing checkpoint root `pnpm fmt:check` (oxfmt) had 79 failures; the scoped task files have zero formatting issues. See [review status](cli-rust-review-status.md) and [CI contract](cli-rust-ci.md).
 

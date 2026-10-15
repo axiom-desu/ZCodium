@@ -2,6 +2,8 @@
 
 ## 结论
 
+**后续需求调整：用户确认只要求 Rust 接管 TS 现有库，最终替代 TS。Rust→TS 切回恢复不再是 M8 阻塞项；下文失败记录只保留为当时测试事实。当前必验收方向为 TS 历史库→Rust 读取、恢复、续写与原数据保全，不等于任意历史库版本均已保证兼容。** 本次仅文档调整，不启动 GUI、不改变默认 runtime。
+
 本轮补上 runtime 显式选择、Desktop 原生存储准备 transport 和 Rust 准备握手/reuse；**真实 App 的 Rust 启动、文本对话和工具显示已有局部运行证据，但切回 TS 恢复没有通过，M8 未验收完成**。
 
 用户接手后续测试。本次交接不再启动 GUI、不重跑性能测试；默认 runtime 仍 TS，不迁移用户库。
@@ -110,7 +112,7 @@ Host DatabaseStartupCoordinator（启动状态 owner）
 ### 优先修整 smoke，再跑完整 GUI
 
 1. 确认构建的 Rust binary 是本轮源码；当前忽略的 `bundled-agents/<platform>/rust` 可能陈旧。默认 smoke 会检查并临时改名不支持 prepare-storage 的 staged binary，finally 恢复；被 SIGKILL 时 finally 不能保证执行，先检查是否残留 `.m8-stale-hidden`。本次检查 staged 原文件已恢复。
-2. 排查 TS restart 窗口关闭；绑定正确业务窗口，严格验证同 session ID 的历史恢复、随后续写，不能只匹配任意时间线文本。
+2. 改验收方向：TS 创建临时历史库（含已完成/中断会话），结束 TS owner 后由 Rust 启动，严格验证同 session ID 的历史、状态恢复与续写及旧记录保全。反向 TS restart 窗口关闭不再是必修项。
 3. 审核 smoke 的退出清理、早期失败临时目录清理、进程组所有权。当前 `forceKillAppTree` 使用负 pid，但 Playwright launch 并未在此显式证明 PGID 所有权；不要假设整个树已清空。启动失败后的 app handle 和首次/重启两次的子树均需确认。
 4. 网络守卫存在 `.catch(()=>{})` 和失败路径证据不全；先修整以避免“未安装守卫却记录成功”。只有确认隔离可靠后再跑。
 5. 构建桥检测仅检查 assets 存在，不证明桥实际编译/暴露；运行时验证桥与 run-id 条件。当前 smoke 是接手入口，不是已通过的门禁。
@@ -130,16 +132,16 @@ cargo test --locked --manifest-path apps/zcode-cli-rust/Cargo.toml -p zcode-cli-
 
 ```bash
 cargo build --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --bin zcode-cli-rust
-node scripts/zcode-cli-rust-desktop-smoke.mjs --keep --evidence=/tmp/m8-desktop-result.json
+node scripts/zcode-cli-rust-desktop-smoke.mjs --skip-restart --keep --evidence=/tmp/m8-desktop-result.json
 ```
 
-该命令默认重建 desktop、启用测试 bridge，打开真实测试窗口、验证 Rust 对话/工具并重启切 TS；`--keep` 保留临时数据供排查。不要把 `--skip-restart` / `--skip-tool` 的局部通过称为完整验收，也不要用陈旧 out 的 `--no-build` 结果证明本轮源码。
+上述命令重建 desktop、启用测试 bridge，打开真实测试窗口并验证 Rust 对话/工具；`--skip-restart` 跳过已不要求的反向切 TS，`--keep` 保留临时数据。驱动当前默认仍含旧的 Rust→TS 步骤（历史实现，未改源码）；该命令也尚未自动生成 TS 历史库，因此不能把局部通过称为 TS→Rust 接管全验收。用户需补该方向的 fixture/步骤；不要用陈旧 out 的 `--no-build` 结果证明本轮源码。
 
 ### 尚未执行或未完成的整体验证
 
 - 本轮最终全 workspace Rust tests/check、driver suite、CI script suite、protocol/contract/domain/migration checks 和 Node/Rust 共库 interop 回归。
 - 全仓 `pnpm fmt:check`：本轮未执行；此前被无关 `logs/` 下 5 个 JSON 阻塞，不自行修改这些日志。
-- 真实 App 的 Rust→TS 同会话恢复/续写、附件、问答/权限交互、取消、崩溃/重连、Host 退出/进程树清理。
+- 真实 App 的 TS→Rust 历史会话读取/恢复/续写和原数据保全、附件、问答/权限交互、取消、崩溃/重连、Host 退出/进程树清理。
 - 本轮新 Desktop/services 测试尚未接入 CI 门禁。
 - Windows/macOS 原生运行；Linux fixture/Playwright 不能代替。
 - Host 被 SIGKILL 的 native 孤儿/持锁边界，正常 abort helper 清理失败是否被吞掉需专项复核。
