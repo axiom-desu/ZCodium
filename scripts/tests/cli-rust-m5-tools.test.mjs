@@ -16,8 +16,18 @@ import test from "node:test";
 import { runTsOracle } from "../zcode-cli-rust-m5-tool-oracle.mjs";
 
 const step = (name, args, failure) => ({ name, args, failure });
-async function run(command, args, input) {
-  const child = spawn(command, args, { cwd: process.cwd(), stdio: ["pipe", "pipe", "pipe"] });
+
+// cargo 首次编译可能较慢，但 driver 卡死必须失败而不是让 CI 无限等待。
+const DRIVER_TIMEOUT_MS = 180_000;
+
+async function run(command, args, input, timeoutMs = DRIVER_TIMEOUT_MS) {
+  // POSIX 下 cargo run 会再派生被测二进制，放进独立进程组才能连子进程一起 kill。
+  const detached = process.platform !== "win32";
+  const child = spawn(command, args, {
+    cwd: process.cwd(),
+    stdio: ["pipe", "pipe", "pipe"],
+    detached,
+  });
   let stdout = "";
   let stderr = "";
   child.stdout.setEncoding("utf8").on("data", (chunk) => {
@@ -30,9 +40,34 @@ async function run(command, args, input) {
     child.once("error", reject);
     child.once("close", resolve);
   });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    if (detached && child.pid) {
+      try {
+        process.kill(-child.pid, "SIGKILL");
+        return;
+      } catch {
+        // fall back to killing just the direct child
+      }
+    }
+    child.kill("SIGKILL");
+  }, timeoutMs);
   child.stdin.on("error", () => {}); // The exit status/stderr below reports early driver failure.
   child.stdin.end(input);
-  assert.equal(await done, 0, `${command} driver failed: ${stderr}`);
+  let code;
+  try {
+    code = await done;
+  } finally {
+    clearTimeout(timer);
+  }
+  assert.equal(
+    code,
+    0,
+    timedOut
+      ? `${command} driver timed out after ${timeoutMs}ms`
+      : `${command} driver failed: ${stderr}`,
+  );
   return stdout;
 }
 
@@ -248,8 +283,104 @@ test("M5 Grep: default adapter, file/content/count, filters, pagination and fail
       step("Grep", { pattern: "[" }, "library"),
       step("Grep", { pattern: "beta", path: "missing" }, "library"),
     ],
-    false,
   );
+});
+
+test("M5 Grep: BOM, CRLF, lone CR and non-UTF-8 line text", async () => {
+  await differential(
+    {
+      "bom.txt": "\ufeffalpha\nalpha\n",
+      "crlf.txt": "alpha\r\nbeta\r\n",
+      "lonecr.txt": "alpha\rbeta\ngamma\r",
+      "invalid.txt": Buffer.from([0x62, 0x65, 0x74, 0x61, 0xff, 0x0a]),
+      "invalid-mid.txt": Buffer.from([
+        0x61, 0x6c, 0x70, 0x68, 0x61, 0x0a, 0x62, 0x65, 0x74, 0x61, 0xff, 0x0a, 0x67, 0x61, 0x6d,
+        0x6d, 0x61, 0x0a,
+      ]),
+    },
+    [
+      // ripgrep 剥离文件起始 BOM，`^` 能锚定首行；Read 保留 BOM，两者边界不同。
+      step("Grep", { pattern: "^alpha", path: "bom.txt", output_mode: "content" }),
+      step("Grep", { pattern: "^alpha", path: "bom.txt", output_mode: "count" }),
+      step("Grep", { pattern: "alpha", path: "crlf.txt", output_mode: "content" }),
+      step("Grep", { pattern: "beta", path: "lonecr.txt", output_mode: "content" }),
+      // 非 UTF-8 行在 ripgrep JSON 只有 bytes 字段，模型文本为空行。
+      step("Grep", { pattern: "beta", path: "invalid.txt", output_mode: "content" }),
+      step("Grep", { pattern: "beta", path: "invalid-mid.txt", output_mode: "content", "-C": 1 }),
+    ],
+  );
+});
+
+test("M5 Grep: head_limit/offset pagination and model text", async () => {
+  await differential(
+    { "rev.txt": "beta\nbeta\nbeta\nbeta\nbeta\n", "a.txt": "beta\n", "c.js": "beta\n" },
+    [
+      step("Grep", { pattern: "beta", path: "rev.txt", output_mode: "content", head_limit: 2 }),
+      step("Grep", {
+        pattern: "beta",
+        path: "rev.txt",
+        output_mode: "content",
+        head_limit: 2,
+        offset: 1,
+      }),
+      step("Grep", { pattern: "beta", path: "rev.txt", output_mode: "content", offset: 10 }),
+      step("Grep", { pattern: "beta", path: "rev.txt", output_mode: "content", head_limit: 0 }),
+      // files 模式按 mtime 排序后分页；count 的分页不影响 numFiles/numMatches。
+      step("Grep", { pattern: "beta", head_limit: 1 }),
+      step("Grep", { pattern: "beta", head_limit: 1, offset: 1 }),
+      step("Grep", { pattern: "beta", path: "rev.txt", output_mode: "count", offset: 5 }),
+      step("Grep", {
+        pattern: "beta",
+        path: "rev.txt",
+        output_mode: "content",
+        head_limit: 2,
+        "-C": 1,
+      }),
+    ],
+  );
+});
+
+test("M5 Grep: -C/context priority over -B/-A including context=0", async () => {
+  await differential({ "ctx.txt": "l1\nl2\nl3\nbeta\nl5\nl6\nl7\n" }, [
+    // TS grep.ts 取 contextLines = context ?? -C；adapter 在 contextLines 已定义时只传 -C，
+    // 同时给出的 -B/-A 被忽略。
+    step("Grep", {
+      pattern: "beta",
+      path: "ctx.txt",
+      output_mode: "content",
+      "-C": 1,
+      "-B": 2,
+      "-A": 3,
+    }),
+    step("Grep", {
+      pattern: "beta",
+      path: "ctx.txt",
+      output_mode: "content",
+      context: 2,
+      "-B": 1,
+      "-A": 1,
+    }),
+    // context: 0 是显式值（?? 只跳过 null/undefined），仍只传 -C 0 并忽略 -B/-A。
+    step("Grep", {
+      pattern: "beta",
+      path: "ctx.txt",
+      output_mode: "content",
+      context: 0,
+      "-B": 2,
+      "-A": 2,
+    }),
+    step("Grep", {
+      pattern: "beta",
+      path: "ctx.txt",
+      output_mode: "content",
+      "-C": 0,
+      "-B": 2,
+      "-A": 2,
+    }),
+    // 没有 context/-C 时才分别使用 -B/-A。
+    step("Grep", { pattern: "beta", path: "ctx.txt", output_mode: "content", "-B": 2 }),
+    step("Grep", { pattern: "beta", path: "ctx.txt", output_mode: "content", "-A": 2 }),
+  ]);
 });
 
 test("M5 oracle refuses non-private workspaces, path escapes, symlinks and non-file tools", async () => {
@@ -275,4 +406,11 @@ test("M5 oracle refuses non-private workspaces, path escapes, symlinks and non-f
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("M5 tools: driver timeout kills and awaits a hung subprocess", async () => {
+  await assert.rejects(
+    run(process.execPath, ["-e", "setTimeout(() => {}, 60_000)"], "", 100),
+    /driver timed out after 100ms/,
+  );
 });

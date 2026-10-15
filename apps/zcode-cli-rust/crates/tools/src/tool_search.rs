@@ -168,9 +168,30 @@ fn search_sync(
     } else {
         requested_limit
     };
-    let context = uint(args, "context", uint(args, "-C", 0)?)? as usize;
-    let before = uint(args, "-B", context as u64)?.min(10_000) as usize;
-    let after = uint(args, "-A", context as u64)?.min(10_000) as usize;
+    // TS grep.ts 取 `contextLines = parsed.context ?? parsed["-C"]`，fs adapter 的
+    // addRipgrepContextArgs 在 contextLines 已定义时只向 ripgrep 传 `-C` 并提前返回，
+    // 同时给出的 `-B`/`-A` 被忽略；只有没有 context/-C 时才分别传 -B/-A。oracle 默认走
+    // bundled ripgrep 的 rg JSON 路径（parseRipgrepJsonOutput），不是
+    // searchTextWithJavaScript fallback（后者才会用 -B/-A 覆盖 context）。因此这里对齐 rg
+    // 路径：context/-C 存在时（显式 0 也算已定义，`??` 只跳过 null/undefined）before/after
+    // 都取该值，否则沿用 -B/-A。
+    let context_lines = if args.get("context").is_some() {
+        Some(uint(args, "context", 0)? as usize)
+    } else if args.get("-C").is_some() {
+        Some(uint(args, "-C", 0)? as usize)
+    } else {
+        None
+    };
+    let (before, after) = match context_lines {
+        Some(context) => {
+            let context = context.min(10_000);
+            (context, context)
+        }
+        None => (
+            uint(args, "-B", 0)?.min(10_000) as usize,
+            uint(args, "-A", 0)?.min(10_000) as usize,
+        ),
+    };
     let mut entries = vec![];
     let mut filenames = BTreeSet::new();
     let mut file_matches = vec![];
@@ -211,13 +232,26 @@ fn search_sync(
         if data.len() > 16 * 1024 * 1024 {
             bail!("grep_too_large: narrow the search; file exceeds 16 MiB");
         }
-        let content = String::from_utf8_lossy(&data);
+        // ripgrep 会剥离文件起始的 UTF-8 BOM；Read 保留 BOM，Grep 必须跟随该差异。
+        let data = data.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&data);
+        let content = String::from_utf8_lossy(data);
+        let raw_lines = super::tool_search_format::grep_raw_lines(data);
+        // ripgrep JSON 对含非法 UTF-8 的行只输出 bytes 字段，TS adapter 读不到 text 时为
+        // 空字符串；这里同样按 raw 行字节判定，避免 lossy 文本泄漏到 content/context。
+        let line_valid: Vec<bool> = raw_lines
+            .iter()
+            .map(|line| std::str::from_utf8(line).is_ok())
+            .collect();
+        let lines: Vec<String> = raw_lines
+            .iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .collect();
         let path = display(e.path());
         if mode != "content" {
             let count = if multiline {
                 re.find_iter(&content).count()
             } else {
-                content.lines().filter(|line| re.is_match(line)).count()
+                lines.iter().filter(|line| re.is_match(line)).count()
             };
             if count == 0 {
                 continue;
@@ -234,7 +268,6 @@ fn search_sync(
             }
             continue;
         }
-        let lines: Vec<_> = content.lines().collect();
         let mut hits = BTreeSet::new();
         let mut only_matches = vec![];
         if multiline {
@@ -291,6 +324,12 @@ fn search_sync(
             }
             for i in visible {
                 let Some(line) = lines.get(i) else { continue };
+                // 非 UTF-8 行与 ripgrep JSON text 缺省一致，输出空文本。
+                let line = if line_valid.get(i).copied().unwrap_or(false) {
+                    line.as_str()
+                } else {
+                    ""
+                };
                 let separator = ":";
                 push(if numbers {
                     format!("{path}{separator}{}{separator}{line}", i + 1)
@@ -331,13 +370,7 @@ fn search_sync(
             output["numLines"] = entries.len().into();
         }
     }
-    let mut model = if text.is_empty() {
-        "No matches found".to_owned()
-    } else {
-        text
-    };
-    if truncated {
-        model.push_str("\n(Results truncated; use offset/head_limit or narrow the search.)");
-    }
+    // TS 的模型文案由结构化输出推导，三种模式与分页提示必须逐字对齐。
+    let model = super::tool_search_format::grep_model(&output);
     Ok(ToolOutput::new(model, output))
 }

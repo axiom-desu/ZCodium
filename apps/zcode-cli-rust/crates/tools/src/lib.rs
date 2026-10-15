@@ -42,6 +42,7 @@ mod tool_edit;
 mod tool_files;
 mod tool_process;
 mod tool_search;
+mod tool_search_format;
 mod tool_shell;
 mod tool_skills;
 pub mod tools;
