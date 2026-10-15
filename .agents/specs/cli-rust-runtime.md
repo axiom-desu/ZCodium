@@ -1,6 +1,6 @@
 # zcode-cli-rust：CLI runtime 的 Rust 重写
 
-> **状态：机械迁移已提交（`19fc61b5`）；受控 case 已验收，M2–M8 / exhaustive 产品 parity 未完成**。最新 M2–M6 切片和重跑结果见 [handoff](cli-rust-handoff.md)，下述测试计数为此前 checkpoint。Rust 最新测试为 426 passed、1 ignored；29 Command/1 ACK cases 通过 `parse_command` + serde 验证完整 outputs，350 leaf cases 验证 publicNode normalization projection。Linux Node interop 的 alternate/crash/concurrent 场景均通过。以上仅是受控 case，不代表全面 DTO 漂移覆盖或产品 parity。当前边界和证据见 [review status](cli-rust-review-status.md) 与 [CI contract](cli-rust-ci.md)。
+> **状态：机械迁移已提交（`19fc61b5`）；受控 case 已验收，M2–M8 / exhaustive 产品 parity 未完成**。最新 M2–M6 切片和重跑结果见 [handoff](cli-rust-handoff.md)，最新整体验证为 Rust 470 passed、1 ignored，driver 50/50、CI scripts 264/264。下述 landing 验证记录是历史 checkpoint；当时 Rust 测试为 426 passed、1 ignored；29 Command/1 ACK cases 通过 `parse_command` + serde 验证完整 outputs，350 leaf cases 验证 publicNode normalization projection。Linux Node interop 的 alternate/crash/concurrent 场景均通过。以上仅是受控 case，不代表全面 DTO 漂移覆盖或产品 parity。当前边界和证据见 [review status](cli-rust-review-status.md) 与 [CI contract](cli-rust-ci.md)。
 
 ## 背景与动机
 
@@ -196,11 +196,11 @@ M0–M2 不涉及行为，可先行；M3 起每个里程碑都要过共库互操
 
 ## 当前验收状态补充
 
-- Latest Rust test evidence is 426 passed / 1 ignored after the schema fix; earlier 423 count predates three schema tests. `pnpm test:zcode-cli-rust-drivers` currently has 15 cases. Separately, `node --test --test-isolation=none scripts/ci/*.test.mjs` is the CI script regression suite with 256 cases, not the driver suite.
+- Historical landing evidence was 426 passed / 1 ignored after the schema fix; earlier 423 count predates three schema tests. At that checkpoint, `pnpm test:zcode-cli-rust-drivers` had 15 cases. Separately, `node --test --test-isolation=none scripts/ci/*.test.mjs` is the CI script regression suite with 256 cases, not the driver suite.
 - Linux interop evidence: alternate 1/1, crash recovery 4/4, different-workspace concurrent 2/2; every DB comparison has matching sessions/read/equal counts and unchanged source hashes. Scope is controlled-case acceptance, not exhaustive parity.
 - M8 blocker is Desktop capability declaration (`unsupported_runtime` before Rust starts), not a missing Rust command; native process transport is not connected to Worker branch.
 - Native Windows/macOS runtime remains untested. Native CI performs compile checks only; do not infer runtime success from remote compile results.
-- Root `pnpm lint` has 51 TypeScript warnings. Rust clippy (`-D warnings`) passed with no warnings, and `cargo fmt --all --check` passed. Root `pnpm fmt:check` (oxfmt) latest result is 79 failures; the scoped task files have zero formatting issues. See [review status](cli-rust-review-status.md) and [CI contract](cli-rust-ci.md).
+- Root `pnpm lint` has 51 TypeScript warnings. Rust clippy (`-D warnings`) passed with no warnings, and `cargo fmt --all --check` passed. At the historical landing checkpoint root `pnpm fmt:check` (oxfmt) had 79 failures; the scoped task files have zero formatting issues. See [review status](cli-rust-review-status.md) and [CI contract](cli-rust-ci.md).
 
 ## 实现偏差
 

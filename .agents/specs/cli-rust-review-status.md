@@ -4,11 +4,15 @@ Latest incremental handoff: [M2–M6 scoped work and fresh verification](cli-rus
 
 This checkpoint records current source, test, interop, and CI evidence only. It is not a claim that M2–M8 or exhaustive product parity is complete. The CI handoff contract is in [cli-rust-ci](cli-rust-ci.md).
 
-## Confirmed completed work
+## Latest incremental verification
+
+The fresh follow-up run reports Rust **470 passed / 1 ignored**, Node drivers **50/50**, CI scripts **264/264**, typecheck/lint (50 warnings, 0 errors), workspace Rust checks and all three isolated interop scenarios passed. Full oxfmt remains blocked only by 5 unrelated untracked log JSON files. Details, accepted scope and known TS/Rust divergences: [handoff](cli-rust-handoff.md).
+
+## Historical landing checkpoint
 
 - 当前工作树包含从 `MBearo/ZCode-rs` commit `06ba9781486cffd395d586ec16138c2eeb5edd58` 迁入的 Rust 源码快照，并保留本地 M1 protocol implementation；这些 source migration changes 已由 `19fc61b5` 提交。
 - Schema validator is pure shared code; unsafe API uses have been replaced with safe APIs. Transformation inventory: 63 paths, 70 leaf branches × 5 cases = 350 leaf cases; 29 complete Command cases and 1 ACK case pass through `parse_command` + serde and validate full outputs. The 350 leaf cases validate publicNode normalization projection, not a complete DTO oracle. These controlled cases are not exhaustive product parity or proof of every possible DTO drift.
-- Latest fresh Rust test evidence after schema fix: 426 passed, 1 ignored (`/tmp/zcode-cli-rust-test.log`). The earlier 423 count predates three schema tests and is stale. Rust fmt/clippy/boundaries have passed; current fresh fmt/lint evidence is separately recorded below.
+- Rust landing test evidence after schema fix: 426 passed, 1 ignored (`/tmp/zcode-cli-rust-test.log`). The earlier 423 count predates three schema tests and is stale. Rust fmt/clippy/boundaries have passed; current fresh fmt/lint evidence is separately recorded below.
 - Current Node driver entry `pnpm test:zcode-cli-rust-drivers`: 15 cases (local log `/tmp/cli-rust-main-node-tests.log`). Separately, `node --test --test-isolation=none scripts/ci/*.test.mjs` is the CI script regression suite with 256 cases; it is not the scripts/tests driver suite.
 - Hardened Linux Node/Rust interop: alternate 1/1, crash recovery 4/4 across both kill/resume directions, concurrent different-workspace sessions 2/2; each reported session/read/equal counters match and source hashes remain unchanged using isolated DB copies (`/tmp/cli-rust-hardened-interop.log`).
 
@@ -21,7 +25,7 @@ This checkpoint records current source, test, interop, and CI evidence only. It 
 - Storage path ownership remains distinct: Rust effective config target matches TS `DefaultRuntimeConfig.storage` (`~/.zcodium`); shared standalone SQLite fallback is `~/.zcodium-exp`. No home migration is performed or authorized.
 - Product acceptance remains pending for capabilities including browser/CUA, Node REPL, memory, MCP OAuth and other non-exhaustively tested behavior. Do not mark M2–M8 or overall parity complete.
 
-## CI and verification record
+## Historical CI and landing verification record
 
 - A local workspace-freshness pass is not evidence of a clean checkout: ignored stale `dist` artifacts can hide missing build prerequisites. Actual CI run `38042550013` failed contract asset checking with missing `@zcode/contracts/dist/index.js` (`/tmp/cli-rust-ci-contract.log`) and failed Linux Node CLI build because contracts/adapters/core/i18n/bootstrap dist prerequisites were absent (`/tmp/cli-rust-ci-node-build.log`). Both Node jobs now require the repository's shared Turbo dependency build before checks/build; full clean-worktree verification is tracked separately from local state.
 - Actual stable Rust 1.99 CI clippy rejected the one-item `properties` loop in `schema_shape.rs` as `single_element_loop` (`/tmp/cli-rust-ci-clippy.log`). Fix preserves shape rejection with a direct condition; CI toolchain and `-D warnings` remain unchanged.
