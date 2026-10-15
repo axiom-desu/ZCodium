@@ -1,6 +1,6 @@
 # Rust CLI runtime：增量交接
 
-本页是当前 checkout 的最新验证入口；runtime/review/README 中的早期 landing 记录是历史基线，不是最终计数。仍未启用默认 Rust runtime，未访问用户库、未改历史 SQL、未迁移 HOME；`logs/` 保留且不提交。
+最新 M8 接线实现、局部 GUI 证据和用户接手待测清单见 [M8 报告](../../docs/reports/cli-rust-m8-desktop-handoff.md)。本页的 470/50 等计数是 M8 之前的验证基线，不是本轮 M8 的最终总数；runtime/review/README 中的早期 landing 记录亦为历史基线。仍未启用默认 Rust runtime，未访问用户库、未改历史 SQL、未迁移 HOME；`logs/` 保留且不提交。
 
 ## 当前进度（不等于 M2–M8 完成）
 
@@ -40,7 +40,7 @@
 2. **M5 内容与展示面**：CRLF 的 `data.content` / diff 输入、display 相对/绝对路径、无 hunk 是否产生 display、checkpoint BOM summary 仍有已确认差异；详见 diff spec。blocking worker panic 发生在写入提交后时的错误语义亦未验收。
 3. **M5 剩余工具矩阵**：multiline、NUL/UTF-16、更多遍历顺序与大输出；权限模式、hooks、Bash 沙箱/取消。文件 handler oracle 不等于 permission executor parity。Myers 对抗性输入在 5s 内仍可能高峰内存，不擅自新增任意硬上限。
 4. **M6 端到端**：真实 Core router/启动/存储握手，UTF-8 分片/CRC 真实完整链路，TTFT、其它 topics 立即 flush、高水位/拥塞/drain。异常编码失败的具体帧序列尚未与真实 TS gateway oracle 对齐。
-5. **M3/M8 原阻碍**：mixed-runtime 同 workspace owner 协调；Desktop storage preparation capability/native transport；Windows/macOS runtime；MCP OAuth、CUA、Node REPL、memory 产品验收。不能用 fallback 绕过 gate。
+5. **M3/M8 原阻碍**：mixed-runtime 同 workspace owner 协调；Desktop capability/native transport 已接线但完整恢复/回退 E2E 待验收；Windows/macOS runtime；MCP OAuth、CUA、Node REPL、memory 产品验收。不能用 fallback 绕过 gate。
 6. **性能限制**：Node dist vs Rust debug，6 轮且整机负载未控制；环境代理 guard 不是 OS 网络沙箱。fixture 排除 title sidecar，仅证明 0 个非标题模型请求，不宣称 0 个所有模型请求。
 
 ## 所有者与事件顺序保持不变

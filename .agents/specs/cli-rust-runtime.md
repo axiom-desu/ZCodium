@@ -61,19 +61,18 @@ Agent CLI 是重复成本最高的一块：
 它的定位本来就是滚动更新模型里 preview 渠道的提前通道——让 Rust runtime 在这里随包分发，
 既能拿到真实安装包的验证，又不影响生产口味。
 
-接线（三处，全部以 `ZCODE_PREVIEW_IDENTITY=1` 为闸门）：
+分发仍以 `ZCODE_PREVIEW_IDENTITY=1` 为闸门；runtime 选择独立采用显式开关，见 [M8 接线与待测报告](../../docs/reports/cli-rust-m8-desktop-handoff.md)：
 
 1. `packages/desktop/scripts/prepare-cli-rust.mjs`：按 target triple `cargo build --release`
    并把产物 stage 到 `bundled-agents/<platform-key>/rust/`（补执行位，copyFileSync 不保留）。
 2. `prepare-runtime-assets.mjs` 与 `electron-builder.config.js` 的 extraResources：
    preview 才跑、才打包，落到 `resources/rust`。
-3. `zcodeAgentProcessManager.ts` 新增 `resolvePackagedZCodeCliRustCommand`，解析顺序为
-   env 显式覆盖 → monorepo dev 源码/dist → **随包 Rust CLI** → Electron Node 跑 zcode.cjs
-   → 远端已部署 native binary。
+3. `zcodeAgentProcessManager.ts` 先处理 custom command，然后读取 `ZCODE_AGENT_SERVER_RUNTIME`。
+   未设置/`ts` 仍走 TS 链；`zcode-cli-rust` 只查 Rust，缺 binary 明确失败，不静默回退。
+   开发态可从仓库锚点发现 Cargo target；随包 Rust 不因文件存在自动启用。
 
-Rust 排在 TS bundle 之前，因为 Preview 的目的就是提前验证它；没有该文件时（生产口味、
-dev 未构建）解析返回 null，自然落到 TS bundle，不需要额外开关。Rust 是独立可执行文件，
-不需要 `ELECTRON_RUN_AS_NODE`。
+Rust 是独立可执行文件，不需要 `ELECTRON_RUN_AS_NODE`。M8 的 native storage transport 已实现，
+真实 App 切回 TS 恢复与完整回退验收尚未通过，不把本次接线视为默认启用授权。
 
 ### D1 依据：为什么移植而不是从零写
 
@@ -153,7 +152,7 @@ M1 正确规则与验收：
 1. stale stop/idle 状态语义需要与当前 runtime 对齐验证。
 2. 冷读 load 有副作用，需审查读路径是否可变更持久化状态。
 3. mixed-runtime owner 协同尚未实现；interop 只覆盖不同 workspace/session 并发与同 workspace/session 顺序交替，不覆盖同 workspace 混合 owner 并发。
-4. M8 Desktop storage preparation 接入未完成：Rust 已实现 `prepare-storage` command/frames；Desktop resolver 未声明 capability，故启动 Rust 前将 `prepareSessionStorage` 拒绝为 `unsupported_runtime`。Native process transport 尚未接入 Worker 分支。不得将问题描述为 Rust 缺命令，也不加 fallback 或扩展 UI/platform interface。
+4. M8 原 capability/native transport 阻碍已有接线实现：使用 tagged storagePreparation 描述并复用 Host 握手；Rust reuse/严格校验已修复。真实 App 的 Rust 基础对话有局部证据，切回 TS 恢复未通过、完整 E2E 待用户接手；详见 [M8 报告](../../docs/reports/cli-rust-m8-desktop-handoff.md)。
 5. 存储路径必须区分所有者：当前 TS CLI `DefaultRuntimeConfig.storage` 有效默认是 `~/.zcodium`；`packages/shared` standalone SQLite session-store fallback 是 `~/.zcodium-exp`。不得将两者合并描述为单一默认或擅自迁移用户数据；默认 runtime 仍不可启用。
 6. Native Windows/macOS runtime 未实际运行；CI native matrix 只检查编译，不作为 runtime 通过证据。Windows 的本地 Linux cross-check 被缺失 native `lib.exe` 阻碍，需等待真实 native CI 结果。
 7. 上游缺少当前产品的 MCP OAuth、browser CUA、Node REPL 与 memory 能力；不将这些功能描述为已迁移或已验收。
@@ -198,7 +197,7 @@ M0–M2 不涉及行为，可先行；M3 起每个里程碑都要过共库互操
 
 - Historical landing evidence was 426 passed / 1 ignored after the schema fix; earlier 423 count predates three schema tests. At that checkpoint, `pnpm test:zcode-cli-rust-drivers` had 15 cases. Separately, `node --test --test-isolation=none scripts/ci/*.test.mjs` is the CI script regression suite with 256 cases, not the driver suite.
 - Linux interop evidence: alternate 1/1, crash recovery 4/4, different-workspace concurrent 2/2; every DB comparison has matching sessions/read/equal counts and unchanged source hashes. Scope is controlled-case acceptance, not exhaustive parity.
-- M8 blocker is Desktop capability declaration (`unsupported_runtime` before Rust starts), not a missing Rust command; native process transport is not connected to Worker branch.
+- The former M8 capability/native-transport blocker is implemented in the latest M8 slice; full desktop recovery/rollback acceptance remains pending. See the [M8 handoff](../../docs/reports/cli-rust-m8-desktop-handoff.md).
 - Native Windows/macOS runtime remains untested. Native CI performs compile checks only; do not infer runtime success from remote compile results.
 - Root `pnpm lint` has 51 TypeScript warnings. Rust clippy (`-D warnings`) passed with no warnings, and `cargo fmt --all --check` passed. At the historical landing checkpoint root `pnpm fmt:check` (oxfmt) had 79 failures; the scoped task files have zero formatting issues. See [review status](cli-rust-review-status.md) and [CI contract](cli-rust-ci.md).
 

@@ -1,6 +1,8 @@
 # Rust CLI checkpoint review status
 
-Latest incremental handoff: [M2–M6 scoped work and fresh verification](cli-rust-handoff.md). The older counts below are historical checkpoint evidence, not the latest checkout result.
+Latest M8 implementation and pending user-run testing: [desktop handoff report](../../docs/reports/cli-rust-m8-desktop-handoff.md). M8 is not fully accepted; the counts below predate this slice.
+
+Earlier incremental handoff: [M2–M6 scoped work and fresh verification](cli-rust-handoff.md). The older counts below are historical checkpoint evidence, not the latest checkout result.
 
 This checkpoint records current source, test, interop, and CI evidence only. It is not a claim that M2–M8 or exhaustive product parity is complete. The CI handoff contract is in [cli-rust-ci](cli-rust-ci.md).
 
@@ -20,7 +22,7 @@ The fresh follow-up run reports Rust **470 passed / 1 ignored**, Node drivers **
 
 - Controlled protocol transformations and interop cases are accepted for the tested inputs; this is not exhaustive DTO coverage or product parity. Do not repeat stale claims that protocol strip/trim or `baseRevision` remains unaligned, or that interop has not been migrated/run.
 - Mixed-runtime owner coordination for the same workspace is not verified. Interop concurrent case covers different workspaces/sessions only; alternate is sequential on one workspace/session.
-- M8 blocker is not a missing Rust `prepare-storage` command: Rust already has the command and frames. Desktop resolver does not declare its capability, so it rejects `prepareSessionStorage` as `unsupported_runtime` before launching Rust. Native process transport is also not connected to the Worker branch. Do not add a fallback or broaden UI/platform interfaces to bypass this gate.
+- The former M8 capability/native preparation blocker has an implementation: explicit selector, tagged storage-preparation transport, shared Host handshake, and Rust reuse validation. Full App Rust→TS recovery has not passed; see the M8 report for unexecuted checks and smoke-driver limitations. Do not call the wiring full M8 acceptance.
 - Native Windows/macOS runtime execution has not been performed. Actual CI run `38042550013` reports both Windows and macOS native compile jobs successful; this is compile evidence only, runtime remains unchecked. The local Linux Windows cross-check is blocked by missing native MSVC `lib.exe`; do not infer native Windows runner outcome from that.
 - Storage path ownership remains distinct: Rust effective config target matches TS `DefaultRuntimeConfig.storage` (`~/.zcodium`); shared standalone SQLite fallback is `~/.zcodium-exp`. No home migration is performed or authorized.
 - Product acceptance remains pending for capabilities including browser/CUA, Node REPL, memory, MCP OAuth and other non-exhaustively tested behavior. Do not mark M2–M8 or overall parity complete.
