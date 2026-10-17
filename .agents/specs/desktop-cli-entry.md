@@ -29,9 +29,10 @@ OS executable → light Main bootstrap（仅 Node 内置模块）
 ## 验收
 
 1. 路由：GUI 参数不变；首个 --cli 被剥离一次，其余 argv/cwd/空串/-- 全保留；production/dev/preview 默认及显式 selector/错误选择/缺物料覆盖。
-2. 真实可执行程序：无 DISPLAY/WAYLAND 环境中 `--cli --help`、`--cli -p` 无窗口，stdout 无 GUI 日志；GUI 单实例已运行不抢占 CLI；退出/错误/信号传播正确。
-3. TS：随包 Electron Node 实际 import 同平台 `@zcode/tui`，PTY 下打开终端界面、可退出，不能靠系统 Node 或仓库 node_modules。
-4. Rust：通过同一可执行入口 help、无头 prompt、PTY 多轮交互与工具；不回退 TS。详见 Rust TUI spec。
-5. GUI：真实窗口仍启动并用原 runtime 处理消息；`out/main/index.js`、GUI chunk、ready marker 和所有引用方同步，打包 app 主入口无需用户修改。
-6. TS 资产：真实闭包加载、仅目标 native 包、manifest exports、执行权限、失败不留旧/半成物料；六平台映射静态测试，原 native/resource/版本/签名校验保留。
-7. 实际执行 typecheck、lint、architecture、定向/CI 测试与可用 E2E，明确未执行平台，不提交临时 profile/截图/二进制/用户 logs。
+2. 隔离 CI 的 Electron probe 显式以 `ELECTRON_DISABLE_SANDBOX=1` 测试环境启动，避免 runner 的 SUID/userns 配置在 bootstrap 前终止 Electron；不改变产品默认沙箱或 CLI argv 规则。
+3. 真实可执行程序：无 DISPLAY/WAYLAND 环境中 `--cli --help`、`--cli -p` 无窗口，stdout 无 GUI 日志；GUI 单实例已运行不抢占 CLI；退出/错误/信号传播正确。
+4. TS：随包 Electron Node 实际 import 同平台 `@zcode/tui`，PTY 下打开终端界面、可退出，不能靠系统 Node 或仓库 node_modules。
+5. Rust：通过同一可执行入口 help、无头 prompt、PTY 多轮交互与工具；不回退 TS。详见 Rust TUI spec。
+6. GUI：真实窗口仍启动并用原 runtime 处理消息；`out/main/index.js`、GUI chunk、ready marker 和所有引用方同步，打包 app 主入口无需用户修改。
+7. TS 资产：真实闭包加载、仅目标 native 包、manifest exports、执行权限、失败不留旧/半成物料；六平台映射静态测试，原 native/resource/版本/签名校验保留。
+8. 实际执行 typecheck、lint、architecture、定向/CI 测试与可用 E2E，明确未执行平台，不提交临时 profile/截图/二进制/用户 logs。

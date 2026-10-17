@@ -138,9 +138,19 @@ test("real Electron bootstrap runs a stub CLI headlessly without importing GUI",
       JSON.stringify({ type: "module", main: "out/main/index.js" }),
     );
     const electron = resolve(desktopRoot, "../../node_modules/.bin/electron");
+    const env = {
+      ...process.env,
+      DISPLAY: "",
+      WAYLAND_DISPLAY: "",
+      ELECTRON_DISABLE_GPU: "1",
+      ELECTRON_DISABLE_SANDBOX: "1",
+    };
+    delete env.ELECTRON_RUN_AS_NODE;
+    delete env.ZCODE_AGENT_SERVER_RUNTIME;
     const result = await new Promise((resolveResult, reject) => {
+      // CI 的 SUID/userns 策略会在 JS bootstrap 前终止 Electron；仅隔离 probe 显式禁用沙箱。
       const child = spawn(electron, [join(temp, "app"), "--cli", "--help"], {
-        env: { ...process.env, DISPLAY: "", WAYLAND_DISPLAY: "", ELECTRON_DISABLE_GPU: "1" },
+        env,
         stdio: ["ignore", "pipe", "pipe"],
       });
       let stdout = "";
