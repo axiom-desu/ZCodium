@@ -2,6 +2,7 @@ mod args;
 mod prompt;
 mod runtime;
 mod storage_startup;
+mod tui;
 use anyhow::Result;
 use args::{AppServerArgs, Cli, Command};
 use clap::Parser;
@@ -19,7 +20,7 @@ async fn main() {
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
     // 子命令走 clap；其余与 Node 一样由顶层参数决定（-p 无头运行或 TUI）。
-    if !matches!(argv.first().map(String::as_str), Some("app-server" | "tui")) {
+    if argv.first().map(String::as_str) != Some("app-server") {
         std::process::exit(prompt::main(&argv).await);
     }
     if let Err(error) = run().await {
@@ -32,18 +33,7 @@ async fn main() {
 async fn run() -> Result<()> {
     match Cli::parse().command {
         Command::AppServer(args) => app_server(args).await,
-        Command::Tui => tui_unavailable(),
     }
-}
-
-/// TUI 入口先占位：保留子命令与退出码契约，避免未实现的前端伪装成可用。
-pub(crate) fn tui_unavailable() -> ! {
-    use std::io::Write;
-    let _ = writeln!(
-        std::io::stderr().lock(),
-        "zcode-cli-rust: TUI 尚未实现，请使用 app-server --stdio 或 -p"
-    );
-    std::process::exit(zcode_cli_tui::UNAVAILABLE_EXIT_CODE);
 }
 
 async fn app_server(args: AppServerArgs) -> Result<()> {

@@ -44,6 +44,8 @@ pub struct PromptArgs {
     pub prompt: String,
     pub format: Format,
     pub mode: String,
+    /// Whether --mode was supplied, distinct from the default used by each frontend.
+    pub mode_explicit: bool,
     pub attach: Vec<String>,
     pub cwd: Option<String>,
     pub resume: Resume,
@@ -53,6 +55,7 @@ pub struct PromptArgs {
     pub verbose: bool,
     pub data_dir: Option<String>,
     pub config: Option<String>,
+    pub locale: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -60,8 +63,8 @@ pub enum Parsed {
     Help,
     Version,
     Prompt(Box<PromptArgs>),
-    /// No prompt: the (reserved) TUI.
-    Tui,
+    /// No prompt: interactive terminal, with the same shared options retained.
+    Tui(Box<PromptArgs>),
 }
 
 pub fn parse(argv: &[String]) -> Result<Parsed, ArgError> {
@@ -75,6 +78,7 @@ pub fn parse(argv: &[String]) -> Result<Parsed, ArgError> {
         ));
     }
     let mode = match values.string("mode").map(str::to_lowercase) {
+        None if values.string("prompt").is_none() => "build".to_owned(),
         None => "yolo".to_owned(),
         Some(mode) if matches!(mode.as_str(), "build" | "edit" | "plan" | "yolo") => mode,
         Some(_) => {
@@ -170,13 +174,13 @@ pub fn parse(argv: &[String]) -> Result<Parsed, ArgError> {
             ));
         }
     }
-    let Some(prompt) = prompt else {
-        return Ok(Parsed::Tui);
-    };
-    Ok(Parsed::Prompt(Box::new(PromptArgs {
+    let tui = prompt.is_none();
+    let prompt = prompt.unwrap_or_default();
+    let parsed = PromptArgs {
         prompt,
         format,
         mode,
+        mode_explicit: values.string("mode").is_some(),
         attach: values.strings.get("attach").cloned().unwrap_or_default(),
         cwd: values.string("cwd").map(str::to_owned),
         resume,
@@ -185,7 +189,13 @@ pub fn parse(argv: &[String]) -> Result<Parsed, ArgError> {
         verbose: values.flag("verbose"),
         data_dir: values.string("data-dir").map(str::to_owned),
         config: values.string("config").map(str::to_owned),
-    })))
+        locale: values.string("locale").unwrap_or("auto").to_owned(),
+    };
+    if tui {
+        Ok(Parsed::Tui(Box::new(parsed)))
+    } else {
+        Ok(Parsed::Prompt(Box::new(parsed)))
+    }
 }
 
 /// Node `prompt-command.ts`: checked after `--cwd`.

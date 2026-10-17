@@ -24,6 +24,7 @@ import {
   resolveDesktopProductIdentity,
 } from "./scripts/desktop-product-identity.mjs";
 import { verifyStagedKoffi } from "./scripts/koffi-package-assets.mjs";
+import { verifyDesktopCliAssets } from "./scripts/stage-desktop-cli-tui.mjs";
 const ELECTRON_BUILDER_ARCH = {
   1: "x64",
   3: "arm64",
@@ -581,6 +582,12 @@ export default {
             configuredTargetPlatform: targetPlatform,
           })
         : null;
+    await runTimedAsync("afterPack:verifyDesktopCliAssets", () =>
+      verifyDesktopCliAssets({
+        glmDir: join(resolvePackagedResourcesDir(context), "glm"),
+        platformKey: targetPlatform.key,
+      }),
+    );
     await runTimedAsync("afterPack:finalizePackagedAsar", () => finalizePackagedAppAsar(context));
     runTimedSync("afterPack:assertPackagedNativeResourcePolicy", () =>
       assertPackagedNativeResourcePolicy(context),
@@ -668,6 +675,12 @@ export default {
       to: "glm",
       filter: ["**/*", "!**/*.map"],
     },
+    {
+      // Builder 会无条件忽略 from 根下的 node_modules；直接以它为复制根，避免丢失 TUI 闭包。
+      from: `bundled-agents/${targetPlatform.key}/glm/node_modules`,
+      to: "glm/node_modules",
+      filter: ["**/*", "!**/*.map"],
+    },
     // Rust CLI runtime，只在 Preview（ZCodium Rust）口味随包分发，落到 resources/rust。
     // 生产口味不构建也不打包，继续只用上面的 glm/ JS bundle。
     // 目录与 glm/ 平级但分开，保证两套 runtime 的启停与回退互不影响。
@@ -677,6 +690,12 @@ export default {
             from: `bundled-agents/${targetPlatform.key}/rust`,
             to: "rust",
             filter: ["**/*"],
+          },
+          {
+            // 新增 Rust 许可材料独立随包；不因旧 npm notices 生成受阻而漏掉原始快照。
+            from: resolve(workspaceRoot, "third-party/rust-tui"),
+            to: "licenses/rust-tui",
+            filter: ["sources.json", "snapshots/**", "README.md"],
           },
         ]
       : []),

@@ -1,6 +1,6 @@
 [package]
 name = "zcode-cli-tui"
-description = "TUI 输入与渲染，只通过 core-api 工作"
+description = "Native terminal UI frontend using the core-api transport"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,3 +19,11 @@ zcode-cli-state.workspace = true
 zcode-cli-model.workspace = true
 zcode-cli-tools.workspace = true
 zcode-cli-host.workspace = true
+anyhow.workspace = true
+crossterm = { version = "0.28", features = ["event-stream"] }
+futures-util.workspace = true
+ratatui = "0.29"
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true

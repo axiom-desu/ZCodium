@@ -7,6 +7,15 @@ const workflow = await readFile(
   "utf8",
 );
 const driverJob = workflow.split("  protocol-schema:")[1]?.split("  linux-node-interop:")[0];
+const interopJob = workflow.split("  linux-node-interop:")[1]?.split("  native-platform-check:")[0];
+const nativeJob = workflow.split("  native-platform-check:")[1];
+
+test("Rust TUI PTY acceptance follows a fresh Rust build in the same Linux job", () => {
+  assert.ok(interopJob);
+  const build = interopJob.indexOf("--bin zcode-cli-rust --example node_read");
+  const smoke = interopJob.indexOf("node scripts/zcode-cli-rust-tui-smoke.mjs");
+  assert.ok(build >= 0 && smoke > build);
+});
 
 // M4/M5 在该 job 中用 cargo --offline 构建 examples；别的 job 的缓存不属于本 runner。
 test("Rust driver job installs its own Rust toolchain before running differential tests", () => {
@@ -23,6 +32,17 @@ test("offline Rust drivers have locked Cargo dependency preparation in the same 
   const rust = driverJob.indexOf("uses: dtolnay/rust-toolchain@stable");
   const drivers = driverJob.indexOf("run: pnpm test:zcode-cli-rust-drivers");
   assert.ok(fetch > rust && drivers > fetch);
+});
+
+test("Windows and macOS native runners execute the non-TTY CLI entry integration test", () => {
+  assert.ok(nativeJob);
+  assert.match(nativeJob, /os: \[windows-latest, macos-latest\]/);
+  const compile = nativeJob.indexOf("cargo check --locked --workspace --all-targets");
+  const entryStep = nativeJob.indexOf("- name: Native non-TTY CLI entry tests");
+  const workingDirectory = nativeJob.indexOf("working-directory: apps/zcode-cli-rust", entryStep);
+  const entryTest = nativeJob.indexOf("run: cargo test --locked --test cli_entry", entryStep);
+  assert.ok(compile >= 0 && entryStep > compile);
+  assert.ok(workingDirectory > entryStep && entryTest > workingDirectory);
 });
 
 test("Rust driver prerequisite does not replace current TS build or contract checks", () => {

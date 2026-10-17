@@ -12,8 +12,6 @@ pub struct Cli {
 pub enum Command {
     /// Serve the App stdio protocol (NDJSON on stdout, diagnostics on stderr).
     AppServer(AppServerArgs),
-    /// Interactive terminal UI. Reserved entry point; not implemented yet.
-    Tui,
 }
 
 #[derive(clap::Args, Debug)]

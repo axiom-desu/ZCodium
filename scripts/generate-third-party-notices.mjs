@@ -4,6 +4,7 @@ import { collectNpmNotices, hashBytes } from "./third-party-npm.mjs";
 import {
   noticesFileName,
   readNativeSearchNotices,
+  readRustTuiNotices,
   repositoryRoot,
 } from "./third-party-notices.mjs";
 
@@ -113,6 +114,10 @@ export async function generateThirdPartyNotices(root = repositoryRoot) {
     patches.push({ package: name, file, sha256: hashBytes(await readInput(file)) });
   }
   const native = await readNativeSearchNotices(root, { verify: true });
+  const rustTui = await readRustTuiNotices(root, { verify: true });
+  await readInput(rustTui.inventoryFile);
+  for (const crate of rustTui.inventory.crates)
+    for (const notice of crate.notices) await readInput(notice.file);
   for (const file of Object.keys(native.inventory.inputs)) await readInput(file);
   for (const component of native.inventory.components) {
     for (const notice of component.notices) await readInput(notice.file);
@@ -159,7 +164,12 @@ export async function generateThirdPartyNotices(root = repositoryRoot) {
       "````text\n" + record.bytes.toString("utf8") + "\n````",
     );
   }
-  sections.push("## Native search tools", "````text\n" + native.bytes.toString("utf8") + "\n````");
+  sections.push(
+    "## Native search tools",
+    "````text\n" + native.bytes.toString("utf8") + "\n````",
+    "## Rust TUI dependency notices",
+    "````text\n" + rustTui.bytes.toString("utf8") + "\n````",
+  );
   const bytes = Buffer.from(`${sections.join("\n\n")}\n`);
   const inventory = {
     schemaVersion: 1,
@@ -196,6 +206,12 @@ export async function generateThirdPartyNotices(root = repositoryRoot) {
         .map((item) => ({
           id: `${item.id}@${item.version}`,
           reason: "No original notice snapshot for this recorded native component.",
+        })),
+      ...rustTui.inventory.crates
+        .filter((item) => item.reviewRequired)
+        .map((item) => ({
+          id: `${item.name}@${item.version}`,
+          reason: item.reviewRequired,
         })),
     ],
   };

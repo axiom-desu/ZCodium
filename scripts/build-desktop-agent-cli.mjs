@@ -2,6 +2,7 @@ import { access } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageAgentBundle } from "../packages/desktop/scripts/stage-agent-bundle.mjs";
+import { stageDesktopCliTui } from "../packages/desktop/scripts/stage-desktop-cli-tui.mjs";
 import { runCommand } from "./spawn-command.mjs";
 
 // adapters tsc 在内存受限机器上会 OOM（exit 134），给整条构建链路提高堆上限。
@@ -10,6 +11,8 @@ import { resolveBuiltinProviderBuildEnvironment } from "./builtin-provider-confi
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const useTurboBuild = process.env.ZCODE_DESKTOP_AGENT_BUILD_MODE === "turbo";
+// prepare:agent-bundle 自己按目标平台暂存，不能先按宿主平台再重复复制整套 TUI。
+const skipStaging = process.argv.includes("--no-stage");
 const useBootstrapWithRemoteBuild = process.env.ZCODE_BOOTSTRAP_WITH_REMOTE === "1";
 const pnpmRunEnv = {
   ...process.env,
@@ -58,6 +61,7 @@ const requiredDevPluginRuntimeBuilds = [
 ];
 const defaultBuildFilters = [
   ...cliWorkspaceBuilds.map(({ packageName }) => packageName),
+  "@zcode/tui",
   ...requiredDevPluginRuntimeBuilds.map(({ packageName }) => packageName),
 ];
 
@@ -86,11 +90,11 @@ async function verifyRequiredDevPluginRuntimeArtifacts() {
  *
  * dev 只跑宿主平台，所以 platformKey 直接取 process；打包链的跨平台 target 由它自己解析。
  */
-function stageDevAgentBundle() {
-  stageAgentBundle({
-    repoRoot,
-    platformKey: `${process.platform}-${process.arch}`,
-  });
+async function stageDevAgentBundle() {
+  if (skipStaging) return;
+  const platformKey = `${process.platform}-${process.arch}`;
+  await stageAgentBundle({ repoRoot, platformKey });
+  await stageDesktopCliTui({ repoRoot, platformKey });
 }
 
 async function runBootstrapWithRemoteBuild() {
@@ -115,6 +119,11 @@ async function runBootstrapWithRemoteBuild() {
     });
   }
 
+  runCommand(process.execPath, ["scripts/build.mjs"], {
+    cwd: "apps/zcode-cli/packages/tui",
+    env: pnpmRunEnv,
+    stdio: "inherit",
+  });
   runCommand(process.execPath, ["scripts/build.mjs", "--desktop-agent"], {
     cwd: "apps/zcode-cli/packages/cli",
     env: pnpmRunEnv,
@@ -124,7 +133,7 @@ async function runBootstrapWithRemoteBuild() {
 
 if (useBootstrapWithRemoteBuild) {
   await runBootstrapWithRemoteBuild();
-  stageDevAgentBundle();
+  await stageDevAgentBundle();
   process.exit(0);
 }
 
@@ -145,7 +154,7 @@ if (!useTurboBuild) {
     env: pnpmRunEnv,
     stdio: "inherit",
   });
-  stageDevAgentBundle();
+  await stageDevAgentBundle();
   process.exit(0);
 }
 
@@ -166,4 +175,4 @@ runCommand(
     stdio: "inherit",
   },
 );
-stageDevAgentBundle();
+await stageDevAgentBundle();

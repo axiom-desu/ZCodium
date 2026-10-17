@@ -11,7 +11,7 @@ import {
 // - Agent 主入口为 JS；独立 node_repl 宿主另携带目标平台 CUA N-API 库；
 // - Electron 41 内置 Node 24.x，与 zcode-cli 的目标运行时一致；
 // - 单平台体积从 ~180MB 降到 ~16MB，且同一份 JS 跨平台通用；
-// - app-server 命令路径不会加载 @zcode/tui，所以这里天然不打包 TUI。
+// - app-server 不加载 TUI；公开 --cli 入口所需的同平台 TUI 闭包单独随 bundle 暂存。
 //
 // 远端（SSH/WSL/Docker）没有 Electron，仍走 prepare:remote-assets 的原生二进制，互不影响。
 
@@ -24,6 +24,7 @@ import { runCommand } from "../../../scripts/spawn-command.mjs";
 import { validateBuiltinPluginAssets } from "../../../scripts/builtin-plugin-assets.mjs";
 import { stageCuaDriverRuntime } from "../../../scripts/cua-driver-runtime-assets.mjs";
 import { stageAgentBundle } from "./stage-agent-bundle.mjs";
+import { stageDesktopCliTui } from "./stage-desktop-cli-tui.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(scriptDir, "..");
@@ -108,10 +109,14 @@ const isBootstrapWithRemote = process.env.ZCODE_BOOTSTRAP_WITH_REMOTE === "1";
 function buildCliBundle() {
   console.log("[prepare:agent-bundle] building zcode-cli app-server bundle ...");
   // 复用仓库根脚本（turbo build:desktop-agent --filter=@zcode/cli），命中缓存时几乎瞬时。
-  runCommand(process.execPath, [resolve(repoRoot, "scripts/build-desktop-agent-cli.mjs")], {
-    cwd: repoRoot,
-    env: pnpmRunEnv,
-  });
+  runCommand(
+    process.execPath,
+    [resolve(repoRoot, "scripts/build-desktop-agent-cli.mjs"), "--no-stage"],
+    {
+      cwd: repoRoot,
+      env: pnpmRunEnv,
+    },
+  );
   if (!existsSync(cliBundlePath)) {
     throw new Error(
       `[prepare:agent-bundle] expected cli bundle missing after build: ${cliBundlePath}`,
@@ -178,10 +183,11 @@ function assertOfficialPluginRuntime(plugin) {
   }
 }
 
-function stageBundle() {
+async function stageBundle() {
   // 实现已抽到 stage-agent-bundle.mjs：dev 链（scripts/build-desktop-agent-cli.mjs）
   // 必须用同一份，否则 dev 会继续跑上一次打包留下的陈旧 agent。
-  stageAgentBundle({ repoRoot, platformKey });
+  await stageAgentBundle({ repoRoot, platformKey });
+  await stageDesktopCliTui({ repoRoot, platformKey });
 }
 
 async function stageOfficialPlugins() {
@@ -244,6 +250,6 @@ async function stageBundledSkillPack() {
 // 必须先构建 CLI 依赖，再构建官方插件；开发机残留的 dist 曾掩盖这个顺序问题。
 buildCliBundle();
 buildOfficialPluginRuntimes();
-stageBundle();
+await stageBundle();
 await stageOfficialPlugins();
 await stageBundledSkillPack();
