@@ -1,12 +1,51 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, symlink, cp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { readRustTuiNotices, readVerifiedNotices } from "../third-party-notices.mjs";
+import { verifyRustSourceMatch } from "../rust-tui-upstream-notices.mjs";
+import {
+  readRustTuiNotices,
+  readVerifiedNotices,
+  repositoryRoot,
+} from "../third-party-notices.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+test("source-match evidence binds the exact published archive, revision and file set", () => {
+  const record = {
+    name: "winapi",
+    version: "0.4.0",
+    archiveSha256: "a".repeat(64),
+    revision: "b".repeat(40),
+    pathInVcs: "i686",
+    mismatches: [],
+    matches: [{ sourcePath: "i686/build.rs", gitBlobSha1: "c".repeat(40), sha256: "d".repeat(64) }],
+  };
+  const bytes = Buffer.from(JSON.stringify({ packages: [record] }));
+  const registration = {
+    ...record,
+    evidence: { sourceMatch: { sha256: hash(bytes), matchedFiles: 1 } },
+  };
+  assert.doesNotThrow(() => verifyRustSourceMatch(registration, bytes));
+  assert.throws(
+    () => verifyRustSourceMatch({ ...registration, revision: "0".repeat(40) }, bytes),
+    /version\/revision proof/,
+  );
+  assert.throws(
+    () => verifyRustSourceMatch(registration, Buffer.from("changed")),
+    /evidence changed/,
+  );
+  assert.throws(
+    () =>
+      verifyRustSourceMatch(
+        { ...registration, evidence: { sourceMatch: { sha256: hash(bytes), matchedFiles: 2 } } },
+        bytes,
+      ),
+    /version\/revision proof/,
+  );
+});
+
 const registrySource = "registry+https://github.com/rust-lang/crates.io-index";
 const lockPackage = (name, version, checksum, dependencies = [], source = registrySource) =>
   `[[package]]\nname = "${name}"\nversion = "${version}"\n${source ? `source = "${source}"\n` : ""}${dependencies.length ? `dependencies = [\n${dependencies.map((dep) => ` "${dep}",\n`).join("")}]\n` : ""}${source ? `checksum = "${checksum}"\n` : ""}`;
@@ -125,6 +164,46 @@ test("Rust notice verifier rejects escaping snapshot paths and symlinks", async 
     await assert.rejects(readRustTuiNotices(f.root, { verify: true }), /symlink escapes/);
   } finally {
     await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("Rust upstream originals are bound to locked crate version, archive, and pinned revision evidence", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "rust-tui-upstream-"));
+  try {
+    await cp(
+      resolve(repositoryRoot, "third-party/rust-tui"),
+      resolve(root, "third-party/rust-tui"),
+      { recursive: true },
+    );
+    await mkdir(resolve(root, "apps/zcode-cli-rust"), { recursive: true });
+    await cp(
+      resolve(repositoryRoot, "apps/zcode-cli-rust/Cargo.lock"),
+      resolve(root, "apps/zcode-cli-rust/Cargo.lock"),
+    );
+    const inventoryPath = resolve(root, "third-party/rust-tui/sources.json");
+    const pristine = JSON.parse(await readFile(inventoryPath, "utf8"));
+    await readRustTuiNotices(root, { verify: true });
+
+    const jni = pristine.crates.find((crate) => crate.name === "jni");
+    jni.version = "0.22.3";
+    await writeFile(inventoryPath, JSON.stringify(pristine));
+    await assert.rejects(
+      readRustTuiNotices(root, { verify: true }),
+      /Missing locked Rust TUI crate: jni@0.22.4/,
+    );
+
+    const restored = JSON.parse(
+      await readFile(resolve(repositoryRoot, "third-party/rust-tui/sources.json"), "utf8"),
+    );
+    const restoredJni = restored.crates.find((crate) => crate.name === "jni");
+    restoredJni.upstreamEvidence.revision = "0".repeat(40);
+    await writeFile(inventoryPath, JSON.stringify(restored));
+    await assert.rejects(
+      readRustTuiNotices(root, { verify: true }),
+      /revision\/evidence mismatch: jni@0.22.4/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

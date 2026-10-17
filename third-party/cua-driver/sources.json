@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "scope": "Exact CUA 0.28.2 and UBJS 0.31.0-3 publisher evidence and original license materials; native binaries unchanged, source instructions supplied separately.",
+  "packages": [
+    {
+      "package": "@trycua/cua-driver@0.28.2",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "af428871543f2a68ee06f00c4901a45f3c83d8bcba06738fdfd14684522a5e74",
+      "license": "MIT",
+      "revision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+      "registryUrl": "https://registry.npmjs.org/%40trycua%2Fcua-driver/0.28.2",
+      "registrySha256": "168404f2ff2efe3fa618c096d0317b1bbc4ccfc1a3efab8d8a3f25b7b8296c4b"
+    },
+    {
+      "package": "@trycua/cua-driver-darwin-arm64@0.28.2",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "480f8a36c8f545ef13356a6399b8467238aced269c0a9f2d73699fb0952eb054",
+      "license": "MIT AND MPL-2.0",
+      "revision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+      "registryUrl": "https://registry.npmjs.org/%40trycua%2Fcua-driver-darwin-arm64/0.28.2",
+      "registrySha256": "834c87920b0d0de0eecadb5354974fc7c3131c8f252f600bebf719fdd46775c8"
+    },
+    {
+      "package": "@trycua/cua-driver-darwin-x64@0.28.2",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "4b28770f9b2763929c72210e7f5ac4e73d2203f29a4674b2a1bbac1e133bef33",
+      "license": "MIT AND MPL-2.0",
+      "revision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+      "registryUrl": "https://registry.npmjs.org/%40trycua%2Fcua-driver-darwin-x64/0.28.2",
+      "registrySha256": "f7e8a7850487bd6852781bb774b4c381b34a6a6d2c509b1331af5788cea3b2b0"
+    },
+    {
+      "package": "@trycua/cua-driver-linux-arm64-gnu@0.28.2",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "640163dd51d95da3262da4dec6b8bcab90357f39d528b9e2640c80724d79e3ed",
+      "license": "MIT AND MPL-2.0",
+      "revision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+      "registryUrl": "https://registry.npmjs.org/%40trycua%2Fcua-driver-linux-arm64-gnu/0.28.2",
+      "registrySha256": "6323b0dd00f82c8fafd30a4fa34235cb371acf022703ea4d57f5c0b0592d7915"
+    },
+    {
+      "package": "@trycua/cua-driver-linux-x64-gnu@0.28.2",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "0c57961c2e6eb0baecc8e170ba30a5bf9a753513d834c48ce5ef546f50c07ad7",
+      "license": "MIT AND MPL-2.0",
+      "revision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+      "registryUrl": "https://registry.npmjs.org/%40trycua%2Fcua-driver-linux-x64-gnu/0.28.2",
+      "registrySha256": "0fcc14d3839e7f40508e8172bed63c439d82f069f2b263497cb84ddabd4f8e00"
+    },
+    {
+      "package": "@trycua/cua-driver-win32-arm64-msvc@0.28.2",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "d2a69898b9de13e174cb4db544a6d00906888ac8368588cae9c2bb14b6f4b0a7",
+      "license": "MIT AND MPL-2.0",
+      "revision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+      "registryUrl": "https://registry.npmjs.org/%40trycua%2Fcua-driver-win32-arm64-msvc/0.28.2",
+      "registrySha256": "839b0de5dda21546eeeaccc7f8b7fccb841bb06335392e40cd692986c7c75fdf"
+    },
+    {
+      "package": "@trycua/cua-driver-win32-x64-msvc@0.28.2",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "5bb7501d60d487ab6499c5062cf8ccb7de4e5c2f8e4cc844a7e3798d3a7a94ea",
+      "license": "MIT AND MPL-2.0",
+      "revision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+      "registryUrl": "https://registry.npmjs.org/%40trycua%2Fcua-driver-win32-x64-msvc/0.28.2",
+      "registrySha256": "dc7282c8cabc1ec6151d9d40ac35825dc7f3f63f1306024c8c08bd0039dc035f"
+    },
+    {
+      "package": "@ubjs/core@0.31.0-3",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "b90e70521a7ea2e23f069c0770b83f3c888c9ff2bb142e845dcfa07430817913",
+      "license": "MPL-2.0",
+      "revision": "49bc59194d183a05855ed4104c18eb92fb465e02",
+      "registryUrl": "https://registry.npmjs.org/%40ubjs%2Fcore/0.31.0-3",
+      "registrySha256": "0cf7a9979032680e5474e8d7261e2ee73ea9cf287a0b5790ef8568682b4e8a42"
+    },
+    {
+      "package": "@ubjs/node@0.31.0-3",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "df41ccaf15eab3ed6f6c53e0e1000617ed5e238e6fd30cf91d180e55834c02ce",
+      "license": "MPL-2.0",
+      "revision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+      "registryUrl": "https://registry.npmjs.org/%40ubjs%2Fnode/0.31.0-3",
+      "registrySha256": "df6293124d098dd8932672287409a5be64e4e5ec67c756c0461fd35275a64fa5"
+    },
+    {
+      "package": "@ubjs/node-darwin-arm64@0.31.0-3",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "875b2c6e8b43ca1cd09ca67b5d141ff77b302b9b81ba1937fecf49b62e0041f7",
+      "license": "MPL-2.0",
+      "revision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+      "registryUrl": "https://registry.npmjs.org/%40ubjs%2Fnode-darwin-arm64/0.31.0-3",
+      "registrySha256": "21cf0759b5ac818e730d33d1fd80f26e256c84c7c9ab97fc6e4278b29006a774"
+    },
+    {
+      "package": "@ubjs/node-darwin-x64@0.31.0-3",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "5e189fa7ca541f08d7cc4e44d8886541ea1b3109703336aeb667fc320ce20818",
+      "license": "MPL-2.0",
+      "revision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+      "registryUrl": "https://registry.npmjs.org/%40ubjs%2Fnode-darwin-x64/0.31.0-3",
+      "registrySha256": "6ecd5276038115b5d2e2cc7405dca1ece8dd11023eb682d41f1ea85bb226e41e"
+    },
+    {
+      "package": "@ubjs/node-linux-arm64-gnu@0.31.0-3",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "e73560184ddfddfa99d5521725678d56127d519baeb8ccc8ff63cbce3509a7d7",
+      "license": "MPL-2.0",
+      "revision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+      "registryUrl": "https://registry.npmjs.org/%40ubjs%2Fnode-linux-arm64-gnu/0.31.0-3",
+      "registrySha256": "bd02fe286a7ab1b306ae1c95caa62b48c231dc0239e69d01bfe104e6e7662f3b"
+    },
+    {
+      "package": "@ubjs/node-linux-x64-gnu@0.31.0-3",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "b5b49b499f5268064fb92b5911a25a31e336da266c5a26180789620cd0ebef24",
+      "license": "MPL-2.0",
+      "revision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+      "registryUrl": "https://registry.npmjs.org/%40ubjs%2Fnode-linux-x64-gnu/0.31.0-3",
+      "registrySha256": "2bd7f42b3bf7a930a51b2854f8a610d0249283313269767f32a5402cea34c311"
+    },
+    {
+      "package": "@ubjs/node-win32-arm64-msvc@0.31.0-3",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "eed2fad826ad26f3bd987958421d473e6216eca542bf6326171603f93738ae56",
+      "license": "MPL-2.0",
+      "revision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+      "registryUrl": "https://registry.npmjs.org/%40ubjs%2Fnode-win32-arm64-msvc/0.31.0-3",
+      "registrySha256": "e0614f33a811f118348680e30b2141818187c9340837ef3320a534b4424a27b5"
+    },
+    {
+      "package": "@ubjs/node-win32-x64-msvc@0.31.0-3",
+      "registrySnapshotKind": "selected-public-version-and-source-fields",
+      "originalRegistryResponseSha256": "7f9d68570ab235625d4e000daf672b08ceeb56e48d879d12962c00445aec4820",
+      "license": "MPL-2.0",
+      "revision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+      "registryUrl": "https://registry.npmjs.org/%40ubjs%2Fnode-win32-x64-msvc/0.31.0-3",
+      "registrySha256": "542d01c3dceb7deaf24f3d9900b4ed184e9b726176ec732e43b2a29c38b4b3c5"
+    }
+  ],
+  "materials": [
+    {
+      "id": "cua-MIT",
+      "url": "https://raw.githubusercontent.com/trycua/cua/fc188250b4ca8549b8e61f937fdb1fb560770e86/LICENSE.md",
+      "kind": "original-license",
+      "sha256": "c0779290c1d4783169aa3dbfb55feb505e563ef8a004bbf55298ceffcfbda8d9"
+    },
+    {
+      "id": "core-MPL",
+      "url": "https://raw.githubusercontent.com/jhugman/uniffi-bindgen-react-native/49bc59194d183a05855ed4104c18eb92fb465e02/LICENSE",
+      "kind": "original-license",
+      "sha256": "d1cc4c0ada218e8a336dc8c3d8bb7d5b1c8dedfa31f5b25c9ea1759d21b8b62d"
+    },
+    {
+      "id": "node-MPL",
+      "url": "https://raw.githubusercontent.com/jhugman/uniffi-bindgen-react-native/dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449/LICENSE",
+      "kind": "original-license",
+      "sha256": "d1cc4c0ada218e8a336dc8c3d8bb7d5b1c8dedfa31f5b25c9ea1759d21b8b62d"
+    },
+    {
+      "id": "runtime-NOTICE",
+      "url": "https://raw.githubusercontent.com/trycua/cua/fc188250b4ca8549b8e61f937fdb1fb560770e86/libs/cua-driver/scripts/node-runtime-NOTICE.md",
+      "kind": "original-notice",
+      "sha256": "66a466cc022b4bf4a41f678e4d31d9b82098cc55cc364d6e9295366dfd02cef2"
+    },
+    {
+      "id": "runtime-build",
+      "url": "https://raw.githubusercontent.com/trycua/cua/fc188250b4ca8549b8e61f937fdb1fb560770e86/libs/cua-driver/scripts/build-node-runtime.mjs",
+      "kind": "build-source",
+      "sha256": "db02ec1345edbf6090f0093ddae3bd41d624d2984af58bcdce3a66cfcad373dc"
+    },
+    {
+      "id": "cua-package",
+      "url": "https://raw.githubusercontent.com/trycua/cua/fc188250b4ca8549b8e61f937fdb1fb560770e86/libs/cua-driver/typescript/package.json",
+      "kind": "version-evidence",
+      "sha256": "e8fef4d6e1965b7c89ede6f701d8471041dbf08d0118f7d84835897bd3d5e9e2"
+    }
+  ],
+  "noticesSha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+  "instructionsSha256": "9d2987109573da2665e7cb866398ac115a5298e33e116e39a0d5c0d141f3dc4b"
+}

@@ -23,7 +23,7 @@ Node 使用 `mise.toml` 指定的 **24.14.0**（隔离工具目录，不修改�
 | `pnpm fmt:check -- '!logs/**'`                                                                                                | 通过；不改用户既有未追踪 logs                               |
 | `pnpm check:zcode-cli-rust`                                                                                                   | crate boundaries / fmt / workspace all-target clippy 通过   |
 | `pnpm test:zcode-cli-rust`                                                                                                    | 495 项通过                                                  |
-| `node --test --test-isolation=none scripts/ci/*.test.mjs`                                                                     | 332 项通过                                                  |
+| `node --test --test-isolation=none scripts/ci/*.test.mjs`                                                                     | 341 项通过                                                  |
 | `pnpm -r --filter './apps/zcode-cli/packages/*' build` / `test`                                                               | 通过，当前有测试脚本的包共 141 项                           |
 | `pnpm test:zcode-cli-rust-drivers`                                                                                            | 52 项通过                                                   |
 | `pnpm check:zcode-cli-rust-protocol-schema` / `check:zcode-cli-rust-contract-assets` / `check:zcode-cli-rust-domain-fixtures` | 通过                                                        |
@@ -50,7 +50,7 @@ Node 使用 `mise.toml` 指定的 **24.14.0**（隔离工具目录，不修改�
 
 `c31f7e97` 已删除购买 webview 及 `packages/ui/test/localOnlyWebview.test.ts`，但 `scripts/ci/local-observability.test.mjs` 仍导入该文件。仅清理遗留引用，未恢复已删除功能，未 skip 当前测试。诊断入口恢复运行，28 项全部通过。
 
-## 发布许可阻塞（未豁免）
+## 初检许可阻塞（历史，补齐结果见下）
 
 在隔离的原 HEAD `7e21a755` worktree、复用同一安装依赖图，复现了相同 npm 失败，确认不是新 CLI 源码造成：
 
@@ -60,4 +60,19 @@ Node 使用 `mise.toml` 指定的 **24.14.0**（隔离工具目录，不修改�
 - 新校验从锁文件推导闭包、核对每个来源/checksum，拒绝遗漏、重复、多余项、文件篡改和路径逃逸；CRLF 锁文件文本归一化，原始快照通过 .gitattributes 保留字节。严格检查独立拒绝 Rust 待复核项，不依赖旧 aggregate inventory 是否已登记。
 - Rust 材料独立随 Preview 打包到 `resources/licenses/rust-tui`，不会因为旧 npm notices 无法再生成而静默遗漏；这不消除材料缺口，也不构成法律合规认证。
 
-解除上述材料与许可分类阻塞、成功重生成 aggregate inventory 并完成 strict 复核后，才可将 PR 标为可发布。无需用户提供 Windows/macOS 设备来执行当前 CI 已配置的非交互检查。
+初检时这些问题阻止 release-ready；后续材料补齐结果如下。无需用户提供 Windows/macOS 设备来执行当前 CI 已配置的非交互检查。
+
+## 上游许可原文补齐
+
+- CUA/UBJS：保存 15 个精确包版本的必要公开 registry 字段快照和原始响应摘要（不收录 publisher 联系信息或内部运维字段）、与同名同版本 pnpm 锁条目相等的 integrity、6 份固定源码材料（MIT/MPL 原文、原始 runtime NOTICE、构建源码和版本证明）。记录 core 与 node/platform 不同的 publisher gitHead，并提供对应源码获取方式和本地打包变换说明。9 项缺原文和 14 项许可分类阻塞已消除；只对证据完整的精确包名/版本/表达式复核，不是通用 MPL 豁免。
+- Rust：JNI 系列、RMCP、Android verifier 已按 archive VCS 取得同期原文；r-efi 的完整 MIT 与原始版权实际在 archive/AUTHORS，收集器已修复；两个 winapi GNU 包缺 archive VCS，但全部 1390 / 1419 个原始发布文件（含 Cargo.toml.orig 和静态库）逐一匹配到 Git revision `b76bbbf40dbfe5bec35a566caa70fd852824213a`，保留文件级证明及同 revision 的 MIT/Apache 原文。
+- objc2 两个 crate：补齐原始许可声明以及明确选择的 Apache-2.0 标准条款，标准文本没有冒充项目原始版权。原声明还明确提示 Apple SDK 衍生源码许可不确定性，故两项实质复核仍保留，不靠补全文本假装授权疑问消失。
+- 当前 Rust 材料：279 个 crate、492 份 archive 原文、17 份额外上游/明确标记的标准条款，以及 source-match 证明。原先 10 项都已有文本材料。
+- 修复生成器将“本机没有安装但仍锁定的其他 libc/platform override”误判为陈旧的问题；锁文件中不存在的版本依旧拒绝。
+- `node scripts/licenses.mjs notices` 成功重生成 aggregate（1123 个生产包版本）；`node scripts/licenses.mjs check` 通过（1715 个实装包）。`check --strict` 仍阻断 **16 项**：14 项更早的 publisher/copy/Skia/QuickJS/Rust std 原文或构建来源记录，加上述 2 项 objc2 实质问题。未删除这些记录，未宣称 release-ready。
+
+许可原文、版本绑定、变更/缺失/篡改/错包 integrity/source-match 负例已补测试；普通检查不依赖网络或开发机 Cargo cache。同步与校验说明见 `third-party/README.md`。
+
+## PR CI 后续结果
+
+初版 `3f2e9100` 的 CLI Rust CI 已通过，包括 Windows/macOS 的 compile 与非 TTY 入口测试；Desktop 的四个 Windows/Linux 构建也通过。Desktop Checks 在真实 Electron probe 被 runner 的 SUID/userns 策略提前终止处失败，而不是 CLI 断言本身。现仅对隔离测试 child 显式设置 `ELECTRON_DISABLE_SANDBOX=1`，不改变产品沙箱；本地回归通过，新提交后由 CI 重新确认。

@@ -5,6 +5,11 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { resolve, join } from "node:path";
 import { readRustTuiRegistryClosure, rustTuiLockFile } from "./rust-tui-notice-graph.mjs";
+import {
+  upstreamNoticeRegistrations,
+  rustUpstreamEvidence,
+  verifyRustSourceMatch,
+} from "./rust-tui-upstream-notices.mjs";
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -58,7 +63,7 @@ for (const crate of crates) {
     const { stdout: listing } = await exec("tar", ["-tzf", tmp]);
     const members = listing
       .split("\n")
-      .filter((line) => /(^|\/)(LICENSE|LICENCE|COPYING|NOTICE)([-_.][^/]*)?$/i.test(line));
+      .filter((line) => /(^|\/)(LICENSE|LICENCE|COPYING|NOTICE|AUTHORS)([-_.][^/]*)?$/i.test(line));
     const notices = [];
     for (const member of members) {
       const { stdout: content } = await exec("tar", ["-xOzf", tmp, member], {
@@ -66,11 +71,17 @@ for (const crate of crates) {
         maxBuffer: 10 * 1024 * 1024,
       });
       if (!content.length) continue;
+      // r-efi 将完整 MIT 授权与版权放在 AUTHORS；纯作者名单不能当作许可原文。
+      if (
+        /(^|\/)AUTHORS$/iu.test(member) &&
+        !content.includes(Buffer.from("Permission is hereby granted"))
+      )
+        continue;
       const file = `${outDir}/snapshots/${crate.name}-${crate.version}-${sha(member).slice(0, 8)}.txt`;
       await writeFile(join(root, file), content);
       notices.push({ member, file, sha256: sha(content) });
     }
-    archives.push({
+    const record = {
       name: crate.name,
       version: crate.version,
       source: crate.source,
@@ -84,12 +95,52 @@ for (const crate of crates) {
               "Crate archive contains no root or nested LICENSE/COPYING/NOTICE text snapshot.",
           }
         : {}),
-    });
+    };
+    archives.push(record);
   } finally {
     await unlink(tmp).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
   }
+}
+for (const registration of upstreamNoticeRegistrations) {
+  const record = archives.find(
+    (crate) => crate.name === registration.name && crate.version === registration.version,
+  );
+  if (registration.unresolved) {
+    if (!record)
+      throw new Error(
+        `Unresolved registration package is not locked: ${registration.name}@${registration.version}`,
+      );
+    record.reviewRequired = registration.unresolved;
+    continue;
+  }
+  if (!record || record.archiveSha256 !== registration.archiveSha256)
+    throw new Error(
+      `Upstream notice archive evidence mismatch: ${registration.name}@${registration.version}`,
+    );
+  const upstreamNotices = [];
+  for (const notice of registration.notices) {
+    const response = await fetch(notice.url);
+    if (!response.ok) throw new Error(`Download failed ${notice.url}: ${response.status}`);
+    const content = Buffer.from(await response.arrayBuffer());
+    if (sha(content) !== notice.sha256)
+      throw new Error(
+        `Upstream notice hash mismatch: ${registration.name}@${registration.version} ${notice.member}`,
+      );
+    const file = `${outDir}/snapshots/${registration.name}-${registration.version}-upstream-${notice.member.replace(/[^a-z0-9.-]/giu, "_")}.txt`;
+    await writeFile(join(root, file), content);
+    upstreamNotices.push({ ...notice, file });
+  }
+  record.upstreamNotices = upstreamNotices;
+  if (registration.evidence.sourceMatch)
+    verifyRustSourceMatch(
+      registration,
+      await readFile(join(root, registration.evidence.sourceMatch.file)),
+    );
+  record.upstreamEvidence = rustUpstreamEvidence(registration);
+  if (registration.reviewRequired) record.reviewRequired = registration.reviewRequired;
+  else if (!record.notices.length) delete record.reviewRequired;
 }
 const inventory = {
   schemaVersion: 1,

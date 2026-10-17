@@ -1,6 +1,7 @@
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { collectNpmNotices, hashBytes } from "./third-party-npm.mjs";
+import { assertNoticeOverrideVersions, collectNpmNotices, hashBytes } from "./third-party-npm.mjs";
+import { readCuaLicenseReview } from "./cua-license-review.mjs";
 import {
   noticesFileName,
   readNativeSearchNotices,
@@ -28,6 +29,8 @@ export async function generateThirdPartyNotices(root = repositoryRoot) {
   await readInput("pnpm-lock.yaml");
   await readInput("pnpm-workspace.yaml");
   await readInput("third-party/native-search/sources.json");
+  const cuaReview = await readCuaLicenseReview(root);
+  for (const file of cuaReview.files) await readInput(file);
   const { packages, notInstalled, workspaceManifests } = await collectNpmNotices(root, overrides);
   // 修复：递归扫描会把 bundled-agents/mock-cdn 的可删除缓存当作源码输入，重建立即失效。
   // workspace 边界由 pnpm 解析，同一份项目集合用于依赖图和 manifest 新鲜度检查。
@@ -35,10 +38,11 @@ export async function generateThirdPartyNotices(root = repositoryRoot) {
   const currentPackages = new Set(
     [...packages, ...notInstalled].map((item) => `${item.name}@${item.version}`),
   );
-  for (const item of overrides) {
-    if (!currentPackages.has(item.package))
-      throw new Error(`Stale npm notice override: ${item.package}`);
-  }
+  const { parse } = await import("yaml");
+  const lockedPackages = new Set(
+    Object.keys(parse(await readFile(join(root, "pnpm-lock.yaml"), "utf8")).packages ?? {}),
+  );
+  assertNoticeOverrideVersions(overrides, currentPackages, lockedPackages);
   const textRecords = new Map();
   function addText(bytes, owner, origin) {
     const sha256 = hashBytes(bytes);
@@ -116,8 +120,12 @@ export async function generateThirdPartyNotices(root = repositoryRoot) {
   const native = await readNativeSearchNotices(root, { verify: true });
   const rustTui = await readRustTuiNotices(root, { verify: true });
   await readInput(rustTui.inventoryFile);
-  for (const crate of rustTui.inventory.crates)
-    for (const notice of crate.notices) await readInput(notice.file);
+  for (const crate of rustTui.inventory.crates) {
+    if (crate.upstreamEvidence?.sourceMatch)
+      await readInput(crate.upstreamEvidence.sourceMatch.file);
+    for (const notice of [...crate.notices, ...(crate.upstreamNotices ?? [])])
+      await readInput(notice.file);
+  }
   for (const file of Object.keys(native.inventory.inputs)) await readInput(file);
   for (const component of native.inventory.components) {
     for (const notice of component.notices) await readInput(notice.file);

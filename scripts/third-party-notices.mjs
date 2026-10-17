@@ -3,6 +3,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { realpath } from "node:fs/promises";
 import { readRustTuiRegistryClosure, rustTuiLockFile } from "./rust-tui-notice-graph.mjs";
+import {
+  upstreamNoticeRegistrations,
+  rustUpstreamEvidence,
+  verifyRustSourceMatch,
+} from "./rust-tui-upstream-notices.mjs";
 
 export const repositoryRoot = resolve(import.meta.dirname, "..");
 export const noticesFileName = "THIRD-PARTY-NOTICES.md";
@@ -52,16 +57,9 @@ export async function readVerifiedNotices(root = repositoryRoot, { requireComple
     throw new Error("Third-party notices changed; regenerate the inventory");
   // Rust crate provenance is checked independently too, so stale legacy inventory cannot omit the new lock boundary.
   const rustTui = await readRustTuiNotices(root, { verify: true });
-  if (requireComplete) {
-    const rustReviewRequired = rustTui.inventory.crates
-      .filter((crate) => crate.reviewRequired)
-      .map((crate) => `${crate.name}@${crate.version}: ${crate.reviewRequired}`);
-    if (rustReviewRequired.length) {
-      throw new Error(
-        `Unresolved Rust TUI material obligations:\n${rustReviewRequired.join("\n")}`,
-      );
-    }
-  }
+  const rustReviewRequired = rustTui.inventory.crates
+    .filter((crate) => crate.reviewRequired)
+    .map((crate) => ({ id: `${crate.name}@${crate.version}`, reason: crate.reviewRequired }));
   for (const [file, expected] of Object.entries(manifest.inputs)) {
     // 工作区文本允许 Windows checkout 的 CRLF；原始许可和发行声明另用字节哈希校验。
     if (hash((await readFile(resolve(root, file), "utf8")).replaceAll("\r\n", "\n")) !== expected) {
@@ -70,10 +68,15 @@ export async function readVerifiedNotices(root = repositoryRoot, { requireComple
   }
   if (requireComplete && !Array.isArray(manifest.reviewRequired))
     throw new Error("Missing material review inventory; regenerate third-party notices");
-  if (requireComplete && manifest.reviewRequired.length) {
-    throw new Error(
-      `Unresolved third-party material obligations:\n${manifest.reviewRequired.map((item) => `${item.id}: ${item.reason}`).join("\n")}`,
+  if (requireComplete) {
+    // 新 Rust 待复核项不能依赖旧 aggregate 是否登记；同时展示全量债务，避免首项错误掩盖其余缺口。
+    const pending = new Map(
+      [...manifest.reviewRequired, ...rustReviewRequired].map((item) => [item.id, item.reason]),
     );
+    if (pending.size)
+      throw new Error(
+        `Unresolved ${rustReviewRequired.length ? "Rust TUI material obligations and other third-party reviews" : "third-party material obligations"}:\n${[...pending].map(([id, reason]) => `${id}: ${reason}`).join("\n")}`,
+      );
   }
   return bytes;
 }
@@ -114,10 +117,62 @@ export async function readRustTuiNotices(root = repositoryRoot, { verify = false
     if (byKey.size)
       throw new Error(`Unlisted Rust TUI registry crate: ${byKey.keys().next().value}`);
 
+    const registrationKeys = new Set();
+    const lockedKeys = new Set(expected.map((item) => `${item.name}@${item.version}`));
+    for (const registration of upstreamNoticeRegistrations) {
+      const key = `${registration.name}@${registration.version}`;
+      if (!lockedKeys.has(key)) continue;
+      registrationKeys.add(key);
+      const crate = inventory.crates.find((item) => `${item.name}@${item.version}` === key);
+      if (!crate) throw new Error(`Missing upstream-registered Rust crate: ${key}`);
+      if (registration.unresolved) {
+        if (crate.upstreamNotices?.length || crate.upstreamEvidence)
+          throw new Error(`Unexpected upstream material for unresolved archive evidence: ${key}`);
+        if (crate.reviewRequired !== registration.unresolved)
+          throw new Error(`Rust upstream evidence/review mismatch: ${key}`);
+        continue;
+      }
+      if (
+        crate.archiveSha256 !== registration.archiveSha256 ||
+        crate.checksum !== registration.archiveSha256
+      )
+        throw new Error(`Rust upstream archive evidence mismatch: ${key}`);
+      const expectedEvidence = rustUpstreamEvidence(registration);
+      if (registration.evidence.sourceMatch)
+        verifyRustSourceMatch(
+          registration,
+          await readFile(await rustSnapshotPath(root, registration.evidence.sourceMatch.file)),
+        );
+      if (JSON.stringify(crate.upstreamEvidence) !== JSON.stringify(expectedEvidence))
+        throw new Error(`Rust upstream revision/evidence mismatch: ${key}`);
+      if (
+        !Array.isArray(crate.upstreamNotices) ||
+        crate.upstreamNotices.length !== registration.notices.length
+      )
+        throw new Error(`Missing or extra Rust upstream notice: ${key}`);
+      for (let index = 0; index < registration.notices.length; index++) {
+        const expectedNotice = registration.notices[index];
+        const actualNotice = crate.upstreamNotices[index];
+        if (
+          actualNotice.member !== expectedNotice.member ||
+          actualNotice.url !== expectedNotice.url ||
+          actualNotice.sha256 !== expectedNotice.sha256 ||
+          actualNotice.kind !== expectedNotice.kind
+        )
+          throw new Error(`Rust upstream notice registration mismatch: ${key}`);
+        const actualFile = await rustSnapshotPath(root, actualNotice.file);
+        if (hash(await readFile(actualFile)) !== expectedNotice.sha256)
+          throw new Error(`Changed Rust upstream notice: ${actualNotice.file}`);
+      }
+      if (crate.reviewRequired !== registration.reviewRequired)
+        throw new Error(`Rust upstream review status mismatch: ${key}`);
+    }
     for (const crate of inventory.crates) {
+      if (crate.upstreamNotices?.length && !registrationKeys.has(`${crate.name}@${crate.version}`))
+        throw new Error(`Unregistered Rust upstream material: ${crate.name}@${crate.version}`);
       if (!Array.isArray(crate.notices))
         throw new Error(`Invalid notices list: ${crate.name}@${crate.version}`);
-      if (!crate.notices.length && !crate.reviewRequired)
+      if (!crate.notices.length && !crate.upstreamNotices?.length && !crate.reviewRequired)
         throw new Error(
           `Missing reviewRequired for empty Rust notice: ${crate.name}@${crate.version}`,
         );
@@ -138,14 +193,13 @@ export async function readRustTuiNotices(root = repositoryRoot, { verify = false
     lines.push(
       `\n===== ${crate.name}@${crate.version} — ${crate.source}; crate SHA-256 ${crate.checksum} =====\n`,
     );
-    if (crate.notices.length)
-      for (const notice of crate.notices) {
-        lines.push(
-          `Original archive member: ${notice.member}; snapshot SHA-256: ${notice.sha256}\n`,
-          (await readFile(await rustSnapshotPath(root, notice.file))).toString("utf8"),
-        );
-      }
-    else lines.push(`REVIEW REQUIRED: ${crate.reviewRequired}`);
+    for (const notice of [...crate.notices, ...(crate.upstreamNotices ?? [])]) {
+      lines.push(
+        `${notice.kind === "standard-terms" ? "Explicitly selected Apache-2.0 standard terms (not an upstream project original)" : crate.notices.includes(notice) ? "Original archive member" : `Pinned upstream source ${notice.url}`}: ${notice.member}; snapshot SHA-256: ${notice.sha256}\n`,
+        (await readFile(await rustSnapshotPath(root, notice.file))).toString("utf8"),
+      );
+    }
+    if (crate.reviewRequired) lines.push(`REVIEW REQUIRED: ${crate.reviewRequired}`);
   }
   return { inventory, bytes: Buffer.from(`${lines.join("\n")}\n`), inventoryFile };
 }

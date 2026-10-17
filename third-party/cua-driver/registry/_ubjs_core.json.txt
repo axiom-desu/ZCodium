@@ -1,0 +1,16 @@
+{
+  "name": "@ubjs/core",
+  "version": "0.31.0-3",
+  "license": "MPL-2.0",
+  "repository": {
+    "url": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+    "type": "git",
+    "directory": "typescript"
+  },
+  "gitHead": "49bc59194d183a05855ed4104c18eb92fb465e02",
+  "dist": {
+    "integrity": "sha512-39XrJgUZ2VVb561sSnkXPhczNoeBsNiSRArecsV0JE7CJq69ajFkcn9/tBAUS2NpgHkLIDU+z6Ks2+1wXnboxg==",
+    "shasum": "a575fa19f7efdcacb98bb4c02fe9777a6e6ed2f6",
+    "tarball": "https://registry.npmjs.org/@ubjs/core/-/core-0.31.0-3.tgz"
+  }
+}

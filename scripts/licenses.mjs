@@ -13,6 +13,7 @@
 // - 商用/半开放检查作用于全量实装包（prod+dev）
 import { generateThirdPartyNotices } from "./generate-third-party-notices.mjs";
 import { readVerifiedNotices } from "./third-party-notices.mjs";
+import { verifyCuaLicenseReview } from "./cua-license-review.mjs";
 import { readFile } from "node:fs/promises";
 import {
   readWorkspaceProductionGraph,
@@ -84,6 +85,7 @@ function classify(raw) {
   return GREEN.test(t) ? "green" : "review";
 }
 for (const r of installed.values()) r.bucket = classify(r.license);
+const cuaLicenseReview = await verifyCuaLicenseReview(ROOT);
 
 // ---------- 构建工具许可标识复核（不是二进制发行义务豁免） ----------
 const WEAK_ALLOW = [[/^lightningcss/, "当前仅构建依赖；进入生产图时需重新核对 MPL 源码提供义务"]];
@@ -97,6 +99,8 @@ if (command === "check") {
   const bad = [];
   for (const r of installed.values()) {
     if (r.bucket === "green") continue;
+    // MIT AND MPL 仍需两套义务；仅版本、表达式和源码/许可材料全部匹配的精确登记可通过。
+    if (cuaLicenseReview.has(`${r.name}@${r.version}:${r.license}`)) continue;
     if (r.bucket.startsWith("yellow") && weakAllowReason(r)) continue;
     bad.push(r);
   }
