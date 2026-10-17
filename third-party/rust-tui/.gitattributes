@@ -1,0 +1,2 @@
+# Preserve upstream bytes, including original CRLF and trailing whitespace.
+snapshots/*.txt -text -whitespace

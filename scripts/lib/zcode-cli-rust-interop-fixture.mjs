@@ -53,6 +53,15 @@ export async function modelServer({ root }) {
       );
     if (last?.role === "tool") return send({ content: "tool done" }, "stop");
     if (text.includes("use tool")) return call("Read", { file_path: "note.txt" });
+    if (text.startsWith("tui-write-allow"))
+      return call("Write", { file_path: "allowed.txt", content: "TUI_WRITE_MARKER\n" });
+    if (text.startsWith("tui-write-deny"))
+      return call("Write", { file_path: "denied.txt", content: "TUI_DENIED_MARKER\n" });
+    if (text.startsWith("tui-question"))
+      return call("AskUserQuestion", {
+        question: "Choose the TUI smoke answer",
+        options: ["SMOKE_ANSWER", "Other"],
+      });
     if (text.includes("shell")) {
       if (!shellPidFile || !resolve(shellPidFile).startsWith(`${resolve(root)}/`))
         throw new Error(

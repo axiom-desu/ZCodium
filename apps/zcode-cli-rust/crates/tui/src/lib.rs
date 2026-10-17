@@ -1,9 +1,14 @@
-//! Terminal UI frontend (reserved).
-//!
-//! The TUI will connect to the runtime through the same transport contract as
-//! the App Server (`zcode_cli_core_api::{ClientMsg, ServerMsg}`) and must never
-//! own session, queue, model or tool facts. Until it is implemented, the
-//! `tui` subcommand exits with [`UNAVAILABLE_EXIT_CODE`].
+//! Native terminal frontend. Runtime facts stay owned by the core actor.
+mod client;
+#[cfg(test)]
+mod client_session_tests;
+mod editor;
+mod interactions;
+mod projection;
+#[cfg(test)]
+mod projection_tests;
+mod session;
+mod terminal;
+mod transport;
 
-/// Exit code of the reserved `tui` entry point.
-pub const UNAVAILABLE_EXIT_CODE: i32 = 2;
+pub use transport::{Request, Resume, run};

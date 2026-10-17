@@ -22,6 +22,7 @@ fn prompt_defaults_and_overrides() {
     assert_eq!(p.format, Format::Text);
     assert_eq!(p.mode, "yolo");
     assert_eq!(p.resume, Resume::New);
+    assert!(!p.mode_explicit);
     assert_eq!(p.surface, "terminal");
     let p = prompt(&[
         "--prompt=-dash",
@@ -33,6 +34,7 @@ fn prompt_defaults_and_overrides() {
     ]);
     assert_eq!(p.prompt, "-dash");
     assert_eq!((p.format, p.mode.as_str()), (Format::Json, "plan"));
+    assert!(p.mode_explicit);
     assert_eq!(p.resume, Resume::Latest);
     assert!(p.verbose);
     let p = prompt(&[
@@ -191,12 +193,53 @@ fn validation_order_and_texts_match_node() {
     assert!(check_prompt(" x ").is_ok());
 }
 
+fn tui_args(line: &[&str]) -> PromptArgs {
+    match parse(&args(line)) {
+        Ok(Parsed::Tui(args)) => *args,
+        other => panic!("{line:?} => {other:?}"),
+    }
+}
+
+#[test]
+fn tui_retains_shared_options_and_uses_build_default() {
+    let parsed = tui_args(&[
+        "tui",
+        "--cwd",
+        "work",
+        "--data-dir",
+        "data",
+        "--config",
+        "model.json",
+        "--continue",
+        "--mode",
+        "plan",
+        "--locale",
+        "zh-CN",
+        "--attach",
+        "a.png",
+        "--disallowed-tools",
+        "Bash",
+        "Edit",
+    ]);
+    assert_eq!(parsed.mode, "plan");
+    assert!(parsed.mode_explicit);
+    assert_eq!(parsed.cwd.as_deref(), Some("work"));
+    assert_eq!(parsed.data_dir.as_deref(), Some("data"));
+    assert_eq!(parsed.config.as_deref(), Some("model.json"));
+    assert_eq!(parsed.resume, Resume::Latest);
+    assert_eq!(parsed.locale, "zh-CN");
+    assert_eq!(parsed.attach, ["a.png"]);
+    assert_eq!(parsed.disallowed_tools, ["Bash", "Edit"]);
+    assert_eq!(tui_args(&[]).mode, "build");
+    assert!(!tui_args(&[]).mode_explicit);
+}
+
 #[test]
 fn help_and_version_come_before_the_prompt() {
     assert_eq!(parse(&args(&["-p", "hi", "--help"])), Ok(Parsed::Help));
     assert_eq!(parse(&args(&["-v"])), Ok(Parsed::Version));
     assert_eq!(parse(&args(&["-hv"])), Ok(Parsed::Help));
-    assert_eq!(parse(&args(&[])), Ok(Parsed::Tui));
+    assert!(matches!(parse(&args(&[])), Ok(Parsed::Tui(_))));
     // 帮助之前的校验仍然先报错（Node run.ts 的顺序）。
     assert!(parse(&args(&["--mode", "x", "--help"])).is_err());
 }

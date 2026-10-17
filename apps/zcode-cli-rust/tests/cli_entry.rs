@@ -5,12 +5,42 @@ fn binary() -> Command {
 }
 
 #[test]
-fn tui_is_a_reserved_entry_that_fails_explicitly() {
-    let output = binary().arg("tui").output().unwrap();
-    assert_eq!(output.status.code(), Some(2));
-    // stdout 只承载协议帧；占位入口不能向 stdout 写任何内容。
-    assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("TUI"));
+fn interactive_entries_fail_before_runtime_without_a_terminal() {
+    for args in [
+        Vec::<&str>::new(),
+        vec!["tui"],
+        vec!["tui", "--cwd", "/missing"],
+    ] {
+        let output = binary().args(args).output().unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("requires a terminal"));
+    }
+}
+
+#[test]
+fn non_tty_tui_flags_do_not_create_or_open_the_session_library() {
+    let data_dir = std::env::temp_dir().join(format!("zcode-cli-nontty-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let output = binary()
+        .args(["tui", "--data-dir"])
+        .arg(&data_dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("requires a terminal"));
+    assert!(
+        !data_dir.exists(),
+        "non-TTY invocation must fail before library access"
+    );
+}
+
+#[test]
+fn help_and_version_do_not_require_a_terminal() {
+    for args in [vec!["--help"], vec!["--version"], vec!["tui", "--help"]] {
+        let output = binary().args(args).output().unwrap();
+        assert!(output.status.success());
+    }
 }
 
 #[test]

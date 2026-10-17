@@ -1,0 +1,14 @@
+{
+  "name": "@trycua/cua-driver",
+  "version": "0.28.2",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/trycua/cua.git",
+    "type": "git"
+  },
+  "dist": {
+    "integrity": "sha512-18DHs68WpIdKtkAMecd5mLKwJtT854gXzie24Ag0QMxveRNgzKphAje51t0oeI7ZnHetyXKDAQUr5fQyZu7S6Q==",
+    "shasum": "2bc1d487e68d937d7a8a5ce79d83b13f7e5fd2e8",
+    "tarball": "https://registry.npmjs.org/@trycua/cua-driver/-/cua-driver-0.28.2.tgz"
+  }
+}

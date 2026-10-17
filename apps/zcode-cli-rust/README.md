@@ -1,5 +1,40 @@
 # zcode-cli-rust source landing
 
+## Interactive terminal and Desktop entry
+
+The native Rust frontend now supports an interactive terminal (ratatui/crossterm),
+not a TS TUI wrapper. Run from the repository:
+
+```bash
+cargo build --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --bin zcode-cli-rust
+apps/zcode-cli-rust/target/debug/zcode-cli-rust --cwd /path/to/workspace
+apps/zcode-cli-rust/target/debug/zcode-cli-rust --continue
+apps/zcode-cli-rust/target/debug/zcode-cli-rust -p "one prompt"
+```
+
+Interactive default mode is `build`; explicit `--mode` is preserved. Enter sends,
+Alt/Shift+Enter inserts a newline, bracketed paste accepts multiple lines, and
+Ctrl+C cancels a running turn or exits when idle. `/help`, `/new`, `/sessions`,
+`/resume <id>`, `/mode <mode>`, `/model [provider model [reasoning]]`, and `/quit`
+use the same Rust actor and persisted session store. Permission choices require
+explicit input (`y`/`n` or an offered option ID); questions accept one answer per
+line. Non-TTY users should use `-p`; `app-server --stdio` is unchanged.
+
+Packaged desktop executables expose `zcodium-exp --cli …` (TS) and
+`zcodium-rust --cli …` (Rust); without `--cli` they still open the GUI. This does
+not install a global CLI alias automatically or change the GUI runtime defaults.
+See [entry contract](../../.agents/specs/desktop-cli-entry.md) and
+[terminal contract](../../.agents/specs/cli-rust-terminal-ui.md).
+
+Linux real-PTY validation is available with
+`node scripts/zcode-cli-rust-tui-smoke.mjs`. It uses a disposable profile and local
+model fixture to exercise multiple turns, Read/Write, permission allow/deny,
+questions, cancellation, continue/history, exit and terminal restoration. This is
+not full TS TUI parity: the visible history is a bounded snapshot window, and
+advanced terminal plugin/marketplace, attachment picker, memory/CUA and rich
+terminal widgets are not claimed. Native Windows/macOS interactive execution is
+separate from compile acceptance.
+
 Latest M8 wiring and pending user-run testing: [desktop handoff report](../../docs/reports/cli-rust-m8-desktop-handoff.md). The 470/50 counts below predate M8; full desktop recovery is not yet accepted.
 
 Earlier scoped M2–M6 work, verification and remaining tasks: [handoff](../../.agents/specs/cli-rust-handoff.md). These are scoped results, not a claim of milestone completion.

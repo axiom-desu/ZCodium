@@ -15,7 +15,6 @@ export const seaTuiManifestAssetKey = `${seaTuiAssetPrefix}manifest.json`;
 const workspacePackageParentDirectoryNames = ["packages", "tools"];
 
 const opentuiCorePackageName = "@mbears/opentui-core";
-const opentuiReactPackageName = "@mbears/opentui-react";
 
 export const opentuiNativePackageForTarget = (target) => {
   const { arch, releasePlatform } = targetParts(target);
@@ -25,10 +24,12 @@ export const opentuiNativePackageForTarget = (target) => {
 
 export const collectSeaTuiAssets = async ({ root, stagingDirectory, target }) => {
   const workspacePackageDirectories = await discoverWorkspacePackageDirectories(root);
+  const runtimeDependencies = await readTuiRuntimeDependencies(workspacePackageDirectories);
   const packageEntries = await runtimePackageNames({
     root,
     target,
     workspacePackageDirectories,
+    runtimeDependencies,
   });
   const files = [];
   const assets = {};
@@ -52,6 +53,7 @@ export const collectSeaTuiAssets = async ({ root, stagingDirectory, target }) =>
       workspacePackage: workspacePackageDirectories.has(packageName),
       stagingDirectory,
       assetPrefix: seaTuiAssetPrefix,
+      runtimeDependencies: packageName === "@zcode/tui" ? runtimeDependencies : undefined,
     });
     Object.assign(assets, staged.assets);
     files.push(...staged.files);
@@ -64,6 +66,8 @@ export const collectSeaTuiAssets = async ({ root, stagingDirectory, target }) =>
   const manifest = {
     files,
     hash: manifestHash,
+    runtimeDependencies,
+    schema: 1,
     target,
     version: 1,
   };
@@ -124,18 +128,40 @@ const workspacePackageParentDirectories = (root) => {
   ];
 };
 
-const runtimePackageNames = async ({ root, target, workspacePackageDirectories }) => {
+const readTuiRuntimeDependencies = async (workspacePackageDirectories) => {
   const tuiDirectory = workspacePackageDirectories.get("@zcode/tui");
-  if (!tuiDirectory) {
-    throw new Error("Missing @zcode/tui workspace package.");
+  if (!tuiDirectory) throw new Error("Missing @zcode/tui workspace package.");
+  const manifestPath = resolve(tuiDirectory, "dist/runtime-dependencies.json");
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new Error(`Missing TUI runtime dependency manifest; rebuild @zcode/tui: ${manifestPath}`);
+    }
+    throw error;
   }
+  if (
+    manifest?.schema !== 1 ||
+    !Array.isArray(manifest.externalDependencies) ||
+    manifest.externalDependencies.some(
+      (name) => typeof name !== "string" || !name.trim() || name.startsWith("@zcode/"),
+    ) ||
+    new Set(manifest.externalDependencies).size !== manifest.externalDependencies.length
+  ) {
+    throw new Error(`Invalid TUI runtime dependency manifest; rebuild @zcode/tui: ${manifestPath}`);
+  }
+  return [...manifest.externalDependencies].sort();
+};
+
+const runtimePackageNames = async ({ root, target, workspacePackageDirectories, runtimeDependencies }) => {
+  const tuiDirectory = workspacePackageDirectories.get("@zcode/tui");
   const queue = [
     { fromDirectory: tuiDirectory, packageName: "@zcode/tui" },
-    { fromDirectory: tuiDirectory, packageName: opentuiCorePackageName },
-    { fromDirectory: tuiDirectory, packageName: opentuiReactPackageName },
-    { fromDirectory: tuiDirectory, packageName: "react" },
-    { fromDirectory: tuiDirectory, packageName: "react-devtools-core" },
-    { fromDirectory: tuiDirectory, packageName: "ws" },
+    ...runtimeDependencies.map((packageName) => ({
+      fromDirectory: tuiDirectory,
+      packageName,
+    })),
   ];
   const placements = new Map();
   const ordered = [];
@@ -172,7 +198,7 @@ const runtimePackageNames = async ({ root, target, workspacePackageDirectories }
     // SEA 缓存目录无法解析 pnpm workspace 链接；旧的 @zcode 白名单漏掉 i18n
     // 后，构建仍成功但 TUI 启动才报错，因此这里必须按 manifest 递归收集依赖。
     for (const [dependencyName, dependencyRange] of Object.entries(
-      packageJson.dependencies ?? {},
+      packageName === "@zcode/tui" ? {} : packageJson.dependencies ?? {},
     )) {
       if (
         shouldQueueRuntimeDependency({
@@ -283,7 +309,7 @@ const shouldIncludePackageFile = ({
   target,
   workspacePackageDirectories,
 }) => {
-  if (relativePath.endsWith(".map")) return false;
+  if (relativePath.endsWith(".map") || /\.tsx?$|\.d\.[cm]?ts$/.test(relativePath)) return false;
 
   if (workspacePackageDirectories.has(packageName)) {
     // Workspace runtime packages resolve in dev via pnpm links, so SEA must copy

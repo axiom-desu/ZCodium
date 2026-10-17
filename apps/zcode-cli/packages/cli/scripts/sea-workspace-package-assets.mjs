@@ -26,6 +26,7 @@ export async function stageSeaPackageAssets({
   workspacePackage,
   stagingDirectory,
   assetPrefix,
+  runtimeDependencies,
 }) {
   const files = [];
   const assets = {};
@@ -34,6 +35,13 @@ export async function stageSeaPackageAssets({
     let bytes = await readFile(sourcePath);
     if (workspacePackage && file.assetPath.endsWith("/package.json")) {
       const manifest = JSON.parse(bytes.toString("utf8"));
+      if (runtimeDependencies && manifest.name === "@zcode/tui") {
+        manifest.dependencies = Object.fromEntries(runtimeDependencies.map((name) => {
+          const version = manifest.dependencies?.[name];
+          if (!version) throw new Error(`TUI runtime dependency is not declared: ${name}`);
+          return [name, version];
+        }));
+      }
       // 根 workspace 为开发环境导出 src/*.ts；SEA 仅携带 dist，必须在暂存副本改写入口。
       // 不修改源码 manifest，否则会影响桌面 esbuild 的源码解析路径。
       for (const field of ["exports", "main", "module", "types", "imports"]) {

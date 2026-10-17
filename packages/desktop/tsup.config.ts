@@ -138,7 +138,8 @@ export default defineConfig([
   {
     name: "main",
     entry: {
-      "main/index": "src/main/index.ts",
+      "main/index": "src/main/bootstrap.ts",
+      "main/gui": "src/main/gui.ts",
       "main/browserWebmRecorder": "src/main/browserView/electronBrowserWebmRecorder.ts",
       // 资源管理器「存储」tab 的扫描 Worker：main 持有 StorageService，遍历放独立线程，供 new Worker(new URL()) 解析。
       "main/storageScanWorker": "src/main/storageScanWorker.ts",
@@ -150,7 +151,8 @@ export default defineConfig([
     // undici 如果被 main ESM bundle 直接内联，运行时会落到它内部的 CommonJS require("assert")，
     // Electron 加载 main 产物时会报 Dynamic require of "assert" is not supported。
     // desktop 保持 undici 为外部依赖，remote 单文件 bundle 再单独内联。
-    external: desktopNodeRuntimeExternals,
+    // bootstrap 的 dynamic import 由入口名映射到同目录 gui.js，保留 specifier 供 tsup 输出入口映射。
+    external: [...desktopNodeRuntimeExternals, "./gui.js"],
     noExternal: [
       "@zcode/server",
       "@zcode/shared",

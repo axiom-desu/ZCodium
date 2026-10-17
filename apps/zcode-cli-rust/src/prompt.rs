@@ -55,7 +55,7 @@ fn resolve(base: &Path, path: &str) -> PathBuf {
 }
 
 /// Node `resolveCliCwd`.
-async fn working_directory(requested: Option<&str>) -> Result<PathBuf, String> {
+pub(crate) async fn working_directory(requested: Option<&str>) -> Result<PathBuf, String> {
     let base = std::env::current_dir().map_err(|e| e.to_string())?;
     let Some(requested) = requested else {
         return Ok(base);
@@ -88,7 +88,7 @@ pub async fn main(argv: &[String]) -> i32 {
             write(false, &format!("{}\n", env!("CARGO_PKG_VERSION"))).await;
             return 0;
         }
-        Ok(Parsed::Tui) => crate::tui_unavailable(),
+        Ok(Parsed::Tui(args)) => return crate::tui::main(*args).await,
         Err(error) => return usage(error).await,
     };
     let cwd = match working_directory(prompt.cwd.as_deref()).await {
@@ -112,7 +112,7 @@ pub async fn main(argv: &[String]) -> i32 {
 
 /// `--attach` paths as V4 attachment refs; missing files are dropped silently
 /// (Node replaces them with a placeholder the model never sees).
-async fn attachments(paths: &[String], cwd: &Path) -> Vec<Value> {
+pub(crate) async fn attachments(paths: &[String], cwd: &Path) -> Vec<Value> {
     let mut refs = vec![];
     for path in paths {
         let absolute = resolve(cwd, path);

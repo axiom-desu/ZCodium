@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "inputHashEncoding": "UTF-8 with CRLF normalized to LF; notice and source snapshot hashes remain byte-exact",
   "scope": "Production dependency union across current workspace projects, copied source/assets and native tools; not a per-installer SBOM or a certification of all licensing obligations.",
-  "noticesSha256": "874bf7c10bdcadd0df0b50fc782f39f077669c6e41bbdbccd868409cd714dec3",
+  "noticesSha256": "cb879e362fb39067fca63540e3d7af730d71cde45ee034b785e7b3dc57fd5f50",
   "inputs": {
     ".agents/skills/agent-browser/references/authentication.md": "e2c3b0f4a1dc1368dee821f03c000d818a48421d09f3872525dddffe73f2112b",
     ".agents/skills/agent-browser/references/commands.md": "17522fc56d742663f47231ff06c4811abc87e12c7f78e11f94d253ddd540a909",
@@ -224,29 +224,43 @@
     ".agents/skills/react-best-practices/rules/server-parallel-nested-fetching.md": "4d9c44e579e1286013acf5cb5f65b04297d2b68909f44f8163804656514a78ff",
     ".agents/skills/react-best-practices/rules/server-serialization.md": "4d025c42043c56e6355196a2e885d168cdb15248d0797146c9db838a57b34946",
     ".agents/skills/react-best-practices/SKILL.md": "b7d246acb440bee224ab33614979a5b8debe5fdb13d0304967aa19358eb69d9f",
-    "apps/zcode-cli/package.json": "6c48017b05d8a7215c5bf7dea12f50edd1487bf5b8b22e11c21703d32e8f7742",
-    "apps/zcode-cli/packages/adapters/package.json": "da99aebdd4d463b7705a2a0febc12adb9ad7e792f74f4ba7c4e258b8bb6a13dc",
-    "apps/zcode-cli/packages/bootstrap/package.json": "03466459735416bd4f6aced619f1d1963a485894de8ee3f9524740f822aa121f",
+    "apps/zcode-cli/package.json": "bb6ef0301cc460b042c3af3d259f35f900fe86989b9f91581bfb353878daf258",
+    "apps/zcode-cli/packages/adapters/package.json": "0b14f586d8f773f07f7e0cfcd3579bae38a4cca4f4091da936803e70b651160f",
+    "apps/zcode-cli/packages/android-emulator-plugin/package.json": "fa4f6b5b8dc7ae870f4015a0da46df7232a7339e892068d535de6d1d2a9f038a",
+    "apps/zcode-cli/packages/bootstrap/package.json": "87cc92968ad13d76eb3e0b75b05d58312ee25b1a5f71499c5ef13f177117726a",
     "apps/zcode-cli/packages/browser-use-plugin/package.json": "b7ecf0a222844419da9a27c66f6bcc0e17bdbb2db187183133c4fb0932b3d59a",
     "apps/zcode-cli/packages/cli/package.json": "81a0c3dbdff4fb6598ac5b7336578de102c54eef914e06f0f3a65bc1b6e734b9",
-    "apps/zcode-cli/packages/contracts/package.json": "7443f402f58df867ad5f776b2e94823d2b3bb235b16d0155f7a939ba181aa3ac",
-    "apps/zcode-cli/packages/core/package.json": "abf5a6c8715fe87ea4b5ef3a48b225f94980dc386fe2ccfe98844347aa16bcd8",
+    "apps/zcode-cli/packages/contracts/package.json": "b9d4e38b01a8f46db290e985607bdd45035b764131b91e18873aa9d300c7101e",
+    "apps/zcode-cli/packages/core/package.json": "6ae967a9c7dd1d3bc806cdde830c24c304c20b5f9ee49e04f2b875a078736e9c",
     "apps/zcode-cli/packages/core/src/tool/handlers/generated/bash-command-registry.ts": "60fa5acd9f5c357f4e51b1d1e944ee39da92680e4bc5e98dd708f1457fcf612b",
-    "apps/zcode-cli/packages/debug/package.json": "16e6a402d995d3a56ed6e97665cd81f0dd22f03280350d5e0a70c14a2cc4b2ca",
+    "apps/zcode-cli/packages/debug/package.json": "2cb75b8b09613c947aa041f479340315b2cba538738a64e9e5c84c1cfbb4a206",
+    "apps/zcode-cli/packages/documents-plugin/package.json": "5cb7af3827a389529c68ffd5f69f8cfd872f7b662d579762047e5d4aeb878289",
     "apps/zcode-cli/packages/dynamic-workflow-runtime/package.json": "f8dab813c3b9f236b593d4d04f1b78e511e15d586cb7dcdd74147e7d1c22ec5c",
-    "apps/zcode-cli/packages/dynamic-workflow/package.json": "aac5891463ddeb419ff6f73fc95b7c407964b06f8aeff66b6a9ba4d999164f99",
+    "apps/zcode-cli/packages/dynamic-workflow/package.json": "3e40d5cc3fc4f3620a4bc6fa1c1cfdf08d3e1a94a754d9a9700568fd668afae3",
     "apps/zcode-cli/packages/i18n/package.json": "025e4620d80f39cac3df06249866fcaed531615b6b8a4c4a727c4557066f7b1b",
-    "apps/zcode-cli/packages/node-repl-host/package.json": "1f593b58799ead7927275a71bcda496ad4861c491ae639b721830594171fa96b",
+    "apps/zcode-cli/packages/image-search-plugin/package.json": "9d4d5656c6218206b8ddfbc1904600e1c5e0111f655cf464e2fdf080705991fd",
+    "apps/zcode-cli/packages/ios-simulator-plugin/package.json": "cc1014f1f482401140cc4dcd135536da92de02dcd311e03c8995c417b2d9a3be",
+    "apps/zcode-cli/packages/node-repl-host/package.json": "925b951daf9934dcc82cbcfe940544c313cb50ed2d5227be6294ee6029e919bd",
+    "apps/zcode-cli/packages/pdf-plugin/package.json": "2e8088d53710767673793d467bf8b3c57057071c90951d6c152ea66074da9584",
+    "apps/zcode-cli/packages/plugin-creator-plugin/package.json": "17ab1504c465c165b013f983270f54868aa282538557bf6f935daac153e46ba6",
+    "apps/zcode-cli/packages/presentations-plugin/package.json": "3e7bb709e7bab8d312a86405c6ef6461a5bd8d8eb5ab5ac05dd72fdb3c5c4922",
+    "apps/zcode-cli/packages/restore-legacy-sessions-plugin/package.json": "ee180a70bc31e945dfa798fd2592a3150cd2e55d546d44be361a90a24cb33fd3",
     "apps/zcode-cli/packages/shared-types/package.json": "6616fb50cf5b4b854273d09411f38857c17df5d4b4abebdfe5d9601e7341e451",
+    "apps/zcode-cli/packages/skill-creator-plugin/package.json": "9477f2dbaf0de233856a8d71f8aa1e4fac95e189358887df5c3b7c13672727a6",
+    "apps/zcode-cli/packages/spreadsheets-plugin/package.json": "ff99c56592a682d14831427207c74c75dcd952645f70759e60afdb9b644243ea",
     "apps/zcode-cli/packages/superpowers-plugin/LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+    "apps/zcode-cli/packages/superpowers-plugin/package.json": "d8dc370349685d95f29c6c3bff3d2739ca1b7a38cc925b4b1574bccce03bd3f4",
     "apps/zcode-cli/packages/swift-bridge/package.json": "958674fcd44c789564ee672b0e6c687f1f900f4286174280700ddfb442d23906",
-    "apps/zcode-cli/packages/telemetry/package.json": "98a3f23459cde469988c15262f1cf92521ddb213370ac1a8d82d641982a6a012",
     "apps/zcode-cli/packages/tui/package.json": "097d5896b0b37a455eafaf015f21113dfbea7b05bb3f92666f423f7753720eb1",
-    "apps/zcode-cli/tools/prompt-trajectory/package.json": "7f161fc87f36691f01eb8c2034bd89cf28107da36db02bc20e76f059edd36af6",
+    "apps/zcode-cli/packages/visualize-plugin/package.json": "f38e0334cd743a4ca15cf8884ca563aaf0b37bccbdfca63505f56f84f5576971",
+    "apps/zcode-cli/packages/zcode-cua-plugin/package.json": "3202cf21f04818049610a7f1de7f5f871bb7bfbe56989c7d1cc9b396ae872eb8",
+    "apps/zcode-cli/packages/zcode-guide-plugin/package.json": "b6b6c4a0097496f5bf8848ad4fecea1c2e9f8a94d4a3b962217a74a6253deacf",
+    "apps/zcode-cli/tools/prompt-trajectory/package.json": "f1dff3a19f177b4732352f81b97b23f47b2f26c4487697dbf4bdba22fbd4c1bf",
+    "apps/zcode-cli/tools/repo-snapshot-parody/package.json": "4a593bc9624d5bd03d6cd7834606fc999627f3c7d8397ce18788a0a3505d5f10",
     "apps/zcode-cli/tools/typescript/package.json": "23d7e50d2089d205ce3022c5bafbb6b3e31d000e41ac678a5934e0b72627cf3a",
-    "package.json": "fd17e8cdcefd36cf92a83b8e45468c4756a947bd77db4e529d11cf2a62d947ed",
+    "package.json": "e666c0e9bfdcc3580b83821597b4389677eb8c015fbf6d43fa17fcef9dc94067",
     "packages/client/package.json": "e76f441549130dc3e5e68072a36b6cb9044e19a6625f1e813f19a4def2b1b689",
-    "packages/desktop/package.json": "fd4a396d3236a97f573c09c3faa35523f09b6735e2393444113fb3b8fa83d673",
+    "packages/desktop/package.json": "810356e481be261a0f8039ba24b1e929ed92da3a23fa9f2a50e02dc59f096a00",
     "packages/desktop/src/renderer/public/material-icons/3d.svg": "9527b849f0fba57ca7640e2717b3a19cb5f5e046712cbbd8b75d73af338c68fb",
     "packages/desktop/src/renderer/public/material-icons/abap.svg": "1335bd7eb9a0ed49deb622330d680c2e97731726a7a5eee8e4f46dc1e5db4de4",
     "packages/desktop/src/renderer/public/material-icons/abc.svg": "d1a68020e8f020ef29dca5f94dc8613b7ae8fb5b212d8b1cc23b0f975ac7acda",
@@ -1397,6 +1411,7 @@
     "packages/model-option-map/package.json": "3c4f3581fda415d2567e9c33be2fbecb6fe2160fddd2a5a2265012bed977b77b",
     "packages/provider-node/package.json": "e736a208a0049c30b61f75c0361a9ef15f70cf75938468ef43271395c7ad9e47",
     "packages/provider/package.json": "dee1d0a66f94d922685a647af9972def6482e2d2d96cfa4e1facb402b40af7d0",
+    "packages/relay/package.json": "3b6c0250df8d79da70370741852a70c9ffbf5227ed64cdde97e572b2130d7669",
     "packages/rpc/examples/01-basic-ipc.ts": "bb4423c1642918846010f9307262c379536ca9541d79df6ebba120b5cf792f3e",
     "packages/rpc/examples/02-proxy-channel.ts": "66dda9aec12cd46da8a56560cb765a3de590917bbc40f329185e6fd05a388fff",
     "packages/rpc/examples/03-ipc-server-client.ts": "9b873f565b4a3426ee3a5338a975cb6ab76e29af094cf6bbee4f7030f872f758",
@@ -1411,18 +1426,18 @@
     "packages/rpc/src/foundation.ts": "b4874401965e7bad7e84245a2fc5960657a349b146f355ac7343562fa724da9f",
     "packages/rpc/src/index.ts": "6a5adcfb0e6c7a7d385e10fede09c3e9c808e3555c27b938091868cdf0c3fbef",
     "packages/rpc/src/ipc.ts": "2ec3dfe0654a68300dbed7afd5ac436b563abf983d6e0f59a2b028469fdf71ef",
-    "packages/rpc/src/logging-middleware.ts": "20edfd8e5d054097186f2498ec4e9c08c61740ed003fc69eecea8176a15fe025",
-    "packages/rpc/src/network-telemetry-middleware.ts": "18a7cde46e6c65e0138af0623d07bf883ce278acf44654bc5144ecaadd36a536",
+    "packages/rpc/src/logging-middleware.ts": "f89a07d0c3ebab89ad1e03194080fc38f466036f8677fe78029531371794969b",
+    "packages/rpc/src/network-telemetry-middleware.ts": "b21ba5fc9fba2b87f9f3b68819613f74eb8177112cd5ca318ba274be69dd0a30",
     "packages/rpc/src/persistent-protocol.ts": "80609595b89188272d743e557502c6cad3858f828acae31c2ef64206bb3c8978",
     "packages/rpc/src/protocol.ts": "aafc0c098c75fcba4519fad2ecbee7e025d5d8a27c15c87e5ccb4ca6ce554670",
     "packages/rpc/src/proxy-channel.ts": "ec5b43e6a3a622a88a8aaa6af9cb37dbfe517932ee7f4a337019ec138bb2d513",
     "packages/rpc/src/remote.ts": "a11e072d5df7e1c1ce64814a68f72afc081246b364f0da409b5c9d22bc815957",
     "packages/rpc/src/serialization.ts": "e949418e1cd17cc863c147fc8d1ff15237e1b5f0cb8e3344fd2a9ccfae9d54e7",
-    "packages/server/package.json": "0a6119239c88af79bc766e3c023eb4437105a0d35b03ecca1137d1e688e60a90",
-    "packages/services/package.json": "71fef5a81918526e8cdda4d3309ef3528353d0a526a9418c306ec9f95641ad50",
-    "packages/shared/package.json": "6394da63b39d6bf4cabadf803a4f26cf9758de944ac6e0cc5c4f0dc303f66b77",
+    "packages/server/package.json": "e85547db6a750c787287e0d290eb6f10646477d00c0d6172e4b75169bca0ba9c",
+    "packages/services/package.json": "1ff573b362b7b6a663cbfb7fe2c20e6bd214413a9a18bf714743a48bd123d220",
+    "packages/shared/package.json": "03786e5fe6bbc141f5f103f218b3fc42e13bc578ab2205323e62e9a6c10ff11c",
     "packages/shared/src/zcode-protocol-v4/wire-codec.ts": "ac2494a3acc795c809c94ee9393f50271a9c2a0fd33813459e5ab93842ceef75",
-    "packages/ui/package.json": "220e916077604008bb6ffea19d6bdf7148c4b09472bea251248a230ba3c69bf5",
+    "packages/ui/package.json": "e2e7d945b883cf5ac6779a292281bdb52f62fdd229e42542e2e40a07b4947618",
     "packages/ui/src/components/ai-elements/agent.tsx": "830e7ea9e927de1524851337f1d35bda0e5690e3e4fa307fff854b60006b16c7",
     "packages/ui/src/components/ai-elements/artifact.tsx": "7d73f08864d6280ac86c77d32e56d0e702f8aa6208e5910820139d0fb08ce64c",
     "packages/ui/src/components/ai-elements/attachments.tsx": "7a847ce6c8ac9dc630481a82dd20a5e9e00949bf710a41fea1d32a18123011d8",
@@ -1433,12 +1448,12 @@
     "packages/ui/src/components/ai-elements/commit.tsx": "e9f5dcffac4ec7702b6d77b41cfc28fab54f0595375dd2c992dc972c0a9e74d2",
     "packages/ui/src/components/ai-elements/confirmation.tsx": "bb39ae89d5550f4ffcbb36e73dc8b75d1c9930f0fdba28cc8ff135d753b65a9b",
     "packages/ui/src/components/ai-elements/connection.tsx": "6e6cf65efcef612a3d14f5fda69e27009bc06046d1f7aa842a1a93b9142a7f81",
-    "packages/ui/src/components/ai-elements/context.tsx": "9f9a766dcab0010b1483b5276f9d5f4b4c3b31bd85434731fc7ce4d8bf9913f7",
+    "packages/ui/src/components/ai-elements/context.tsx": "088590daa4377581f53e0206ee16f44f1ded7d948a00fa37ae6eabb9f8f3a48c",
     "packages/ui/src/components/ai-elements/controls.tsx": "3123e9cb668171780944fb91632c68977617ae4ef46312540c1f7ddecc3fc568",
     "packages/ui/src/components/ai-elements/conversation.tsx": "1fda6a3c198ae104e8736b70992e9ce8549f667a942246d9a9762be8f4431e3a",
     "packages/ui/src/components/ai-elements/diagram-preview-dialog.tsx": "cc142f8808370897dfc40cd7aea3f1aa42fd07ce471a7fbb284d9ae728b1299a",
     "packages/ui/src/components/ai-elements/edge.tsx": "661a25632f0879b8363f22e6b99198a6d37ad622781c798c090fcad9b591b181",
-    "packages/ui/src/components/ai-elements/image-preview-dialog.tsx": "47d4ecdefc84d39f2deda93119ce400b36224276bb6c7dab6a914868914ac8de",
+    "packages/ui/src/components/ai-elements/image-preview-dialog.tsx": "31c8c6fbf572cf7b0e0b89685f11556949531e63061a8bfd3f9f2483cd4d0b86",
     "packages/ui/src/components/ai-elements/image-thumbnail-gallery.tsx": "185766c039c6c4852ae12360360f7cf29e844a1463358b8cc2c6de972dcdaf43",
     "packages/ui/src/components/ai-elements/image.tsx": "1c6f9595ef814c4ef9648607562fa77a3007f7d857571f8e107a24022fe83e24",
     "packages/ui/src/components/ai-elements/markdown-blockquote.tsx": "0c76599780a464136703d40d07172dcc62730dee1ce01a155100cf4712440a7f",
@@ -1513,10 +1528,10 @@
     "packages/ui/src/components/ui/toast.tsx": "0f8894c6fc30e4cec44caa4cffe70e111f9c41ff9bf3699ec8e91696ea631671",
     "packages/ui/src/components/ui/tooltip.tsx": "301dbf3a6f8b1bc496f9bdc6fbc5fe6202ed373182897f39cd1ecd19b00fdfbe",
     "packages/ui/src/components/ui/usePdfZoomOverlay.ts": "c8c91b003ce2fded32c7a2369dc6eac43aa4b9dc9c830a0f5ceccb21d366b610",
-    "packages/ui/src/components/ui/ZCodeAboutLogo.tsx": "1e5b7c2e8a9dc98a3c597cbe34122521319eaeb89825e4c41641e77715d1407a",
+    "packages/ui/src/components/ui/ZCodeAboutLogo.tsx": "42cddfd415c0d813e3ba5e35898e67ad0e9dec3ea71cc388aacbf1be4bc7f7f8",
     "packages/ui/src/lib/builtinSkillI18n.ts": "fbb44f7044214b70148f64dbafc1cea5ea550531e8084965ea978c5defc06deb",
-    "packages/ui/src/styles.css": "22d5b58e44cdebdbe7154c418ee05fef6dde689e384f0dd590d4057739487be7",
-    "packages/web/package.json": "0810e762bf1d6641d5f73ab642b81953e183e53fd963a1d405ffc65b206e5ce6",
+    "packages/ui/src/styles.css": "9b8a1e231e1565cda48094b94640e0b0e0b8c240a729f3409a2a4eba40dc6f04",
+    "packages/web/package.json": "5898d03b2617c72a5fd41f8a311fa77ac4ee90d167fe0f4a65313798a6e67e7b",
     "packages/web/public/material-icons/3d.svg": "9527b849f0fba57ca7640e2717b3a19cb5f5e046712cbbd8b75d73af338c68fb",
     "packages/web/public/material-icons/abap.svg": "1335bd7eb9a0ed49deb622330d680c2e97731726a7a5eee8e4f46dc1e5db4de4",
     "packages/web/public/material-icons/abc.svg": "d1a68020e8f020ef29dca5f94dc8613b7ae8fb5b212d8b1cc23b0f975ac7acda",
@@ -2663,17 +2678,40 @@
     "packages/web/public/material-icons/zeabur.svg": "8bb7c84934202e9b24842ddb1ca69d316b9d69f1a4f5ebc9bbcce78eb2cea1a7",
     "packages/web/public/material-icons/zig.svg": "37be0ce02cf471b18d86150b3c38e80caa7c16c49a15078e7db6f1f41788d101",
     "packages/web/public/material-icons/zip.svg": "dad79a45f756542d37abd422502ecfbea15720b92ea1c9d80ef0439ab6b9448a",
-    "packages/zcode-cua/package.json": "87f0fe859ffd7539d719bfd6ac4ae2884960ffa80ee29a7a562b52bc805f67c8",
+    "packages/zcode-cua/package.json": "b2eaa5a5a452f612eeb46100c2c3e0ea7b75f230eba962d001b4c66433c4fb25",
     "packages/zcode-server-cli/package.json": "6e294c4409cb90863d85b2e3d60f92766b156ccee577ebfeaffcb85e94194004",
     "patches/@ai-sdk__anthropic@3.0.81.patch": "d3a7c381eba7f5157f765a0528003af17cf84544911dfb7412c7800168e01c18",
     "patches/@ai-sdk__openai-compatible@2.0.60.patch": "9632fe9d821b3dc20939ae509cc35b968d90d018bbd1d812390718898182a38b",
-    "patches/@arms__rum-electron@0.0.3.patch": "36855354851ea495bc47a03340b0484ff62836b739cad56904b8a69f18e2ae97",
-    "pnpm-lock.yaml": "7d40b0231089692a91eb39f73b212f7eae86ee9402c360139216cff577e9583c",
+    "pnpm-lock.yaml": "bca3fa0e639f60333a7d4d04c3d61e14570d27fe7f2ade59ee1a874804bde69d",
     "pnpm-workspace.yaml": "f18a18233e82cda1dc40be61bf2ad1bc99de25de63ad0be64bc652761a638372",
     "scripts/license-texts/Apache-2.0.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
     "scripts/native-search-tools-config.mjs": "281d368464f61363fa2d8ab74f416962fe730dd0a0572db5564475f876bb65aa",
     "scripts/remote-native-search-tools-config.mjs": "472322a66f84c7452f96aa9e16e9c4e0600f7c2588a03dc6bc869229161b1cb2",
     "third-party/copied-components.json": "a411ef6ee22a25e910d2ccfb5dde572a116174645abbda9e99f86946deeb2072",
+    "third-party/cua-driver/materials/core-MPL.txt": "d1cc4c0ada218e8a336dc8c3d8bb7d5b1c8dedfa31f5b25c9ea1759d21b8b62d",
+    "third-party/cua-driver/materials/cua-MIT.txt": "c0779290c1d4783169aa3dbfb55feb505e563ef8a004bbf55298ceffcfbda8d9",
+    "third-party/cua-driver/materials/cua-package.txt": "e8fef4d6e1965b7c89ede6f701d8471041dbf08d0118f7d84835897bd3d5e9e2",
+    "third-party/cua-driver/materials/node-MPL.txt": "d1cc4c0ada218e8a336dc8c3d8bb7d5b1c8dedfa31f5b25c9ea1759d21b8b62d",
+    "third-party/cua-driver/materials/runtime-build.txt": "db02ec1345edbf6090f0093ddae3bd41d624d2984af58bcdce3a66cfcad373dc",
+    "third-party/cua-driver/materials/runtime-NOTICE.txt": "66a466cc022b4bf4a41f678e4d31d9b82098cc55cc364d6e9295366dfd02cef2",
+    "third-party/cua-driver/NOTICE.md": "9d2987109573da2665e7cb866398ac115a5298e33e116e39a0d5c0d141f3dc4b",
+    "third-party/cua-driver/NOTICES.txt": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "third-party/cua-driver/registry/_trycua_cua-driver-darwin-arm64.json.txt": "834c87920b0d0de0eecadb5354974fc7c3131c8f252f600bebf719fdd46775c8",
+    "third-party/cua-driver/registry/_trycua_cua-driver-darwin-x64.json.txt": "f7e8a7850487bd6852781bb774b4c381b34a6a6d2c509b1331af5788cea3b2b0",
+    "third-party/cua-driver/registry/_trycua_cua-driver-linux-arm64-gnu.json.txt": "6323b0dd00f82c8fafd30a4fa34235cb371acf022703ea4d57f5c0b0592d7915",
+    "third-party/cua-driver/registry/_trycua_cua-driver-linux-x64-gnu.json.txt": "0fcc14d3839e7f40508e8172bed63c439d82f069f2b263497cb84ddabd4f8e00",
+    "third-party/cua-driver/registry/_trycua_cua-driver-win32-arm64-msvc.json.txt": "839b0de5dda21546eeeaccc7f8b7fccb841bb06335392e40cd692986c7c75fdf",
+    "third-party/cua-driver/registry/_trycua_cua-driver-win32-x64-msvc.json.txt": "dc7282c8cabc1ec6151d9d40ac35825dc7f3f63f1306024c8c08bd0039dc035f",
+    "third-party/cua-driver/registry/_trycua_cua-driver.json.txt": "168404f2ff2efe3fa618c096d0317b1bbc4ccfc1a3efab8d8a3f25b7b8296c4b",
+    "third-party/cua-driver/registry/_ubjs_core.json.txt": "0cf7a9979032680e5474e8d7261e2ee73ea9cf287a0b5790ef8568682b4e8a42",
+    "third-party/cua-driver/registry/_ubjs_node-darwin-arm64.json.txt": "21cf0759b5ac818e730d33d1fd80f26e256c84c7c9ab97fc6e4278b29006a774",
+    "third-party/cua-driver/registry/_ubjs_node-darwin-x64.json.txt": "6ecd5276038115b5d2e2cc7405dca1ece8dd11023eb682d41f1ea85bb226e41e",
+    "third-party/cua-driver/registry/_ubjs_node-linux-arm64-gnu.json.txt": "bd02fe286a7ab1b306ae1c95caa62b48c231dc0239e69d01bfe104e6e7662f3b",
+    "third-party/cua-driver/registry/_ubjs_node-linux-x64-gnu.json.txt": "2bd7f42b3bf7a930a51b2854f8a610d0249283313269767f32a5402cea34c311",
+    "third-party/cua-driver/registry/_ubjs_node-win32-arm64-msvc.json.txt": "e0614f33a811f118348680e30b2141818187c9340837ef3320a534b4424a27b5",
+    "third-party/cua-driver/registry/_ubjs_node-win32-x64-msvc.json.txt": "542d01c3dceb7deaf24f3d9900b4ed184e9b726176ec732e43b2a29c38b4b3c5",
+    "third-party/cua-driver/registry/_ubjs_node.json.txt": "df6293124d098dd8932672287409a5be64e4e5ec67c756c0461fd35275a64fa5",
+    "third-party/cua-driver/sources.json": "d4de3a9d88285a8bcc8d3940cdf3b62c5e6a62055522307cd0f5da097951f8d6",
     "third-party/embedded-components.json": "9586ccca15897f56d4ca1d703dffe9e02880fedd766c1dff93f7ac1f52ea891a",
     "third-party/native-search/licenses/00373c9bf56a894b2ed67586596bc1e8b0630cabbaf1ab46c75fc754b6bcd1ce.txt": "00373c9bf56a894b2ed67586596bc1e8b0630cabbaf1ab46c75fc754b6bcd1ce",
     "third-party/native-search/licenses/01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f.txt": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
@@ -2790,10 +2828,521 @@
     "third-party/native-search/licenses/f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af.txt": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
     "third-party/native-search/licenses/f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505.txt": "f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505",
     "third-party/native-search/sources.json": "5a7b2d7abf5bd5f310712710cbbd0ca70dc9491e723cbf070b5c696fe155a962",
-    "third-party/npm-overrides.json": "08e2b41ea681c0058e7430f8d285e0693433af2ead0b0bc96d80aecbe7ecad19",
+    "third-party/npm-overrides.json": "3c8be4a2dae405dbd4f660a5ff820a6a0c7a6db7fe7eb55f41143468751143dc",
     "third-party/runtime/node-22.16.0-LICENSE.txt": "1ae62e2015784ba438db7b04ebd33f3c4ff3efdb824c111c4ececd99945fd52d",
     "third-party/runtime/node-24.14.0-LICENSE.txt": "4573185d56580da2b890ba34a85a409257640f1c5632eade4300137266194d18",
     "third-party/runtime/sources.json": "b27bc8d81aeb71108e523602364ffbb6a1b19c2d5d47733fd43094b769006741",
+    "third-party/rust-tui/snapshots/adler2-2.0.1-0a3bcdd4.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/adler2-2.0.1-79e12f13.txt": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb",
+    "third-party/rust-tui/snapshots/adler2-2.0.1-cf22e5be.txt": "861399f8c21c042b110517e76dc6b63a2b334276c8cf17412fc3c8908ca8dc17",
+    "third-party/rust-tui/snapshots/aho-corasick-1.1.5-321354ba.txt": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+    "third-party/rust-tui/snapshots/aho-corasick-1.1.5-e4bde5ac.txt": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+    "third-party/rust-tui/snapshots/allocator-api2-0.2.21-6db1e8f4.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/allocator-api2-0.2.21-ac7a127f.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/android_system_properties-0.1.6-24012d3f.txt": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e",
+    "third-party/rust-tui/snapshots/android_system_properties-0.1.6-f174d62b.txt": "216486f29671a4262efe32af6d84a75bef398127f8c5f369b5c8305983887a06",
+    "third-party/rust-tui/snapshots/anyhow-1.0.104-9b375c99.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/anyhow-1.0.104-fa1adce7.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/async-trait-0.1.92-3b7f5aa9.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/async-trait-0.1.92-dce33cda.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/atomic-waker-1.1.2-0a146056.txt": "6226d0632e2e1a80c23597e964da9812ae193c535fe058154afb034e94167aa5",
+    "third-party/rust-tui/snapshots/atomic-waker-1.1.2-5e643db9.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/atomic-waker-1.1.2-88c621e1.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/autocfg-1.5.1-1922a004.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/autocfg-1.5.1-7788e040.txt": "27995d58ad5c1145c1a8cd86244ce844886958a35eb2b78c6b772748669999ac",
+    "third-party/rust-tui/snapshots/base64-0.22.1-4f071d93.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/base64-0.22.1-d4077aa1.txt": "0dd882e53de11566d50f8e8e2d5a651bcf3fabee4987d70f306233cf39094ba7",
+    "third-party/rust-tui/snapshots/base64-0.23.1-a57f0140.txt": "ab499c75a0f0da8e0fe83bf9ba3a27e5c39705310f07107c6c66b69958d2401c",
+    "third-party/rust-tui/snapshots/base64-0.23.1-b0aa7dc3.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/bitflags-2.13.2-5b77d75a.txt": "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb",
+    "third-party/rust-tui/snapshots/bitflags-2.13.2-f1c7198e.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/block-buffer-0.10.4-3f968c93.txt": "d5c22aa3118d240e877ad41c5d9fa232f9c77d757d4aac0c2f943afc0a95e0ef",
+    "third-party/rust-tui/snapshots/block-buffer-0.10.4-ba69dc9a.txt": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5",
+    "third-party/rust-tui/snapshots/bstr-1.13.1-0d850620.txt": "68653aaa727a2bfa31b7a751e31701ce33c49d695c12dd291a07d1c54da4c14b",
+    "third-party/rust-tui/snapshots/bstr-1.13.1-90978f4d.txt": "6b7374c39a57e57fc2c38eb529c4c88340152b10f51dd5ae2d819dfa67f61715",
+    "third-party/rust-tui/snapshots/bstr-1.13.1-c019936f.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/bumpalo-3.20.3-3f0e4e8c.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/bumpalo-3.20.3-528dd5ae.txt": "65f94e99ddaf4f5d1782a6dae23f35d4293a9a01444a13135a6887017d353cee",
+    "third-party/rust-tui/snapshots/bytemuck-1.25.2-38d4ecb8.txt": "e3ba223bb1423f0aad8c3dfce0fe3148db48926d41e6fbc3afbbf5ff9e1c89cb",
+    "third-party/rust-tui/snapshots/bytemuck-1.25.2-801dd773.txt": "84b34dd7608f7fb9b17bd588a6bf392bf7de504e2716f024a77d89f1b145a151",
+    "third-party/rust-tui/snapshots/bytemuck-1.25.2-a87fa03a.txt": "9df9ba60a11af705f2e451b53762686e615d86f76b169cf075c3237730dbd7e2",
+    "third-party/rust-tui/snapshots/byteorder-lite-0.1.0-bec80d84.txt": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+    "third-party/rust-tui/snapshots/bytes-1.12.1-b381fc5b.txt": "45f522cacecb1023856e46df79ca625dfc550c94910078bd8aec6e02880b3d42",
+    "third-party/rust-tui/snapshots/cassowary-0.3.0-a97659b2.txt": "fd198949ebcc78b2d12fc57ebfb2da4ae8f781b7c3b7047aaccc2f804b6f12ef",
+    "third-party/rust-tui/snapshots/cassowary-0.3.0-b4cee75d.txt": "000b4962e6b27176a0ff89cce4be555b16472cafb5671eb2804a8fdac6854793",
+    "third-party/rust-tui/snapshots/castaway-0.2.4-32e2b8a8.txt": "f98e09091d5ae02b2f2ec1ead4f7f28c4c44d1cb98b078739ba67091637e170c",
+    "third-party/rust-tui/snapshots/cc-1.7.0-5812acfd.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/cc-1.7.0-5ebe03a2.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/cfg_aliases-0.2.2-a24f11fd.txt": "31b94860253d8ec7b4529f51901044d3b459d6292d996504a36b1bae3a36a812",
+    "third-party/rust-tui/snapshots/cfg-if-1.0.5-5fb7818e.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/cfg-if-1.0.5-926b4eaa.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/chrono-0.4.45-14c2ea47.txt": "946c9835d8034d24404f8cfec5f4654cee5dad17e944afc3d06d742cf2882831",
+    "third-party/rust-tui/snapshots/chrono-tz-0.10.4-eb914335.txt": "4789210f4df8abc03fce1cddd9c2ba517f184840687f2815d741de282c1aa93a",
+    "third-party/rust-tui/snapshots/chrono-tz-0.10.4-ee115674.txt": "0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf",
+    "third-party/rust-tui/snapshots/color_quant-1.1.0-0116dfdf.txt": "592dc80f1a865d20d61a2006a2d29ce34a2bc28cd7e868ab300fdeed6da154ca",
+    "third-party/rust-tui/snapshots/combine-4.6.8-e6092ba3.txt": "9bbc1b3dc4674a9ebb12c2a62f54fe3c08672539717f8d05828f684b6cc419a3",
+    "third-party/rust-tui/snapshots/compact_str-0.8.2-e4effd29.txt": "0d52feec79589df30138dad3800323fe5686b764b73347330a2dfef8ac83efe8",
+    "third-party/rust-tui/snapshots/core-foundation-0.10.1-7c26e928.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/core-foundation-0.10.1-a336d511.txt": "62065228e42caebca7e7d7db1204cbb867033de5982ca4009928915e4095f3a3",
+    "third-party/rust-tui/snapshots/core-foundation-sys-0.8.7-125bb072.txt": "62065228e42caebca7e7d7db1204cbb867033de5982ca4009928915e4095f3a3",
+    "third-party/rust-tui/snapshots/core-foundation-sys-0.8.7-dc6fa6c2.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/cpufeatures-0.2.17-0f2ea566.txt": "ae9baa7beea910273c2f384c2a6b721fb7bd02bda3436074a1072e4ee689f985",
+    "third-party/rust-tui/snapshots/cpufeatures-0.2.17-990cc155.txt": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5",
+    "third-party/rust-tui/snapshots/crc32fast-1.5.2-621ffc0a.txt": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+    "third-party/rust-tui/snapshots/crc32fast-1.5.2-e26ce6bd.txt": "61d383b05b87d78f94d2937e2580cce47226d17823c0430fbcad09596537efcf",
+    "third-party/rust-tui/snapshots/crossbeam-deque-0.8.8-39e5c40d.txt": "5734ed989dfca1f625b40281ee9f4530f91b2411ec01cb748223e7eb87e201ab",
+    "third-party/rust-tui/snapshots/crossbeam-deque-0.8.8-f2ee89e2.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/crossbeam-epoch-0.9.21-cda4fee7.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/crossbeam-epoch-0.9.21-ecd7ebed.txt": "5734ed989dfca1f625b40281ee9f4530f91b2411ec01cb748223e7eb87e201ab",
+    "third-party/rust-tui/snapshots/crossbeam-utils-0.8.23-8f0f614a.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/crossbeam-utils-0.8.23-95b83837.txt": "5734ed989dfca1f625b40281ee9f4530f91b2411ec01cb748223e7eb87e201ab",
+    "third-party/rust-tui/snapshots/crossterm_winapi-0.9.1-e0f318fd.txt": "3fea97e00df9a8e30027f4298d6941b6970c542ffd49de68b4a2bcafedcbfe02",
+    "third-party/rust-tui/snapshots/crossterm-0.28.1-ebc51e80.txt": "3fea97e00df9a8e30027f4298d6941b6970c542ffd49de68b4a2bcafedcbfe02",
+    "third-party/rust-tui/snapshots/crypto-common-0.1.7-7eec5a99.txt": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5",
+    "third-party/rust-tui/snapshots/crypto-common-0.1.7-c93c6e7e.txt": "3521672491a3479422d5fe1aca6645dd2984090f85da6e5205abfb18fb7a6897",
+    "third-party/rust-tui/snapshots/darling_core-0.24.1-cdb80e6c.txt": "8ea93490d74a5a1b1af3ff71d786271b3f1e5f0bea79ac16e02ec533cef040d6",
+    "third-party/rust-tui/snapshots/darling_macro-0.24.1-e73410bf.txt": "8ea93490d74a5a1b1af3ff71d786271b3f1e5f0bea79ac16e02ec533cef040d6",
+    "third-party/rust-tui/snapshots/darling-0.24.1-696daf13.txt": "8ea93490d74a5a1b1af3ff71d786271b3f1e5f0bea79ac16e02ec533cef040d6",
+    "third-party/rust-tui/snapshots/digest-0.10.7-2a363ca4.txt": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5",
+    "third-party/rust-tui/snapshots/digest-0.10.7-724dd9f8.txt": "9e0dfd2dd4173a530e238cb6adb37aa78c34c6bc7444e0e10c1ab5d8881f63ba",
+    "third-party/rust-tui/snapshots/displaydoc-0.2.7-70efd169.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/displaydoc-0.2.7-b2d48ac2.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/either-1.19.0-7d4d0fb9.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/either-1.19.0-dec4a04c.txt": "7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545",
+    "third-party/rust-tui/snapshots/equivalent-1.0.2-0f917f69.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/equivalent-1.0.2-9eb5c3fa.txt": "7365cc8878a1d7ce155a58c4ca09c3d7a6be413efa5334a80ea842912b669349",
+    "third-party/rust-tui/snapshots/errno-0.3.14-8b3df211.txt": "8764a597675778ddfd4e25f81b08a05dbcf089ac05662df7613fe67f150e3aa2",
+    "third-party/rust-tui/snapshots/errno-0.3.14-ccef940f.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/fallible-iterator-0.3.0-7dfe3618.txt": "0816e154b159ba255c563f7c8c7df5bbb8cc5fc96f5ab8cf9f4743b4f41fe7eb",
+    "third-party/rust-tui/snapshots/fallible-iterator-0.3.0-8aeecbed.txt": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+    "third-party/rust-tui/snapshots/fallible-streaming-iterator-0.1.9-34130cb7.txt": "8dcec5569a9be5b0e086c80faed6f1aefa670af0ec29cecc2f714303096887e0",
+    "third-party/rust-tui/snapshots/fallible-streaming-iterator-0.1.9-9cdb396c.txt": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+    "third-party/rust-tui/snapshots/fastrand-2.5.0-3c7acde3.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/fastrand-2.5.0-44f0cf89.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/fdeflate-0.3.7-33e55cf0.txt": "c77a4cf9da729987d0fe7ccd811e3bd27393914ddf3d23467c18cc22954513b3",
+    "third-party/rust-tui/snapshots/fdeflate-0.3.7-a0c3620b.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "third-party/rust-tui/snapshots/find-msvc-tools-0.1.14-b400910c.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/find-msvc-tools-0.1.14-f4356d5a.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/flate2-1.1.10-974996ba.txt": "025436edff4cfcdde17a5811fdea78892d8482efd1abdec5a17872d07a4f2112",
+    "third-party/rust-tui/snapshots/flate2-1.1.10-e6352e64.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/foldhash-0.1.5-ff1b352d.txt": "b1181a40b2a7b25cf66fd01481713bc1005df082c53ef73e851e55071b102744",
+    "third-party/rust-tui/snapshots/form_urlencoded-1.2.2-0b118e30.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/form_urlencoded-1.2.2-85c44d8d.txt": "20c7855c364d57ea4c97889a5e8d98470a9952dade37bd9248b9a54431670e5e",
+    "third-party/rust-tui/snapshots/futures-0.3.34-27b7d697.txt": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
+    "third-party/rust-tui/snapshots/futures-0.3.34-87d5282f.txt": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
+    "third-party/rust-tui/snapshots/futures-channel-0.3.34-032459a7.txt": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
+    "third-party/rust-tui/snapshots/futures-channel-0.3.34-df3abe97.txt": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
+    "third-party/rust-tui/snapshots/futures-core-0.3.34-22b6c153.txt": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
+    "third-party/rust-tui/snapshots/futures-core-0.3.34-bf0d2c29.txt": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
+    "third-party/rust-tui/snapshots/futures-executor-0.3.34-463fa363.txt": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
+    "third-party/rust-tui/snapshots/futures-executor-0.3.34-abc25d54.txt": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
+    "third-party/rust-tui/snapshots/futures-io-0.3.34-7c8a75b4.txt": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
+    "third-party/rust-tui/snapshots/futures-io-0.3.34-eb38840d.txt": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
+    "third-party/rust-tui/snapshots/futures-macro-0.3.34-e2255b3f.txt": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
+    "third-party/rust-tui/snapshots/futures-macro-0.3.34-f86e0058.txt": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
+    "third-party/rust-tui/snapshots/futures-sink-0.3.34-551f4f6b.txt": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
+    "third-party/rust-tui/snapshots/futures-sink-0.3.34-a993e41a.txt": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
+    "third-party/rust-tui/snapshots/futures-task-0.3.34-5a0f23f2.txt": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
+    "third-party/rust-tui/snapshots/futures-task-0.3.34-ad908292.txt": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
+    "third-party/rust-tui/snapshots/futures-util-0.3.34-0b9f170d.txt": "275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427",
+    "third-party/rust-tui/snapshots/futures-util-0.3.34-be883477.txt": "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd",
+    "third-party/rust-tui/snapshots/generic-array-0.14.7-de202024.txt": "ad4fcfaf8d5b12b97409c137a03d4a4e4b21024c65c54f976cc3b609c1bd5b0f",
+    "third-party/rust-tui/snapshots/getrandom-0.2.17-75fb9565.txt": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf",
+    "third-party/rust-tui/snapshots/getrandom-0.2.17-e52f2c14.txt": "42fa16951ce7f24b5a467a40e5b449a1d41e662f97ca779864f053f39e097737",
+    "third-party/rust-tui/snapshots/getrandom-0.4.3-20a4f94b.txt": "523a42c25d245dde9c015f882cec7f4555aad883382a6cf19b4b7d9b2cd5419b",
+    "third-party/rust-tui/snapshots/getrandom-0.4.3-b87f7eb5.txt": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf",
+    "third-party/rust-tui/snapshots/gif-0.14.2-1b2b2596.txt": "77257f3d2181236b1aee78920238062ae64efe13c5d858b2db126e79c9e1b14f",
+    "third-party/rust-tui/snapshots/gif-0.14.2-a193c05b.txt": "769f80b5bcb42ed0af4e4d2fd74e1ac9bf843cb80c5a29219d1ef3544428a6bb",
+    "third-party/rust-tui/snapshots/globset-0.4.20-2ae9f141.txt": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+    "third-party/rust-tui/snapshots/globset-0.4.20-a29bcef9.txt": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+    "third-party/rust-tui/snapshots/hashbrown-0.15.5-14430885.txt": "ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2",
+    "third-party/rust-tui/snapshots/hashbrown-0.15.5-557192ce.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/hashbrown-0.17.1-16381bfa.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/hashbrown-0.17.1-a1eab807.txt": "ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2",
+    "third-party/rust-tui/snapshots/hashlink-0.10.0-09a55cdd.txt": "c144680885b29e4719e2a51f0aab5439a1e02d980692b5aaf086cae12727f28b",
+    "third-party/rust-tui/snapshots/hashlink-0.10.0-7d65b90f.txt": "e915669a595b11a200873df8286561881b0e04932f6412a585db6297ba0bc97c",
+    "third-party/rust-tui/snapshots/heck-0.5.0-7cfab77a.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/heck-0.5.0-c42c70f7.txt": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0",
+    "third-party/rust-tui/snapshots/http-1.5.0-ae483fc7.txt": "8bb1b50b0e5c9399ae33bd35fab2769010fa6c14e8860c729a52295d84896b7a",
+    "third-party/rust-tui/snapshots/http-1.5.0-e304b457.txt": "dc91f8200e4b2a1f9261035d4c18c33c246911a6c0f7b543d75347e61b249cff",
+    "third-party/rust-tui/snapshots/http-body-1.1.0-18f4be0d.txt": "248378d0a3383c173fb925f17141b88e71580b3ba17ddc6ac3d2a344683232ab",
+    "third-party/rust-tui/snapshots/http-body-util-0.1.5-66aa15ad.txt": "248378d0a3383c173fb925f17141b88e71580b3ba17ddc6ac3d2a344683232ab",
+    "third-party/rust-tui/snapshots/httparse-1.10.1-668aa278.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/httparse-1.10.1-e5b0278f.txt": "391a5396cec6230bfabd4ef4eb2350eb895bc5efce377a2218f5702ed020d3e3",
+    "third-party/rust-tui/snapshots/httpdate-1.0.3-0797c73a.txt": "934887691e05d69d7c86ad3f2c360980fa30c15b035e351f3c9865e99da4debc",
+    "third-party/rust-tui/snapshots/httpdate-1.0.3-61c720e2.txt": "4d10fe5f3aa176b05b229a248866bad70b834c173f1252a814ff4748d8a13837",
+    "third-party/rust-tui/snapshots/hyper-1.12.0-09d8e748.txt": "2d01890414494742ba4a509fcec8efa40f6d8be22cbd72be7cff08d6fda4ec89",
+    "third-party/rust-tui/snapshots/hyper-rustls-0.27.10-8c5a86d3.txt": "709e3175b4212f7b13aa93971c9f62ff8c69ec45ad8c6532a7e0c41d7a7d6f8c",
+    "third-party/rust-tui/snapshots/hyper-rustls-0.27.10-9b841ef7.txt": "7cfafc877eccc46c0e346ccbaa5c51bb6b894d2b818e617d970211e232785ad4",
+    "third-party/rust-tui/snapshots/hyper-rustls-0.27.10-ee79a7a4.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/hyper-util-0.1.21-c0221394.txt": "9e0a97848ea543aef745c98e84fde696a9a3e0735538f6daefdd3cb1942effc1",
+    "third-party/rust-tui/snapshots/iana-time-zone-0.1.65-849765ca.txt": "696759d65dfe558ff7d9f031c76db19ec5c0767470fb67c4e8d990820d1e99c9",
+    "third-party/rust-tui/snapshots/iana-time-zone-0.1.65-88c11486.txt": "da28ccc6b158fc2d8cccc74e99794b1cff1d29bd7bbeb019442fcf0c04c6cad9",
+    "third-party/rust-tui/snapshots/iana-time-zone-haiku-0.1.2-23ded712.txt": "696759d65dfe558ff7d9f031c76db19ec5c0767470fb67c4e8d990820d1e99c9",
+    "third-party/rust-tui/snapshots/iana-time-zone-haiku-0.1.2-8de389c1.txt": "da28ccc6b158fc2d8cccc74e99794b1cff1d29bd7bbeb019442fcf0c04c6cad9",
+    "third-party/rust-tui/snapshots/icu_collections-2.3.0-70d938c6.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/icu_locale_core-2.3.0-d5d2c1c8.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/icu_normalizer_data-2.3.0-f66928dc.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/icu_normalizer-2.3.0-1d5d89c9.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/icu_properties_data-2.3.0-744151d1.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/icu_properties-2.3.0-17249739.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/icu_provider-2.3.1-f09a1dc0.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/ident_case-1.0.1-b8f85290.txt": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+    "third-party/rust-tui/snapshots/idna_adapter-1.2.2-58b5d79a.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/idna_adapter-1.2.2-660b6f8e.txt": "8b43ce8accd61e9d370b5ca9e9c4f953279b5c239926c62315b40e24df51b726",
+    "third-party/rust-tui/snapshots/idna-1.1.0-17461ff7.txt": "b38f11f6096706e6de553dabe2a7ed142d59b6fa8c97e290c67496154745cdd5",
+    "third-party/rust-tui/snapshots/idna-1.1.0-e30db499.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/ignore-0.4.33-157eba11.txt": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+    "third-party/rust-tui/snapshots/ignore-0.4.33-a5ddef89.txt": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+    "third-party/rust-tui/snapshots/image-0.25.10-591ed381.txt": "c77a4cf9da729987d0fe7ccd811e3bd27393914ddf3d23467c18cc22954513b3",
+    "third-party/rust-tui/snapshots/image-0.25.10-a13287e9.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "third-party/rust-tui/snapshots/indexmap-2.14.2-10b2894f.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/indexmap-2.14.2-72844d4d.txt": "ecc269ef87fd38a1d98e30bfac9ba964a9dbd9315c3770fed98d4d7cb5882055",
+    "third-party/rust-tui/snapshots/indoc-2.0.8-7d082c41.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/indoc-2.0.8-daa4d85c.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/instability-0.3.14-64dde36d.txt": "0352320d9929e862c1f07b59caacc3cd1bbacfec0ad4136bf4c89d4ca8939781",
+    "third-party/rust-tui/snapshots/ipnet-2.12.2-7d2a5c15.txt": "87d9feb9238c6bd8e0024fc4733b06cff036f89f36d93b7df1c8a0549bbb7a5b",
+    "third-party/rust-tui/snapshots/ipnet-2.12.2-da07f068.txt": "47dc9ff29128ddfb4d6a0435383c9f89120bc374dbcc1dd00b933a0b28aa7865",
+    "third-party/rust-tui/snapshots/itertools-0.13.0-2299e7cd.txt": "7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545",
+    "third-party/rust-tui/snapshots/itertools-0.13.0-6a9cf83b.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/itoa-1.0.18-044d2628.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/itoa-1.0.18-d22d278d.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/jni-0.22.4-upstream-LICENSE-APACHE.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/jni-0.22.4-upstream-LICENSE-MIT.txt": "fea1d5bf3dd71605ce5d7d2ff695c1837e914c77195e523a86b5391716477960",
+    "third-party/rust-tui/snapshots/jni-macros-0.22.4-upstream-LICENSE-APACHE.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/jni-macros-0.22.4-upstream-LICENSE-MIT.txt": "fea1d5bf3dd71605ce5d7d2ff695c1837e914c77195e523a86b5391716477960",
+    "third-party/rust-tui/snapshots/jni-sys-0.4.1-2e88d184.txt": "1d85bd754b04ceec93e98e890edd1fa3c6a22e81bcb32135806beeccefa51cd1",
+    "third-party/rust-tui/snapshots/jni-sys-0.4.1-98908571.txt": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+    "third-party/rust-tui/snapshots/jni-sys-macros-0.4.1-upstream-LICENSE-APACHE.txt": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+    "third-party/rust-tui/snapshots/jni-sys-macros-0.4.1-upstream-LICENSE-MIT.txt": "1d85bd754b04ceec93e98e890edd1fa3c6a22e81bcb32135806beeccefa51cd1",
+    "third-party/rust-tui/snapshots/js-sys-0.3.106-b1eae21b.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/js-sys-0.3.106-ec6bc900.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/libc-0.2.190-184a402d.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/libc-0.2.190-9908e0ef.txt": "123a331b5dbf04c30097fa43b8f858bc85df671fe776de498d01f3d6b7c1f69e",
+    "third-party/rust-tui/snapshots/libsqlite3-sys-0.35.0-4de38746.txt": "c10c1f27337546471e5f7e4e97fdd398b35b9d4e126115dcd22de8d8e65abf6f",
+    "third-party/rust-tui/snapshots/libsqlite3-sys-0.35.0-c2a7c010.txt": "ea4fcb309f14a22065e1ea45362d494d320012249ed865fe9c7c0946db754131",
+    "third-party/rust-tui/snapshots/linux-raw-sys-0.12.1-ad555741.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/linux-raw-sys-0.12.1-c591c9c7.txt": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+    "third-party/rust-tui/snapshots/linux-raw-sys-0.12.1-e2c20cc1.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/linux-raw-sys-0.4.15-4ada648b.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/linux-raw-sys-0.4.15-b98d9203.txt": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+    "third-party/rust-tui/snapshots/linux-raw-sys-0.4.15-de693bde.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/litemap-0.8.3-b5461359.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/lock_api-0.4.14-88a85a93.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/lock_api-0.4.14-cf435379.txt": "c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5",
+    "third-party/rust-tui/snapshots/log-0.4.34-36519a33.txt": "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb",
+    "third-party/rust-tui/snapshots/log-0.4.34-facfdeab.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/lru-0.12.5-b97dd6c0.txt": "061dc50af2cd9340703daf61978af3200cf681b12ea67a323c33ba109a23a45e",
+    "third-party/rust-tui/snapshots/memchr-2.8.3-36e8df4c.txt": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+    "third-party/rust-tui/snapshots/memchr-2.8.3-62e6a1e6.txt": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+    "third-party/rust-tui/snapshots/miniz_oxide-0.8.9-2ffbf0b0.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "third-party/rust-tui/snapshots/miniz_oxide-0.8.9-314ce4d4.txt": "0a54e647fe54104658b5e563c04c6f9edf251710e47bce692e0bd990a4ddaa39",
+    "third-party/rust-tui/snapshots/miniz_oxide-0.8.9-43ddd23d.txt": "799e9ca9d179295ef372f25d3769cdda7d25bb2668add6a6a1e22d1e4c678b8d",
+    "third-party/rust-tui/snapshots/miniz_oxide-0.8.9-d6e92e0c.txt": "4108245a1f2df9d4e94df8abed5b4ba0759bb2f9b40a6b939f1be141077ae50b",
+    "third-party/rust-tui/snapshots/miniz_oxide-0.9.1-5f0f1984.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "third-party/rust-tui/snapshots/miniz_oxide-0.9.1-c77365fd.txt": "0a54e647fe54104658b5e563c04c6f9edf251710e47bce692e0bd990a4ddaa39",
+    "third-party/rust-tui/snapshots/miniz_oxide-0.9.1-deafc04c.txt": "799e9ca9d179295ef372f25d3769cdda7d25bb2668add6a6a1e22d1e4c678b8d",
+    "third-party/rust-tui/snapshots/miniz_oxide-0.9.1-feaf1219.txt": "4108245a1f2df9d4e94df8abed5b4ba0759bb2f9b40a6b939f1be141077ae50b",
+    "third-party/rust-tui/snapshots/mio-1.2.4-cb951c3a.txt": "07919255c7e04793d8ea760d6c2ce32d19f9ff02bdbdde3ce90b1e1880929a9b",
+    "third-party/rust-tui/snapshots/moxcms-0.8.1-18d7c97e.txt": "90bf2d659c43045111b65c733ab2a6d4cbcb422a098368c8c58a9ba3db4ed0c5",
+    "third-party/rust-tui/snapshots/moxcms-0.8.1-b1869c4c.txt": "2aa92cada6431e75615e3fe6cb1a9082c98f777d48ae1c087c0da0e37f7b8bff",
+    "third-party/rust-tui/snapshots/nix-0.30.1-aed40dc7.txt": "66e3ee1fa7f909ad3c612d556f2a0cdabcd809ad6e66f3b0605015ac64841b70",
+    "third-party/rust-tui/snapshots/ntapi-0.4.3-01370489.txt": "cf90d659de5c1e6418267ab8043b756e65508ee5d8d50b29eb2d2fe444c2c3eb",
+    "third-party/rust-tui/snapshots/ntapi-0.4.3-aabf0bfe.txt": "11a7964ccc0dd115d16720ab1d826c5d03e52838748ffaba3d21bae8bcacd82a",
+    "third-party/rust-tui/snapshots/num-traits-0.2.19-13de74f6.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/num-traits-0.2.19-5021104f.txt": "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb",
+    "third-party/rust-tui/snapshots/objc2-core-foundation-0.3.2-upstream-LICENSE.md.txt": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+    "third-party/rust-tui/snapshots/objc2-core-foundation-0.3.2-upstream-selected-Apache-2.0-standard-terms.txt.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "third-party/rust-tui/snapshots/objc2-io-kit-0.3.2-upstream-LICENSE.md.txt": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+    "third-party/rust-tui/snapshots/objc2-io-kit-0.3.2-upstream-selected-Apache-2.0-standard-terms.txt.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "third-party/rust-tui/snapshots/once_cell-1.21.4-1e1f458b.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/once_cell-1.21.4-5d26acda.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/openssl-probe-0.2.1-84fac55f.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/openssl-probe-0.2.1-da81a9e8.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/parking_lot_core-0.9.12-0977a0a8.txt": "c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5",
+    "third-party/rust-tui/snapshots/parking_lot_core-0.9.12-fbb1b334.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/parking_lot-0.12.5-73cd103e.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/parking_lot-0.12.5-8957b2ca.txt": "c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5",
+    "third-party/rust-tui/snapshots/paste-1.0.15-405a42b6.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/paste-1.0.15-fad6089f.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/percent-encoding-2.3.2-39b3a686.txt": "b38f11f6096706e6de553dabe2a7ed142d59b6fa8c97e290c67496154745cdd5",
+    "third-party/rust-tui/snapshots/percent-encoding-2.3.2-9f9fb860.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/phf_shared-0.12.1-03e0461a.txt": "0ab4d106b6faac07fb6a051815fd1b4d862d730895e2d7d7358c2f13565e7a38",
+    "third-party/rust-tui/snapshots/phf-0.12.1-3fd8204f.txt": "0ab4d106b6faac07fb6a051815fd1b4d862d730895e2d7d7358c2f13565e7a38",
+    "third-party/rust-tui/snapshots/pin-project-lite-0.2.17-9493b5e4.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/pin-project-lite-0.2.17-dac4f9bd.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "third-party/rust-tui/snapshots/pkg-config-0.3.34-54d870e5.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/pkg-config-0.3.34-a5ab5945.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/png-0.18.1-a779751e.txt": "eaf40297c75da471f7cda1f3458e8d91b4b2ec866e609527a13acfa93b638652",
+    "third-party/rust-tui/snapshots/png-0.18.1-b261671c.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/potential_utf-0.1.6-3c49da05.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/proc-macro2-1.0.107-4e5de5fc.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/proc-macro2-1.0.107-63f48ea4.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/pxfm-0.1.30-3f7ef6a5.txt": "90bf2d659c43045111b65c733ab2a6d4cbcb422a098368c8c58a9ba3db4ed0c5",
+    "third-party/rust-tui/snapshots/pxfm-0.1.30-88aaa335.txt": "2aa92cada6431e75615e3fe6cb1a9082c98f777d48ae1c087c0da0e37f7b8bff",
+    "third-party/rust-tui/snapshots/quote-1.0.47-02f2b26c.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/quote-1.0.47-445e95cc.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/r-efi-6.0.0-739db97c.txt": "d027e91dbc9cdbb2f1190068e498bd6b61cff022b6a032b191021ba658d96111",
+    "third-party/rust-tui/snapshots/ratatui-0.29.0-708e4c26.txt": "6cfda12c40ae6c1175a0d1798c56e4d7089d9c781a2dbe29a53076defde829d0",
+    "third-party/rust-tui/snapshots/redox_syscall-0.5.18-83e0f562.txt": "efcfee7981ff72431fffb06925cad00a23dce079ed4354f61030ad5abdb78829",
+    "third-party/rust-tui/snapshots/regex-1.13.1-255d22c9.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/regex-1.13.1-aa2a695b.txt": "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb",
+    "third-party/rust-tui/snapshots/regex-automata-0.4.18-af0ecfa4.txt": "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb",
+    "third-party/rust-tui/snapshots/regex-automata-0.4.18-c629a7d8.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/regex-syntax-0.8.11-14e593d2.txt": "74db5baf44a41b1000312c673544b3374e4198af5605c7f9080a402cec42cfa3",
+    "third-party/rust-tui/snapshots/regex-syntax-0.8.11-6f27af7b.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/regex-syntax-0.8.11-fbfb8848.txt": "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb",
+    "third-party/rust-tui/snapshots/regress-0.12.0-06f7d634.txt": "e36d55837170195cdf934aa6a48c0ad6efba1bde3f5b4a1b9259c171d5aeb647",
+    "third-party/rust-tui/snapshots/regress-0.12.0-80252826.txt": "3f8a05fc8617c5ce569fa5a4f2301cd847fe00fa011bdaa8f353fd55a2691a54",
+    "third-party/rust-tui/snapshots/reqwest-0.13.5-64c10ccf.txt": "751963a8b88c0e3a9f27e98933079fbcf09b9998b2c13ac49c2e4d58444520d6",
+    "third-party/rust-tui/snapshots/reqwest-0.13.5-e36e0dab.txt": "dd87e27dfbaa888cb77ea34592648a7743636b8dce07e49543bddda0fcfc73bc",
+    "third-party/rust-tui/snapshots/ring-0.17.14-008534a4.txt": "6ee2ed6c77710de911761acd5fc1ad1da00f476beb1a7ef27e78c2d1858deafc",
+    "third-party/rust-tui/snapshots/ring-0.17.14-56c52e35.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/ring-0.17.14-8420b887.txt": "005fc765ddc5115da796cca915baa9557abae13ff35e0a47c47affc56f6c414d",
+    "third-party/rust-tui/snapshots/ring-0.17.14-92dd3ccb.txt": "b3d734001a94efff3579978d953391aa7115f877657d25eb54037a43875d078a",
+    "third-party/rust-tui/snapshots/ring-0.17.14-b62a9446.txt": "9eacbcb81be660840c714a560a9d65ba07913db98dd4baf969f78dd499fdd60f",
+    "third-party/rust-tui/snapshots/ring-0.17.14-d7649512.txt": "f025ccfb7dfb6bdfedc75ca0f67acc69e6fb4998143d834f7c2f38a29989680f",
+    "third-party/rust-tui/snapshots/rmcp-3.5.1-upstream-LICENSE.txt": "0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a",
+    "third-party/rust-tui/snapshots/rusqlite-0.37.0-0c4498f7.txt": "c10c1f27337546471e5f7e4e97fdd398b35b9d4e126115dcd22de8d8e65abf6f",
+    "third-party/rust-tui/snapshots/rustc_version-0.4.1-35428191.txt": "c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5",
+    "third-party/rust-tui/snapshots/rustc_version-0.4.1-df13551f.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/rustix-0.38.44-15d4fd04.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/rustix-0.38.44-affabcf4.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/rustix-0.38.44-e8adc6d4.txt": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+    "third-party/rust-tui/snapshots/rustix-1.1.5-6099e935.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/rustix-1.1.5-72a1d636.txt": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+    "third-party/rust-tui/snapshots/rustix-1.1.5-b2bbca52.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/rustls-0.23.45-79b94e74.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/rustls-0.23.45-7f7caa06.txt": "709e3175b4212f7b13aa93971c9f62ff8c69ec45ad8c6532a7e0c41d7a7d6f8c",
+    "third-party/rust-tui/snapshots/rustls-0.23.45-938d75ca.txt": "7cfafc877eccc46c0e346ccbaa5c51bb6b894d2b818e617d970211e232785ad4",
+    "third-party/rust-tui/snapshots/rustls-native-certs-0.8.4-03d13bd4.txt": "d75967ce788187f83c3bd3328210974acfc443d4dc44909f1d7e34f21623a0c6",
+    "third-party/rust-tui/snapshots/rustls-native-certs-0.8.4-4273a287.txt": "709e3175b4212f7b13aa93971c9f62ff8c69ec45ad8c6532a7e0c41d7a7d6f8c",
+    "third-party/rust-tui/snapshots/rustls-native-certs-0.8.4-b495c8ea.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/rustls-native-certs-0.8.4-c4957803.txt": "7cfafc877eccc46c0e346ccbaa5c51bb6b894d2b818e617d970211e232785ad4",
+    "third-party/rust-tui/snapshots/rustls-pki-types-1.15.1-ab7b09b5.txt": "9117d922e667125508dde62b02c1f57ed22f5ad21eb536aa2e2d99e1c796e639",
+    "third-party/rust-tui/snapshots/rustls-pki-types-1.15.1-e28956c0.txt": "45fd05c4865e7c350b98ad7ac50e1b15462d49af4a91e9b0c9dd933dc9a69742",
+    "third-party/rust-tui/snapshots/rustls-platform-verifier-0.7.1-b3814747.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "third-party/rust-tui/snapshots/rustls-platform-verifier-0.7.1-bda08208.txt": "1c7cf76689c837a68ed8d704994e52a0f2940c087958f860d17f3186afbdcc0c",
+    "third-party/rust-tui/snapshots/rustls-platform-verifier-android-0.2.0-upstream-LICENSE-APACHE.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "third-party/rust-tui/snapshots/rustls-platform-verifier-android-0.2.0-upstream-LICENSE-MIT.txt": "1c7cf76689c837a68ed8d704994e52a0f2940c087958f860d17f3186afbdcc0c",
+    "third-party/rust-tui/snapshots/rustls-webpki-0.103.15-90b4c9c8.txt": "5b698ca13897be3afdb7174256fa1574f8c6892b8bea1a66dd6469d3fe27885a",
+    "third-party/rust-tui/snapshots/rustversion-1.0.23-9aeb4c95.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/rustversion-1.0.23-aaa96051.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/ryu-1.0.23-784199d4.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/ryu-1.0.23-db7d5510.txt": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+    "third-party/rust-tui/snapshots/same-file-1.0.6-2791dc6b.txt": "cb3c929a05e6cbc9de9ab06a4c57eeb60ca8c724bef6c138c87d3a577e27aa14",
+    "third-party/rust-tui/snapshots/same-file-1.0.6-69dba716.txt": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+    "third-party/rust-tui/snapshots/schannel-0.1.29-58bffc20.txt": "aa72991ac35b4de0034da0afe943e62b48c4092fc2ba13ae47806d8e9a4ad551",
+    "third-party/rust-tui/snapshots/scopeguard-1.2.0-33efeb82.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/scopeguard-1.2.0-f6a10a4f.txt": "fb77f0a9c53e473abe5103c8632ef9f0f2874d4fb3f17cb2d8c661aab9cee9d7",
+    "third-party/rust-tui/snapshots/security-framework-3.7.0-b1d0b854.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/security-framework-3.7.0-c6fa6e56.txt": "91e934255ba3b2f21103d68c5581c23ef34aa95c4628e4405b8c901935e11c69",
+    "third-party/rust-tui/snapshots/security-framework-sys-2.17.0-563a6843.txt": "91e934255ba3b2f21103d68c5581c23ef34aa95c4628e4405b8c901935e11c69",
+    "third-party/rust-tui/snapshots/security-framework-sys-2.17.0-815d8a56.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/semver-1.0.28-295f1b1b.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/semver-1.0.28-b4a3d90f.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/serde_core-1.0.229-02ecec62.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/serde_core-1.0.229-f614970b.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/serde_derive-1.0.229-002e76dd.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/serde_derive-1.0.229-b92e49d9.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/serde_json-1.0.151-adcd021c.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/serde_json-1.0.151-faa14b8b.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/serde-1.0.229-410ee343.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/serde-1.0.229-455e2248.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/sha2-0.10.9-7a61c006.txt": "b4eb00df6e2a4d22518fcaa6a2b4646f249b3a3c9814509b22bd2091f1392ff1",
+    "third-party/rust-tui/snapshots/sha2-0.10.9-86d7ebdc.txt": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5",
+    "third-party/rust-tui/snapshots/shlex-2.0.1-8cb12d5f.txt": "4455bf75a91154108304cb283e0fea9948c14f13e20d60887cf2552449dea3b1",
+    "third-party/rust-tui/snapshots/shlex-2.0.1-daeaaa5a.txt": "553fffcd9b1cb158bc3e9edc35da85ca5c3b3d7d2e61c883ebcfa8a65814b583",
+    "third-party/rust-tui/snapshots/signal-hook-0.3.18-792b605a.txt": "503558bfefe66ca15e4e3f7955b3cb0ec87fd52f29bf24b336af7bd00e946d5c",
+    "third-party/rust-tui/snapshots/signal-hook-0.3.18-da88a6c6.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/signal-hook-mio-0.2.5-268671b1.txt": "503558bfefe66ca15e4e3f7955b3cb0ec87fd52f29bf24b336af7bd00e946d5c",
+    "third-party/rust-tui/snapshots/signal-hook-mio-0.2.5-dc7c69fe.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/signal-hook-registry-1.4.8-153b50a2.txt": "503558bfefe66ca15e4e3f7955b3cb0ec87fd52f29bf24b336af7bd00e946d5c",
+    "third-party/rust-tui/snapshots/signal-hook-registry-1.4.8-9459b8c3.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/simd_cesu8-1.2.0-00962024.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/simd_cesu8-1.2.0-35f415ff.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/simd-adler32-0.3.10-e074e677.txt": "42a35170233e83e18856792e748de4c1ce4a63b2afce9a370c89ef3fe23f9f2d",
+    "third-party/rust-tui/snapshots/simdutf8-0.1.5-5f153a2a.txt": "1847e0e0698142ed4347c1441a9fa81c8fbddd44b1d8bbcd5e3647f991759d7f",
+    "third-party/rust-tui/snapshots/simdutf8-0.1.5-b53ebabc.txt": "0cec06e0e55fbc3dc5cee4fca9b607f66cb8f4e4dbcf3b3c013594dd156732e9",
+    "third-party/rust-tui/snapshots/siphasher-1.0.4-08ee219c.txt": "f9c4c77baa3828004ee54b8a4f2db2e88ed44a6237a493965bf551fac0fcb62d",
+    "third-party/rust-tui/snapshots/siphasher-1.0.4-ab25e793.txt": "c962ee4d1d05ddc138b202b2540219ebc57893fcf97b364852094a9a94ce1365",
+    "third-party/rust-tui/snapshots/siphasher-1.0.4-ae0c01bf.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "third-party/rust-tui/snapshots/slab-0.4.12-4d69437c.txt": "8ce0830173fdac609dfb4ea603fdc002c2f4af0dc9b1a005653f5da9cf534b18",
+    "third-party/rust-tui/snapshots/smallvec-1.16.3-593292c8.txt": "0b28172679e0009b655da42797c03fd163a3379d5cfa67ba1f1655e974a2a1a9",
+    "third-party/rust-tui/snapshots/smallvec-1.16.3-af0fa223.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/socket2-0.6.5-4c8e08f9.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/socket2-0.6.5-da677800.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/sse-stream-0.2.6-207aa0c1.txt": "049d23c7810a0723f186a193f841378dbc307f62be89bdba21c73126b0df2c52",
+    "third-party/rust-tui/snapshots/sse-stream-0.2.6-82765766.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "third-party/rust-tui/snapshots/stable_deref_trait-1.2.1-925222c4.txt": "5e05b024f653a5ce199e77cbbbd42fb5553562ec714b819421ed0c3e552a75d7",
+    "third-party/rust-tui/snapshots/stable_deref_trait-1.2.1-9e18a413.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/static_assertions-1.1.0-a9624a4e.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "third-party/rust-tui/snapshots/static_assertions-1.1.0-e07e8ae4.txt": "ea084a2373ebc1f0902c09266e7bf25a05ab3814c1805bb017ffa7308f90c061",
+    "third-party/rust-tui/snapshots/strsim-0.11.1-9dd1f96f.txt": "1e697ce8d21401fbf1bddd9b5c3fd4c4c79ae1e3bdf51f81761c85e11d5a89cd",
+    "third-party/rust-tui/snapshots/strum_macros-0.26.4-cf8b3d7e.txt": "8bce3b45e49ecd1461f223b46de133d8f62cd39f745cfdaf81bee554b908bd42",
+    "third-party/rust-tui/snapshots/strum-0.26.3-7a561293.txt": "8bce3b45e49ecd1461f223b46de133d8f62cd39f745cfdaf81bee554b908bd42",
+    "third-party/rust-tui/snapshots/subtle-2.6.1-28e3ee71.txt": "d1fc1bc0d155df60b2e7705b6b2ae02a05c96f948e1cec6e2fb86360b09f346b",
+    "third-party/rust-tui/snapshots/syn-2.0.119-5dced5ca.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/syn-2.0.119-c22b0827.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/syn-3.0.7-60bff7f0.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/syn-3.0.7-c83efa55.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/sync_wrapper-1.0.2-7e33ef78.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "third-party/rust-tui/snapshots/synstructure-0.14.0-3ede594b.txt": "219920e865eee70b7dcfc948a86b099e7f4fe2de01bcca2ca9a20c0a033f2b59",
+    "third-party/rust-tui/snapshots/sysinfo-0.37.2-a1919304.txt": "1f14f9ce70a5fdedab449bb32cd7d3f20e6e9d18c2a2b74221fc203db8684d43",
+    "third-party/rust-tui/snapshots/tempfile-3.27.0-5691e2dd.txt": "8b427f5bc501764575e52ba4f9d95673cf8f6d80a86d0d06599852e1a9a20a36",
+    "third-party/rust-tui/snapshots/tempfile-3.27.0-6e7b1e3e.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/thiserror-2.0.21-02030181.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/thiserror-2.0.21-482e5f42.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/thiserror-impl-2.0.21-4cbb3724.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/thiserror-impl-2.0.21-cb462710.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/tinystr-0.8.4-937e28ea.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/tinyvec-1.13.3-825b1649.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "third-party/rust-tui/snapshots/tinyvec-1.13.3-abe9985e.txt": "84b34dd7608f7fb9b17bd588a6bf392bf7de504e2716f024a77d89f1b145a151",
+    "third-party/rust-tui/snapshots/tinyvec-1.13.3-d5e212e7.txt": "fd80a26fbb3f644af1fa994134446702932968519797227e07a1368dea80f0bc",
+    "third-party/rust-tui/snapshots/tokio-1.53.2-63626c1d.txt": "253cd04c6714889df2d32f3f64d669179a1c95c76ac43c40882c52eb06bc3552",
+    "third-party/rust-tui/snapshots/tokio-macros-2.7.2-b8b528fa.txt": "0b83dc40cba89b9922bb84b0a9c7d2768ce37c1d7e138b7424fd4549915778c9",
+    "third-party/rust-tui/snapshots/tokio-rustls-0.26.6-4f68943c.txt": "cc117d90b498b32b11a886f279b359da16a73c3b01efbb2f5cc004b20262334e",
+    "third-party/rust-tui/snapshots/tokio-rustls-0.26.6-557d39ee.txt": "e20fa2b8e0a2565f24a792b94b4bf4b6c2b9d36f781d8a9516e218a036e6677a",
+    "third-party/rust-tui/snapshots/tokio-stream-0.1.19-a737a643.txt": "253cd04c6714889df2d32f3f64d669179a1c95c76ac43c40882c52eb06bc3552",
+    "third-party/rust-tui/snapshots/tokio-util-0.7.20-a8c1270d.txt": "253cd04c6714889df2d32f3f64d669179a1c95c76ac43c40882c52eb06bc3552",
+    "third-party/rust-tui/snapshots/tower-0.5.3-0b59a695.txt": "4249c8e6c5ebb85f97c77e6457c6fafc1066406eb8f1ef61e796fbdc5ff18482",
+    "third-party/rust-tui/snapshots/tower-http-0.6.11-b1e4745e.txt": "5049cf464977eff4b4fcfa7988d84e74116956a3eb9d5f1d451b3f828f945233",
+    "third-party/rust-tui/snapshots/tower-layer-0.3.3-3aaebee7.txt": "4249c8e6c5ebb85f97c77e6457c6fafc1066406eb8f1ef61e796fbdc5ff18482",
+    "third-party/rust-tui/snapshots/tower-service-0.3.3-cc88f48f.txt": "4249c8e6c5ebb85f97c77e6457c6fafc1066406eb8f1ef61e796fbdc5ff18482",
+    "third-party/rust-tui/snapshots/tracing-0.1.44-152ebfa6.txt": "898b1ae9821e98daf8964c8d6c7f61641f5f5aa78ad500020771c0939ee0dea1",
+    "third-party/rust-tui/snapshots/tracing-attributes-0.1.31-83213047.txt": "898b1ae9821e98daf8964c8d6c7f61641f5f5aa78ad500020771c0939ee0dea1",
+    "third-party/rust-tui/snapshots/tracing-core-0.1.36-05805169.txt": "898b1ae9821e98daf8964c8d6c7f61641f5f5aa78ad500020771c0939ee0dea1",
+    "third-party/rust-tui/snapshots/tracing-core-0.1.36-4f9d422c.txt": "58545fed1565e42d687aecec6897d35c6d37ccb71479a137c0deb2203e125c79",
+    "third-party/rust-tui/snapshots/try-lock-0.2.5-db6fe8d9.txt": "c816a0749cdc6bf062a5111c159723de51b2bfac66a1dac2655abd9e6b1583eb",
+    "third-party/rust-tui/snapshots/typed-path-0.12.3-0db1411a.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/typed-path-0.12.3-65d41701.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/typenum-1.20.1-408ce759.txt": "db11fec9946737df39ca3898d9cd8c10ec6f6c3a884a6802b0ad0b81b4e8f23a",
+    "third-party/rust-tui/snapshots/typenum-1.20.1-530af03d.txt": "516b24e051bf5630880ebbd55c40a25ce9552ebaf8970a53e8976eb70e522406",
+    "third-party/rust-tui/snapshots/typenum-1.20.1-7ac308dc.txt": "a825bd853ab71619a4923d7b4311221427848070ff44d990da39b0b274c1683f",
+    "third-party/rust-tui/snapshots/unicode-ident-1.0.26-30e24c1d.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/unicode-ident-1.0.26-3809f241.txt": "f7db81051789b729fea528a63ec4c938fdcb93d9d61d97dc8cc2e9df6d47f2a1",
+    "third-party/rust-tui/snapshots/unicode-ident-1.0.26-be6261bf.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/unicode-normalization-0.1.25-24b98ec3.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/unicode-normalization-0.1.25-5ed2df26.txt": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0",
+    "third-party/rust-tui/snapshots/unicode-segmentation-1.13.3-052e2065.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/unicode-segmentation-1.13.3-adfebf34.txt": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0",
+    "third-party/rust-tui/snapshots/unicode-truncate-1.1.0-1b4989f2.txt": "fa226a5c235dafc28fc9303b03f6bf5f7483c31d8355a031ebd6963ffeb65b95",
+    "third-party/rust-tui/snapshots/unicode-truncate-1.1.0-6032114f.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/unicode-width-0.1.14-9304be32.txt": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0",
+    "third-party/rust-tui/snapshots/unicode-width-0.1.14-cb1a1ec6.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/unicode-width-0.2.0-35566fff.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/unicode-width-0.2.0-8195aa79.txt": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0",
+    "third-party/rust-tui/snapshots/untrusted-0.9.0-0d0793ae.txt": "7abd9b6960dcf7d4d0a48606a5b71bfe37d472db68d70637f3a58a56785f1621",
+    "third-party/rust-tui/snapshots/url-2.5.8-9ba0cd18.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/url-2.5.8-b815aca3.txt": "b38f11f6096706e6de553dabe2a7ed142d59b6fa8c97e290c67496154745cdd5",
+    "third-party/rust-tui/snapshots/utf8_iter-1.0.4-409ec1ae.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "third-party/rust-tui/snapshots/utf8_iter-1.0.4-766fc9c5.txt": "3fa4ca83dcc9237839b1bdeb2e6d16bdfb5ec0c5ce42b24694d8bbf0dcbef72c",
+    "third-party/rust-tui/snapshots/uuid-1.28.0-084cbe86.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/uuid-1.28.0-8efe5035.txt": "436bc5a105d8e57dcd8778730f3754f7bf39c14d2f530e4cde4bd2d17a83ec3d",
+    "third-party/rust-tui/snapshots/vcpkg-0.2.15-1ec096cd.txt": "3708458dee7f359ac6c9c5558023ed481be87e5372c43ebd7f2ca7ad23c12026",
+    "third-party/rust-tui/snapshots/vcpkg-0.2.15-c98cb346.txt": "ff7d99434986ba68f6575d689fd9cc11d93a486876b19004e1bacc0f6ca554d4",
+    "third-party/rust-tui/snapshots/version_check-0.9.5-5b57a809.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/version_check-0.9.5-cdc42ddb.txt": "b7e650f3fce5c53249d1cdc608b54df156a97edd636cf9d23498d0cfe7aec63e",
+    "third-party/rust-tui/snapshots/walkdir-2.5.0-696c9c1d.txt": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+    "third-party/rust-tui/snapshots/walkdir-2.5.0-b55e66e3.txt": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+    "third-party/rust-tui/snapshots/want-0.3.2-75df96d8.txt": "a65f5d0a945d267751344c95665945b90c030ea107faf5c85d518929886187da",
+    "third-party/rust-tui/snapshots/wasi-0.11.1+wasi-snapshot-preview1-a9bbb4b0.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/wasi-0.11.1+wasi-snapshot-preview1-b3d07486.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/wasi-0.11.1+wasi-snapshot-preview1-bfad5be1.txt": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+    "third-party/rust-tui/snapshots/wasm-bindgen-0.2.129-12023ed1.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/wasm-bindgen-0.2.129-60d70cbb.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/wasm-bindgen-futures-0.4.79-e410c473.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/wasm-bindgen-futures-0.4.79-e5c2345a.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/wasm-bindgen-macro-0.2.129-2584c223.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/wasm-bindgen-macro-0.2.129-a6e194cd.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/wasm-bindgen-macro-support-0.2.129-4b0dcbbd.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/wasm-bindgen-macro-support-0.2.129-a5a12781.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/wasm-bindgen-shared-0.2.129-009d8b14.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/wasm-bindgen-shared-0.2.129-5dd2d8cb.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/wasm-streams-0.5.0-141cdc24.txt": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third-party/rust-tui/snapshots/wasm-streams-0.5.0-c0461cd2.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/web-sys-0.3.106-6d845106.txt": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+    "third-party/rust-tui/snapshots/web-sys-0.3.106-84d5daf0.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/rust-tui/snapshots/webpki-root-certs-1.0.9-1b487242.txt": "e271993808fec50ab29350b39539cdec611a9103f827e0aa26d61da70e2d33f8",
+    "third-party/rust-tui/snapshots/weezl-0.1.12-10b33860.txt": "573f5227db835cd30bbdd3aed3f82615f80119a4d5c82b4daf642dbfe2b6afde",
+    "third-party/rust-tui/snapshots/weezl-0.1.12-a816591b.txt": "769f80b5bcb42ed0af4e4d2fd74e1ac9bf843cb80c5a29219d1ef3544428a6bb",
+    "third-party/rust-tui/snapshots/winapi-0.3.9-c125b34c.txt": "ce7bc3499fee93d5022ef430d5e4201e79a6d9154f3974e42f41349f0569e09b",
+    "third-party/rust-tui/snapshots/winapi-0.3.9-c508e953.txt": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+    "third-party/rust-tui/snapshots/winapi-i686-pc-windows-gnu-0.4.0-upstream-LICENSE-APACHE.txt": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+    "third-party/rust-tui/snapshots/winapi-i686-pc-windows-gnu-0.4.0-upstream-LICENSE-MIT.txt": "5b19674a1db628a475850a131956ed49521b744e3dda8f5a94141f9aba681219",
+    "third-party/rust-tui/snapshots/winapi-source-matches.json.txt": "b9e0999060865c3fc42a60be71bc722514e5a5aa441a05fc93f8aebbd6f904d5",
+    "third-party/rust-tui/snapshots/winapi-util-0.1.11-176cc0e8.txt": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+    "third-party/rust-tui/snapshots/winapi-util-0.1.11-7594e250.txt": "cb3c929a05e6cbc9de9ab06a4c57eeb60ca8c724bef6c138c87d3a577e27aa14",
+    "third-party/rust-tui/snapshots/winapi-x86_64-pc-windows-gnu-0.4.0-upstream-LICENSE-APACHE.txt": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+    "third-party/rust-tui/snapshots/winapi-x86_64-pc-windows-gnu-0.4.0-upstream-LICENSE-MIT.txt": "5b19674a1db628a475850a131956ed49521b744e3dda8f5a94141f9aba681219",
+    "third-party/rust-tui/snapshots/windows_aarch64_gnullvm-0.52.6-6d46efcb.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows_aarch64_gnullvm-0.52.6-f05b1b95.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows_aarch64_msvc-0.52.6-a1c234df.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows_aarch64_msvc-0.52.6-ddbb1820.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows_i686_gnu-0.52.6-00e5e538.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows_i686_gnu-0.52.6-bc9ea125.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows_i686_gnullvm-0.52.6-0ce9cb87.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows_i686_gnullvm-0.52.6-d3add608.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows_i686_msvc-0.52.6-16658142.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows_i686_msvc-0.52.6-d262a8b9.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows_x86_64_gnu-0.52.6-0a4e772e.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows_x86_64_gnu-0.52.6-39e48113.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows_x86_64_gnullvm-0.52.6-27ccdbc6.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows_x86_64_gnullvm-0.52.6-596b620e.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows_x86_64_msvc-0.52.6-62d23c77.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows_x86_64_msvc-0.52.6-cdc38e47.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-0.61.3-011da915.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-0.61.3-fc82c5e6.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-collections-0.2.0-1555f04d.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-collections-0.2.0-3eae8459.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-core-0.61.2-0ee2fd12.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-core-0.61.2-a20cf1c8.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-future-0.2.1-29be32b7.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-future-0.2.1-5224290c.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-implement-0.60.2-3120b07a.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-implement-0.60.2-dbfa7224.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-interface-0.59.3-3e115ec8.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-interface-0.59.3-946f7da7.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-link-0.1.3-e244f8f0.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-link-0.1.3-e37c374d.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-link-0.2.1-42b62b5d.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-link-0.2.1-75b46a3b.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-numerics-0.2.0-9bad26f4.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-numerics-0.2.0-d0021074.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-result-0.3.4-554cb467.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-result-0.3.4-59c7e112.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-strings-0.4.2-bb0c4eff.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-strings-0.4.2-f53cf29f.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-sys-0.52.0-4b8c0d1e.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-sys-0.52.0-99d4e9a7.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-sys-0.61.2-808f82ad.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-sys-0.61.2-dd3d769f.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-targets-0.52.6-01700e77.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-targets-0.52.6-a47b79e3.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-threading-0.1.0-0503e8c4.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/windows-threading-0.1.0-679ead96.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-version-0.1.5-0c43b006.txt": "c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b",
+    "third-party/rust-tui/snapshots/windows-version-0.1.5-6a8e361b.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "third-party/rust-tui/snapshots/writeable-0.6.4-35bc652b.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/yoke-0.8.3-433c5682.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/yoke-derive-0.8.4-74d0935d.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/zerofrom-0.1.8-256cfc92.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/zerofrom-derive-0.1.8-e266b79e.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/zeroize-1.9.1-52e3a566.txt": "8c7516d4b27b1e495be5e38b612298b63de48d05f49cdac94f70f3cd70f8864b",
+    "third-party/rust-tui/snapshots/zeroize-1.9.1-c3a8a186.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "third-party/rust-tui/snapshots/zerotrie-0.2.5-8e3dc734.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/zerovec-0.11.8-39f1c7dc.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/zerovec-derive-0.11.6-e4d2b52a.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+    "third-party/rust-tui/snapshots/zip-8.6.0-2fc1e04e.txt": "58545fed1565e42d687aecec6897d35c6d37ccb71479a137c0deb2203e125c79",
+    "third-party/rust-tui/snapshots/zlib-rs-0.6.8-2d6c16fe.txt": "e72111c52b7d96ebe25348dee19f0744f444d3c95ae6b1ecb6ccaecc5bce05ba",
+    "third-party/rust-tui/snapshots/zmij-1.0.23-dbdeb2fd.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third-party/rust-tui/snapshots/zune-core-0.5.3-14ef41fb.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "third-party/rust-tui/snapshots/zune-core-0.5.3-a330923e.txt": "d201d14804d3bcd3b944147173175e4abfbd838b7c8069b6bd3452496bf13e6c",
+    "third-party/rust-tui/snapshots/zune-core-0.5.3-c2d519b4.txt": "d30047bca3b516639339a3c279bb84c3483124fb5a9dafe3c75056a85090e745",
+    "third-party/rust-tui/snapshots/zune-jpeg-0.5.15-0bb0de05.txt": "d201d14804d3bcd3b944147173175e4abfbd838b7c8069b6bd3452496bf13e6c",
+    "third-party/rust-tui/snapshots/zune-jpeg-0.5.15-4c795c22.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "third-party/rust-tui/snapshots/zune-jpeg-0.5.15-96bbba2b.txt": "d30047bca3b516639339a3c279bb84c3483124fb5a9dafe3c75056a85090e745",
+    "third-party/rust-tui/sources.json": "b7aef06c9a5171ef37879e434dd967029f12768650fa299d3e3914b937b4ad78",
     "third-party/upstream/000ffa2d773c511f4459fb31d89f841806f93bf5caf2050468ab2097c081b443.txt": "000ffa2d773c511f4459fb31d89f841806f93bf5caf2050468ab2097c081b443",
     "third-party/upstream/014bb31e83d5c2e76aea1cc6e82217346ab41362f32cb355ad0f5c10aa0aeaff.txt": "014bb31e83d5c2e76aea1cc6e82217346ab41362f32cb355ad0f5c10aa0aeaff",
     "third-party/upstream/0a7cda7d15aca7baaa3035e1f90466dde9ecc980c103cd230382d6675714bf2a.txt": "0a7cda7d15aca7baaa3035e1f90466dde9ecc980c103cd230382d6675714bf2a",
@@ -2803,19 +3352,15 @@
     "third-party/upstream/1564074e13439397221ffd522e2e504d56561994a23d371aa5e3ad43e4f5423f.txt": "1564074e13439397221ffd522e2e504d56561994a23d371aa5e3ad43e4f5423f",
     "third-party/upstream/17510cf7a58b4879b887ec05a45d72cf1b73544dd9ec7e72f20110ed104229ee.txt": "17510cf7a58b4879b887ec05a45d72cf1b73544dd9ec7e72f20110ed104229ee",
     "third-party/upstream/1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d.txt": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
-    "third-party/upstream/1b8910ad1a22011c632f7ff544708be6cf08818ef80e8d4b45b6808ee8b05c17.txt": "1b8910ad1a22011c632f7ff544708be6cf08818ef80e8d4b45b6808ee8b05c17",
     "third-party/upstream/23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
     "third-party/upstream/268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5.txt": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
     "third-party/upstream/2711a8b5a5cdfef0e639f96c1aca12ae23d7d64a02d0507f1bdf14d2b27bbc3a.txt": "2711a8b5a5cdfef0e639f96c1aca12ae23d7d64a02d0507f1bdf14d2b27bbc3a",
     "third-party/upstream/2c88816684a40c718113a10062a8335b665cec00d3c7b32e2b3fe9c620a3e03e.txt": "2c88816684a40c718113a10062a8335b665cec00d3c7b32e2b3fe9c620a3e03e",
-    "third-party/upstream/2c976d327b293bd74c257cd53e9b4ecef97a06b1651baa3b24327c97192cb3de.txt": "2c976d327b293bd74c257cd53e9b4ecef97a06b1651baa3b24327c97192cb3de",
     "third-party/upstream/2d2349188616c4b64ceeae33e1386bb546b0658864b4f7f8c9785757cb065b5d.txt": "2d2349188616c4b64ceeae33e1386bb546b0658864b4f7f8c9785757cb065b5d",
     "third-party/upstream/3007cd45c9afdf93812c0c8a7643ea32a7db0b24e495dc0f2312c8a43990b0dd.txt": "3007cd45c9afdf93812c0c8a7643ea32a7db0b24e495dc0f2312c8a43990b0dd",
     "third-party/upstream/31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87.txt": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87",
-    "third-party/upstream/328eb7864c20ab77607b26ee1913b65a9b880f6300eea9e667b890da896a2f40.txt": "328eb7864c20ab77607b26ee1913b65a9b880f6300eea9e667b890da896a2f40",
     "third-party/upstream/34dee5fd5e5cc756efb5ad4d64652bce719bdf5e900ca5d7538253e737930bc4.txt": "34dee5fd5e5cc756efb5ad4d64652bce719bdf5e900ca5d7538253e737930bc4",
     "third-party/upstream/37398454f23ddeb02f0b81113fef9ebdc4571b7297cb6e18376c1ccb9bb1453e.txt": "37398454f23ddeb02f0b81113fef9ebdc4571b7297cb6e18376c1ccb9bb1453e",
-    "third-party/upstream/38b6f63a0aa422b5c329e75f1aeecd2b02e83caab1747644c00810870d77bacb.txt": "38b6f63a0aa422b5c329e75f1aeecd2b02e83caab1747644c00810870d77bacb",
     "third-party/upstream/3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94.txt": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94",
     "third-party/upstream/417fa227d75b1e22a15d8389ca8b5e8b7b86241c3b1b17288d20523016ef6fa6.txt": "417fa227d75b1e22a15d8389ca8b5e8b7b86241c3b1b17288d20523016ef6fa6",
     "third-party/upstream/43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1.txt": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
@@ -2832,8 +3377,6 @@
     "third-party/upstream/5f745b8244890bde0a2258fe32342d60c577fad043e8601d923690a5bfe1b54f.txt": "5f745b8244890bde0a2258fe32342d60c577fad043e8601d923690a5bfe1b54f",
     "third-party/upstream/5f787c1dee3c56547f09ccc2906ab5f5293c4d8dd6c8654e573216c38e908dbd.txt": "5f787c1dee3c56547f09ccc2906ab5f5293c4d8dd6c8654e573216c38e908dbd",
     "third-party/upstream/66aa9feab8bb39aceebd69f2a357015d57ceab486d3c7a19ff8d3d4110a6d101.txt": "66aa9feab8bb39aceebd69f2a357015d57ceab486d3c7a19ff8d3d4110a6d101",
-    "third-party/upstream/6ae13df543a24b3fb18c25182cf4f084132f799ea9225410f7037888401b7469.txt": "6ae13df543a24b3fb18c25182cf4f084132f799ea9225410f7037888401b7469",
-    "third-party/upstream/6f7e6eae2a2afbaa67b266650f7342e7bf8e82cb57f6ab98148b3d6e0fb4450a.txt": "6f7e6eae2a2afbaa67b266650f7342e7bf8e82cb57f6ab98148b3d6e0fb4450a",
     "third-party/upstream/75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6.txt": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6",
     "third-party/upstream/8405932022a556380c2d8c272eff154a923feb197233f348ce5f7334fb0a5ede.txt": "8405932022a556380c2d8c272eff154a923feb197233f348ce5f7334fb0a5ede",
     "third-party/upstream/8802fecf9da4367bc23bcf20b21cc143785fc6c92b152f3fa7fbe6ce08d344d6.txt": "8802fecf9da4367bc23bcf20b21cc143785fc6c92b152f3fa7fbe6ce08d344d6",
@@ -2865,7 +3408,6 @@
     "third-party/upstream/da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93.txt": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
     "third-party/upstream/e1cfcc55c325b3f78cf55df9664abaa066e2271dffe8213347d9fccdfbac8f2c.txt": "e1cfcc55c325b3f78cf55df9664abaa066e2271dffe8213347d9fccdfbac8f2c",
     "third-party/upstream/e2b35be49f7284a45b7baca8fc7b3ab7440e7902392b2528a457816b5bb2a15c.txt": "e2b35be49f7284a45b7baca8fc7b3ab7440e7902392b2528a457816b5bb2a15c",
-    "third-party/upstream/e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c.txt": "e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c",
     "third-party/upstream/ebb2e920800c6353474e3e23d84f714ee8aaecd8f5a71851aa03594a4129d855.txt": "ebb2e920800c6353474e3e23d84f714ee8aaecd8f5a71851aa03594a4129d855",
     "third-party/upstream/f158b3bd10b867740fdbf81447216f1f8685473acf61e6a105ef91ba9fe8ebc3.txt": "f158b3bd10b867740fdbf81447216f1f8685473acf61e6a105ef91ba9fe8ebc3",
     "third-party/upstream/f18c12b8e7daf98d572518b7db133b2dc66a713921dac4825410dd656e0c1a1a.txt": "f18c12b8e7daf98d572518b7db133b2dc66a713921dac4825410dd656e0c1a1a",
@@ -3047,39 +3589,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "6209542eca0c56db0322ad9a8f307b85b8fad89ce601810e00987d4a94e55738"
-        }
-      ]
-    },
-    {
-      "name": "@arms/rum-browser",
-      "version": "0.1.8",
-      "license": "ISC",
-      "notices": [
-        {
-          "member": "https://registry.npmjs.org/%40arms%2frum-browser%400.1.8",
-          "sha256": "2c976d327b293bd74c257cd53e9b4ecef97a06b1651baa3b24327c97192cb3de"
-        }
-      ]
-    },
-    {
-      "name": "@arms/rum-core",
-      "version": "0.1.4",
-      "license": "ISC",
-      "notices": [
-        {
-          "member": "https://registry.npmjs.org/%40arms%2frum-core%400.1.4",
-          "sha256": "328eb7864c20ab77607b26ee1913b65a9b880f6300eea9e667b890da896a2f40"
-        }
-      ]
-    },
-    {
-      "name": "@arms/rum-electron",
-      "version": "0.0.3",
-      "license": "MIT",
-      "notices": [
-        {
-          "member": "https://registry.npmjs.org/%40arms%2frum-electron%400.0.3",
-          "sha256": "38b6f63a0aa422b5c329e75f1aeecd2b02e83caab1747644c00810870d77bacb"
         }
       ]
     },
@@ -3712,18 +4221,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "24601581852c22ee64603c980589723298f3a10fe52e1279bec400f7fd9a4d22"
-        }
-      ]
-    },
-    {
-      "name": "@electron/get",
-      "version": "2.0.3",
-      "license": "MIT",
-      "repository": "https://github.com/electron/get",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "edab8abb78d9c5b36944c3e00aebf6a90eb32378993f49ac8a3904007029c629"
         }
       ]
     },
@@ -4862,6 +5359,18 @@
       ]
     },
     {
+      "name": "@modelcontextprotocol/ext-apps",
+      "version": "2.0.0",
+      "license": "MIT",
+      "repository": "https://github.com/modelcontextprotocol/ext-apps",
+      "notices": [
+        {
+          "member": "LICENSE",
+          "sha256": "0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a"
+        }
+      ]
+    },
+    {
       "name": "@modelcontextprotocol/sdk",
       "version": "1.29.0",
       "license": "MIT",
@@ -4938,31 +5447,7 @@
       ]
     },
     {
-      "name": "@napi-rs/canvas-linux-arm64-musl",
-      "version": "0.1.100",
-      "license": "MIT",
-      "repository": "git+https://github.com/Brooooooklyn/canvas.git",
-      "notices": [
-        {
-          "member": "https://raw.githubusercontent.com/Brooooooklyn/canvas/db337893b9b53483050ca7b24c6d306e4da06741/LICENSE",
-          "sha256": "8802fecf9da4367bc23bcf20b21cc143785fc6c92b152f3fa7fbe6ce08d344d6"
-        }
-      ]
-    },
-    {
       "name": "@napi-rs/canvas-linux-x64-gnu",
-      "version": "0.1.100",
-      "license": "MIT",
-      "repository": "git+https://github.com/Brooooooklyn/canvas.git",
-      "notices": [
-        {
-          "member": "https://raw.githubusercontent.com/Brooooooklyn/canvas/db337893b9b53483050ca7b24c6d306e4da06741/LICENSE",
-          "sha256": "8802fecf9da4367bc23bcf20b21cc143785fc6c92b152f3fa7fbe6ce08d344d6"
-        }
-      ]
-    },
-    {
-      "name": "@napi-rs/canvas-linux-x64-musl",
       "version": "0.1.100",
       "license": "MIT",
       "repository": "git+https://github.com/Brooooooklyn/canvas.git",
@@ -5142,22 +5627,6 @@
       ]
     },
     {
-      "name": "@opentelemetry/api-logs",
-      "version": "0.214.0",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "bd58f2a90815dfc0589075fab5af424dedc7415266765f48ae59b3de98d5e1be"
-        }
-      ]
-    },
-    {
       "name": "@opentelemetry/api",
       "version": "1.9.0",
       "license": "Apache-2.0",
@@ -5170,214 +5639,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "9cfa86899ccd67b76331431bbff57cbe15ceabb2e393aeb5a56c7a958dabd595"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/api",
-      "version": "1.9.1",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "9cfa86899ccd67b76331431bbff57cbe15ceabb2e393aeb5a56c7a958dabd595"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/context-async-hooks",
-      "version": "2.6.1",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "fc58ccbf60cdd4a212be673e7f1278dd1a3e49f1b1ddc21a7d70724bc8b3044a"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/core",
-      "version": "2.6.1",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "998b885208a7e72f854bca1a9fcb439c7665671dcbc77a9b6ca5fae5a15982dc"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/exporter-metrics-otlp-http",
-      "version": "0.214.0",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "f60c6f5ed7777891fdb00c840a9328db068f279da72aee211f1648d28a93be36"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/exporter-metrics-otlp-proto",
-      "version": "0.214.0",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "1b28b52d5dc4fa05b087ba53e75f1f95c11731ed07218fcdc992ad8bcddd93e1"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/exporter-trace-otlp-proto",
-      "version": "0.214.0",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "e1acb133327575513e723320b5c42d7705bfe95dfdf0da1879239824ec5f8496"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/otlp-exporter-base",
-      "version": "0.214.0",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "0b8732770b293090db6e4ec732b98a2b3b199c927dfafcbc23e51c5b724306b7"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/otlp-transformer",
-      "version": "0.214.0",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "df4b0aa1ded638f520ed7ca841161c27677d0678671e98ffc02917fdb0c0ff3b"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/resources",
-      "version": "2.6.1",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "9cb96eeeccf177dd2579c21e2376f52ce4fa90861cc2dda9f14842542da7a3f9"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/sdk-logs",
-      "version": "0.214.0",
-      "license": "Apache-2.0",
-      "repository": "git+https://github.com/open-telemetry/opentelemetry-js.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "a194d66e0c5bd6dc8927f5806bd9c5fd1df7c582eb8518d980a612cee902d632"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/sdk-metrics",
-      "version": "2.6.1",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "1c6a18bba0437d60bb18fa58bf055eb32c51c791837ac0ad375b529bcf245f94"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/sdk-trace-base",
-      "version": "2.6.1",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "8375f12da0f472679e1eeee52bf58ea289c9806b8a7605f80a1f8865b01908f1"
-        }
-      ]
-    },
-    {
-      "name": "@opentelemetry/semantic-conventions",
-      "version": "1.43.0",
-      "license": "Apache-2.0",
-      "repository": "open-telemetry/opentelemetry-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "ac32ccc44843f58e28c56d475e1e8687a3eeae4aa003c9225b40e9603b5f9c73"
         }
       ]
     },
@@ -5446,7 +5707,7 @@
     },
     {
       "name": "@protobufjs/codegen",
-      "version": "2.0.4",
+      "version": "2.0.5",
       "license": "BSD-3-Clause",
       "repository": "https://github.com/dcodeIO/protobuf.js.git",
       "notices": [
@@ -5458,7 +5719,7 @@
     },
     {
       "name": "@protobufjs/eventemitter",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "license": "BSD-3-Clause",
       "repository": "https://github.com/dcodeIO/protobuf.js.git",
       "notices": [
@@ -5470,7 +5731,7 @@
     },
     {
       "name": "@protobufjs/fetch",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "license": "BSD-3-Clause",
       "repository": "https://github.com/dcodeIO/protobuf.js.git",
       "notices": [
@@ -5483,18 +5744,6 @@
     {
       "name": "@protobufjs/float",
       "version": "1.0.2",
-      "license": "BSD-3-Clause",
-      "repository": "https://github.com/dcodeIO/protobuf.js.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "a67b34a24a5daddcce46aea68c5004e4442bbfb63690329fa607bf4de4269794"
-        }
-      ]
-    },
-    {
-      "name": "@protobufjs/inquire",
-      "version": "1.1.0",
       "license": "BSD-3-Clause",
       "repository": "https://github.com/dcodeIO/protobuf.js.git",
       "notices": [
@@ -5530,9 +5779,9 @@
     },
     {
       "name": "@protobufjs/utf8",
-      "version": "1.1.0",
+      "version": "1.1.2",
       "license": "BSD-3-Clause",
-      "repository": "https://github.com/dcodeIO/protobuf.js.git",
+      "repository": "https://github.com/protobufjs/protobuf.js.git",
       "notices": [
         {
           "member": "LICENSE",
@@ -6321,30 +6570,6 @@
       ]
     },
     {
-      "name": "@rrweb/types",
-      "version": "2.1.6",
-      "license": "MIT",
-      "repository": "git+https://github.com/rrweb-io/rrweb.git",
-      "notices": [
-        {
-          "member": "https://raw.githubusercontent.com/rrweb-io/rrweb/rrweb%402.1.6/LICENSE",
-          "sha256": "e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c"
-        }
-      ]
-    },
-    {
-      "name": "@rrweb/utils",
-      "version": "2.1.6",
-      "license": "MIT",
-      "repository": "git+https://github.com/rrweb-io/rrweb.git",
-      "notices": [
-        {
-          "member": "https://raw.githubusercontent.com/rrweb-io/rrweb/rrweb%402.1.6/LICENSE",
-          "sha256": "e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c"
-        }
-      ]
-    },
-    {
       "name": "@sec-ant/readable-stream",
       "version": "0.4.1",
       "license": "MIT",
@@ -6689,18 +6914,6 @@
       ]
     },
     {
-      "name": "@sindresorhus/is",
-      "version": "4.6.0",
-      "license": "MIT",
-      "repository": "sindresorhus/is",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
-        }
-      ]
-    },
-    {
       "name": "@sindresorhus/merge-streams",
       "version": "4.0.0",
       "license": "MIT",
@@ -6809,22 +7022,6 @@
       ]
     },
     {
-      "name": "@szmarczak/http-timer",
-      "version": "4.0.6",
-      "license": "MIT",
-      "repository": "git+https://github.com/szmarczak/http-timer.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "0194571d45a06ea2a22ceb51f981e3be92525966d28847dbc0d9982603bf90de"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
-        }
-      ]
-    },
-    {
       "name": "@tanstack/react-virtual",
       "version": "3.13.23",
       "license": "MIT",
@@ -6929,6 +7126,114 @@
       ]
     },
     {
+      "name": "@trycua/cua-driver-darwin-arm64",
+      "version": "0.28.2",
+      "license": "MIT AND MPL-2.0",
+      "repository": "git+https://github.com/trycua/cua.git",
+      "notices": [
+        {
+          "member": "node-runtime-NOTICE.md",
+          "sha256": "66a466cc022b4bf4a41f678e4d31d9b82098cc55cc364d6e9295366dfd02cef2"
+        },
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@trycua/cua-driver-darwin-x64",
+      "version": "0.28.2",
+      "license": "MIT AND MPL-2.0",
+      "repository": "git+https://github.com/trycua/cua.git",
+      "notices": [
+        {
+          "member": "node-runtime-NOTICE.md",
+          "sha256": "66a466cc022b4bf4a41f678e4d31d9b82098cc55cc364d6e9295366dfd02cef2"
+        },
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@trycua/cua-driver-linux-arm64-gnu",
+      "version": "0.28.2",
+      "license": "MIT AND MPL-2.0",
+      "repository": "git+https://github.com/trycua/cua.git",
+      "notices": [
+        {
+          "member": "node-runtime-NOTICE.md",
+          "sha256": "66a466cc022b4bf4a41f678e4d31d9b82098cc55cc364d6e9295366dfd02cef2"
+        },
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@trycua/cua-driver-linux-x64-gnu",
+      "version": "0.28.2",
+      "license": "MIT AND MPL-2.0",
+      "repository": "git+https://github.com/trycua/cua.git",
+      "notices": [
+        {
+          "member": "node-runtime-NOTICE.md",
+          "sha256": "66a466cc022b4bf4a41f678e4d31d9b82098cc55cc364d6e9295366dfd02cef2"
+        },
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@trycua/cua-driver-win32-arm64-msvc",
+      "version": "0.28.2",
+      "license": "MIT AND MPL-2.0",
+      "repository": "git+https://github.com/trycua/cua.git",
+      "notices": [
+        {
+          "member": "node-runtime-NOTICE.md",
+          "sha256": "66a466cc022b4bf4a41f678e4d31d9b82098cc55cc364d6e9295366dfd02cef2"
+        },
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@trycua/cua-driver-win32-x64-msvc",
+      "version": "0.28.2",
+      "license": "MIT AND MPL-2.0",
+      "repository": "git+https://github.com/trycua/cua.git",
+      "notices": [
+        {
+          "member": "node-runtime-NOTICE.md",
+          "sha256": "66a466cc022b4bf4a41f678e4d31d9b82098cc55cc364d6e9295366dfd02cef2"
+        },
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@trycua/cua-driver",
+      "version": "0.28.2",
+      "license": "MIT",
+      "repository": "git+https://github.com/trycua/cua.git",
+      "notices": [
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
       "name": "@ts-morph/common",
       "version": "0.27.0",
       "license": "MIT",
@@ -6937,30 +7242,6 @@
         {
           "member": "LICENSE",
           "sha256": "c2a4cfb69592431f4b3a179c114909bb76a979d5748c19ca595c94133c623b12"
-        }
-      ]
-    },
-    {
-      "name": "@types/cacheable-request",
-      "version": "6.0.3",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
-        }
-      ]
-    },
-    {
-      "name": "@types/css-font-loading-module",
-      "version": "0.0.7",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
         }
       ]
     },
@@ -7409,32 +7690,8 @@
       ]
     },
     {
-      "name": "@types/http-cache-semantics",
-      "version": "4.2.0",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
-        }
-      ]
-    },
-    {
       "name": "@types/katex",
       "version": "0.16.8",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
-        }
-      ]
-    },
-    {
-      "name": "@types/keyv",
-      "version": "3.1.4",
       "license": "MIT",
       "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
       "notices": [
@@ -7482,43 +7739,7 @@
     },
     {
       "name": "@types/node",
-      "version": "24.12.2",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
-        }
-      ]
-    },
-    {
-      "name": "@types/node",
       "version": "25.6.0",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
-        }
-      ]
-    },
-    {
-      "name": "@types/prop-types",
-      "version": "15.7.15",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
-        }
-      ]
-    },
-    {
-      "name": "@types/react-dom",
-      "version": "18.3.7",
       "license": "MIT",
       "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
       "notices": [
@@ -7542,31 +7763,7 @@
     },
     {
       "name": "@types/react",
-      "version": "18.3.28",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
-        }
-      ]
-    },
-    {
-      "name": "@types/react",
       "version": "19.2.14",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
-        }
-      ]
-    },
-    {
-      "name": "@types/responselike",
-      "version": "1.0.3",
       "license": "MIT",
       "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
       "notices": [
@@ -7649,14 +7846,98 @@
       ]
     },
     {
-      "name": "@types/yauzl",
-      "version": "2.10.3",
-      "license": "MIT",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+      "name": "@ubjs/core",
+      "version": "0.31.0-3",
+      "license": "MPL-2.0",
+      "repository": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
       "notices": [
         {
-          "member": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@ubjs/node-darwin-arm64",
+      "version": "0.31.0-3",
+      "license": "MPL-2.0",
+      "repository": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+      "notices": [
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@ubjs/node-darwin-x64",
+      "version": "0.31.0-3",
+      "license": "MPL-2.0",
+      "repository": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+      "notices": [
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@ubjs/node-linux-arm64-gnu",
+      "version": "0.31.0-3",
+      "license": "MPL-2.0",
+      "repository": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+      "notices": [
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@ubjs/node-linux-x64-gnu",
+      "version": "0.31.0-3",
+      "license": "MPL-2.0",
+      "repository": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+      "notices": [
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@ubjs/node-win32-arm64-msvc",
+      "version": "0.31.0-3",
+      "license": "MPL-2.0",
+      "repository": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+      "notices": [
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@ubjs/node-win32-x64-msvc",
+      "version": "0.31.0-3",
+      "license": "MPL-2.0",
+      "repository": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+      "notices": [
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
+        }
+      ]
+    },
+    {
+      "name": "@ubjs/node",
+      "version": "0.31.0-3",
+      "license": "MPL-2.0",
+      "repository": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+      "notices": [
+        {
+          "member": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+          "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a"
         }
       ]
     },
@@ -7709,18 +7990,6 @@
         {
           "member": "LICENSE",
           "sha256": "b070d77bfb2c52a1dd6996de0ce5f64c49a0ca55c889b163a963ddf5cb001ee2"
-        }
-      ]
-    },
-    {
-      "name": "@xstate/fsm",
-      "version": "1.6.5",
-      "license": "MIT",
-      "repository": "git+ssh://git@github.com/statelyai/xstate.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "542d926d7bbb099785e322d1d5574c539d51942e52ec8adce2be4629ba81fc7f"
         }
       ]
     },
@@ -7805,22 +8074,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "8680b8612ab6b67e95d54bc30d5bd33abc9a6f91f11bff0007eb000a563cf728"
-        }
-      ]
-    },
-    {
-      "name": "acorn-jsx",
-      "version": "5.3.2",
-      "license": "MIT",
-      "repository": "https://github.com/acornjs/acorn-jsx",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "cfa72b62b9ae173078823a3796b25c027a9071046a263beddf966df67018ce06"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "0fcfb65cfdc25b72b2c6fcd64828f786710359adcc3e9397252fd5f5e900ff09"
         }
       ]
     },
@@ -8061,18 +8314,6 @@
       ]
     },
     {
-      "name": "async",
-      "version": "3.2.6",
-      "license": "MIT",
-      "repository": "https://github.com/caolan/async.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "d9fed24f132985934fca621c4dc1dfb53e03377a24d0568d424383d7eaa9c0ac"
-        }
-      ]
-    },
-    {
       "name": "asynckit",
       "version": "0.4.0",
       "license": "MIT",
@@ -8145,22 +8386,6 @@
         {
           "member": "LICENSE.md",
           "sha256": "d408f38ffa3355c5faec517153295338892eb0f1ea43f57874bb23c6075979b5"
-        }
-      ]
-    },
-    {
-      "name": "base64-arraybuffer",
-      "version": "1.0.2",
-      "license": "MIT",
-      "repository": "https://github.com/niklasvh/base64-arraybuffer",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "f3eca6ff762533fa5a77caf954a143e48afa204668cf97dce758c45a9e006be3"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "62235643db61d20e8e4c58d160e906fc168941207adbc96a80ba87b491570067"
         }
       ]
     },
@@ -8241,18 +8466,6 @@
         {
           "member": "https://registry.npmjs.org/boolbase/1.0.0",
           "sha256": "2d2349188616c4b64ceeae33e1386bb546b0658864b4f7f8c9785757cb065b5d"
-        }
-      ]
-    },
-    {
-      "name": "boolean",
-      "version": "3.2.0",
-      "license": "MIT",
-      "repository": "git://github.com/thenativeweb/boolean.git",
-      "notices": [
-        {
-          "member": "LICENSE.txt",
-          "sha256": "8e4aa1aef825c37d6f74d4b867dccb7b059b66c75ecdedc74834e2f403568a27"
         }
       ]
     },
@@ -8409,38 +8622,6 @@
       ]
     },
     {
-      "name": "cacheable-lookup",
-      "version": "5.0.4",
-      "license": "MIT",
-      "repository": "git+https://github.com/szmarczak/cacheable-lookup.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "b35de79efc88b23c73dd431df6075bed0890db0db1544ee3d57b046aa7a8e72b"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
-        }
-      ]
-    },
-    {
-      "name": "cacheable-request",
-      "version": "7.0.4",
-      "license": "MIT",
-      "repository": "lukechilds/cacheable-request",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "861908ec818ff6142fdd6c4b66d6264c206d3d5a46003b1342e1853a9a85abac"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "4f6bff47d23de042c99fb8f97a4a4193390d0f7fef2443b6aef8945aa8147b79"
-        }
-      ]
-    },
-    {
       "name": "call-bind-apply-helpers",
       "version": "1.0.2",
       "license": "MIT",
@@ -8521,18 +8702,6 @@
         {
           "member": "readme.md (license section)",
           "sha256": "f61b55f45906274c0d834ddf2e318c56c001fba66062ae8a22d45f15945cd7f0"
-        }
-      ]
-    },
-    {
-      "name": "ce-la-react",
-      "version": "0.3.2",
-      "license": "BSD-3-Clause",
-      "repository": "git+https://github.com/muxinc/ce-la-react.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "45d31799d0db956cc3eb5469346abbd9b7025babc5ff29fab10d7095da992ef1"
         }
       ]
     },
@@ -8749,22 +8918,6 @@
         {
           "member": "LICENSE.txt",
           "sha256": "2dc0465729366c3a7890dfa9e972a1ba7048a26c02116fb8b419a6a1ac110149"
-        }
-      ]
-    },
-    {
-      "name": "clone-response",
-      "version": "1.0.3",
-      "license": "MIT",
-      "repository": "git+https://github.com/sindresorhus/clone-response.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "861908ec818ff6142fdd6c4b66d6264c206d3d5a46003b1342e1853a9a85abac"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "4f6bff47d23de042c99fb8f97a4a4193390d0f7fef2443b6aef8945aa8147b79"
         }
       ]
     },
@@ -9801,18 +9954,6 @@
       ]
     },
     {
-      "name": "decompress-response",
-      "version": "6.0.0",
-      "license": "MIT",
-      "repository": "sindresorhus/decompress-response",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
-        }
-      ]
-    },
-    {
       "name": "dedent",
       "version": "1.7.2",
       "license": "MIT",
@@ -9869,34 +10010,6 @@
       ]
     },
     {
-      "name": "defer-to-connect",
-      "version": "2.0.1",
-      "license": "MIT",
-      "repository": "git+https://github.com/szmarczak/defer-to-connect.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "0194571d45a06ea2a22ceb51f981e3be92525966d28847dbc0d9982603bf90de"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
-        }
-      ]
-    },
-    {
-      "name": "define-data-property",
-      "version": "1.1.4",
-      "license": "MIT",
-      "repository": "git+https://github.com/ljharb/define-data-property.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "b41d08bc3624d8c436fc80237d73ebb361985a67f4504bbcd703e5ca2b27254c"
-        }
-      ]
-    },
-    {
       "name": "define-lazy-prop",
       "version": "3.0.0",
       "license": "MIT",
@@ -9905,18 +10018,6 @@
         {
           "member": "license",
           "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
-        }
-      ]
-    },
-    {
-      "name": "define-properties",
-      "version": "1.2.1",
-      "license": "MIT",
-      "repository": "git://github.com/ljharb/define-properties.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "00d402c2bbe7c67369bd01ce2c16b8ed46ccc949a1ee2d6bb8f9606afa8c7434"
         }
       ]
     },
@@ -9997,18 +10098,6 @@
       "version": "1.1.0",
       "license": "MIT",
       "repository": "https://github.com/thekashey/detect-node",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "54b32293ea560d22cd9b62af9b2cda1a030d910a48c6601d227c5ff2338d95f8"
-        }
-      ]
-    },
-    {
-      "name": "detect-node",
-      "version": "2.1.0",
-      "license": "MIT",
-      "repository": "https://github.com/iliakan/detect-node",
       "notices": [
         {
           "member": "LICENSE",
@@ -10265,26 +10354,6 @@
       ]
     },
     {
-      "name": "electron",
-      "version": "41.0.3",
-      "license": "MIT",
-      "repository": "https://github.com/electron/electron",
-      "notices": [
-        {
-          "member": "dist/LICENSE",
-          "sha256": "5154e165bd6c2cc0cfbcd8916498c7abab0497923bafcd5cb07673fe8480087d"
-        },
-        {
-          "member": "LICENSE",
-          "sha256": "5154e165bd6c2cc0cfbcd8916498c7abab0497923bafcd5cb07673fe8480087d"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "56a37896ff6edec2b75b41465b66dd768f2d294c315255164898ca3e685bbd30"
-        }
-      ]
-    },
-    {
       "name": "embla-carousel-react",
       "version": "8.6.0",
       "license": "MIT",
@@ -10381,22 +10450,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "7c59ffc1bdc8ebb3145afe526c0afb0d63e2b1a3233ce239eb3f62a6a79b0e2e"
-        }
-      ]
-    },
-    {
-      "name": "end-of-stream",
-      "version": "1.4.5",
-      "license": "MIT",
-      "repository": "git://github.com/mafintosh/end-of-stream.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "3fe8d55a98dbf260eace67c00cf9bc53edb46234e840098a0b93df3096b97fb6"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
         }
       ]
     },
@@ -10529,18 +10582,6 @@
       ]
     },
     {
-      "name": "es6-error",
-      "version": "4.1.1",
-      "license": "MIT",
-      "repository": "https://github.com/bjyoungblood/es6-error.git",
-      "notices": [
-        {
-          "member": "LICENSE.md",
-          "sha256": "9f655c5baa5a6f254d1e87f27e14d04acaff4bd0b489ea3c2f33723919da2f44"
-        }
-      ]
-    },
-    {
       "name": "escalade",
       "version": "3.2.0",
       "license": "MIT",
@@ -10581,18 +10622,6 @@
         {
           "member": "Readme.md (license section)",
           "sha256": "ab27fc045f7a02ee0f02640e290b14a849a6a9d3dac2c5e6a4f986d303543809"
-        }
-      ]
-    },
-    {
-      "name": "escape-string-regexp",
-      "version": "4.0.0",
-      "license": "MIT",
-      "repository": "sindresorhus/escape-string-regexp",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
         }
       ]
     },
@@ -10833,18 +10862,6 @@
       ]
     },
     {
-      "name": "extract-zip",
-      "version": "2.0.1",
-      "license": "BSD-2-Clause",
-      "repository": "maxogden/extract-zip",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "77b2de947c65f3062fb347118ca198ca50898ead84a8509d8153fa65741f029b"
-        }
-      ]
-    },
-    {
       "name": "fast-deep-equal",
       "version": "3.1.3",
       "license": "MIT",
@@ -10921,18 +10938,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "ba9493d367402925a7705f85f597583fd894561efb8717ab6ad56d9ebc17ba14"
-        }
-      ]
-    },
-    {
-      "name": "fd-slicer",
-      "version": "1.1.0",
-      "license": "MIT",
-      "repository": "git://github.com/andrewrk/node-fd-slicer.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "176d95320d565cb034d8323797b6cd6160238f625453687f98aad2085c46c3b3"
         }
       ]
     },
@@ -11165,22 +11170,6 @@
       ]
     },
     {
-      "name": "fs-extra",
-      "version": "8.1.0",
-      "license": "MIT",
-      "repository": "https://github.com/jprichardson/node-fs-extra",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "1e76029602ae9b21cc4e612db2496d92febed882ba13ba745f8b3309e85f9d39"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "99418da6b0279959da793d62433978847d00236e852c4be780f384b7f506d425"
-        }
-      ]
-    },
-    {
       "name": "function-bind",
       "version": "1.1.2",
       "license": "MIT",
@@ -11294,18 +11283,6 @@
     },
     {
       "name": "get-stream",
-      "version": "5.2.0",
-      "license": "MIT",
-      "repository": "sindresorhus/get-stream",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
-        }
-      ]
-    },
-    {
-      "name": "get-stream",
       "version": "6.0.1",
       "license": "MIT",
       "repository": "sindresorhus/get-stream",
@@ -11377,30 +11354,6 @@
       ]
     },
     {
-      "name": "global-agent",
-      "version": "3.0.0",
-      "license": "BSD-3-Clause",
-      "repository": "https://github.com/gajus/global-agent",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "ba98e94118579117505f6f11fd9a4354c5e65ece03b4898d8b8f7785efcd25c1"
-        }
-      ]
-    },
-    {
-      "name": "globalthis",
-      "version": "1.0.4",
-      "license": "MIT",
-      "repository": "git://github.com/ljharb/System.global.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "acfaf437865d82f0fa9b9cdcae8b550bed8d011adaa5b42d973191caf99f62a8"
-        }
-      ]
-    },
-    {
       "name": "gopd",
       "version": "1.2.0",
       "license": "MIT",
@@ -11409,18 +11362,6 @@
         {
           "member": "LICENSE",
           "sha256": "d90bf0a089da4cf43d644ed240a0b3825dcdb705e64e38371d56995a4cc9e4c5"
-        }
-      ]
-    },
-    {
-      "name": "got",
-      "version": "11.8.6",
-      "license": "MIT",
-      "repository": "sindresorhus/got",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
         }
       ]
     },
@@ -11461,18 +11402,6 @@
         {
           "member": "LICENSE",
           "sha256": "5e807b516a9be9229ed459880bf353a336e2d947867247290680d437017be391"
-        }
-      ]
-    },
-    {
-      "name": "has-property-descriptors",
-      "version": "1.0.2",
-      "license": "MIT",
-      "repository": "git+https://github.com/inspect-js/has-property-descriptors.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "0f0ca96f50793990031ebc488a38f7292ff70bce8ab6a8e5eeda674abc32ccdf"
         }
       ]
     },
@@ -11825,18 +11754,6 @@
       ]
     },
     {
-      "name": "http-cache-semantics",
-      "version": "4.2.0",
-      "license": "BSD-2-Clause",
-      "repository": "git+https://github.com/kornelski/http-cache-semantics.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "ab868ad5a2ef5068560d9cd3b2180ec63c140bb4c5cae1ba779d300a0ac74fa3"
-        }
-      ]
-    },
-    {
       "name": "http-errors",
       "version": "2.0.1",
       "license": "MIT",
@@ -11853,22 +11770,6 @@
       ]
     },
     {
-      "name": "http-mitm-proxy",
-      "version": "1.1.0",
-      "license": "MIT",
-      "repository": "https://github.com/joeferner/node-http-mitm-proxy",
-      "notices": [
-        {
-          "member": "README.md (license section)",
-          "sha256": "6ae13df543a24b3fb18c25182cf4f084132f799ea9225410f7037888401b7469"
-        },
-        {
-          "member": "node_modules/http-mitm-proxy/README.md",
-          "sha256": "6ae13df543a24b3fb18c25182cf4f084132f799ea9225410f7037888401b7469"
-        }
-      ]
-    },
-    {
       "name": "http-proxy-agent",
       "version": "9.0.0",
       "license": "MIT",
@@ -11877,22 +11778,6 @@
         {
           "member": "LICENSE",
           "sha256": "71368fd0f5b4129191e9afcd1e1ef2dc89a9090d3e4d80bbab92dafd032b3bef"
-        }
-      ]
-    },
-    {
-      "name": "http2-wrapper",
-      "version": "1.0.3",
-      "license": "MIT",
-      "repository": "git+https://github.com/szmarczak/http2-wrapper.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "0194571d45a06ea2a22ceb51f981e3be92525966d28847dbc0d9982603bf90de"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
         }
       ]
     },
@@ -12617,22 +12502,6 @@
       ]
     },
     {
-      "name": "json-buffer",
-      "version": "3.0.1",
-      "license": "MIT",
-      "repository": "git://github.com/dominictarr/json-buffer.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "715f1f0f2eb7688e53e4e958acdc7fc9e365ae3eaf26efc2604b93cc65fdc3f5"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
-        }
-      ]
-    },
-    {
       "name": "json-parse-even-better-errors",
       "version": "2.3.1",
       "license": "MIT",
@@ -12689,18 +12558,6 @@
       ]
     },
     {
-      "name": "json-stringify-safe",
-      "version": "5.0.1",
-      "license": "ISC",
-      "repository": "git://github.com/isaacs/json-stringify-safe",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b"
-        }
-      ]
-    },
-    {
       "name": "json5",
       "version": "2.2.3",
       "license": "MIT",
@@ -12713,22 +12570,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "09ebd9927f40b8b47880fa9ad15bd2e09ca95a6d52668767c2b0f01550920357"
-        }
-      ]
-    },
-    {
-      "name": "jsonfile",
-      "version": "4.0.0",
-      "license": "MIT",
-      "repository": "git@github.com:jprichardson/node-jsonfile.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "a9801fb52ba22ef808682a094da8a7a480584b7ed0dfd0d888ab543616335031"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "e61af02e143359d84791b8386297b57a0739d9f545e253757bec1ef00952ca23"
         }
       ]
     },
@@ -12805,22 +12646,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "1a7471ca96e17d08d390ff3b0c23ccbbff29390483add7577ae75c799d494b59"
-        }
-      ]
-    },
-    {
-      "name": "keyv",
-      "version": "4.5.4",
-      "license": "MIT",
-      "repository": "git+https://github.com/jaredwray/keyv.git",
-      "notices": [
-        {
-          "member": "README.md (license section)",
-          "sha256": "7c52c9115673b3e47e2a78c9c911558b7b2f23b144a3927e5fa862e1409727ba"
-        },
-        {
-          "member": "https://registry.npmjs.org/keyv/4.5.4",
-          "sha256": "6f7e6eae2a2afbaa67b266650f7342e7bf8e82cb57f6ab98148b3d6e0fb4450a"
         }
       ]
     },
@@ -13169,22 +12994,6 @@
       ]
     },
     {
-      "name": "lowercase-keys",
-      "version": "2.0.0",
-      "license": "MIT",
-      "repository": "sindresorhus/lowercase-keys",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
-        },
-        {
-          "member": "readme.md (license section)",
-          "sha256": "0b8c7c0c5579b689ab841976b473ebe9269aa46347fc1295431e0fc3f2452d36"
-        }
-      ]
-    },
-    {
       "name": "lru_map",
       "version": "0.4.1",
       "license": "MIT",
@@ -13337,18 +13146,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "9432aa108cccae3962e4d284c49478ba528fb74e0fb68c4af719e8a338bb15da"
-        }
-      ]
-    },
-    {
-      "name": "matcher",
-      "version": "3.0.0",
-      "license": "MIT",
-      "repository": "sindresorhus/matcher",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
         }
       ]
     },
@@ -13617,18 +13414,6 @@
         {
           "member": "readme.md (license section)",
           "sha256": "075cb62faa39cc8f9b00d6712f525596c2ae82fbe3d1fb70aae64ff6c3e63ec4"
-        }
-      ]
-    },
-    {
-      "name": "media-chrome",
-      "version": "4.19.0",
-      "license": "MIT",
-      "repository": "git+https://github.com/muxinc/media-chrome.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "13faec6cc4820429b213665a1fff88e1bcfad5a3aff10956f90dea08bf45e808"
         }
       ]
     },
@@ -14345,34 +14130,6 @@
       ]
     },
     {
-      "name": "mimic-response",
-      "version": "1.0.1",
-      "license": "MIT",
-      "repository": "sindresorhus/mimic-response",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
-        },
-        {
-          "member": "readme.md (license section)",
-          "sha256": "0b8c7c0c5579b689ab841976b473ebe9269aa46347fc1295431e0fc3f2452d36"
-        }
-      ]
-    },
-    {
-      "name": "mimic-response",
-      "version": "3.1.0",
-      "license": "MIT",
-      "repository": "sindresorhus/mimic-response",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
-        }
-      ]
-    },
-    {
       "name": "minimatch",
       "version": "10.2.5",
       "license": "BlueOak-1.0.0",
@@ -14397,38 +14154,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "cc15cc37a1fb93f68ce0b84d0333571b35870e10fb441e7b8c2cc93c11e2829d"
-        }
-      ]
-    },
-    {
-      "name": "mitt",
-      "version": "3.0.1",
-      "license": "MIT",
-      "repository": "developit/mitt",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "1cab22f196264195a4caec8ca5630170fdde76ee8f43346e47021d087332d3b0"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "23f29ca7271409b35761a333311e24dd1dc6b62bea91fd7c80b2bc753f3b1b8f"
-        }
-      ]
-    },
-    {
-      "name": "mkdirp",
-      "version": "1.0.4",
-      "license": "MIT",
-      "repository": "https://github.com/isaacs/node-mkdirp.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "144c935613e823350f7798d19da78b5e8315a79af5c2a3744fd85cd61baf07ee"
-        },
-        {
-          "member": "readme.markdown (license section)",
-          "sha256": "4d8a73c1024e09c8b323a225d3a7880156ba5a4b9a8d56c9f4fd4202384b110f"
         }
       ]
     },
@@ -14725,18 +14450,6 @@
       ]
     },
     {
-      "name": "normalize-url",
-      "version": "6.1.0",
-      "license": "MIT",
-      "repository": "sindresorhus/normalize-url",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
-        }
-      ]
-    },
-    {
       "name": "npm-run-path",
       "version": "4.0.1",
       "license": "MIT",
@@ -14801,18 +14514,6 @@
         {
           "member": "readme.markdown (license section)",
           "sha256": "04694eacd112f4a979f1dd1c7a1c365ea2d721f505eb0464bd05838d80933c34"
-        }
-      ]
-    },
-    {
-      "name": "object-keys",
-      "version": "1.1.1",
-      "license": "MIT",
-      "repository": "git://github.com/ljharb/object-keys.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "5640e5cbe2e9f57f6ccfdd8dbfbeadb875495bdbcb69d2666ce3177ccd0942e4"
         }
       ]
     },
@@ -14973,18 +14674,6 @@
         {
           "member": "LICENSE",
           "sha256": "d06a69cefbdd9135436ff8e36ea5c32f07fc27c629063aa411f811efe7c30359"
-        }
-      ]
-    },
-    {
-      "name": "p-cancelable",
-      "version": "2.1.1",
-      "license": "MIT",
-      "repository": "sindresorhus/p-cancelable",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
         }
       ]
     },
@@ -15673,22 +15362,6 @@
       ]
     },
     {
-      "name": "progress",
-      "version": "2.0.3",
-      "license": "MIT",
-      "repository": "git://github.com/visionmedia/node-progress",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "d7d2a7786de7c7cfd96f920c6f12927d74e1d2a861ca4498bf465c3bc3f4c21c"
-        },
-        {
-          "member": "Readme.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
-        }
-      ]
-    },
-    {
       "name": "prompts",
       "version": "2.4.2",
       "license": "MIT",
@@ -15750,7 +15423,7 @@
     },
     {
       "name": "protobufjs",
-      "version": "7.5.5",
+      "version": "7.6.6",
       "license": "BSD-3-Clause",
       "repository": "protobufjs/protobuf.js",
       "notices": [
@@ -15817,22 +15490,6 @@
       ]
     },
     {
-      "name": "pump",
-      "version": "3.0.4",
-      "license": "MIT",
-      "repository": "git://github.com/mafintosh/pump.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "3fe8d55a98dbf260eace67c00cf9bc53edb46234e840098a0b93df3096b97fb6"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
-        }
-      ]
-    },
-    {
       "name": "qrcode",
       "version": "1.5.4",
       "license": "MIT",
@@ -15873,18 +15530,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "a3c7d5b41af742dce5b55e0b2cb165c39b857e3d48e51ed2ee1e66afe3b82887"
-        }
-      ]
-    },
-    {
-      "name": "quick-lru",
-      "version": "5.1.1",
-      "license": "MIT",
-      "repository": "sindresorhus/quick-lru",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
         }
       ]
     },
@@ -16005,18 +15650,6 @@
         {
           "member": "LICENSE",
           "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
-        }
-      ]
-    },
-    {
-      "name": "react-jsx-parser",
-      "version": "2.4.1",
-      "license": "MIT",
-      "repository": "TroyAlford/react-jsx-parser",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "c5a0e348be3cd999ae55e7054079ddd3cd704137e90bbcb084cf8d1127035f20"
         }
       ]
     },
@@ -16505,22 +16138,6 @@
       ]
     },
     {
-      "name": "resolve-alpn",
-      "version": "1.2.1",
-      "license": "MIT",
-      "repository": "git+https://github.com/szmarczak/resolve-alpn.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "03b347a3d13b0e5bdb8fc5edeed0286b1be51441c6490a90710692d227136e0d"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
-        }
-      ]
-    },
-    {
       "name": "resolve-from",
       "version": "4.0.0",
       "license": "MIT",
@@ -16533,22 +16150,6 @@
         {
           "member": "readme.md (license section)",
           "sha256": "0b8c7c0c5579b689ab841976b473ebe9269aa46347fc1295431e0fc3f2452d36"
-        }
-      ]
-    },
-    {
-      "name": "responselike",
-      "version": "2.0.1",
-      "license": "MIT",
-      "repository": "https://github.com/sindresorhus/responselike.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "2c4e066228dbca96c8c6e8bef5377306f227ffa1d87a18a218b230e13ac5d39e"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "4f6bff47d23de042c99fb8f97a4a4193390d0f7fef2443b6aef8945aa8147b79"
         }
       ]
     },
@@ -16609,18 +16210,6 @@
       ]
     },
     {
-      "name": "roarr",
-      "version": "2.15.4",
-      "license": "BSD-3-Clause",
-      "repository": "git@github.com:gajus/roarr.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "ba98e94118579117505f6f11fd9a4354c5e65ece03b4898d8b8f7785efcd25c1"
-        }
-      ]
-    },
-    {
       "name": "robust-predicates",
       "version": "3.0.3",
       "license": "Unlicense",
@@ -16665,42 +16254,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "5ca52667d17b1f17d424c5dcc5564d9783f6c8e88cb38d4a1628132fcf22d57e"
-        }
-      ]
-    },
-    {
-      "name": "rrdom",
-      "version": "2.1.6",
-      "license": "MIT",
-      "repository": "git+https://github.com/rrweb-io/rrweb.git",
-      "notices": [
-        {
-          "member": "https://raw.githubusercontent.com/rrweb-io/rrweb/rrweb%402.1.6/LICENSE",
-          "sha256": "e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c"
-        }
-      ]
-    },
-    {
-      "name": "rrweb-snapshot",
-      "version": "2.1.6",
-      "license": "MIT",
-      "repository": "git+https://github.com/rrweb-io/rrweb.git",
-      "notices": [
-        {
-          "member": "https://raw.githubusercontent.com/rrweb-io/rrweb/rrweb%402.1.6/LICENSE",
-          "sha256": "e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c"
-        }
-      ]
-    },
-    {
-      "name": "rrweb",
-      "version": "2.1.6",
-      "license": "MIT",
-      "repository": "git+ssh://git@github.com/rrweb-io/rrweb.git",
-      "notices": [
-        {
-          "member": "https://raw.githubusercontent.com/rrweb-io/rrweb/rrweb%402.1.6/LICENSE",
-          "sha256": "e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c"
         }
       ]
     },
@@ -16797,38 +16350,6 @@
       ]
     },
     {
-      "name": "semaphore",
-      "version": "1.1.0",
-      "license": "MIT",
-      "repository": "git@github.com:abrkn/semaphore.js.git",
-      "notices": [
-        {
-          "member": "README.md (license section)",
-          "sha256": "660db1542fe470a1dc4d87af8a02275c42be452f75930a4dc8d76edfea01e117"
-        },
-        {
-          "member": "https://registry.npmjs.org/semaphore/1.1.0",
-          "sha256": "1b8910ad1a22011c632f7ff544708be6cf08818ef80e8d4b45b6808ee8b05c17"
-        }
-      ]
-    },
-    {
-      "name": "semver-compare",
-      "version": "1.0.0",
-      "license": "MIT",
-      "repository": "git://github.com/substack/semver-compare.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "435a6722c786b0a56fbe7387028f1d9d3f3a2d0fb615bb8fee118727c3f59b7b"
-        },
-        {
-          "member": "readme.markdown (license section)",
-          "sha256": "4d8a73c1024e09c8b323a225d3a7880156ba5a4b9a8d56c9f4fd4202384b110f"
-        }
-      ]
-    },
-    {
       "name": "semver",
       "version": "6.3.1",
       "license": "ISC",
@@ -16865,18 +16386,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "6acb5236fdb284e239fdd9aa3e939067b28373d09c241ce7aab38d2d01f0e495"
-        }
-      ]
-    },
-    {
-      "name": "serialize-error",
-      "version": "7.0.1",
-      "license": "MIT",
-      "repository": "sindresorhus/serialize-error",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
         }
       ]
     },
@@ -17241,22 +16750,6 @@
       ]
     },
     {
-      "name": "sprintf-js",
-      "version": "1.1.3",
-      "license": "BSD-3-Clause",
-      "repository": "https://github.com/alexei/sprintf.js.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "f8287e4dd9480be58c56aca4a55c23b782c43a86e69aabad78fff4df0d29edef"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "b0103765a1ddbb08ac290cf214f00caabac645d7f8702d22677d0b766f7b7729"
-        }
-      ]
-    },
-    {
       "name": "ssh2",
       "version": "1.17.0",
       "license": "MIT",
@@ -17529,18 +17022,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "0ce5ffaadf384c9e64046fffa70faec61ac66c66af562682b16566a99be9e228"
-        }
-      ]
-    },
-    {
-      "name": "sumchecker",
-      "version": "3.0.1",
-      "license": "Apache-2.0",
-      "repository": "git+https://github.com/malept/sumchecker.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
         }
       ]
     },
@@ -17910,22 +17391,6 @@
     },
     {
       "name": "type-fest",
-      "version": "0.13.1",
-      "license": "(MIT OR CC0-1.0)",
-      "repository": "sindresorhus/type-fest",
-      "notices": [
-        {
-          "member": "license",
-          "sha256": "64a93ffc0a06a2266dbb57ed7ebe3b56ba66ab337b6347fabdbf86c76819fbae"
-        },
-        {
-          "member": "readme.md (license section)",
-          "sha256": "ee8ce2b628da002780228222081dd7353fb050ca452de937983a369a1d80c418"
-        }
-      ]
-    },
-    {
-      "name": "type-fest",
       "version": "5.5.0",
       "license": "(MIT OR CC0-1.0)",
       "repository": "sindresorhus/type-fest",
@@ -18037,18 +17502,6 @@
         {
           "member": "README.md (license section)",
           "sha256": "d274cc11a7f8b98caff978f6b5acdfd72de3ba6a2c3c20ea3bd984fcde194201"
-        }
-      ]
-    },
-    {
-      "name": "undici-types",
-      "version": "7.16.0",
-      "license": "MIT",
-      "repository": "git+https://github.com/nodejs/undici.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "a6db8096b2707bc0102d256917d4d33f298ba36d8c3f25de067a2b5bb379db27"
         }
       ]
     },
@@ -18246,22 +17699,6 @@
     },
     {
       "name": "universalify",
-      "version": "0.1.2",
-      "license": "MIT",
-      "repository": "git+https://github.com/RyanZim/universalify.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "3fda5977c0904e226190b4e21d64340c1731e2142d6fe5f3dee0090a216b8b63"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
-        }
-      ]
-    },
-    {
-      "name": "universalify",
       "version": "2.0.1",
       "license": "MIT",
       "repository": "git+https://github.com/RyanZim/universalify.git",
@@ -18439,18 +17876,6 @@
     {
       "name": "uuid",
       "version": "11.1.0",
-      "license": "MIT",
-      "repository": "https://github.com/uuidjs/uuid.git",
-      "notices": [
-        {
-          "member": "LICENSE.md",
-          "sha256": "beaa6b04fb82e41dd2ad679e19e27953afb5999b1abbb455b6564e78ebfeb332"
-        }
-      ]
-    },
-    {
-      "name": "uuid",
-      "version": "9.0.1",
       "license": "MIT",
       "repository": "https://github.com/uuidjs/uuid.git",
       "notices": [
@@ -18813,22 +18238,6 @@
       ]
     },
     {
-      "name": "web-vitals",
-      "version": "3.5.2",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/GoogleChrome/web-vitals.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "bfdeded4040e05da31ca9b6239dc83bd23fa26ac8db87342a7ca4363f68916ff"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "43aaa4efe24cac3b61a9626d2ec1316b634457f90919fff757c299c090d6595f"
-        }
-      ]
-    },
-    {
       "name": "whatwg-encoding",
       "version": "3.1.1",
       "license": "MIT",
@@ -19170,18 +18579,6 @@
     },
     {
       "name": "yauzl",
-      "version": "2.10.0",
-      "license": "MIT",
-      "repository": "https://github.com/thejoshwolfe/yauzl.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "b303783d5eb7ca50b853ffa5f145e4e7998fab339831d848f507ca6cd970577a"
-        }
-      ]
-    },
-    {
-      "name": "yauzl",
       "version": "3.3.0",
       "license": "MIT",
       "repository": "git+https://github.com/thejoshwolfe/yauzl.git",
@@ -19361,20 +18758,7 @@
       ]
     }
   ],
-  "notInstalled": [
-    {
-      "name": "@napi-rs/canvas-android-arm64",
-      "version": "0.1.100"
-    },
-    {
-      "name": "@napi-rs/canvas-linux-arm-gnueabihf",
-      "version": "0.1.100"
-    },
-    {
-      "name": "@napi-rs/canvas-linux-riscv64-gnu",
-      "version": "0.1.100"
-    }
-  ],
+  "notInstalled": [],
   "copied": [
     {
       "id": "shadcn",
@@ -19401,7 +18785,7 @@
         },
         {
           "file": "packages/ui/src/components/ui/ZCodeAboutLogo.tsx",
-          "sha256": "1e5b7c2e8a9dc98a3c597cbe34122521319eaeb89825e4c41641e77715d1407a"
+          "sha256": "42cddfd415c0d813e3ba5e35898e67ad0e9dec3ea71cc388aacbf1be4bc7f7f8"
         },
         {
           "file": "packages/ui/src/components/ui/accordion.tsx",
@@ -19573,7 +18957,7 @@
         },
         {
           "file": "packages/ui/src/styles.css",
-          "sha256": "22d5b58e44cdebdbe7154c418ee05fef6dde689e384f0dd590d4057739487be7"
+          "sha256": "9b8a1e231e1565cda48094b94640e0b0e0b8c240a729f3409a2a4eba40dc6f04"
         }
       ]
     },
@@ -19775,7 +19159,7 @@
         },
         {
           "file": "packages/ui/src/components/ai-elements/context.tsx",
-          "sha256": "9f9a766dcab0010b1483b5276f9d5f4b4c3b31bd85434731fc7ce4d8bf9913f7"
+          "sha256": "088590daa4377581f53e0206ee16f44f1ded7d948a00fa37ae6eabb9f8f3a48c"
         },
         {
           "file": "packages/ui/src/components/ai-elements/controls.tsx",
@@ -19795,7 +19179,7 @@
         },
         {
           "file": "packages/ui/src/components/ai-elements/image-preview-dialog.tsx",
-          "sha256": "47d4ecdefc84d39f2deda93119ce400b36224276bb6c7dab6a914868914ac8de"
+          "sha256": "31c8c6fbf572cf7b0e0b89685f11556949531e63061a8bfd3f9f2483cd4d0b86"
         },
         {
           "file": "packages/ui/src/components/ai-elements/image-thumbnail-gallery.tsx",
@@ -29779,11 +29163,11 @@
         },
         {
           "file": "packages/rpc/src/logging-middleware.ts",
-          "sha256": "20edfd8e5d054097186f2498ec4e9c08c61740ed003fc69eecea8176a15fe025"
+          "sha256": "f89a07d0c3ebab89ad1e03194080fc38f466036f8677fe78029531371794969b"
         },
         {
           "file": "packages/rpc/src/network-telemetry-middleware.ts",
-          "sha256": "18a7cde46e6c65e0138af0623d07bf883ce278acf44654bc5144ecaadd36a536"
+          "sha256": "b21ba5fc9fba2b87f9f3b68819613f74eb8177112cd5ca318ba274be69dd0a30"
         },
         {
           "file": "packages/rpc/src/persistent-protocol.ts",
@@ -30173,11 +29557,6 @@
   ],
   "patches": [
     {
-      "package": "@arms/rum-electron@0.0.3",
-      "file": "patches/@arms__rum-electron@0.0.3.patch",
-      "sha256": "36855354851ea495bc47a03340b0484ff62836b739cad56904b8a69f18e2ae97"
-    },
-    {
       "package": "@ai-sdk/openai-compatible@2.0.60",
       "file": "patches/@ai-sdk__openai-compatible@2.0.60.patch",
       "sha256": "9632fe9d821b3dc20939ae509cc35b968d90d018bbd1d812390718898182a38b"
@@ -30310,26 +29689,6 @@
       }
     },
     {
-      "package": "semaphore@1.1.0",
-      "repo": "abrkn/semaphore.js",
-      "refs": [
-        "88a33875b168cc7b5943d7fe987c36d08321d252"
-      ],
-      "file": "third-party/upstream/1b8910ad1a22011c632f7ff544708be6cf08818ef80e8d4b45b6808ee8b05c17.txt",
-      "sha256": "1b8910ad1a22011c632f7ff544708be6cf08818ef80e8d4b45b6808ee8b05c17",
-      "source": "https://registry.npmjs.org/semaphore/1.1.0",
-      "evidenceKind": "publisher-license-identifier-and-standard-terms",
-      "license": "MIT",
-      "reviewEvidence": {
-        "checkedOn": "2026-09-21",
-        "result": "The versioned npm archive contains no standalone complete LICENSE; existing publisher declaration and original README license sections remain preserved. Upstream authorization/copyright material is still required to close this review.",
-        "npmArchiveSha256": "72002cc502d607af8e2dbcbdafa3495bf4efe34394e1a037b92038d157f077a2",
-        "sourceRevision": "88a33875b168cc7b5943d7fe987c36d08321d252",
-        "sourceTreeUrl": "https://api.github.com/repos/abrkn/semaphore.js/git/trees/88a33875b168cc7b5943d7fe987c36d08321d252?recursive=1",
-        "upstreamLicenseFiles": []
-      }
-    },
-    {
       "package": "boolbase@1.0.0",
       "repo": "fb55/boolbase",
       "refs": [
@@ -30409,38 +29768,6 @@
         "sourceTreeUrl": "https://api.github.com/repos/nteract/ansi-to-react/git/trees/145140971e9d83ccac32265f24b1c55dea437896?recursive=1",
         "upstreamLicenseFiles": []
       }
-    },
-    {
-      "package": "keyv@4.5.4",
-      "file": "third-party/upstream/6f7e6eae2a2afbaa67b266650f7342e7bf8e82cb57f6ab98148b3d6e0fb4450a.txt",
-      "sha256": "6f7e6eae2a2afbaa67b266650f7342e7bf8e82cb57f6ab98148b3d6e0fb4450a",
-      "source": "https://registry.npmjs.org/keyv/4.5.4",
-      "evidenceKind": "publisher-license-identifier-and-standard-terms",
-      "license": "MIT"
-    },
-    {
-      "package": "@arms/rum-browser@0.1.8",
-      "file": "third-party/upstream/2c976d327b293bd74c257cd53e9b4ecef97a06b1651baa3b24327c97192cb3de.txt",
-      "sha256": "2c976d327b293bd74c257cd53e9b4ecef97a06b1651baa3b24327c97192cb3de",
-      "source": "https://registry.npmjs.org/%40arms%2frum-browser%400.1.8",
-      "evidenceKind": "publisher-license-identifier-and-standard-terms",
-      "license": "ISC"
-    },
-    {
-      "package": "@arms/rum-core@0.1.4",
-      "file": "third-party/upstream/328eb7864c20ab77607b26ee1913b65a9b880f6300eea9e667b890da896a2f40.txt",
-      "sha256": "328eb7864c20ab77607b26ee1913b65a9b880f6300eea9e667b890da896a2f40",
-      "source": "https://registry.npmjs.org/%40arms%2frum-core%400.1.4",
-      "evidenceKind": "publisher-license-identifier-and-standard-terms",
-      "license": "ISC"
-    },
-    {
-      "package": "@arms/rum-electron@0.0.3",
-      "file": "third-party/upstream/38b6f63a0aa422b5c329e75f1aeecd2b02e83caab1747644c00810870d77bacb.txt",
-      "sha256": "38b6f63a0aa422b5c329e75f1aeecd2b02e83caab1747644c00810870d77bacb",
-      "source": "https://registry.npmjs.org/%40arms%2frum-electron%400.0.3",
-      "evidenceKind": "publisher-license-identifier-and-standard-terms",
-      "license": "MIT"
     }
   ],
   "embedded": [
@@ -30738,10 +30065,6 @@
       "reason": "Original version-specific publisher copyright/license material remains incomplete."
     },
     {
-      "id": "semaphore@1.1.0",
-      "reason": "Original version-specific publisher copyright/license material remains incomplete."
-    },
-    {
       "id": "boolbase@1.0.0",
       "reason": "Original version-specific publisher copyright/license material remains incomplete."
     },
@@ -30758,22 +30081,6 @@
       "reason": "Original version-specific publisher copyright/license material remains incomplete."
     },
     {
-      "id": "keyv@4.5.4",
-      "reason": "Original version-specific publisher copyright/license material remains incomplete."
-    },
-    {
-      "id": "@arms/rum-browser@0.1.8",
-      "reason": "Original version-specific publisher copyright/license material remains incomplete."
-    },
-    {
-      "id": "@arms/rum-core@0.1.4",
-      "reason": "Original version-specific publisher copyright/license material remains incomplete."
-    },
-    {
-      "id": "@arms/rum-electron@0.0.3",
-      "reason": "Original version-specific publisher copyright/license material remains incomplete."
-    },
-    {
       "id": "Skia",
       "reason": "Skia core notice retained. Per-platform linked third-party libraries and their exact build provenance still require a complete audit."
     },
@@ -30784,6 +30091,14 @@
     {
       "id": "rust-standard-library@6a6eaca656978778f7c1c750ee0c3db87f8bffb2",
       "reason": "No original notice snapshot for this recorded native component."
+    },
+    {
+      "id": "objc2-core-foundation@0.3.2",
+      "reason": "Original project grant and selected Apache-2.0 terms are preserved; upstream LICENSE.md expressly identifies unresolved Apple SDK-derived source licensing implications. This material audit does not approve those separate implications."
+    },
+    {
+      "id": "objc2-io-kit@0.3.2",
+      "reason": "Original project grant and selected Apache-2.0 terms are preserved; upstream LICENSE.md expressly identifies unresolved Apple SDK-derived source licensing implications. This material audit does not approve those separate implications."
     }
   ]
 }

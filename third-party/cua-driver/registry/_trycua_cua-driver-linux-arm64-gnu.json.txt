@@ -1,0 +1,14 @@
+{
+  "name": "@trycua/cua-driver-linux-arm64-gnu",
+  "version": "0.28.2",
+  "license": "MIT AND MPL-2.0",
+  "repository": {
+    "url": "git+https://github.com/trycua/cua.git",
+    "type": "git"
+  },
+  "dist": {
+    "integrity": "sha512-ZFrYmA53ooEGyImEHo7cxYxgyXidP6Mkxc1KYiM8KoFmeHFSX3TmuKDsVV9dwZGKrhAOJBvQTvLvlb85RlccQg==",
+    "shasum": "dc3671c895e88149b97da6fa87628daaf6fa3cc9",
+    "tarball": "https://registry.npmjs.org/@trycua/cua-driver-linux-arm64-gnu/-/cua-driver-linux-arm64-gnu-0.28.2.tgz"
+  }
+}

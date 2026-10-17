@@ -9,11 +9,17 @@ CUA SDK source, including the compatibility runtime build transformations:
 https://github.com/trycua/cua/tree/fc188250b4ca8549b8e61f937fdb1fb560770e86/libs/cua-driver
 Release tag: `cua-driver-rs-v0.28.2`.
 
-The native `cua_driver_node_runtime.node` is derived from
-uniffi-bindgen-react-native. Its publisher's `node-runtime-NOTICE.md` is
-preserved beside the binary. Corresponding ubjs source (the npm publisher's
-gitHead for 0.31.0-3):
-https://github.com/jhugman/uniffi-bindgen-react-native/tree/49bc59194d183a05855ed4104c18eb92fb465e02
+The native `cua_driver_node_runtime.node` is a compatibility build derived
+from `@ubjs/node` 0.31.0-3. The original source is available at the exact
+npm-published revision (gitHead) and can be obtained from
+https://github.com/jhugman/uniffi-bindgen-react-native/tree/dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449
+(the corresponding `@ubjs/core` release points to
+https://github.com/jhugman/uniffi-bindgen-react-native/tree/49bc59194d183a05855ed4104c18eb92fb465e02).
+The CUA packager rebuilds the runtime from this source with the deterministic
+compatibility build transformations in the pinned CUA release; packaging strips
+source-map files and `sourceMappingURL` comments. This is a local packaging
+transformation, not upstream source: original copyright and license notices are
+retained, and this notice plus the full MPL text accompany the distribution.
 
 ## CUA — MIT
 
@@ -52,6 +58,6 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 MPL-2.0 terms: https://www.mozilla.org/MPL/2.0/
-The linked source remains available under MPL-2.0. The native binaries are redistributed without modification. Packaging may
+The linked source remains available under MPL-2.0. Native runtime code is redistributed without local source changes; platform signing may update signature metadata. Packaging may
 remove JavaScript source maps and sourceMappingURL comments; runtime behavior
 and the original copyright and license notices are retained.

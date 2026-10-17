@@ -1,0 +1,14 @@
+{
+  "name": "@trycua/cua-driver-darwin-x64",
+  "version": "0.28.2",
+  "license": "MIT AND MPL-2.0",
+  "repository": {
+    "url": "git+https://github.com/trycua/cua.git",
+    "type": "git"
+  },
+  "dist": {
+    "integrity": "sha512-n7iWl2iqIyPoDpCJ3hyK2gKZqu0RTolabRptmZKYPzRSTbRbzO3mejOa+CXHsJjVbM4+FyDJDNn5NE2CZLMdXg==",
+    "shasum": "7c793bbd115c9975217b5a222a2d82967ab7af06",
+    "tarball": "https://registry.npmjs.org/@trycua/cua-driver-darwin-x64/-/cua-driver-darwin-x64-0.28.2.tgz"
+  }
+}

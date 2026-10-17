@@ -238,6 +238,14 @@ export function missingProductionPackages(required, installed) {
   return missing;
 }
 
+export function assertNoticeOverrideVersions(overrides, currentPackages, lockedPackages) {
+  for (const item of overrides) {
+    // 不因本机 libc/平台没有安装就删除仍由锁文件持有的原始许可材料。
+    if (!currentPackages.has(item.package) && !lockedPackages.has(item.package))
+      throw new Error(`Stale npm notice override: ${item.package}`);
+  }
+}
+
 export async function collectNpmNotices(root, overrides) {
   root = await realpath(root);
   const { required, projects } = await readWorkspaceProductionGraph(root);

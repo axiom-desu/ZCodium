@@ -1,0 +1,16 @@
+{
+  "name": "@ubjs/node-darwin-arm64",
+  "version": "0.31.0-3",
+  "license": "MPL-2.0",
+  "repository": {
+    "url": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+    "type": "git",
+    "directory": "runtimes/napi"
+  },
+  "gitHead": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+  "dist": {
+    "integrity": "sha512-GGQVPLkVo4Gc8qVLW4IGvS8bjl8eHXyeP4a97ntGmsAdXwE5gsS29o8xUEFROjhwHKD+9sgVeblCSWVG3CpHsw==",
+    "shasum": "7fbc1c1ae2bc365cc33770d55546f319ec3f9fd1",
+    "tarball": "https://registry.npmjs.org/@ubjs/node-darwin-arm64/-/node-darwin-arm64-0.31.0-3.tgz"
+  }
+}

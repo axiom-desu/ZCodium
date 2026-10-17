@@ -421,5 +421,200 @@
     "package": "khroma@2.1.0",
     "license": "MIT",
     "evidence": "The package does not declare a license field; its license contains the MIT grant and copyright notice."
+  },
+  {
+    "package": "@ubjs/core@0.31.0-3",
+    "license": "MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "49bc59194d183a05855ed4104c18eb92fb465e02",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40ubjs%2Fcore/0.31.0-3",
+      "registrySha256": "0cf7a9979032680e5474e8d7261e2ee73ea9cf287a0b5790ef8568682b4e8a42",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@ubjs/node@0.31.0-3",
+    "license": "MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40ubjs%2Fnode/0.31.0-3",
+      "registrySha256": "df6293124d098dd8932672287409a5be64e4e5ec67c756c0461fd35275a64fa5",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@trycua/cua-driver@0.28.2",
+    "license": "MIT",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40trycua%2Fcua-driver/0.28.2",
+      "registrySha256": "168404f2ff2efe3fa618c096d0317b1bbc4ccfc1a3efab8d8a3f25b7b8296c4b",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@trycua/cua-driver-darwin-arm64@0.28.2",
+    "license": "MIT AND MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40trycua%2Fcua-driver-darwin-arm64/0.28.2",
+      "registrySha256": "834c87920b0d0de0eecadb5354974fc7c3131c8f252f600bebf719fdd46775c8",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@trycua/cua-driver-darwin-x64@0.28.2",
+    "license": "MIT AND MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40trycua%2Fcua-driver-darwin-x64/0.28.2",
+      "registrySha256": "f7e8a7850487bd6852781bb774b4c381b34a6a6d2c509b1331af5788cea3b2b0",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@trycua/cua-driver-linux-arm64-gnu@0.28.2",
+    "license": "MIT AND MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40trycua%2Fcua-driver-linux-arm64-gnu/0.28.2",
+      "registrySha256": "6323b0dd00f82c8fafd30a4fa34235cb371acf022703ea4d57f5c0b0592d7915",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@trycua/cua-driver-linux-x64-gnu@0.28.2",
+    "license": "MIT AND MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40trycua%2Fcua-driver-linux-x64-gnu/0.28.2",
+      "registrySha256": "0fcc14d3839e7f40508e8172bed63c439d82f069f2b263497cb84ddabd4f8e00",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@trycua/cua-driver-win32-arm64-msvc@0.28.2",
+    "license": "MIT AND MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40trycua%2Fcua-driver-win32-arm64-msvc/0.28.2",
+      "registrySha256": "839b0de5dda21546eeeaccc7f8b7fccb841bb06335392e40cd692986c7c75fdf",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@trycua/cua-driver-win32-x64-msvc@0.28.2",
+    "license": "MIT AND MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40trycua%2Fcua-driver-win32-x64-msvc/0.28.2",
+      "registrySha256": "dc7282c8cabc1ec6151d9d40ac35825dc7f3f63f1306024c8c08bd0039dc035f",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@ubjs/node-darwin-arm64@0.31.0-3",
+    "license": "MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40ubjs%2Fnode-darwin-arm64/0.31.0-3",
+      "registrySha256": "21cf0759b5ac818e730d33d1fd80f26e256c84c7c9ab97fc6e4278b29006a774",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@ubjs/node-darwin-x64@0.31.0-3",
+    "license": "MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40ubjs%2Fnode-darwin-x64/0.31.0-3",
+      "registrySha256": "6ecd5276038115b5d2e2cc7405dca1ece8dd11023eb682d41f1ea85bb226e41e",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@ubjs/node-linux-arm64-gnu@0.31.0-3",
+    "license": "MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40ubjs%2Fnode-linux-arm64-gnu/0.31.0-3",
+      "registrySha256": "bd02fe286a7ab1b306ae1c95caa62b48c231dc0239e69d01bfe104e6e7662f3b",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@ubjs/node-linux-x64-gnu@0.31.0-3",
+    "license": "MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40ubjs%2Fnode-linux-x64-gnu/0.31.0-3",
+      "registrySha256": "2bd7f42b3bf7a930a51b2854f8a610d0249283313269767f32a5402cea34c311",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@ubjs/node-win32-arm64-msvc@0.31.0-3",
+    "license": "MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40ubjs%2Fnode-win32-arm64-msvc/0.31.0-3",
+      "registrySha256": "e0614f33a811f118348680e30b2141818187c9340837ef3320a534b4424a27b5",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
+  },
+  {
+    "package": "@ubjs/node-win32-x64-msvc@0.31.0-3",
+    "license": "MPL-2.0",
+    "file": "third-party/cua-driver/NOTICES.txt",
+    "sha256": "7f77a0353f6b768937954400b40af64f9f1f18c41b7432229497fcacc03f5a2a",
+    "source": "third-party/cua-driver/sources.json (bundle of identified original upstream texts and corresponding-source instructions)",
+    "sourceRevision": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+    "reviewEvidence": {
+      "registry": "https://registry.npmjs.org/%40ubjs%2Fnode-win32-x64-msvc/0.31.0-3",
+      "registrySha256": "542d01c3dceb7deaf24f3d9900b4ed184e9b726176ec732e43b2a29c38b4b3c5",
+      "provenance": "third-party/cua-driver/sources.json"
+    }
   }
 ]

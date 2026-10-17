@@ -1,0 +1,16 @@
+{
+  "name": "@ubjs/node-linux-arm64-gnu",
+  "version": "0.31.0-3",
+  "license": "MPL-2.0",
+  "repository": {
+    "url": "git+https://github.com/jhugman/uniffi-bindgen-react-native.git",
+    "type": "git",
+    "directory": "runtimes/napi"
+  },
+  "gitHead": "dcb5c4ab2350d57f6d26f5fa81a99c77ed86d449",
+  "dist": {
+    "integrity": "sha512-YStVXhYz/5jvlWf/p4fhiVT72unYAbGugifFC9QmO/+hnroQDAQ5t8SARbsc15G4olMcamdIB+GETiUB7gmaYg==",
+    "shasum": "a727c9c5f8e1cefb5d60abf2b34310e6395b3e28",
+    "tarball": "https://registry.npmjs.org/@ubjs/node-linux-arm64-gnu/-/node-linux-arm64-gnu-0.31.0-3.tgz"
+  }
+}

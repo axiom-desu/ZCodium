@@ -1,0 +1,5 @@
+# HTTP publisher/source snapshots and derived notices retain original bytes.
+NOTICE.md text eol=lf
+materials/*.txt -text -whitespace
+registry/*.txt -text -whitespace
+NOTICES.txt -text -whitespace

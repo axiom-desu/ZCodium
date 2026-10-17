@@ -1,0 +1,14 @@
+{
+  "name": "@trycua/cua-driver-win32-x64-msvc",
+  "version": "0.28.2",
+  "license": "MIT AND MPL-2.0",
+  "repository": {
+    "url": "git+https://github.com/trycua/cua.git",
+    "type": "git"
+  },
+  "dist": {
+    "integrity": "sha512-H7pUIwbrKCqkyDBcI4ovk1ggN+MOmFtATGl0fokPkD7dp1EHGn5I9vRJEPVvqjP0BTwdlBJ8NucIy0g2eFK86Q==",
+    "shasum": "a7a9a0851fabb40f77611e71240784e97537f1bf",
+    "tarball": "https://registry.npmjs.org/@trycua/cua-driver-win32-x64-msvc/-/cua-driver-win32-x64-msvc-0.28.2.tgz"
+  }
+}

@@ -52,11 +52,11 @@ pub fn help(version: &str) -> String {
 Usage:
   zcode-cli-rust [command] [options]
 
-With no command and no --prompt, the terminal UI would open (not implemented yet).
+With no command and no --prompt, open the interactive terminal UI (requires a TTY).
 
 Commands:
   app-server Run the ZCode Protocol stdio app server
-  tui        Open the terminal UI (not implemented yet)
+  tui        Open the interactive terminal UI (requires a TTY)
 
 Options:
   -h, --help       Show help
@@ -71,7 +71,7 @@ Options:
     Comma or space-separated tool names, e.g. \"Bash Edit\".
     \"Bash(git *)\" removes all of Bash; command patterns are not matched.
   --locale <locale>  UI locale: en-US, zh-CN, or auto
-  --mode <mode>    Permission mode for prompts: build, edit, plan, or yolo (default: yolo for --prompt)
+  --mode <mode>    Permission mode: build, edit, plan, or yolo (default: build for TUI; yolo for --prompt)
   --resume <sessionId>  Resume a persisted session by sessionId
   -c, --continue        Resume the latest session for the current directory
   --json           Print machine-readable JSON where supported

@@ -11,7 +11,7 @@ await tsImport(
   "../../apps/zcode-cli/packages/bootstrap/test/local-observability.test.ts",
   testOptions,
 );
-await tsImport("../../packages/ui/test/localOnlyWebview.test.ts", testOptions);
+// 购买 webview 与其测试已随 billing 移除；不能让遗留引用阻断其余本地诊断测试。
 await tsImport("../../packages/ui/test/localDiagnostics.test.ts", testOptions);
 await tsImport(
   "../../apps/zcode-cli/packages/bootstrap/test/local-measurements.test.ts",

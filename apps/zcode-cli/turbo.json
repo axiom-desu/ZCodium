@@ -15,7 +15,8 @@
         "@zcode/core#build",
         "@zcode/adapters#build",
         "@zcode/bootstrap#build",
-        "@zcode/i18n#build"
+        "@zcode/i18n#build",
+        "@zcode/tui#build"
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
