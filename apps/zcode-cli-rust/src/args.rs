@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(version, about = "ZCode CLI Rust runtime")]
+#[command(version, about = "ZCodium Rust CLI runtime")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,

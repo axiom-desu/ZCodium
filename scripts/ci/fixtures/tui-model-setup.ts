@@ -1,3 +1,5 @@
+export { EmptyTranscriptLogo } from "../../../apps/zcode-cli/packages/tui/src/app-empty-transcript.js";
+export { ZCODIUM_LOGO_LINES } from "../../../apps/zcode-cli/packages/tui/src/app-logo.js";
 export { TuiApp } from "../../../apps/zcode-cli/packages/tui/src/app.tsx";
 export {
   createCommandCenter,

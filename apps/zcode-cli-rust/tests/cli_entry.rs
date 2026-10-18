@@ -38,8 +38,11 @@ fn non_tty_tui_flags_do_not_create_or_open_the_session_library() {
 #[test]
 fn help_and_version_do_not_require_a_terminal() {
     for args in [vec!["--help"], vec!["--version"], vec!["tui", "--help"]] {
-        let output = binary().args(args).output().unwrap();
+        let output = binary().args(&args).output().unwrap();
         assert!(output.status.success());
+        if args.contains(&"--help") {
+            assert!(String::from_utf8_lossy(&output.stdout).starts_with("ZCodium Rust "));
+        }
     }
 }
 

@@ -24,6 +24,8 @@ process.env.XDG_DATA_HOME = cacheDirectory;
 
 const {
   TuiApp,
+  EmptyTranscriptLogo,
+  ZCODIUM_LOGO_LINES,
   createCommandCenter,
   createTuiSubmitPrompt,
   listSlashCommandSuggestions,
@@ -98,7 +100,7 @@ try {
           workspaceDirectory: "/fixture/project",
         },
       }),
-      { width: 100, height: 32 },
+      { width: 140, height: 32 },
     );
     try {
       await act(async () => {
@@ -106,6 +108,9 @@ try {
       });
       await ui.renderOnce();
       assert.match(ui.captureCharFrame(), /provider_config\.json/);
+      // 宽终端展开真实侧栏，避免只验 Logo 而漏掉常驻产品标题。
+      assert.match(ui.captureCharFrame(), /ZCodium\s+fixture/);
+      assert.doesNotMatch(ui.captureCharFrame(), /\bZCode\b/);
       assert.doesNotMatch(ui.captureCharFrame(), /\/login|Coding Plan/);
       await act(async () => {
         await ui.mockInput.typeText("/LOGIN fixture-private-key");
@@ -170,6 +175,29 @@ try {
         ui.renderer.destroy();
       });
       await treeSitter.destroy();
+    }
+  }
+  // 实际终端 renderer 验证新版 Mark 与窄屏降级，不只检查纯函数/源码字符串。
+  for (const width of [80, 20]) {
+    const logo = await testRender(createElement(EmptyTranscriptLogo, { width: width - 2 }), {
+      width,
+      height: 12,
+    });
+    try {
+      await act(async () => {
+        await logo.flush();
+      });
+      await logo.renderOnce();
+      const frame = logo.captureCharFrame();
+      if (width === 80) assert.ok(frame.includes(ZCODIUM_LOGO_LINES[0]), frame);
+      else {
+        assert.match(frame, /ZCodium/);
+        assert.ok(!frame.includes("████"), frame);
+      }
+    } finally {
+      await act(async () => {
+        logo.renderer.destroy();
+      });
     }
   }
   console.log(
