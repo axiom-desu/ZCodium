@@ -3,7 +3,7 @@
 ## 范围与产品规则
 
 - 构建矩阵覆盖 Linux x64/arm64、Windows x64/arm64、macOS arm64/x64；除 Windows arm64 在 x64 runner 上交叉打包外，均使用 GitHub 托管的**原生** runner（Linux arm64 用 `ubuntu-24.04-arm`）。
-- PR、main 推送、手动运行和 `v*` 标签推送均执行检查与 Linux/Windows 打包；macOS 仅手动运行和标签推送构建（保持现有成本规则）。
+- PR、main 推送、手动运行和 `v*` 标签推送均执行检查与 Linux/Windows 打包；macOS 仅手动运行和标签推送构建（保持现有成本规则）。PR/main 仅构建 production / ZCodium Exp；手动与标签构建 production + preview / ZCodium Rust 两种身份，见下方双产品发布规则。
 - Linux 沿用现有 AppImage、deb、rpm、pkg.tar.zst，Windows 沿用 NSIS exe，macOS 发 dmg 与 zip。
   本机缺 `rpmbuild` / `pacman` 时可用 `ZCODE_DESKTOP_LINUX_TARGETS=deb`（逗号分隔，取值限本次四种）只打子集；
   发布工作流不设置该变量，始终保持完整列表，未知取值直接失败而不是静默少出产物。
@@ -141,6 +141,58 @@ Checks 中的诊断回归直接读取受检源码，不依赖 CLI package 的 `d
 - 桌面、远端和首启 seed 清单保持一致，只分发源码资源完整且满足 seed 契约的插件，不降低资源校验要求。
 - CUA 原生运行时按目标 platform/arch 落盘（`@trycua/cua-driver-<platform>-<arch>`），交叉打包不得把构建机架构的原生库带进安装包。
 - Linux/Windows GUI 启动和安装体验需在真实目标环境验证；静态检查与脚本测试不能替代安装验收。
+
+## 双产品发布与本地 deb 验收（实现前规则）
+
+用户授权同一源码/滚动版本/tag 的一版发行同时包含两种产品：
+
+- `production`：ZCodium Exp，`ZCODE_ENV=production` + `ZCODE_PREVIEW_IDENTITY=0`，默认 TS runtime。
+- `preview`：ZCodium Rust，`ZCODE_ENV=production` + `ZCODE_PREVIEW_IDENTITY=1`，默认随包 Rust runtime；是实验身份，不是 test 后端。
+- 身份来源仍为 `desktop-product-identity.mjs`；不在发布脚本另写产品名、appId、包名表，也不改用户数据路径或自动更新渠道。
+- PR/main push 保留原有四格 Exp Linux/Windows 矩阵；手动和 tag 才展开双身份 Linux/Windows 及 macOS，共十二格。`fail-fast: false` 保留。
+- 每格使用独立 checkout/prepare/build/package；不复用另一身份编译的 Main/preload/renderer。artifact 名固定为 `desktop-<flavor>-<platform>-<arch>`，单格 collect 仍仅收自己的身份/平台/架构。
+- remote producer 仍只有一个，两个身份复用同 run、同版本的真实 remote artifact；两个身份后端环境相同。不引入跨 run 缓存产物或缺失 fallback。
+- Preview job 在 prepare 之前安装明确目标的 Rust 工具链。Windows ARM64 继续现有 x64 runner 交叉打包，额外明确初始化 ARM64 MSVC 工具环境和 Rust target；不能把 host x64 binary 当目标 binary 打包。
+- tag release 仍需 `checks`、整个 `build` 与 `build-macos` 全成功。明确下载十二个当前 run 的固定 artifact，先验证两种身份全部 28 个安装包，再生成一份覆盖全部文件的 `SHA256SUMS`；缺任何身份/架构/格式、空文件、错版本、额外文件均失败。
+- 同一 Draft Release 标题/说明明确 Exp=TS、Rust=实验 Rust；重跑已有草稿也先同步这些自动生成的元数据，不能缺少双产品说明；保留已有人工备注和自动变更日志，缺少产品说明时补充而不是重置正文。元数据更新失败不继续上传；已公开 Release 仍在任何编辑前拒绝。保留既有 Shakespeare 首段、unsigned/未完成全平台人工验收提示、tag 精确版本验证、已公开 Release 禁止覆盖和仅 draft 可重跑规则。
+- 手动触发仍只产出 artifacts，不创建 Release。双包失败不得静默生成半套发行。
+
+```text
+同一 ref / version ┬→ checks ──────────────────────────────────┐
+                   └→ 一个 remote producer → 当前 run artifact │
+                      ├→ Exp 平台格 → 独立身份/产物 ───────────┤
+                      └→ Rust 平台格 → Rust target/资产/产物 ──┤
+                                                              v
+              仅 tag + 所有必需格成功 → 28 包精确校验 → SHA256SUMS
+                                                              v
+                                      同一个 Draft → 维护者人工公开
+```
+
+### 本次验证边界与验收
+
+1. 解析真实 workflow 验证事件→身份笛卡尔积、原平台/格式/覆盖命令、安全权限/needs 图不退化、Rust target 与 MSVC ARM64 设置、artifact 名及十二个下载完整且唯一；不得只测手写副本。
+2. 发布脚本临时 fixture 覆盖两身份文件名不冲突、按身份 collect、完整 28 包与哈希、缺一个身份/单文件/空包/错版本/额外包拒绝、旧单身份 helper 调用兼容、draft-only 与无副作用失败。
+3. 本地在固定 Node 下从本轮源码分别 prepare/build/package 两个 Linux x64 deb，仅用已有 `ZCODE_DESKTOP_LINUX_TARGETS=deb` 本地子集开关，输出到不同目录；不降低 CI 的完整格式要求。检查包名、版本、架构、appId/资源及 runtime 身份。
+4. 在临时目录解包真实 deb，直接启动其携带的可执行文件，断言 `app.isPackaged=true`、app/resources 路径属于该 deb。分别使用独立临时 HOME/userData/sessionData/XDG/数据根及本地 OpenAI-compatible fixture；删除 runtime override，证明产品默认确实选择随包 TS/Rust（不能用开发 Cargo binary 冒充）。
+5. 通过真实 GUI/composer 验证数据库 ready、模型文本、文件工具结果、退出后同数据目录重启恢复，再追问并核对模型收到旧轮历史。使用测试目录内文件及 fixture key；不读取已有用户配置/凭据/会话/日志、不调用真实模型，不全局 kill 或卸载系统现有程序。
+6. 普通发行构建不启用 E2E store bridge；测试可以复用既有 Playwright main 观察/网络隔离和真实 DOM 操作，不改变产品默认值来让测试通过。实际受限或失败时报告阶段与证据，不能把 deb 文件存在或静态资源校验等同于可用性。
+7. 本地解包启动不是系统级 `dpkg -i` 安装/桌面注册验收；本轮不承诺其他架构、Windows/macOS、真实模型、Rust 全功能和既有历史库迁移已通过。
+8. **用户补充限制：本轮仅本地修改/打包/验证，不 push、不打 tag、不创建/上传真实 Release，不公开任何安装包。** 发布 API 只使用 mock 测试。
+9. 实际执行定向测试、根 typecheck/lint、架构与格式检查；保留无关 `logs/`。发布规则改动与本地测试结果分别报告。
+
+### 本轮本地实测记录（未公开）
+
+- 源码基线 `d988d893`，CI/测试改动仍在本地工作区；Node 24.14.0，Linux x64。
+- 从当前源码依次完整 prepare/build/package 两种身份，远端资产只首次重建，第二种复用同版本产物；仅本地使用 `ZCODE_DESKTOP_LINUX_TARGETS=deb`，未修改 CI 的全格式列表。
+- 两个 App 均为 `3.15.1-20261018.374`；deb control 均为 `3.15.1~20261018.374`（fpm 的 Debian prerelease 表达）。验收精确比对当前源码派生版本、deb control 与启动后 `app.getVersion()`，错版本不能通过。
+- 实际加载两种构建环境的 electron-builder 配置，appId 分别为 `dev.zcodium.app.exp` / `dev.zcodium.app.preview`，productName/executable 与既有 identity 完全一致；Linux 运行期不伪造不存在的 appId API，另验真实产品名/包身份与资源。
+- Exp：`zcodium-exp` / amd64，231.45 MiB；Rust：`zcodium-rust` / amd64，242.15 MiB。路径为 `/tmp/zcodium-dual-deb/production/` 与 `/tmp/zcodium-dual-deb/preview/`。
+- 在临时解包根和独立 Xvfb 中运行真实 deb 内的 executable，未执行系统 `dpkg -i`。两者 `app.isPackaged=true`、产品名分别为 ZCodium Exp / ZCodium Rust，app/resources 路径均属于各自 deb。
+- Exp 的 TS CLI 会改写 process.title，不能仅依赖 argv 路径；验证自有 PID 的 packaged Electron executable、Node mode、Main 下发的 `ts` 选择与非空随包 JS bundle。Rust 同时核对自有 PID 的 argv 和 `/proc/PID/exe` 指向 deb 内 `resources/rust/zcode-cli-rust`，不使用开发 Cargo binary。Linux 进程发现覆盖自有进程的全部线程 children，不扫描其他用户进程。
+- 两种身份都通过真实 GUI 输入、本地 fixture 模型响应、Read note.txt 的 marker 回传模型后 UI 完成、同数据根重启恢复，以及重启后继续对话并确认请求携带先前用户轮历史。未启用构建期 E2E store bridge，无 runtime override；各自独立临时 HOME/XDG/userData/sessionData/业务库，无环境凭据泄漏。
+- 实测 JSON、进程与版本证据及 App 窗口截图仅落在 `/tmp/zcodium-dual-deb/{production,preview}-smoke.json` 及对应 `.png`，未上传。Chromium 的非本地流量由代理/拦截阻断；不宣称任意 Node 直接 socket 已被 OS 网络隔离。
+- 此证据仅表示 Linux x64 新数据目录的基本可用性；不等于系统安装/桌面注册、旧库迁移、同库并行、真实模型或其他平台验收，也不证明 Rust 所有功能与 TS 完全一致。
+- 没有 push、tag、真实 Release 写入或公开安装包；用户现有 `logs/` 未修改。
 
 ## 参考
 

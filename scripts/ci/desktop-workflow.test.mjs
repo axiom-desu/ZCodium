@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { parse } from "yaml";
 
 // 直接解析真实工作流（公开入口），断言 job 条件与 needs 图语义，
@@ -89,6 +90,129 @@ test("parallel packaging preserves coverage commands, full targets and current-r
     assert.ok(verify >= 0 && prepare > verify && build > prepare);
     assert.ok(commands.some((command) => command.includes("--skip-prepare --skip-build")));
   }
+});
+
+test("dual-product matrix expands four Exp jobs on PR/main and twelve jobs on dispatch/tag", async () => {
+  const jobs = await loadJobs();
+  const desktop = jobs.build;
+  const matrix = desktop.strategy.matrix;
+  assert.deepEqual(
+    matrix.target.map(({ platform, arch }) => `${platform}-${arch}`),
+    ["linux-x64", "linux-arm64", "win-x64", "win-arm64"],
+  );
+  assert.equal(
+    matrix.flavor,
+    "${{ fromJSON((github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')) && '[\"production\",\"preview\"]' || '[\"production\"]') }}",
+  );
+  assert.equal((await parse(await readFile(workflowPath, "utf8"))).env.ZCODE_ENV, "production");
+  assert.equal(desktop.env?.ZCODE_ENV, undefined);
+  assert.equal(desktop.env?.ZCODE_TARGET_OS, "${{ matrix.target.platform }}");
+  assert.equal(desktop.env?.ZCODE_TARGET_ARCH, "${{ matrix.target.arch }}");
+  assert.equal(
+    desktop.env?.ZCODE_PREVIEW_IDENTITY,
+    "${{ matrix.flavor == 'preview' && '1' || '0' }}",
+  );
+  assert.equal(desktop.strategy["fail-fast"], false);
+  assert.ok(desktop.name.includes("matrix.flavor"));
+  const mac = jobs["build-macos"];
+  assert.equal(mac.strategy["fail-fast"], false);
+  assert.deepEqual(
+    mac.strategy.matrix.target.map(({ arch }) => arch),
+    ["arm64", "x64"],
+  );
+  assert.match(String(mac.if), /workflow_dispatch/);
+  assert.match(String(mac.if), /github\.event_name == 'push'.*github\.ref_type == 'tag'/);
+  assert.equal(mac.env?.ZCODE_PREVIEW_IDENTITY, desktop.env.ZCODE_PREVIEW_IDENTITY);
+});
+
+test("actual event expressions expand to four daily or twelve dual-product jobs", async () => {
+  const jobs = await loadJobs();
+  for (const [event, refType, expected] of [
+    ["pull_request", "branch", 4],
+    ["push", "branch", 4],
+    ["workflow_dispatch", "branch", 12],
+    ["workflow_dispatch", "tag", 12],
+    ["push", "tag", 12],
+  ]) {
+    const context = {
+      github: { event_name: event, ref_type: refType },
+      needs: { "remote-assets": { result: "success" } },
+      cancelled: () => false,
+    };
+    const combinations = [];
+    for (const id of ["build", "build-macos"]) {
+      const job = jobs[id];
+      // Actions 允许 job id 含横杠；映射到 JS 的方括号属性语法再求值。
+      const condition = String(job.if)
+        .replace(/^\$\{\{\s*|\s*\}\}$/g, "")
+        .replaceAll("needs.remote-assets", 'needs["remote-assets"]');
+      const enabled = runInNewContext(condition, context, { timeout: 1000 });
+      if (!enabled) continue;
+      const expression = job.strategy.matrix.flavor.match(/^\$\{\{\s*fromJSON\((.*)\)\s*\}\}$/)[1];
+      const flavors = JSON.parse(runInNewContext(expression, context, { timeout: 1000 }));
+      for (const flavor of flavors)
+        for (const target of job.strategy.matrix.target)
+          combinations.push(`${flavor}/${target.platform ?? "mac"}/${target.arch}`);
+    }
+    assert.equal(combinations.length, expected, `${event}/${refType}`);
+    assert.equal(new Set(combinations).size, expected);
+    if (expected === 4) assert.ok(combinations.every((item) => item.startsWith("production/")));
+    else assert.equal(combinations.filter((item) => item.startsWith("preview/")).length, 6);
+  }
+});
+
+test("preview toolchains precede preparation and Windows arm64 initializes matching MSVC", async () => {
+  const jobs = await loadJobs();
+  for (const id of ["build", "build-macos"]) {
+    const job = jobs[id];
+    const rust = job.steps.findIndex((step) =>
+      String(step.uses ?? "").startsWith("dtolnay/rust-toolchain@"),
+    );
+    const prepare = job.steps.findIndex((step) => step.name === "Prepare desktop runtime");
+    assert.ok(
+      rust >= 0 && prepare > rust,
+      `${id}: Rust toolchain must be installed before runtime preparation`,
+    );
+    assert.match(String(job.steps[rust].if), /matrix\.flavor == 'preview'/);
+  }
+  const windows = jobs.build.steps.findIndex((step) =>
+    String(step.uses ?? "").startsWith("ilammy/msvc-dev-cmd@"),
+  );
+  const prepare = jobs.build.steps.findIndex((step) => step.name === "Prepare desktop runtime");
+  assert.ok(windows >= 0 && prepare > windows);
+  assert.equal(
+    jobs.build.steps[windows].uses,
+    "ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756",
+  );
+  assert.match(
+    String(jobs.build.steps[windows].if),
+    /matrix\.flavor == 'preview'.*matrix\.target\.platform == 'win'/,
+  );
+  assert.match(
+    jobs.build.steps[windows].with.arch,
+    /matrix\.target\.arch == 'arm64'.*amd64_arm64.*amd64/,
+  );
+  const rustTarget = jobs.build.steps.findIndex((step) =>
+    String(step.run ?? "").includes("rustup target add aarch64-pc-windows-msvc"),
+  );
+  assert.ok(rustTarget >= 0 && rustTarget < prepare);
+  assert.match(String(jobs.build.steps[rustTarget].if), /matrix\.target\.arch == 'arm64'/);
+});
+
+test("release downloads exactly the twelve flavor/platform/arch artifacts", async () => {
+  const jobs = await loadJobs();
+  const names = uses(jobs.release, "actions/download-artifact").map((step) => step.with.name);
+  const expected = ["production", "preview"].flatMap((flavor) => [
+    `desktop-${flavor}-linux-x64`,
+    `desktop-${flavor}-linux-arm64`,
+    `desktop-${flavor}-win-x64`,
+    `desktop-${flavor}-win-arm64`,
+    `desktop-${flavor}-mac-arm64`,
+    `desktop-${flavor}-mac-x64`,
+  ]);
+  assert.equal(names.length, 12);
+  assert.deepEqual([...names].sort(), [...expected].sort());
+  assert.equal(new Set(names).size, 12);
 });
 
 test("release still requires checks success before publishing a draft", async () => {
