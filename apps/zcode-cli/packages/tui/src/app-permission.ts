@@ -86,7 +86,10 @@ export function createTuiPermissionRequester(input: {
         reject(error);
       };
       const abortHandler = () => {
-        input.setApprovalQueue((current) => current.filter((item) => item !== approval));
+        // 问答编辑会替换 UI 对象，取消应移除同一 resolve 句柄，不能留下已取消的审批遮挡输入。
+        input.setApprovalQueue((current) =>
+          current.filter((item) => item.resolve !== approval.resolve),
+        );
         fail(new Error("Permission request cancelled"));
       };
 

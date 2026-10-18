@@ -16,6 +16,10 @@ test("Rust TUI PTY acceptance follows a fresh Rust build in the same Linux job",
   const smoke = interopJob.indexOf("node scripts/zcode-cli-rust-tui-smoke.mjs");
   assert.ok(build >= 0 && smoke > build);
   assert.match(interopJob, /node scripts\/zcode-cli-rust-tui-smoke\.mjs --provider-discovery/);
+  assert.ok(
+    interopJob.indexOf("node scripts/ci/tui-quit-pty-smoke.mjs") >
+      interopJob.indexOf("Build Node CLI"),
+  );
 });
 
 // M4/M5 在该 job 中用 cargo --offline 构建 examples；别的 job 的缓存不属于本 runner。

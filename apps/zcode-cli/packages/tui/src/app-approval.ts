@@ -116,7 +116,7 @@ function resolveApproval(
 ): void {
   approval.cleanup();
   approval.resolve(createApprovalResult(approval.request, decision));
-  setApprovalQueue((current) => current.filter((item) => item !== approval));
+  setApprovalQueue((current) => current.filter((item) => item.resolve !== approval.resolve));
   setStatus(`Permission ${approvalStatusLabel(decision)} for ${approval.request.toolName}.`);
 }
 
