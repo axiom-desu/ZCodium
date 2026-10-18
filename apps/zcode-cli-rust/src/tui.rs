@@ -38,7 +38,7 @@ async fn run(args: PromptArgs, cwd: PathBuf) -> anyhow::Result<i32> {
         zcode_cli_state::lock_workspace(ctx.data_dir.clone(), ctx.workspace.clone()).await?;
     let store: Arc<dyn SessionStore> = Arc::new(ctx.node_store().await?);
     let config = args.config.as_ref().map(PathBuf::from);
-    let engine = ctx.engine(store, config.as_ref(), false).await?;
+    let engine = ctx.standalone_engine(store, config.as_ref(), false).await?;
     let path = ctx.requested_cwd.to_string_lossy().into_owned();
     let mut workspace = serde_json::json!({"workspacePath": path, "workspaceKey": ctx.workspace});
     if ctx.workspace != path {

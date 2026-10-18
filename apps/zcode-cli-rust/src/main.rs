@@ -1,5 +1,6 @@
 mod args;
 mod prompt;
+mod provider_config;
 mod runtime;
 mod storage_startup;
 mod tui;
