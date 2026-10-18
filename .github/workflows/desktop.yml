@@ -49,6 +49,9 @@ jobs:
       - name: Architecture
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm architecture:check
+      - name: Plugin UI domain regressions
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm vitest run --config packages/ui/vitest.config.ts packages/ui/src/plugin-ui/domain packages/ui/src/plugin-ui/contract.test.ts
       - name: Build Agent test dependencies
         id: agent-build
         # 根安装采用 hoisted 布局；从子 workspace 启动会丢失根目录的工具路径。
