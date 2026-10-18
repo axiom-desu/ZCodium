@@ -55,6 +55,7 @@ import {
   buildConversationTurnRenderUnits,
   type ConversationTurnRenderUnit,
 } from "@/v4/conversationTurnRenderUnits.js";
+import { ConversationTurnRenderUnitCache } from "@/v4/conversationTurnRenderUnitCache.js";
 import {
   resolveConversationTurnNavigatorActiveQueryRowId,
   resolveConversationTurnNavigatorHydrationRetryDelayMs,
@@ -434,14 +435,15 @@ function ConversationTimelineImpl({
       manualPinned: getPluginUiManualPin(sessionKey, toolCallId),
     });
   }, [pluginUiDerivation, sessionKey, pluginUiDisclosureVersion]);
+  const turnRenderCache = useMemo(() => new ConversationTurnRenderUnitCache(), [sessionKey]);
   const renderUnits = useMemo(
     () =>
-      buildConversationTurnRenderUnits(rows, {
-        nowMs: liveNowMs,
-        sessionPhase,
-        pluginUiPinResolver,
-      }),
-    [liveNowMs, pluginUiPinResolver, rows, sessionPhase],
+      buildConversationTurnRenderUnits(
+        rows,
+        { nowMs: liveNowMs, sessionPhase, pluginUiPinResolver },
+        turnRenderCache,
+      ),
+    [liveNowMs, pluginUiPinResolver, rows, sessionPhase, turnRenderCache],
   );
   const { virtualizedUnits, liveUnit, liveUnitIndex } = useMemo(
     () => splitConversationTimelineLiveTail(renderUnits),

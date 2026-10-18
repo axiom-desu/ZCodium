@@ -8,6 +8,7 @@ import type {
   UserInputRow,
   WorkflowLaunchMeta,
 } from "@zcode/shared/zcode-protocol-v4";
+import type { ConversationTurnRenderUnitCache } from "./conversationTurnRenderUnitCache.js";
 import type { AssistantWorkRow, ConversationTurnFlowItem } from "@/v4/conversationTurnFlowItems.js";
 import type { PluginUiRowPinResolver } from "@/plugin-ui/index.js";
 import {
@@ -70,7 +71,7 @@ export interface ConversationTurnRenderUnit {
   workflowLaunch?: WorkflowLaunchMeta;
 }
 
-interface BuildConversationTurnRenderUnitsOptions {
+export interface BuildConversationTurnRenderUnitsOptions {
   nowMs?: number;
   sessionPhase?: SessionPhase;
   /** 插件卡片折叠裁决（时间线由推导结果 + 手动状态组装）。 */
@@ -442,23 +443,18 @@ function normalizeRenderUnitPosition(
 export function buildConversationTurnRenderUnits(
   rows: readonly ConversationRow[],
   options: BuildConversationTurnRenderUnitsOptions = {},
+  cache?: ConversationTurnRenderUnitCache,
 ): ConversationTurnRenderUnit[] {
   const units: DraftTurnRenderUnit[] = [];
   const unitByTurnId = new Map<string, DraftTurnRenderUnit>();
 
-  const getOrCreateUnit = (turnId: string) => {
-    const existing = unitByTurnId.get(turnId);
-    if (existing) {
-      return existing;
-    }
-    const unit = createDraftUnit(turnId);
-    units.push(unit);
-    unitByTurnId.set(turnId, unit);
-    return unit;
-  };
-
   for (const row of rows) {
-    const unit = getOrCreateUnit(row.turnId);
+    let unit = unitByTurnId.get(row.turnId);
+    if (!unit) {
+      unit = createDraftUnit(row.turnId);
+      units.push(unit);
+      unitByTurnId.set(row.turnId, unit);
+    }
     if (isTurnHeaderRow(row)) {
       unit.header = row;
       continue;
@@ -475,11 +471,18 @@ export function buildConversationTurnRenderUnits(
     unit.assistantWorkRows.push(row);
   }
 
-  const materializedUnits = units.map((unit, index) =>
-    materializeDraftUnit(unit, index, units.length, options),
-  );
+  const materializedUnits = units.map((unit, index) => {
+    const create = () => materializeDraftUnit(unit, index, units.length, options);
+    // 原因：流式尾行和秒级时钟原本会重做全部历史回合的物化；不可变行引用与有效
+    // 插件裁决足以复用未变化的回合，最后位置仍统一归一化，不改协议或折叠语义。
+    return cache
+      ? cache.materialize(unit, options, resolveTurnRunning(unit, options), create)
+      : create();
+  });
   const keptUnits = materializedUnits.filter(shouldKeepRenderUnit);
-  return keptUnits.map((unit, index) =>
+  const result = keptUnits.map((unit, index) =>
     normalizeRenderUnitPosition(unit, index, keptUnits.length, options),
   );
+  cache?.finishBuild(result);
+  return result;
 }
