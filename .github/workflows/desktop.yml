@@ -78,6 +78,9 @@ jobs:
         run: |
           node --test --test-isolation=none packages/zcode-cua/test/*.test.mjs
           pnpm --filter @zcode/zcode-cua-plugin check:sdk
+      - name: Conversation navigator regressions
+        if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
+        run: pnpm vitest run --config packages/ui/vitest.config.ts packages/ui/src/v4/conversationTurnNavigatorPreview.test.ts
       - name: Standalone CLI and TUI model setup checks
         run: |
           node scripts/ci/cli-local-entrypoints-smoke.mjs
@@ -106,6 +109,8 @@ jobs:
         run: node scripts/ci/bundled-help-smoke.mjs
       - name: Local feedback browser checks
         run: node scripts/ci/local-feedback-smoke.mjs
+      - name: Conversation navigator browser checks
+        run: node scripts/ci/conversation-navigator-smoke.mjs
       - name: Imported conversation browser checks
         run: node scripts/ci/local-share-context-smoke.mjs
       - name: Self-managed model settings

@@ -1,4 +1,6 @@
 import type { ConversationTurnRenderUnit } from "@/v4/conversationTurnRenderUnits.js";
+import { buildConversationTurnNavigatorPreview } from "./conversationTurnNavigatorPreview.js";
+import type { ConversationTurnNavigatorPreviewCache } from "./conversationTurnNavigatorPreviewCache.js";
 
 export type ConversationTurnNavigatorAssistantPreviewKind = "empty" | "running" | "text";
 
@@ -13,7 +15,7 @@ export interface ConversationTurnNavigatorItem {
   isRunning: boolean;
 }
 
-interface BuildConversationTurnNavigatorItemsOptions {
+export interface BuildConversationTurnNavigatorItemsOptions {
   assistantEmptyPreview: string;
   assistantRunningPreview: string;
   userFallbackPreview: string;
@@ -99,39 +101,8 @@ export function resolveConversationTurnNavigatorHydrationRetryDelayMs(
 const DEFAULT_MAX_PREVIEW_CHARS = 220;
 const DEFAULT_MAX_PREVIEW_PARAGRAPHS = 2;
 
-function normalizePreviewParagraphs(text: string, maxParagraphs: number): string[] {
-  return text
-    .trim()
-    .split(/\n\s*\n/u)
-    .map((paragraph) => paragraph.replace(/\s+/gu, " ").trim())
-    .filter(Boolean)
-    .slice(0, Math.max(1, maxParagraphs));
-}
-
-function truncatePreview(text: string, maxChars: number): string {
-  const normalizedMaxChars = Math.max(8, maxChars);
-  if (text.length <= normalizedMaxChars) {
-    return text;
-  }
-  return `${text.slice(0, normalizedMaxChars - 3).trimEnd()}...`;
-}
-
-function buildPreviewText({
-  texts,
-  fallback,
-  maxPreviewChars,
-  maxPreviewParagraphs,
-}: {
-  texts: readonly string[];
-  fallback: string;
-  maxPreviewChars: number;
-  maxPreviewParagraphs: number;
-}): string {
-  const paragraphs = normalizePreviewParagraphs(texts.join("\n\n"), maxPreviewParagraphs);
-  if (paragraphs.length === 0) {
-    return fallback;
-  }
-  return truncatePreview(paragraphs.join("\n"), maxPreviewChars);
+function* assistantTexts(unit: ConversationTurnRenderUnit): Iterable<string> {
+  for (const row of unit.assistantTextRows) yield row.text;
 }
 
 function buildAssistantPreview(
@@ -143,8 +114,8 @@ function buildAssistantPreview(
 } {
   if (unit.assistantTextRows.length > 0) {
     return {
-      assistantPreview: buildPreviewText({
-        texts: unit.assistantTextRows.map((row) => row.text),
+      assistantPreview: buildConversationTurnNavigatorPreview({
+        texts: assistantTexts(unit),
         fallback: options.assistantEmptyPreview,
         maxPreviewChars: options.maxPreviewChars,
         maxPreviewParagraphs: options.maxPreviewParagraphs,
@@ -169,6 +140,7 @@ function buildAssistantPreview(
 export function buildConversationTurnNavigatorItems(
   units: readonly ConversationTurnRenderUnit[],
   options: BuildConversationTurnNavigatorItemsOptions,
+  cache?: ConversationTurnNavigatorPreviewCache,
 ): ConversationTurnNavigatorItem[] {
   const resolvedOptions: Required<BuildConversationTurnNavigatorItemsOptions> = {
     ...options,
@@ -176,7 +148,8 @@ export function buildConversationTurnNavigatorItems(
     maxPreviewParagraphs: options.maxPreviewParagraphs ?? DEFAULT_MAX_PREVIEW_PARAGRAPHS,
   };
 
-  return units.flatMap((unit, unitIndex) => {
+  cache?.beginBuild(resolvedOptions);
+  const items = units.flatMap((unit, unitIndex) => {
     // provider/store 的物理 role=user 还包含 background/goal/mailbox
     // 等系统上下文；目录代表用户主动 query，只能使用投影明确裁决的 realUser。
     const realUserInputs = unit.visibleUserInputs.filter((row) => row.origin === "realUser");
@@ -186,28 +159,37 @@ export function buildConversationTurnNavigatorItems(
 
     // 导航项按 query 拆分，但 hover 的 assistant 摘要保持旧产品语义：
     // 取所属 product turn 的文本结果，不在 renderer 猜测 guide 回复分段。
-    const { assistantPreview, assistantPreviewKind } = buildAssistantPreview(unit, resolvedOptions);
-    return realUserInputs.map((row, queryIndex) => ({
-      // 不能以 product turn 为目录粒度，并把同一 turn 的 steer query
-      // 全部拼进一个 preview。目录真正导航的是用户可见 query，必须用稳定 row
-      // 身份逐条建项，turnId 只负责把虚拟列表先定位到所属容器。
-      key: `${unit.key}:query:${row.entityId ?? row.rowId}`,
-      turnId: unit.turnId,
-      unitIndex,
-      rowId: row.rowId,
-      userPreview: buildPreviewText({
-        texts: [row.text],
-        fallback: resolvedOptions.userFallbackPreview,
-        maxPreviewChars: resolvedOptions.maxPreviewChars,
-        maxPreviewParagraphs: resolvedOptions.maxPreviewParagraphs,
-      }),
-      assistantPreview,
-      assistantPreviewKind,
-      // 同一 running product turn 可能已有多个已结束 guide segment；只有最后一条
-      // query 仍代表当前工作，避免所有旧 query 一起呈现 running 强调。
-      isRunning: unit.isRunning && queryIndex === realUserInputs.length - 1,
-    }));
+    const createAssistantPreview = () => buildAssistantPreview(unit, resolvedOptions);
+    const { assistantPreview, assistantPreviewKind } = cache
+      ? cache.assistantPreview(unit, createAssistantPreview)
+      : createAssistantPreview();
+    return realUserInputs.map((row, queryIndex) => {
+      const createUserPreview = () =>
+        buildConversationTurnNavigatorPreview({
+          texts: [row.text],
+          fallback: resolvedOptions.userFallbackPreview,
+          maxPreviewChars: resolvedOptions.maxPreviewChars,
+          maxPreviewParagraphs: resolvedOptions.maxPreviewParagraphs,
+        });
+      return {
+        // 不能以 product turn 为目录粒度，并把同一 turn 的 steer query
+        // 全部拼进一个 preview。目录真正导航的是用户可见 query，必须用稳定 row
+        // 身份逐条建项，turnId 只负责把虚拟列表先定位到所属容器。
+        key: `${unit.key}:query:${row.entityId ?? row.rowId}`,
+        turnId: unit.turnId,
+        unitIndex,
+        rowId: row.rowId,
+        userPreview: cache ? cache.userPreview(row, createUserPreview) : createUserPreview(),
+        assistantPreview,
+        assistantPreviewKind,
+        // 同一 running product turn 可能已有多个已结束 guide segment；只有最后一条
+        // query 仍代表当前工作，避免所有旧 query 一起呈现 running 强调。
+        isRunning: unit.isRunning && queryIndex === realUserInputs.length - 1,
+      };
+    });
   });
+  cache?.finishBuild();
+  return items;
 }
 
 function resolveFiniteNonNegative(value: number): number {

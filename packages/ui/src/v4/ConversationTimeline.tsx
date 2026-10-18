@@ -1731,6 +1731,7 @@ function ConversationTimelineImpl({
           必须隐藏对话轮导航，避免两个绝对定位控件互相覆盖。退出分享选择后自动恢复。 */}
       {hideTurnNavigator ? null : (
         <ConversationTurnNavigator
+          sessionKey={sessionKey}
           renderUnits={renderUnits}
           isHydratingDirectory={loadingOlder}
           scrollOffsetPx={virtualizer.scrollOffset ?? turnNavigatorViewport.scrollOffsetPx}

@@ -17,8 +17,10 @@ import {
   type ConversationTurnNavigatorVirtualItem,
 } from "@/v4/conversationTurnNavigatorHelpers.js";
 import type { ConversationTurnRenderUnit } from "@/v4/conversationTurnRenderUnits.js";
+import { ConversationTurnNavigatorPreviewCache } from "./conversationTurnNavigatorPreviewCache.js";
 
 interface ConversationTurnNavigatorProps {
+  sessionKey: string;
   renderUnits: readonly ConversationTurnRenderUnit[];
   scrollOffsetPx: number;
   viewportHeightPx: number;
@@ -46,6 +48,7 @@ function usePrefersReducedMotion() {
 }
 
 function ConversationTurnNavigatorImpl({
+  sessionKey,
   renderUnits,
   scrollOffsetPx,
   viewportHeightPx,
@@ -56,21 +59,26 @@ function ConversationTurnNavigatorImpl({
 }: ConversationTurnNavigatorProps) {
   const { intl } = useZCodeIntl();
   const prefersReducedMotion = usePrefersReducedMotion();
+  const previewCache = useMemo(() => new ConversationTurnNavigatorPreviewCache(), [sessionKey]);
   const [interactionItemIndex, setInteractionItemIndex] = useState<number | undefined>(undefined);
   const items = useMemo(
     () =>
-      buildConversationTurnNavigatorItems(renderUnits, {
-        assistantEmptyPreview: intl.formatMessage({
-          id: "chat.turnNavigator.emptyAssistant",
-        }),
-        assistantRunningPreview: intl.formatMessage({
-          id: "chat.turnNavigator.runningAssistant",
-        }),
-        userFallbackPreview: intl.formatMessage({
-          id: "chat.turnNavigator.userFallback",
-        }),
-      }),
-    [intl, renderUnits],
+      buildConversationTurnNavigatorItems(
+        renderUnits,
+        {
+          assistantEmptyPreview: intl.formatMessage({
+            id: "chat.turnNavigator.emptyAssistant",
+          }),
+          assistantRunningPreview: intl.formatMessage({
+            id: "chat.turnNavigator.runningAssistant",
+          }),
+          userFallbackPreview: intl.formatMessage({
+            id: "chat.turnNavigator.userFallback",
+          }),
+        },
+        previewCache,
+      ),
+    [intl, renderUnits, previewCache],
   );
 
   const activeUnitIndex = useMemo(
