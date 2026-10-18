@@ -216,7 +216,7 @@ function inputPaneTextareaStyle(editorRows: number): Record<string, unknown> {
   };
 }
 
-function syncTextareaValue(textarea: DraftTextarea, value: string): boolean {
+export function syncTextareaValue(textarea: DraftTextarea, value: string): boolean {
   if (textarea.plainText === value) return false;
   textarea.setText(value);
   moveInputCursorToEnd(textarea);

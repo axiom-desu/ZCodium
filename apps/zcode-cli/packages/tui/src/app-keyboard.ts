@@ -4,7 +4,8 @@ import { useKeyboard } from "@mbears/opentui-react";
 import { useCallback, useRef } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { handleApprovalKey } from "./app-approval.js";
-import { handleSelectionKey } from "./app-input.js";
+import { handlePendingQuitKey } from "./app-quit.js";
+import { handleSelectionKey, isTuiQuitInput } from "./app-input.js";
 import {
   CTRL_C_EXIT_PROMPT,
   PROMPT_DRAFT_CLEARED_STATUS,
@@ -56,7 +57,7 @@ export {
 type UseTuiKeyboardControlsOptions = {
   readOnlyView?: { back(): void };
   abortControllerRef: MutableRefObject<AbortController | undefined>;
-  approvalQueue: ApprovalPrompt[];
+  getCurrentApproval: () => ApprovalPrompt | undefined;
   busy: boolean;
   copyCurrentSelection: () => boolean;
   draftValue: string;
@@ -72,6 +73,8 @@ type UseTuiKeyboardControlsOptions = {
   modelSelection: ModelCommandSelectionState | undefined;
   modeSelection: ModeCommandSelectionState | undefined;
   onExit: (code: number) => void;
+  tryQuit: (value?: string, origin?: "composer" | "approval") => boolean;
+  quitHint: string;
   pasteClipboardImage: () => Promise<void>;
   recallNextInput: () => Promise<void>;
   recallPreviousInput: () => Promise<void>;
@@ -95,7 +98,7 @@ type UseTuiKeyboardControlsOptions = {
 export function useTuiKeyboardControls({
   readOnlyView,
   abortControllerRef,
-  approvalQueue,
+  getCurrentApproval,
   busy,
   copyCurrentSelection,
   draftValue,
@@ -111,6 +114,8 @@ export function useTuiKeyboardControls({
   modelSelection,
   modeSelection,
   onExit,
+  tryQuit,
+  quitHint,
   pasteClipboardImage,
   recallNextInput,
   recallPreviousInput,
@@ -131,12 +136,27 @@ export function useTuiKeyboardControls({
   toggleSidebarSection,
 }: UseTuiKeyboardControlsOptions): void {
   const ctrlCExitGuardRef = useRef<CtrlCExitGuard>(createCtrlCExitGuard());
+  const pendingQuitRef = useRef<string | undefined>(undefined);
   const sidebarShortcutRef = useRef<SidebarShortcutState>(createSidebarShortcutState());
 
   useKeyboard(
     useCallback(
       (key: KeyEvent) => {
         if (key.eventType === "release") return;
+
+        // 仅普通 Enter 提交退出，Shift/Alt+Enter 仍是换行；隐藏子会话视图不能提交主草稿。
+        if (
+          !readOnlyView &&
+          key.name === "return" &&
+          !key.shift &&
+          !key.option &&
+          !key.ctrl &&
+          !key.meta &&
+          tryQuit()
+        ) {
+          consumeKey(key);
+          return;
+        }
 
         if (readOnlyView) {
           resetCtrlCExitGuard(ctrlCExitGuardRef.current);
@@ -166,7 +186,36 @@ export function useTuiKeyboardControls({
           return;
         }
 
-        const approval = approvalQueue[0];
+        const approval = getCurrentApproval();
+        if (!approval) pendingQuitRef.current = undefined;
+        // 自定义问答保留真实文本（例如 /tmp/path）；只在显式提交完整 /quit 时退出。
+        if (
+          approval?.questionState?.editingOther &&
+          key.name === "return" &&
+          !key.shift &&
+          !key.option &&
+          isTuiQuitInput(approval.questionState.otherBuffer) &&
+          tryQuit(approval.questionState.otherBuffer, "approval")
+        ) {
+          consumeKey(key);
+          return;
+        }
+        if (
+          approval &&
+          !approval.questionState?.editingOther &&
+          handlePendingQuitKey({
+            key,
+            buffer: pendingQuitRef,
+            hint: quitHint,
+            setStatus,
+            submit: (value) => {
+              tryQuit(value, "approval");
+            },
+          })
+        ) {
+          consumeKey(key);
+          return;
+        }
         if (approval) {
           resetCtrlCExitGuard(ctrlCExitGuardRef.current);
           consumeKey(key);
@@ -378,7 +427,7 @@ export function useTuiKeyboardControls({
       [
         readOnlyView,
         abortControllerRef,
-        approvalQueue,
+        getCurrentApproval,
         workflowExpansion,
         busy,
         copyCurrentSelection,
@@ -394,6 +443,8 @@ export function useTuiKeyboardControls({
         modelSelection,
         modeSelection,
         onExit,
+        tryQuit,
+        quitHint,
         pasteClipboardImage,
         recallNextInput,
         recallPreviousInput,

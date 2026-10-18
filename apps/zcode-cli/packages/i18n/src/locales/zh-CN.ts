@@ -51,6 +51,7 @@ export const zhCN: ZCodeCopy = {
 
 Slash Commands:
   /help [command]       显示 slash command 帮助
+  /quit                 退出交互式 TUI（本地命令）
   /compact [instructions]  压缩当前对话
   /expert [status|resume|stop|<task>]  运行或管理 expert workflow
   /dwf [list|cancel|resume]  列出、取消或恢复 dynamic workflow run
@@ -233,6 +234,7 @@ Slash Commands:
       turnFailed: "本轮失败。",
     },
     terminal: {
+      quit: "退出终端界面",
       starting: "正在启动 ZCodium… Ctrl+C 退出",
       requiresInteractive: "TUI 需要交互式终端。",
     },

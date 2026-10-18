@@ -51,6 +51,7 @@ Options:
 
 Slash Commands:
   /help [command]       Show slash command help
+  /quit                 Exit the interactive TUI (local command)
   /compact [instructions]  Compact the current conversation
   /expert [status|resume|stop|<task>]  Run or manage the expert workflow
   /dwf [list|cancel|resume]  List, cancel, or resume dynamic workflow runs
@@ -234,6 +235,7 @@ Slash Commands:
       turnFailed: "Turn failed.",
     },
     terminal: {
+      quit: "Exit the TUI",
       requiresInteractive: "TUI requires an interactive terminal.",
       starting: "Starting ZCodium... Ctrl+C to exit",
     },

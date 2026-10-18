@@ -91,6 +91,8 @@ jobs:
         run: cargo build --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --bin zcode-cli-rust --example node_read
       - name: Run real Node/Rust interop
         run: pnpm test:zcode-cli-rust-interop
+      - name: TS TUI quit real PTY acceptance
+        run: node scripts/ci/tui-quit-pty-smoke.mjs
       - name: Rust TUI real PTY acceptance
         run: node scripts/zcode-cli-rust-tui-smoke.mjs --provider-discovery
 

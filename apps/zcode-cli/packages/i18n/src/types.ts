@@ -181,6 +181,7 @@ export interface TuiCopy {
     turnFailed: string;
   };
   terminal: {
+    quit: string;
     requiresInteractive: string;
     starting: string;
   };

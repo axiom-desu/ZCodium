@@ -2,7 +2,7 @@ import type { ModelUsageSummary, TodoItem, TurnId } from "@zcode/contracts";
 import { getZCodeCopy } from "@zcode/i18n";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { AppView } from "./app-view.js";
-import type { PromptInputEditor } from "./app-input-pane.js";
+import { syncTextareaValue, type PromptInputEditor } from "./app-input-pane.js";
 import { selectionCopyStatus, type SelectionCopyResult } from "./app-copy.js";
 import { useClipboardImagePaste } from "./app-clipboard-image.js";
 import { useFileMentionController } from "./app-file-mentions.js";
@@ -11,7 +11,12 @@ import { useTuiModeSwitcher } from "./app-mode.js";
 import { createTuiPermissionRequester } from "./app-permission.js";
 import { appendAgentResult } from "./app-submit.js";
 import { useSubmitValue } from "./app-submit-controller.js";
-import { filterSlashCommands, reconcileSlashSelection } from "./app-input.js";
+import {
+  filterSlashCommands,
+  reconcileSlashSelection,
+  tuiSlashCommands,
+  trySubmitTuiQuit,
+} from "./app-input.js";
 import { useEffortCommandController } from "./app-effort-command.js";
 import { useInputHistory } from "./app-input-history.js";
 import { useModeCommandController } from "./app-mode-command.js";
@@ -93,7 +98,15 @@ export function TuiApp({
     createSelectionState(initialResult?.selection),
   );
   const [slashSelection, setSlashSelection] = useState<SlashSelectionState | undefined>();
-  const [approvalQueue, setApprovalQueue] = useState<ApprovalPrompt[]>([]);
+  const [approvalQueue, setApprovalQueueState] = useState<ApprovalPrompt[]>([]);
+  const approvalQueueRef = useRef<ApprovalPrompt[]>([]);
+  // 快速同批按键发生在下一次 render 之前；同步 owner 保存最新局部审批，state 只投影给界面。
+  const setApprovalQueue = useCallback((action: React.SetStateAction<ApprovalPrompt[]>) => {
+    const next = typeof action === "function" ? action(approvalQueueRef.current) : action;
+    approvalQueueRef.current = next;
+    setApprovalQueueState(next);
+  }, []);
+  const getCurrentApproval = useCallback(() => approvalQueueRef.current[0], []);
   const [inputCursorToEndVersion, setInputCursorToEndVersion] = useState(0);
   // dwf 运行态镜像：共享 reducer 逐事件维护 + 冷启动一次性补种，无第二时钟。
   const workflowRuns = useTuiWorkflowRuns({ copy: copy.tui, options, setMessages });
@@ -101,6 +114,7 @@ export function TuiApp({
   const subagents = useSubagents(options);
 
   const abortControllerRef = useRef<AbortController | undefined>(undefined);
+  const exitRequestedRef = useRef(false);
   const draftRef = useRef("");
   const draftAttachmentsRef = useRef<DraftAttachment[]>([]);
   const inputEditorRef = useRef<PromptInputEditor | null>(null);
@@ -112,7 +126,10 @@ export function TuiApp({
   const modifiedFileToolCallIdsRef = useRef(new Set<string>());
   const toolNamesByIdRef = useRef(new Map<string, string>());
 
-  const slashCommands = options.slashCommands ?? [];
+  const slashCommands = useMemo(
+    () => tuiSlashCommands(options.slashCommands, copy.tui.terminal.quit),
+    [options.slashCommands, copy.tui.terminal.quit],
+  );
   const [effortOptions, setEffortOptions] = useState<NonNullable<TuiOptions["effortOptions"]>>(
     () => initialResult?.effortOptions ?? options.effortOptions ?? [],
   );
@@ -133,7 +150,12 @@ export function TuiApp({
 
   const setDraftValue = useCallback(
     (value: string) => {
+      if (exitRequestedRef.current) return;
       draftRef.current = value;
+      // 同批原生输入的提交会先于 React layout effect；立即清空同一 editor，
+      // 防止延迟 content-change 复活旧 prompt，把下一条 /quit 拼到旧输入后排队。
+      if (value.length === 0 && inputEditorRef.current)
+        syncTextareaValue(inputEditorRef.current, value);
       setDraftState(value);
       setDraftAttachments((current) =>
         current.filter((attachment) => value.includes(attachment.placeholder)),
@@ -222,7 +244,7 @@ export function TuiApp({
 
   const requestPermission = useMemo(
     () => createTuiPermissionRequester({ setApprovalQueue, setStatus }),
-    [],
+    [setApprovalQueue],
   );
 
   const resolveSubmittedText = useCallback(
@@ -242,6 +264,12 @@ export function TuiApp({
     [effortCommand, filteredSlashCommands, modeCommand, modelCommand, slashSelection],
   );
 
+  const requestExit = useCallback(() => {
+    if (exitRequestedRef.current) return;
+    exitRequestedRef.current = true;
+    abortControllerRef.current?.abort();
+    onExit(0);
+  }, [onExit]);
   const submitValue = useSubmitValue({
     activeTurnId,
     applyResult,
@@ -266,7 +294,18 @@ export function TuiApp({
     setStatus,
     setStatusDetails,
     turnRef: abortControllerRef,
+    requestExit,
+    quitSummary: copy.tui.terminal.quit,
   });
+  const tryQuit = useCallback(
+    (value = draftRef.current, origin: "composer" | "approval" = "composer") =>
+      trySubmitTuiQuit({
+        draft: value,
+        hasAttachments: origin === "composer" && draftAttachmentsRef.current.length > 0,
+        submit: requestExit,
+      }),
+    [requestExit],
+  );
 
   const pasteClipboardImage = useClipboardImagePaste({
     abortControllerRef,
@@ -330,7 +369,7 @@ export function TuiApp({
   useTuiKeyboardControls({
     readOnlyView: subagents.selected ? { back: subagents.back } : undefined,
     abortControllerRef,
-    approvalQueue,
+    getCurrentApproval,
     busy,
     copyCurrentSelection,
     effortSelection: effortCommand.selection,
@@ -339,7 +378,9 @@ export function TuiApp({
     filteredModeOptions: modeCommand.filteredOptions,
     filteredModelOptions: modelCommand.filteredOptions,
     handleFileMentionKey: fileMentions.handleKey,
-    onExit,
+    onExit: requestExit,
+    tryQuit,
+    quitHint: copy.tui.terminal.quit,
     pasteClipboardImage,
     recallNextInput,
     recallPreviousInput,

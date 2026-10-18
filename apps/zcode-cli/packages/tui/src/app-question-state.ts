@@ -1,7 +1,4 @@
-import type {
-  AskUserQuestionAnnotation,
-  AskUserQuestionInput,
-} from "@zcode/contracts";
+import type { AskUserQuestionAnnotation, AskUserQuestionInput } from "@zcode/contracts";
 import type { KeyEvent } from "@mbears/opentui-core";
 import type React from "react";
 import type { ApprovalPrompt, QuestionPromptState } from "./app-model.js";
@@ -34,7 +31,8 @@ export function handleQuestionKey(
   const update = (recipe: (draft: QuestionPromptState) => void) => {
     setApprovalQueue((current) =>
       current.map((item) => {
-        if (item !== approval || !item.questionState) return item;
+        // 每键都会 clone approval；按对象引用匹配会丢掉同批后续按键。resolve 是该审批稳定的 UI 句柄。
+        if (item.resolve !== approval.resolve || !item.questionState) return item;
         const nextState = cloneQuestionState(item.questionState);
         recipe(nextState);
         return {
@@ -130,7 +128,7 @@ function handleQuestionReviewKey(
       reason: "Answered in TUI",
       resolvedAt: new Date(),
     });
-    setApprovalQueue((current) => current.filter((item) => item !== approval));
+    setApprovalQueue((current) => current.filter((item) => item.resolve !== approval.resolve));
     setStatus(`Answered ${Object.keys(state.answers).length} clarification questions.`);
     return;
   }
@@ -291,7 +289,7 @@ function denyQuestion(
     reason: "Denied in TUI",
     resolvedAt: new Date(),
   });
-  setApprovalQueue((current) => current.filter((item) => item !== approval));
+  setApprovalQueue((current) => current.filter((item) => item.resolve !== approval.resolve));
   setStatus("Clarification declined.");
 }
 
@@ -328,7 +326,7 @@ function answerCurrentQuestion(
   if (!question) return undefined;
 
   const selectedLabels = question.multiSelect
-    ? state.multiSelections[question.question] ?? []
+    ? (state.multiSelections[question.question] ?? [])
     : [
         state.selectedOptionIndex === question.options.length
           ? "Other"
