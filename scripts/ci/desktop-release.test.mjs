@@ -87,6 +87,20 @@ test("collect only installers, excluding unpacked app and builder metadata", asy
   });
 });
 
+test("collect selects the requested product identity", async (t) => {
+  const preview = desktopProductIdentities.preview;
+  const source = await fixture(t, [
+    ...artifactNames("linux", version, "x64", identity),
+    ...artifactNames("linux", version, "x64", preview),
+  ]);
+  const output = await fixture(t, []);
+  await collectArtifacts(source, output, "linux", version, "x64", preview);
+  assert.deepEqual(
+    (await readdir(output)).sort(),
+    [...artifactNames("linux", version, "x64", preview)].sort(),
+  );
+});
+
 test("Windows x64 and arm64 artifacts are collected independently", async (t) => {
   // 交叉打包：x64 job 与 arm64 job 各自只收自己的产物；不传 arch 才收全部。
   const source = await fixture(t);
@@ -179,6 +193,53 @@ test("missing, empty, wrong-version and extra assets block release", async (t) =
   await assert.rejects(verifyReleaseAssets(wrongVersion, version, identity));
 });
 
+test("dual-product checksums cover exactly 28 installers from both identities", async (t) => {
+  const preview = desktopProductIdentities.preview;
+  const names = [
+    ...artifactNames("linux", version, undefined, identity),
+    ...artifactNames("win", version, undefined, identity),
+    ...artifactNames("mac", version, undefined, identity),
+    ...artifactNames("linux", version, undefined, preview),
+    ...artifactNames("win", version, undefined, preview),
+    ...artifactNames("mac", version, undefined, preview),
+  ];
+  const directory = await fixture(t, names);
+  const paths = await verifyReleaseAssets(directory, version, [identity, preview]);
+  assert.equal(paths.length, 29);
+  assert.equal(
+    (await readFile(join(directory, "SHA256SUMS"), "utf8")).trim().split("\n").length,
+    28,
+  );
+});
+
+test("dual-product verification rejects empty, duplicate, missing, empty, wrong-version, and extra inputs", async (t) => {
+  const preview = desktopProductIdentities.preview;
+  const names = [
+    ...artifactNames("linux", version, undefined, identity),
+    ...artifactNames("win", version, undefined, identity),
+    ...artifactNames("mac", version, undefined, identity),
+    ...artifactNames("linux", version, undefined, preview),
+    ...artifactNames("win", version, undefined, preview),
+    ...artifactNames("mac", version, undefined, preview),
+  ];
+  const complete = await fixture(t, names);
+  await assert.rejects(verifyReleaseAssets(complete, version, []), /identit/i);
+  await assert.rejects(verifyReleaseAssets(complete, version, [identity, identity]), /duplicate/i);
+  await assert.rejects(
+    verifyReleaseAssets(await fixture(t, names.slice(0, -1)), version, [identity, preview]),
+  );
+  const empty = await fixture(t, names);
+  await writeFile(join(empty, names[0]), "");
+  await assert.rejects(verifyReleaseAssets(empty, version, [identity, preview]), /empty/);
+  const wrong = await fixture(
+    t,
+    names.map((name) => name.replace(version, "3.13.0")),
+  );
+  await assert.rejects(verifyReleaseAssets(wrong, version, [identity, preview]));
+  const extra = await fixture(t, [...names, "unexpected.bin"]);
+  await assert.rejects(verifyReleaseAssets(extra, version, [identity, preview]), /Unexpected/);
+});
+
 test("checksums cover exactly the fourteen validated installers and can be regenerated", async (t) => {
   const directory = await fixture(t);
   const paths = await verifyReleaseAssets(directory, version, identity);
@@ -198,10 +259,34 @@ function githubMock(releases = []) {
   const calls = [];
   const run = async (command, args) => {
     calls.push([command, ...args]);
-    return { stdout: args[1] === "list" ? JSON.stringify(releases) : "" };
+    return {
+      stdout:
+        args[1] === "list"
+          ? JSON.stringify(releases)
+          : args[1] === "view"
+            ? JSON.stringify({
+                body: "Maintainer notes\n\n## Generated changes\n- Preserve this entry",
+              })
+            : "",
+    };
   };
   return { run, calls };
 }
+
+test("draft title and notes describe both products without losing the required notice", async () => {
+  const { run, calls } = githubMock();
+  await publishDraft({ tag: "v3.14.0", repo: "owner/repo", files: ["/tmp/artifact"], run });
+  const titleIndex = calls[1].indexOf("--title");
+  assert.equal(calls[1][titleIndex + 1], "ZCodium Exp + ZCodium Rust v3.14.0");
+  const notesIndex = calls[1].indexOf("--notes");
+  assert.match(calls[1][notesIndex + 1], /^To be, or not to be/);
+  assert.match(
+    calls[1][notesIndex + 1],
+    /ZCodium Exp.*default TS runtime.*ZCodium Rust.*experimental.*default Rust runtime/s,
+  );
+  assert.match(calls[1][notesIndex + 1], /unsigned/i);
+  assert.match(calls[1][notesIndex + 1], /Manual platform acceptance is not complete/);
+});
 
 test("create a draft then upload assets; never publish it", async () => {
   const { run, calls } = githubMock();
@@ -213,7 +298,7 @@ test("create a draft then upload assets; never publish it", async () => {
   assert.notEqual(notesIndex, -1);
   assert.equal(
     calls[1][notesIndex + 1],
-    "To be, or not to be, that is the question.\n\n生存还是毁灭，这是一个问题。\n\n— William Shakespeare, Hamlet / 莎士比亚《哈姆雷特》\n\nFeatures: workflow Holes; mobile replayable realtime; scoped upstream 3.15.1 sync. Manual platform acceptance is not complete.\n\nmacOS arm64/x64, Linux x64/arm64 and Windows x64/arm64. Unsigned builds; review and test each platform before publishing. Verify downloads with SHA256SUMS.",
+    "To be, or not to be, that is the question.\n\n生存还是毁灭，这是一个问题。\n\n— William Shakespeare, Hamlet / 莎士比亚《哈姆雷特》\n\nProducts: ZCodium Exp uses the default TS runtime; ZCodium Rust is experimental and uses the default Rust runtime.\n\nFeatures: workflow Holes; mobile replayable realtime; scoped upstream 3.15.1 sync. Manual platform acceptance is not complete.\n\nmacOS arm64/x64, Linux x64/arm64 and Windows x64/arm64. Unsigned builds; review and test each platform before publishing. Verify downloads with SHA256SUMS.",
   );
   assert.equal(calls[2][2], "upload");
   assert.ok(calls[2].includes("--clobber"));
@@ -222,14 +307,45 @@ test("create a draft then upload assets; never publish it", async () => {
 test("rerun updates only a draft and refuses an already public release", async () => {
   const draft = githubMock([{ tagName: "v3.14.0", isDraft: true }]);
   await publishDraft({ tag: "v3.14.0", repo: "owner/repo", files: ["a"], run: draft.run });
-  assert.equal(draft.calls.length, 2);
-  assert.equal(draft.calls[1][2], "upload");
+  assert.equal(draft.calls.length, 4);
+  assert.equal(draft.calls[1][2], "view");
+  assert.equal(draft.calls[2][2], "edit");
+  assert.equal(
+    draft.calls[2][draft.calls[2].indexOf("--title") + 1],
+    "ZCodium Exp + ZCodium Rust v3.14.0",
+  );
+  const updatedNotes = draft.calls[2][draft.calls[2].indexOf("--notes") + 1];
+  assert.match(updatedNotes, /ZCodium Exp.*TS/);
+  assert.match(updatedNotes, /ZCodium Rust.*Rust/);
+  assert.match(updatedNotes, /^Maintainer notes\n\n## Generated changes\n- Preserve this entry/);
+  assert.equal(draft.calls[3][2], "upload");
   const published = githubMock([{ tagName: "v3.14.0", isDraft: false }]);
   await assert.rejects(
     publishDraft({ tag: "v3.14.0", repo: "owner/repo", files: ["a"], run: published.run }),
     /published/,
   );
   assert.equal(published.calls.length, 1);
+});
+
+test("draft metadata update failure stops before asset upload", async () => {
+  const calls = [];
+  await assert.rejects(
+    publishDraft({
+      tag: "v3.14.0",
+      repo: "owner/repo",
+      files: ["a"],
+      run: async (_command, args) => {
+        calls.push(args);
+        if (args[1] === "list")
+          return { stdout: JSON.stringify([{ tagName: "v3.14.0", isDraft: true }]) };
+        if (args[1] === "view") return { stdout: JSON.stringify({ body: "notes" }) };
+        throw new Error("metadata update failed");
+      },
+    }),
+    /metadata update failed/,
+  );
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2][1], "edit");
 });
 
 test("prerelease tags create prerelease drafts", async () => {

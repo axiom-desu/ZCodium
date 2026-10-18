@@ -3,7 +3,7 @@
 // 不修改产品代码；网络拦截通过运行时注入 main 的 webRequest（测试专用）与 renderer route 完成。
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { _electron as electron } from "playwright-core";
 import {
   installMainProcessNetworkGuard,
@@ -38,6 +38,7 @@ export async function launchDesktopApp({
   env,
   proxyUrl,
   extraArgs = [],
+  packaged = false,
   timeoutMs = 90_000,
 }) {
   const networkArgs = [
@@ -47,8 +48,10 @@ export async function launchDesktopApp({
   ];
   const app = await electron.launch({
     executablePath: electronBinary,
-    args: [desktopRoot, "--no-sandbox", ...networkArgs, ...extraArgs],
-    cwd: desktopRoot,
+    // deb smoke 直接启动包内 executable；传 desktopRoot 会强制 Electron 进入开发态。
+    args: [...(packaged ? [] : [desktopRoot]), "--no-sandbox", ...networkArgs, ...extraArgs],
+    // 打包态不能继承仓库 cwd，否则 dev runtime discovery 可能掩盖漏打包资源。
+    cwd: packaged ? dirname(electronBinary) : desktopRoot,
     env,
     timeout: timeoutMs,
   });

@@ -170,7 +170,7 @@ jobs:
           retention-days: 7
 
   build:
-    name: Build (${{ matrix.platform }} ${{ matrix.arch }})
+    name: Build (${{ matrix.flavor }} ${{ matrix.target.platform }} ${{ matrix.target.arch }})
     needs: remote-assets
     # 打包只等待 assets 真实产出，不等待 checks 完成，也不看 checks 是否通过：
     # - checks 失败但 assets 成功 -> 继续打包，保留「检查与打包独立」的产品规则；
@@ -180,7 +180,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
+        flavor: ${{ fromJSON((github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')) && '["production","preview"]' || '["production"]') }}
+        target:
           - platform: linux
             runner: ubuntu-24.04
             arch: x64
@@ -200,14 +201,15 @@ jobs:
             runner: windows-2025
             arch: arm64
             crossArch: true
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.target.runner }}
     timeout-minutes: 90
     defaults:
       run:
         shell: bash
     env:
-      ZCODE_TARGET_OS: ${{ matrix.platform }}
-      ZCODE_TARGET_ARCH: ${{ matrix.arch }}
+      ZCODE_TARGET_OS: ${{ matrix.target.platform }}
+      ZCODE_TARGET_ARCH: ${{ matrix.target.arch }}
+      ZCODE_PREVIEW_IDENTITY: ${{ matrix.flavor == 'preview' && '1' || '0' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -225,15 +227,26 @@ jobs:
           path: packages/desktop/bundled-remote-assets
       - name: Verify bundled remote components
         run: node scripts/bundle-remote-assets.mjs verify
+      # Preview 的 Rust runtime 必须在准备/构建前安装；与仓库 CLI workflow 使用相同 stable channel。
+      - uses: dtolnay/rust-toolchain@stable
+        if: matrix.flavor == 'preview'
+      - name: Initialize Windows MSVC environment for Preview
+        if: matrix.flavor == 'preview' && matrix.target.platform == 'win'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        with:
+          arch: ${{ matrix.target.arch == 'arm64' && 'amd64_arm64' || 'amd64' }}
+      - name: Install Windows ARM64 Rust target
+        if: matrix.flavor == 'preview' && matrix.target.platform == 'win' && matrix.target.arch == 'arm64'
+        run: rustup target add aarch64-pc-windows-msvc
       - name: Prepare desktop runtime
         run: pnpm prepare:desktop-runtime
       # 交叉架构（Windows arm64 在 x64 runner 上打包）加载不了目标原生库，
       # 只能校验随包资产文件；执行探针留给同架构的原生 runner（含 Linux arm64）。
       - name: Verify native CUA and shared plugin host
-        if: matrix.crossArch != true
+        if: matrix.target.crossArch != true
         run: node scripts/ci/cua-driver-smoke.mjs
       - name: Verify staged CUA assets (cross-arch)
-        if: matrix.crossArch == true
+        if: matrix.target.crossArch == true
         run: node scripts/ci/cua-driver-smoke.mjs --files-only
       - name: Build workspace and desktop
         run: pnpm build:bootstrap
@@ -241,20 +254,20 @@ jobs:
         run: pnpm bundle:desktop -- --os "$ZCODE_TARGET_OS" --arch "$ZCODE_TARGET_ARCH" --skip-prepare --skip-build
       # 同理：交叉架构的 Electron 可执行文件在 x64 runner 上跑不起来。
       - name: Verify CUA with the packaged Electron runtime
-        if: matrix.crossArch != true
+        if: matrix.target.crossArch != true
         run: node scripts/ci/cua-driver-smoke.mjs --packaged
       - name: Collect installers
         run: node scripts/ci/desktop-release.mjs collect "$ZCODE_TARGET_OS" "$ZCODE_TARGET_ARCH"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          name: desktop-${{ matrix.flavor }}-${{ matrix.target.platform }}-${{ matrix.target.arch }}
           path: dist/release-assets/*
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
 
   build-macos:
-    name: Build (mac ${{ matrix.arch }})
+    name: Build (${{ matrix.flavor }} mac ${{ matrix.target.arch }})
     # macOS runner 按 10 倍费率计分钟，只在发版 tag 与手动触发时打包；
     # 日常 push/PR 的打包回归由 linux/win 矩阵与 checks 覆盖。
     if: ${{ !cancelled() && needs.remote-assets.result == 'success' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')) }}
@@ -262,18 +275,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
+        flavor: ${{ fromJSON((github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')) && '["production","preview"]' || '["production"]') }}
+        target:
           # arm64 与 x64 各自用原生 runner：Apple Silicon 上交叉打 x64 会带上
           # 错误架构的原生预编译产物（node-pty prebuild、bundled 工具链）。
           - arch: arm64
             runner: macos-15
           - arch: x64
             runner: macos-15-intel
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.target.runner }}
     timeout-minutes: 120
     env:
       ZCODE_TARGET_OS: mac
-      ZCODE_TARGET_ARCH: ${{ matrix.arch }}
+      ZCODE_TARGET_ARCH: ${{ matrix.target.arch }}
+      ZCODE_PREVIEW_IDENTITY: ${{ matrix.flavor == 'preview' && '1' || '0' }}
     defaults:
       run:
         shell: bash
@@ -291,6 +306,9 @@ jobs:
           path: packages/desktop/bundled-remote-assets
       - name: Verify bundled remote components
         run: node scripts/bundle-remote-assets.mjs verify
+      # Rust runtime 只用于 Preview；工具链必须在 runtime preparation 之前就绪。
+      - uses: dtolnay/rust-toolchain@stable
+        if: matrix.flavor == 'preview'
       - name: Prepare desktop runtime
         run: pnpm prepare:desktop-runtime
       - name: Build workspace and desktop
@@ -301,7 +319,7 @@ jobs:
         run: node scripts/ci/desktop-release.mjs collect mac "$ZCODE_TARGET_ARCH"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: desktop-mac-${{ matrix.arch }}
+          name: desktop-${{ matrix.flavor }}-mac-${{ matrix.target.arch }}
           path: dist/release-assets/*
           if-no-files-found: error
           compression-level: 0
@@ -325,27 +343,51 @@ jobs:
           install-dependencies: "false"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: desktop-linux-x64
+          name: desktop-production-linux-x64
           path: dist/release-assets
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: desktop-linux-arm64
+          name: desktop-production-linux-arm64
           path: dist/release-assets
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: desktop-win-x64
+          name: desktop-production-win-x64
           path: dist/release-assets
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: desktop-win-arm64
+          name: desktop-production-win-arm64
           path: dist/release-assets
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: desktop-mac-arm64
+          name: desktop-production-mac-arm64
           path: dist/release-assets
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: desktop-mac-x64
+          name: desktop-production-mac-x64
+          path: dist/release-assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-preview-linux-x64
+          path: dist/release-assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-preview-linux-arm64
+          path: dist/release-assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-preview-win-x64
+          path: dist/release-assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-preview-win-arm64
+          path: dist/release-assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-preview-mac-arm64
+          path: dist/release-assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-preview-mac-x64
           path: dist/release-assets
       - name: Verify assets and create or update draft
         run: node scripts/ci/desktop-release.mjs publish

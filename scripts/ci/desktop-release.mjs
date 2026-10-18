@@ -2,7 +2,10 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { copyFile, lstat, mkdir, open, readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { resolveDesktopProductIdentity } from "../../packages/desktop/scripts/desktop-product-identity.mjs";
+import {
+  desktopProductIdentities,
+  resolveDesktopProductIdentity,
+} from "../../packages/desktop/scripts/desktop-product-identity.mjs";
 import { getBuildMetadata } from "../../packages/desktop/scripts/build-metadata.mjs";
 import { collectRollingAppVersion } from "../rolling-app-version.mjs";
 import { pathToFileURL } from "node:url";
@@ -14,7 +17,9 @@ const RELEASE_MESSAGE_HEADING =
   "To be, or not to be, that is the question.\n\n" +
   "生存还是毁灭，这是一个问题。\n\n" +
   "— William Shakespeare, Hamlet / 莎士比亚《哈姆雷特》";
+const RELEASE_PRODUCT_SUMMARY = `Products: ${desktopProductIdentities.production.productName} uses the default TS runtime; ${desktopProductIdentities.preview.productName} is experimental and uses the default Rust runtime.`;
 const RELEASE_MESSAGE_BODY =
+  `${RELEASE_PRODUCT_SUMMARY}\n\n` +
   "Features: workflow Holes; mobile replayable realtime; scoped upstream 3.15.1 sync. Manual platform acceptance is not complete.\n\n" +
   "macOS arm64/x64, Linux x64/arm64 and Windows x64/arm64. Unsigned builds; review and test each platform before publishing. Verify downloads with SHA256SUMS.";
 // electron-builder 按发行格式改写 ${arch}，必须匹配实际产物而非统一猜测 x64。
@@ -123,9 +128,21 @@ export async function verifyReleaseAssets(
   version,
   identity = resolveDesktopProductIdentity(),
 ) {
-  const names = Object.keys(extensions)
-    .flatMap((platform) => artifactNames(platform, version, undefined, identity))
+  const identities = Array.isArray(identity) ? identity : [identity];
+  if (identities.length === 0) throw new Error("Release identities must not be empty");
+  const identityKeys = identities.map((item) => item?.flavor);
+  if (identityKeys.some((key) => !key)) throw new Error("Release identities must be valid");
+  if (new Set(identityKeys).size !== identityKeys.length) {
+    throw new Error("Duplicate release identity");
+  }
+  const names = identities
+    .flatMap((item) =>
+      Object.keys(extensions).flatMap((platform) =>
+        artifactNames(platform, version, undefined, item),
+      ),
+    )
     .sort();
+  if (new Set(names).size !== names.length) throw new Error("Duplicate release asset filenames");
   const allowed = new Set([...names, "SHA256SUMS"]);
   for (const name of await readdir(directory)) {
     if (!allowed.has(name)) throw new Error(`Unexpected release asset: ${name}`);
@@ -156,6 +173,8 @@ export async function publishDraft({ tag, repo, files, run = execFileAsync }) {
   const existing = JSON.parse(stdout).find((release) => release.tagName === tag);
   if (existing && !existing.isDraft)
     throw new Error(`Refusing to overwrite published release ${tag}`);
+  const title = `${desktopProductIdentities.production.productName} + ${desktopProductIdentities.preview.productName} ${tag}`;
+  const notes = `${RELEASE_MESSAGE_HEADING}\n\n${RELEASE_MESSAGE_BODY}`;
   if (!existing) {
     await gh([
       "release",
@@ -165,11 +184,22 @@ export async function publishDraft({ tag, repo, files, run = execFileAsync }) {
       "--draft",
       ...(tag.includes("-") ? ["--prerelease"] : []),
       "--title",
-      `${resolveDesktopProductIdentity().productName} ${tag}`,
+      title,
       "--generate-notes",
       "--notes",
-      `${RELEASE_MESSAGE_HEADING}\n\n${RELEASE_MESSAGE_BODY}`,
+      notes,
     ]);
+  } else {
+    // 草稿可能按单产品预建；补齐产品说明，但不能抹掉维护者备注或自动生成的变更日志。
+    const { stdout: detail } = await gh(["release", "view", tag, "--json", "body"]);
+    const body = JSON.parse(detail).body;
+    if (typeof body !== "string") throw new Error("Invalid draft release body");
+    const updatedNotes = !body
+      ? notes
+      : body.includes(RELEASE_PRODUCT_SUMMARY)
+        ? body
+        : `${body.trimEnd()}\n\n${RELEASE_PRODUCT_SUMMARY}`;
+    await gh(["release", "edit", tag, "--title", title, "--notes", updatedNotes]);
   }
   await gh(["release", "upload", tag, ...files, "--clobber"]);
 }
@@ -191,7 +221,7 @@ async function main() {
     const buildVersion = getBuildMetadata().appVersion;
     validateVersion(buildVersion);
     await collectArtifacts(
-      join(root, "packages/desktop/dist"),
+      resolve(root, "packages/desktop", process.env.ZCODE_DESKTOP_DIST_DIR || "dist"),
       artifacts,
       platform,
       buildVersion,
@@ -206,7 +236,10 @@ async function main() {
     const rollingVersion = collectRollingAppVersion().appVersion;
     validateTag(tag, version, rollingVersion);
     // tag 与产物必须来自当前被打标 commit 的滚动派生值；不读 build-meta 缓存，避免陈旧值让错误 tag/产物蒙混通过。
-    const files = await verifyReleaseAssets(artifacts, rollingVersion);
+    const files = await verifyReleaseAssets(artifacts, rollingVersion, [
+      desktopProductIdentities.production,
+      desktopProductIdentities.preview,
+    ]);
     await publishDraft({ tag, repo: process.env.GITHUB_REPOSITORY, files });
   } else {
     throw new Error("Usage: desktop-release.mjs check-version | collect <linux|win> | publish");
