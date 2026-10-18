@@ -67,6 +67,7 @@ jobs:
         run: |
           pnpm vitest run packages/shared/src/webRemoteControl packages/shared/src/mcp-apps packages/ui/src/lib/webRemoteControlTarget.test.ts packages/desktop/src/main/webRemoteControl/servicePipe.test.ts packages/desktop/src/main/desktopAgentRuntimeEnv.test.ts apps/zcode-cli/packages/adapters/src/network packages/web/src/mobile packages/shared/src/zcode-protocol-v4
           pnpm vitest run --config packages/ui/vitest.holes.config.ts
+          pnpm vitest run --config packages/ui/vitest.config.ts packages/ui/src/v4/conversationTurnRenderUnits.test.ts
       - name: Release tests
         if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
         run: node --test --test-isolation=none scripts/ci/*.test.mjs
