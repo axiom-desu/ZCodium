@@ -92,7 +92,7 @@ jobs:
       - name: Run real Node/Rust interop
         run: pnpm test:zcode-cli-rust-interop
       - name: Rust TUI real PTY acceptance
-        run: node scripts/zcode-cli-rust-tui-smoke.mjs
+        run: node scripts/zcode-cli-rust-tui-smoke.mjs --provider-discovery
 
   native-platform-check:
     name: Native compile (${{ matrix.os }})

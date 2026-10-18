@@ -2,7 +2,7 @@
 // Real Linux PTY acceptance for the Rust terminal UI; all user state lives under a disposable root.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { modelServer, prepareHome } from "./lib/zcode-cli-rust-interop-fixture.mjs";
@@ -31,6 +31,26 @@ try {
     TERM: "xterm-256color",
     ZCODE_RUNTIME_ENV: "production",
   };
+  if (args.includes("--provider-discovery")) {
+    // 旧测试注入两个路径会掩盖裸 CLI 无法发现 GUI 配置的问题；本场景仅写 canonical 文件。
+    const configRoot = join(root, "data", ".zcodium-exp", "v2");
+    const builtinRoot = join(configRoot, "runtime", "provider", "bundled");
+    await mkdir(builtinRoot, { recursive: true });
+    if (!args.includes("--packaged-builtin")) {
+      await copyFile(
+        env.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE,
+        join(builtinRoot, "zcode-builtin.json"),
+      );
+    }
+    await copyFile(
+      env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE,
+      join(configRoot, "provider_config.json"),
+    );
+    env.ZCODE_DATA_BASE_DIR = join(root, "data");
+    delete env.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE;
+    delete env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE;
+    assert.equal(env.ZCODE_AGENT_SERVER_RUNTIME, undefined);
+  }
   const python = spawn("python3", [resolve("scripts/lib/zcode-cli-rust-tui-pty.py")], {
     cwd: resolve("."),
     stdio: ["pipe", "pipe", "inherit"],
@@ -103,6 +123,8 @@ try {
     JSON.stringify({
       status: "passed",
       root: keep ? root : undefined,
+      providerDiscovery: args.includes("--provider-discovery"),
+      packagedBuiltin: args.includes("--packaged-builtin"),
       assertions: result.assertions,
       sessionId: result.sessionId,
       modelRequests: requests.length,

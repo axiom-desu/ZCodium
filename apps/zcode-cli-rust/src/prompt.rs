@@ -196,7 +196,7 @@ async fn run(prompt: PromptArgs, cwd: PathBuf) -> anyhow::Result<i32> {
         std::sync::Arc::new(ctx.node_store().await?);
     let config = prompt.config.as_ref().map(PathBuf::from);
     let engine = ctx
-        .engine(store, config.as_ref(), prompt.surface == "desktop")
+        .standalone_engine(store, config.as_ref(), prompt.surface == "desktop")
         .await?
         .with_headless();
     let path = ctx.requested_cwd.to_string_lossy().into_owned();

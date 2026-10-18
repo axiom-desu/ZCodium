@@ -1,7 +1,7 @@
 // ZCodium 下游修改，契约/存储/安全边界适配，来源及许可见 Rust 根 NOTICE.md
 //! Composition shared by `app-server` and `-p`: the workspace context read once
 //! at startup and the engine wired to the adapters.
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use std::path::PathBuf;
 use std::sync::Arc;
 use zcode_cli_core::Engine;
@@ -116,14 +116,54 @@ impl Context {
         config: Option<&PathBuf>,
         desktop: bool,
     ) -> Result<Engine> {
+        self.build_engine(store, config, desktop, false).await
+    }
+
+    pub async fn standalone_engine(
+        &self,
+        store: Arc<dyn SessionStore>,
+        config: Option<&PathBuf>,
+        desktop: bool,
+    ) -> Result<Engine> {
+        self.build_engine(store, config, desktop, true).await
+    }
+
+    async fn build_engine(
+        &self,
+        store: Arc<dyn SessionStore>,
+        config: Option<&PathBuf>,
+        desktop: bool,
+        standalone: bool,
+    ) -> Result<Engine> {
         let question_timing = zcode_cli_host::question_timing()?;
         let config = ModelConfig::load(config).await?;
-        let registry = if config.is_none() {
+        let registry: Option<Arc<dyn ModelRegistry>> = if config.is_some() {
+            None
+        } else if standalone {
+            // GUI Host 会注入路径，但裸 CLI 没有 Host；只在独立入口发现同一份配置，
+            // 避免空 registry 直到 session/create 才报 Selected model is unavailable。
+            let paths = crate::provider_config::discover(
+                &self.home,
+                &self.runtime_env,
+                &std::env::current_exe()?,
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
+            )
+            .await?;
+            let registry = Arc::new(Registry::new(
+                paths.builtin,
+                paths.personal,
+                self.egress.clone(),
+            ));
+            registry.refresh(None).await?;
+            ensure!(
+                !registry.model_options().is_empty(),
+                "No available models. Configure a personal model in ZCodium Settings or provide --config <file>."
+            );
+            Some(registry)
+        } else {
             Registry::from_env(self.egress.clone())
                 .await?
                 .map(|r| r as Arc<dyn ModelRegistry>)
-        } else {
-            None
         };
         let identity = config.as_ref().map(|c| ModelIdentity {
             provider_id: c.provider_id.clone(),
