@@ -56,16 +56,25 @@ export function deriveLogicalUiInstances(
   rows: readonly ConversationRow[],
   options: { autoExpandTurns?: number } = {},
 ): PluginUiInstanceDerivation {
-  // domain 不用 Map / Set（模块边界约束），全部用数组与普通对象。
+  const pluginRows = rows.filter(isPluginUiToolRow);
+  // 原因：流式正文也会触发本推导；没有插件时，构造全部回合目录既无用途又曾产生二次扫描。
+  if (pluginRows.length === 0) return { instances: [], byToolCallId: {} };
+
+  // domain 沿用调用内的数组/对象，不引入跨调用缓存；空原型索引避免身份与原型属性碰撞。
   const turnOrder: string[] = [];
+  const seenTurns: Record<string, true> = Object.create(null);
   for (const row of rows) {
-    if (!turnOrder.includes(row.turnId)) turnOrder.push(row.turnId);
+    if (seenTurns[row.turnId]) continue;
+    seenTurns[row.turnId] = true;
+    turnOrder.push(row.turnId);
   }
-  const recentTurns = turnOrder.slice(-(options.autoExpandTurns ?? PLUGIN_UI_AUTO_EXPAND_TURNS));
+  const recentTurns: Record<string, true> = Object.create(null);
+  for (const turnId of turnOrder.slice(-(options.autoExpandTurns ?? PLUGIN_UI_AUTO_EXPAND_TURNS))) {
+    recentTurns[turnId] = true;
+  }
   const groupKeys: string[] = [];
   const groups: Record<string, ToolCallRow[]> = {};
-  for (const row of rows) {
-    if (!isPluginUiToolRow(row)) continue;
+  for (const row of pluginRows) {
     const display = row.display;
     if (display?.kind !== "mcp_tool" || !display.ui) continue;
     const logical = resolvePluginUiLogicalScope(display.ui, {
@@ -92,12 +101,15 @@ export function deriveLogicalUiInstances(
     const successes = group.filter(isSuccessfulUiRow);
     const active = successes.at(-1) ?? group.at(-1)!;
     const superseded = successes.filter((row) => row !== active).map((row) => row.toolCallId);
+    // 同一 surface 可累积很多成功调用；按 ID 建索引，避免逐行 includes 再次形成二次成本。
+    const supersededIds: Record<string, true> = Object.create(null);
+    for (const toolCallId of superseded) supersededIds[toolCallId] = true;
     instances.push({ key, activeToolCallId: active.toolCallId, supersededToolCallIds: superseded });
     for (const row of group) {
       byToolCallId[row.toolCallId] = {
         key,
-        superseded: superseded.includes(row.toolCallId),
-        autoExpand: recentTurns.includes(row.turnId),
+        superseded: supersededIds[row.toolCallId] === true,
+        autoExpand: recentTurns[row.turnId] === true,
         forcedInline: row.display?.kind === "mcp_tool" && row.display.ui?.showInline === true,
       };
     }

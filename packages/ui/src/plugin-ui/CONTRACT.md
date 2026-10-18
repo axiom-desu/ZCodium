@@ -15,6 +15,7 @@ Renderer 模块，层序 `domain → app → adapters → components`；公开�
 - `sendFollowUpMessage` 仍走既有会话动作和手势/可编辑确认；确认完成后验证实例。只读会话不登记动作。`updateModelContext` 只投递到该 workspace/session 的 composer，不是数据库状态。
 - `display.ui` 无效、Web/手机/远程、不支持平台或初始化失败继续普通 MCP 卡回退。工具行替代与折叠策略仍由投影派生；不会另建 accepted-input queue 或改变 continuous/replayable 语义。
 - 工具失败、取消或 `display.ui.isError` 只保留普通工具记录，不占用 inline/侧栏区域、不自动开侧栏，手动固定/showInline/最近回合不能越过此门禁；失败不替代已有成功页面。原始错误结果及页面通知语义保持不变。
+- 逻辑 UI 推导仅使用单次调用内的数组与身份索引，不修改输入或跨调用缓存。无插件行时跳过回合目录；有插件时按所有行的首次回合顺序计算最近范围，回合去重和替代成员判断不反复扫描增长数组。展示次序、逻辑作用域、成功替代及重复 ID 的既有裁决保持不变。
 
 组件只经 hooks/服务端口访问外部能力；controller 不导入适配器，domain 只做纯计算。侧栏 tab、composer 上下文仍由既有 UI owner 持有，不与页面状态重复写入。
 
