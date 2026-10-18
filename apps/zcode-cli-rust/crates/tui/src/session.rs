@@ -57,11 +57,14 @@ pub(crate) async fn open(
         }
     };
     let is_resuming = id.is_some();
-    let mode = view.state["config"]["mode"]
-        .as_str()
-        .or(request.mode_override.as_deref())
-        .unwrap_or("build")
-        .to_owned();
+    let mode = if view.state["config"].is_object() {
+        view.mode().to_owned()
+    } else {
+        request
+            .mode_override
+            .clone()
+            .unwrap_or_else(|| "build".into())
+    };
     let data =
         match id.as_ref() {
             Some(id) => {
@@ -112,7 +115,8 @@ pub(crate) async fn open(
         .cloned()
         .unwrap_or_default();
     view.notices.clear();
-    if !previous.is_empty() {
+    // 恢复当前会话时不能释放同一个刚打开的 topic，否则下一轮流式事件会被取消订阅。
+    if !previous.is_empty() && previous != view.session {
         client
             .to
             .send(ClientMsg::TopicReleased {
@@ -172,6 +176,18 @@ pub(crate) async fn stop(client: &mut Client<'_>, view: &mut View) -> Result<()>
     accepted(ack)
 }
 
+pub(crate) async fn set_setting(
+    client: &mut Client<'_>,
+    view: &mut View,
+    method: Method,
+    params: Value,
+) -> Result<()> {
+    client.call(view, method, params).await?;
+    // 旧 setter 只广播 HostNotification，终端不消费 Host 的业务投影；从 actor 回拉快照，
+    // 保证菜单与带参命令共用一条写入路径且展示已提交事实，而不是手改 UI config。
+    client.refresh(view).await
+}
+
 /// Slash operations are requests to the actor, not mutations of a second session store.
 pub(crate) async fn slash(
     client: &mut Client<'_>,
@@ -191,7 +207,7 @@ pub(crate) async fn slash(
                 view.push(&format!("{} {}",session["sessionId"].as_str().unwrap_or("?"),session["title"].as_str().unwrap_or("")));
             }
         }
-        ["/mode",mode] => { client.call(view,Method::SessionSetMode,json!({"sessionId":view.session,"mode":mode})).await?; }
+        ["/mode",mode] => { set_setting(client,view,Method::SessionSetMode,json!({"sessionId":view.session,"mode":mode})).await?; }
         ["/model"] => {
             for model in view.models.clone() { view.push(&format!("{} {}",model["ref"]["providerId"].as_str().unwrap_or(""),model["ref"]["modelId"].as_str().unwrap_or(""))); }
             view.push(view.text("Use /model <providerId> <modelId> [reasoningLevel]", "使用 /model <providerId> <modelId> [reasoningLevel]"));
@@ -200,7 +216,7 @@ pub(crate) async fn slash(
             let mut selection=json!({"providerId":provider,"modelId":model});
             let level=words.get(3).copied().or_else(||view.models.iter().find(|m|m["ref"]["providerId"]==*provider && m["ref"]["modelId"]==*model).and_then(|m|m["reasoning"]["defaultLevel"].as_str()));
             if let Some(level)=level { selection["options"]=json!({"reasoningLevel":level}); }
-            client.call(view,Method::SessionSetModel,json!({"sessionId":view.session,"model":selection})).await?;
+            set_setting(client,view,Method::SessionSetModel,json!({"sessionId":view.session,"model":selection})).await?;
         }
         _ => bail!("Unknown command. /help"),
     }

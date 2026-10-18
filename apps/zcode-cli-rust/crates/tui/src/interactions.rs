@@ -48,6 +48,58 @@ pub(crate) fn prompt(interaction: &Value) -> String {
     )
 }
 
+pub(crate) fn panel(interaction: &Value, zh: bool) -> String {
+    let clip = |v: &Value| {
+        v.as_str()
+            .unwrap_or("")
+            .chars()
+            .take(1024)
+            .collect::<String>()
+    };
+    let p = &interaction["payload"];
+    let mut lines = Vec::new();
+    if interaction["kind"] == "permission" {
+        lines.push(format!(
+            "{} · {}",
+            clip(&p["toolName"]),
+            clip(&p["summary"])
+        ));
+        for option in p["options"].as_array().into_iter().flatten().take(16) {
+            lines.push(format!(
+                "{}: {}",
+                clip(&option["optionId"]),
+                clip(&option["label"])
+            ));
+        }
+        lines.push(
+            if zh {
+                "输入 y/n 或明确的选项 ID；空 Enter 不会批准"
+            } else {
+                "Type y/n or an offered option ID; empty Enter never approves"
+            }
+            .into(),
+        );
+    } else if let Some(questions) = p["input"]["questions"].as_array() {
+        for q in questions.iter().take(8) {
+            lines.push(clip(&q["question"]));
+            for option in q["options"].as_array().into_iter().flatten().take(12) {
+                lines.push(format!("  • {}", clip(&option["label"])));
+            }
+        }
+        lines.push(
+            if zh {
+                "每个问题输入一行答案；多问题可多行粘贴"
+            } else {
+                "One answer per question; paste multiple lines"
+            }
+            .into(),
+        );
+    } else {
+        lines.push(prompt(interaction));
+    }
+    lines.join("\n")
+}
+
 pub(crate) fn answer(interaction: &Value, text: &str) -> Result<Value> {
     if interaction["kind"] == "permission" {
         let options = interaction["payload"]["options"]
@@ -67,7 +119,8 @@ pub(crate) fn answer(interaction: &Value, text: &str) -> Result<Value> {
     let questions = interaction["payload"]["input"]["questions"].as_array();
     if let Some(questions) = questions {
         let values: Vec<_> = text.lines().collect();
-        if values.len() != questions.len() {
+        // 空 Enter 不代表用户完成了问答，不能将空串当作一次明确批准。
+        if values.len() != questions.len() || values.iter().any(|v| v.trim().is_empty()) {
             bail!("Provide one answer per question (paste multiple lines)");
         }
         let mut answers = serde_json::Map::new();

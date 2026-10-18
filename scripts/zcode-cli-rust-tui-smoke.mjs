@@ -19,7 +19,7 @@ try {
   const cwd = join(root, "workspace");
   await mkdir(cwd, { recursive: true });
   await writeFile(join(cwd, "note.txt"), "TUI_NOTE_MARKER\n");
-  model = await modelServer({ root });
+  model = await modelServer({ root, ignoreSystemReminders: true });
   const base = Object.fromEntries(
     ["PATH", "LANG", "LC_ALL", "SHELL", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "WINDIR"]
       .filter((key) => process.env[key] !== undefined)

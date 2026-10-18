@@ -16,7 +16,7 @@ import time
 import unicodedata
 
 
-def rendered(data, rows=40, cols=120):
+def rendered(data, rows=40, cols=160):
     # Ratatui emits cursor-addressed diffs, not plain lines; reconstruct the screen
     # instead of looking for accidental contiguous bytes in its escape stream.
     text = data.decode("utf-8", "replace")
@@ -62,7 +62,7 @@ def main():
     binary, cwd, env = config["binary"], config["cwd"], config["env"]
     output = bytearray()
     master, slave = pty.openpty()
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 160, 0, 0))
     original = termios.tcgetattr(slave)
     children = []
 
@@ -97,7 +97,8 @@ def main():
 
     def wait_for(text, timeout=25): wait_until(lambda s: text in s, repr(text), timeout)
     def send(text): os.write(master, text.encode())
-    def prompt(text, response): send(text + "\r"); wait_for(response); wait_for("ready")
+    def ready(): wait_until(lambda s: bool(re.search(r"· ready(?:\s|└|$)", s.splitlines()[-1])), "idle footer")
+    def prompt(text, response): send(text + "\r"); wait_for(response); ready()
     def restored():
         actual = termios.tcgetattr(slave)
         if actual[3] & (termios.ECHO | termios.ICANON) != original[3] & (termios.ECHO | termios.ICANON):
@@ -110,25 +111,60 @@ def main():
     try:
         first = launch([])
         wait_for("ZCodium Rust")
+        wait_for("Context")
+        wait_for("███████")
+        send("\x18b"); wait_until(lambda s: "Context" not in s, "sidebar hidden")
+        send("\x18b"); wait_for("Context")
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        os.killpg(first.pid, signal.SIGWINCH)
+        wait_until(lambda s: "Context" not in s, "narrow layout")
+        send("\x18b"); wait_for("Context")
+        send("\x1b"); wait_until(lambda s: "Context" not in s, "narrow overlay dismissed")
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 160, 0, 0))
+        os.killpg(first.pid, signal.SIGWINCH)
+        wait_for("Context")
+        send("/model\r"); wait_for("Models"); send("\x1b")
+        wait_until(lambda s: "Models" not in s, "model picker cancelled")
+        send("\x7f" * len("/model"))
+        send("/model\r"); wait_for("Models"); send("\r")
+        wait_until(lambda s: "Models" not in s, "model picker committed")
+        send("/mode\r"); wait_for("Modes"); send("\x1b[B\r")
+        wait_until(lambda s: re.search(r"Mode\s+plan", s), "plan mode selected")
+        send("/mode build\r"); wait_until(lambda s: re.search(r"Mode\s+build", s), "build mode restored")
+        result["assertions"].append("welcome/sidebar/toggle/resize/model-mode pickers")
+        # 计划切换有真实 system-reminder；新会话隔离该上下文，不让 echo fixture 把提醒当用户问题。
+        prior_ids = set(re.findall(r"sess_[0-9a-f-]{36}", screen(), re.I))
+        send("/new\r")
+        wait_until(lambda s: bool(set(re.findall(r"sess_[0-9a-f-]{36}", s, re.I)) - prior_ids), "fresh session after mode checks")
         prompt("first turn", "answer: first turn")
         prompt("second distinct turn", "answer: second distinct turn")
+        current_id = re.search(r"sess_[0-9a-f-]{36}", screen().splitlines()[-1], re.I).group(0)
+        send("/sessions\r"); wait_for("Sessions")
+        if not any("›" in line and current_id in line for line in screen().splitlines()):
+            send("\x1b[B")
+            wait_until(lambda s: any("›" in line and current_id in line for line in s.splitlines()), "current session highlighted")
+        send("\r")
+        wait_until(lambda s: "Sessions" not in s, "current session resumed from picker")
         prompt("use tool", "TUI_NOTE_MARKER")
         result["assertions"].append("title/multiturn/Read")
-        send("tui-write-deny\r"); wait_for("allowOnce"); send("n\r"); wait_for("ready")
+        send("tui-write-deny\r"); wait_for("allowOnce"); send("n\r"); ready()
         if os.path.exists(os.path.join(cwd, "denied.txt")): raise AssertionError("denied Write created a file")
-        send("tui-write-allow\r"); wait_for("allowOnce"); send("y\r"); wait_for("ready")
+        send("tui-write-allow\r"); wait_for("allowOnce"); send("y\r"); ready()
         with open(os.path.join(cwd, "allowed.txt"), encoding="utf8") as f:
             if f.read() != "TUI_WRITE_MARKER\n": raise AssertionError("Write content mismatch")
         result["assertions"].append("Write allow/deny")
-        send("tui-question\r"); wait_for("Choose the TUI smoke answer"); send("SMOKE_ANSWER\r"); wait_for("ready")
+        send("tui-question\r"); wait_for("Choose the TUI smoke answer"); send("SMOKE_ANSWER\r"); ready()
         result["assertions"].append("AskUserQuestion")
-        send("slow request\r"); wait_for("partial"); send("\x03"); wait_for("ready")
+        send("slow request\r"); wait_for("partial"); send("\x03"); ready()
         prompt("after cancellation", "answer: after cancellation")
         ids = re.findall(r"[0-9a-f]{8}-[0-9a-f-]{27,}", screen(), re.I)
         if not ids: raise AssertionError("no real session id in footer")
         result["sessionId"] = ids[-1]
         send("/sessions\r")
+        wait_for("Sessions")
         wait_until(lambda s: s.count(result["sessionId"]) >= 2, "session list and footer")
+        send("\x1b"); wait_until(lambda s: "Sessions" not in s, "sessions picker cancelled")
+        send("\x7f" * len("/sessions"))
         send("/quit\r")
         if first.wait(timeout=10) != 0: raise AssertionError("/quit did not exit 0")
         restored(); result["assertions"].append("cancel/sessions/quit/termios")
