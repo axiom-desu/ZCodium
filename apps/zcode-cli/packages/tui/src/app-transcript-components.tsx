@@ -76,7 +76,11 @@ export function ContentPane({
       ? [
           emptyText
             ? h("text", { key: "empty", style: { fg: palette.muted } }, emptyText)
-            : h(EmptyTranscriptLogo, { animated: animateEmptyLogo, key: "empty-transcript-logo" }),
+            : h(EmptyTranscriptLogo, {
+                animated: animateEmptyLogo,
+                width: terminalWidth - 2,
+                key: "empty-transcript-logo",
+              }),
         ]
       : messages.map((message, index) =>
           h(MessageRow, {

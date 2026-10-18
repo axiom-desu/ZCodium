@@ -47,10 +47,11 @@ pub fn signal_exit_code(signal: &str) -> i32 {
 /// `--help` (Node `i18n` en-US help, limited to what this runtime supports).
 pub fn help(version: &str) -> String {
     format!(
-        "zcode-cli-rust {version}
+        "ZCodium Rust {version}
 
 Usage:
   zcode-cli-rust [command] [options]
+  zcodium-rust --cli [command] [options]
 
 With no command and no --prompt, open the interactive terminal UI (requires a TTY).
 

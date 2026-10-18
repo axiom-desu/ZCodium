@@ -1,4 +1,6 @@
 import React from "react";
+import { useTerminalDimensions } from "@mbears/opentui-react";
+import { logoLinesForWidth } from "./app-logo.js";
 import { palette } from "./app-model.js";
 import { ShimmerText, useShimmerFrame } from "./app-motion.js";
 
@@ -8,34 +10,31 @@ const h = React.createElement as (
   ...children: React.ReactNode[]
 ) => React.ReactElement;
 
-const ZCODE_LOGO_LINES = [
-  "███████╗ ██████╗ ██████╗ ██████╗ ███████╗",
-  "   ███╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝",
-  "  ███╔╝ ██║     ██║   ██║██║  ██║█████╗  ",
-  " ███╔╝  ██║     ██║   ██║██║  ██║██╔══╝  ",
-  "███████╗╚██████╗╚██████╔╝██████╔╝███████╗",
-  "╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝",
-] as const;
-
-const EMPTY_TRANSCRIPT_LOGO_MIN_HEIGHT = ZCODE_LOGO_LINES.length;
-
 export function EmptyTranscriptLogo({
   animated = false,
+  width,
 }: {
   animated?: boolean;
+  width?: number;
 } = {}): React.ReactElement {
+  const terminal = useTerminalDimensions();
+  const lines = logoLinesForWidth(width ?? terminal.width - 2);
   if (animated) {
-    return h(AnimatedEmptyTranscriptLogo);
+    return h(AnimatedEmptyTranscriptLogo, { lines });
   }
-  return renderLogoContent({ animated: false });
+  return renderLogoContent({ animated: false, lines });
 }
 
-function AnimatedEmptyTranscriptLogo(): React.ReactElement {
+function AnimatedEmptyTranscriptLogo({ lines }: { lines: readonly string[] }): React.ReactElement {
   const frameMs = useShimmerFrame(true);
-  return renderLogoContent({ animated: true, frameMs });
+  return renderLogoContent({ animated: true, frameMs, lines });
 }
 
-function renderLogoContent(input: { animated: boolean; frameMs?: number }): React.ReactElement {
+function renderLogoContent(input: {
+  animated: boolean;
+  frameMs?: number;
+  lines: readonly string[];
+}): React.ReactElement {
   return h(
     "box",
     {
@@ -44,16 +43,16 @@ function renderLogoContent(input: { animated: boolean; frameMs?: number }): Reac
         flexDirection: "column",
         flexGrow: 1,
         justifyContent: "center",
-        minHeight: EMPTY_TRANSCRIPT_LOGO_MIN_HEIGHT,
+        minHeight: input.lines.length,
         width: "100%",
       },
     },
-    ...ZCODE_LOGO_LINES.map((line, index) =>
+    ...input.lines.map((line, index) =>
       renderLogoText({
         animated: input.animated,
         baseColor: palette.accent,
         frameMs: input.frameMs,
-        key: `zcode-logo-${index}`,
+        key: `zcodium-logo-${index}`,
         text: line,
       }),
     ),

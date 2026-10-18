@@ -7,7 +7,7 @@ export const enUS: ZCodeCopy = {
       localeUnsupported: (value) =>
         `Unsupported --locale value: ${value}. Supported locales: en-US, zh-CN, auto.`,
     },
-    help: (version) => `zcode ${version}
+    help: (version) => `ZCodium CLI ${version}
 
 Usage:
   zcode [command] [options]
@@ -235,7 +235,7 @@ Slash Commands:
     },
     terminal: {
       requiresInteractive: "TUI requires an interactive terminal.",
-      starting: "Starting ZCode... Ctrl+C to exit",
+      starting: "Starting ZCodium... Ctrl+C to exit",
     },
     transcript: {
       compact: {
