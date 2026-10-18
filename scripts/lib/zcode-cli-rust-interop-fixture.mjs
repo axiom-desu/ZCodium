@@ -17,7 +17,7 @@ export function contentText(content) {
  * chunk and stalls, `shell` runs a long Bash command; tool results and other prompts get
  * `answer: <prompt>`. Title sidecar requests are answered apart from `requests`.
  */
-export async function modelServer({ root }) {
+export async function modelServer({ root, ignoreSystemReminders = false }) {
   const requests = [];
   const slowChunkSignals = new Map();
   let shellPidFile;
@@ -35,7 +35,16 @@ export async function modelServer({ root }) {
     };
     if (body.includes(TITLE)) return send({ content: '{"title":"Interop"}' }, "stop");
     requests.push(parsed);
-    const last = parsed.messages.at(-1);
+    // TUI 菜单/恢复会注入真实控制提醒；echo fixture 应识别最后一条业务消息，
+    // 否则把提醒当用户输入会重复工具或跳过 slow 分支。请求记录仍保留完整原始协议。
+    const messages = ignoreSystemReminders
+      ? parsed.messages.filter(
+          (message) =>
+            message.role !== "user" ||
+            !contentText(message.content).trimStart().startsWith("<system-reminder>"),
+        )
+      : parsed.messages;
+    const last = messages.at(-1);
     const text = contentText(last?.content);
     const call = (name, args) =>
       send(

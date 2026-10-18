@@ -1,4 +1,7 @@
-use crate::editor::{Editor, sanitize};
+use crate::{
+    editor::{Editor, sanitize},
+    selector::Selector,
+};
 use serde_json::Value;
 
 const MAX_ROWS: usize = 2000;
@@ -86,22 +89,41 @@ pub(crate) struct View {
     pub resync: bool,
     pub zh: bool,
     pub models: Vec<Value>,
+    pub selector: Option<Selector>,
+    pub sidebar: bool,
+    pub sidebar_overlay: bool,
+    pub no_color: bool,
+    pub directory: String,
+    pub display_revision: u64,
 }
 impl View {
     pub fn text<'a>(&self, en: &'a str, zh: &'a str) -> &'a str {
         if self.zh { zh } else { en }
     }
     pub fn push(&mut self, text: &str) {
+        self.display_revision = self.display_revision.wrapping_add(1);
         self.notices
             .push(bounded(&sanitize(text), MAX_NOTICE_BYTES));
         if self.notices.len() > 40 {
             self.notices.remove(0);
         }
     }
+    pub fn mode(&self) -> &str {
+        // Plan 是 actor 的独立标记；只显示 permission mode 会把已经启用的 plan 错写成 build。
+        if self.state["config"]["planEnabled"] == true {
+            "plan"
+        } else {
+            self.state["config"]["mode"].as_str().unwrap_or("—")
+        }
+    }
     pub fn busy(&self) -> bool {
         self.pending_submit || self.state["control"]["canStop"] == true
     }
     pub fn snapshot(&mut self, snapshot: &Value) {
+        self.display_revision = self.display_revision.wrapping_add(1);
+        if self.session != snapshot["sessionId"].as_str().unwrap_or_default() {
+            self.selector = None;
+        }
         self.session = snapshot["sessionId"].as_str().unwrap_or_default().into();
         self.rows = snapshot["rows"]["window"]
             .as_array()
@@ -140,6 +162,7 @@ impl View {
             self.delta(&delta);
         }
         self.seq = to;
+        self.display_revision = self.display_revision.wrapping_add(1);
     }
     fn delta(&mut self, delta: &Value) {
         match delta["op"].as_str().unwrap_or_default() {
@@ -185,6 +208,7 @@ impl View {
     pub fn interaction(&self) -> Option<&Value> {
         self.state["pendingInteractions"].as_array()?.first()
     }
+    #[cfg(test)]
     pub fn lines(&self) -> Vec<String> {
         // 先为错误和最新通知留出预算，再用剩余空间展示最新会话行；这样旧历史
         // 再长也不会挤掉本轮回复或错误提示。最终顺序仍按时间从旧到新输出。

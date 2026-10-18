@@ -55,7 +55,14 @@ impl Editor {
         let before = &self.text[..self.cursor];
         (
             before.matches('\n').count(),
-            ratatui::text::Line::raw(before.rsplit('\n').next().unwrap_or_default()).width(),
+            ratatui::text::Line::raw(
+                before
+                    .rsplit('\n')
+                    .next()
+                    .unwrap_or_default()
+                    .replace('\t', "    "),
+            )
+            .width(),
         )
     }
 }
@@ -71,6 +78,7 @@ pub fn sanitize(input: &str) -> String {
         .collect()
 }
 
+#[cfg(test)]
 pub fn clamp_scroll(offset: usize, content: usize, visible: usize) -> usize {
     offset.min(content.saturating_sub(visible))
 }
