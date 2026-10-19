@@ -1629,7 +1629,7 @@ export function createLocalServices(options: {
       }),
     )
     .register(IFileWatcherService, createFileWatcherService())
-    .register(IUsageStatsService, createUsageStatsService({ zcodeAgentService }))
+    .register(IUsageStatsService, createUsageStatsService({ zcodeAgentService, apiClient }))
     .register(ICodingPlanSubscriptionService, codingPlanSubscriptionService)
     .register(IClientConfigService, createClientConfigService())
     .register(IClientScenesService, createClientScenesService())

@@ -5,21 +5,24 @@ import ts from "typescript";
 import { build } from "esbuild";
 
 // Guard the actual entrypoint: local Usage must not restore account discovery on mount.
+// Coding Plan remaining quota is allowed, but only through the API-key path — account,
+// entitlement and OAuth dependencies stay banned.
 test("settings and local usage hooks have no official quota query dependencies", async () => {
+  const banned =
+    /UsageEntitlement|AccountAccess|accountProviderAccess|usageEntitlement|oauth|OAuth/;
   for (const path of [
     "packages/ui/src/SettingsPage.tsx",
     "packages/ui/src/settings/UsageStatsSection.tsx",
     "packages/ui/src/hooks/useUsageStats.ts",
+    "packages/ui/src/hooks/useCodingPlanQuota.ts",
+    "packages/ui/src/settings/usage-stats/CodingPlanQuotaPanel.tsx",
   ]) {
     const text = await readFile(path, "utf8");
     const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
     const imports = source.statements
       .filter(ts.isImportDeclaration)
       .map((node) => node.getText(source));
-    assert.doesNotMatch(
-      imports.join("\n"),
-      /CodingPlan|UsageEntitlement|AccountAccess|accountProviderAccess|usageEntitlement|useProviderSettingsView/,
-    );
+    assert.doesNotMatch(imports.join("\n"), banned);
   }
 });
 

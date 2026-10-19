@@ -803,6 +803,17 @@ export function InlineEditableProviderCard({
 
       {statusSection}
 
+      {/* 账号连接方式已从本仓库移除：这里只给只读说明，不再渲染任何看起来可填的控件，
+          避免用户以为填了 Key 或点了开关就能连上。 */}
+      {isAccountProvider ? (
+        <p
+          role="note"
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-ui-base text-foreground-subtle"
+        >
+          {intl.formatMessage({ id: "settings.modelProvider.accountAccessRetired" })}
+        </p>
+      ) : null}
+
       <div className="space-y-3">
         {isAccountProvider ? null : (
           <ProviderConnectionSection
