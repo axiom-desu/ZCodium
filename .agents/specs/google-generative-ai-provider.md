@@ -64,6 +64,33 @@ CLI adapters 依赖 `@ai-sdk/google`（`ai-v6` 线，与仓库现有 `ai@6.0.193
 | `displayName`                | 仅选择器展示，**不覆盖模型 ID**   |
 | `supportedGenerationMethods` | 仅记录，当前不映射为能力开关      |
 
+### contextWindow 语义（已核实）
+
+`contextWindow` 是**输入与输出共享**的窗口，不是纯输入上限。`core/src/compact/policy.ts`
+的 `getEffectiveContextWindowSize()` 会自己扣掉输出预留：
+
+```text
+effectiveContextWindow = contextWindow - min(maxOutputTokens ?? 32K, 21K)
+```
+
+因此 `inputTokenLimit → contextWindow`、`outputTokenLimit → optionSpecs.maxOutputTokens.max`
+这条映射是**正确且必要的一对**：只填前者会让压缩阈值按 32K 默认预留计算，
+只填后者则压缩时会按 200K 兜底窗口估算。
+
+### Gemini 的 option map 必须嵌进 generationConfig
+
+Gemini 的生成参数只有一个入口 `generationConfig`。写成顶层键（OpenAI 风格）会被网关
+**静默忽略**——没有报错，只是请求里没有该字段，表现为"设了 maxOutputTokens 却不生效"。
+
+因此 `modelApiRules` 必须提供一条 `apiTypeMatch: "google-generative-ai"` 的规则：
+
+```json
+"maxOutputTokens": { "map": "{'generationConfig': {'maxOutputTokens': maxOutputTokens}}" }
+```
+
+`reasoningLevel` 走 `generationConfig.thinkingConfig`：`disabled` → `{thinkingBudget: 0}`，
+`enabled` → `{includeThoughts: true}`。
+
 硬约束：**不从模型名或产品系列推断能力**。端点没给的字段整条缺席
 （`metadata[modelId] === undefined`），调用方必须退回既有规则匹配，不能当作
 "零能力"或补 0。`displayName` 不能被当成模型 ID——身份判定只认剥过前缀的 `name`。

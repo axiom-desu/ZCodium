@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 32,
+  "revision": 33,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -2535,6 +2535,27 @@
         }
       ],
       "modelApiRules": [
+        {
+          "modelMatch": ".*",
+          "apiTypeMatch": "google-generative-ai",
+          "config": {
+            "properties": {
+              "supportsToolCall": true,
+              "supportsJsonSchemaOutput": true,
+              "supportsNativeWebSearch": true,
+              "supportsMidConversationSystem": false
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["disabled", "enabled"],
+                "map": "reasoningLevel == \"disabled\"\n  ? {\n      \"generationConfig\": {\n        \"thinkingConfig\": {\n          \"thinkingBudget\": 0\n        }\n      }\n    }\n  : {\n      \"generationConfig\": {\n        \"thinkingConfig\": {\n          \"includeThoughts\": true\n        }\n      }\n    }"
+              },
+              "maxOutputTokens": {
+                "map": "{'generationConfig': {'maxOutputTokens': maxOutputTokens}}"
+              }
+            }
+          }
+        },
         {
           "modelMatch": ".*claude-(?:opus-(?:4[.-]8|5)|(?:fable|mythos)-5(?:[.-]1)?)(?:[.\\-:/\\[].*)?",
           "apiTypeMatch": "anthropic-messages",
