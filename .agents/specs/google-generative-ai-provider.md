@@ -121,6 +121,30 @@ effectiveContextWindow = contextWindow - min(maxOutputTokens ?? 32K, 21K)
 | `generativelanguage.googleapis.com/v1beta`    | ❌ 落到兜底 200K / 32K         |
 | 用户自建代理                                  | ❌ 落到兜底                    |
 
+#### 实测数据（Google 官方 key 验证）
+
+官方 `models.list` **确实返回完整元数据**，此前基于 OpenCode 得出的"拿不到能力"结论只适用于 OpenCode：
+
+```
+GET https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000
+```
+
+响应含 `inputTokenLimit`、`outputTokenLimit`、`displayName`、
+`supportedGenerationMethods`、`temperature`、`topP`、`topK`、`thinking`。
+`collectCatalog` / `readCatalogMetadata` 对这些字段的解析已用真实响应验证通过，
+`models/` 前缀也能正确剥离。
+
+两个由此暴露的问题：
+
+1. **不要在能力字段上信任 OpenRouter。** OpenRouter 报 `gemini-4-argon` 的
+   `max_completion_tokens` 为 `943718`，而该值恰好等于 `1048576 × 0.9`，是推算值；
+   Google 官方 `outputTokenLimit` 为 `32768`，相差 30 倍。多模态字段
+   （`architecture.input_modalities`）官方不返回，仍只能仰赖 OpenRouter，
+   但**数值上限一律以官方为准**。
+2. **必须显式请求满页。** 官方 `models.list` 默认只回 50 条并给 `nextPageToken`，
+   不指定 `pageSize` 会静默丢模型（实测 63 个只拿到 50 个）。已固定请求
+   `?pageSize=1000`。
+
 **TODO（条件触发即可删除）**：当 OpenCode 的 Gemini 端点开始返回能力元数据
 （`models.list` 可用，或 OpenAI 兼容目录带上 `context_length`），
 应删除这批 `providerSiteRules`，改由 `ProviderModelCatalogSuccess.metadata` 自动填充，

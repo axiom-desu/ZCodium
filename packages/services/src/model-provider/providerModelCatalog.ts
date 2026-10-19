@@ -75,6 +75,11 @@ interface ProviderModelCatalogAttempt {
 const DEFAULT_TIMEOUT_MS = 15_000;
 /** 目录异常放大时保护 UI 与后续逐条添加，不追求穷尽。 */
 const MAX_MODEL_IDS = 1000;
+/**
+ * Gemini 目录需要显式页大小：官方 models.list 默认 50 条且带 nextPageToken，
+ * 不指定会静默截断（实测 63 个模型只回 50 个）。
+ */
+const GEMINI_MODELS_PATH = "/models?pageSize=1000";
 const ANTHROPIC_VERSION = "2023-06-01";
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -120,8 +125,12 @@ function resolveCatalogPaths(
     return ["/v1/models", "/models"];
   }
   if (apiType === "google-generative-ai") {
+    // Gemini 的 models.list 默认只回 50 条并给 nextPageToken：不显式要满一页会静默丢模型
+    // （实测官方端点 63 个模型只拿到 50 个）。目录是只读展示，取满一页即可。
     const hasVersionSegment = /\/v\d+(?:alpha|beta)?\d*$/i.test(base);
-    return hasVersionSegment ? ["/models", "/models"] : ["/models", "/v1beta/models"];
+    return hasVersionSegment
+      ? [GEMINI_MODELS_PATH, GEMINI_MODELS_PATH]
+      : [GEMINI_MODELS_PATH, `/v1beta${GEMINI_MODELS_PATH}`];
   }
   return ["/models", "/v1/models"];
 }

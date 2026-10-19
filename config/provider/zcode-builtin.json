@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 39,
+  "revision": 40,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -3379,7 +3379,7 @@
             },
             "optionSpecs": {
               "maxOutputTokens": {
-                "max": 943718
+                "max": 32768
               }
             }
           }
@@ -3404,7 +3404,7 @@
             },
             "optionSpecs": {
               "maxOutputTokens": {
-                "max": 943718
+                "max": 32768
               }
             }
           }
