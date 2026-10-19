@@ -50,7 +50,7 @@ test("google api rule keeps generation fields inside generationConfig", () => {
     ),
   );
   assert.deepEqual(enabled.generationConfig, {
-    thinkingConfig: { includeThoughts: true },
+    thinkingConfig: { thinkingLevel: "high", includeThoughts: true },
     maxOutputTokens: 65536,
   });
   // 顶层不得出现散落字段。
@@ -65,10 +65,11 @@ test("google api rule keeps generation fields inside generationConfig", () => {
       },
     ),
   );
-  assert.deepEqual(disabled.generationConfig, {
-    thinkingConfig: { thinkingBudget: 0 },
-    maxOutputTokens: 1024,
-  });
+  // disabled 档必须**省略** thinkingConfig：实测 gemini-4-argon / gemini-3.1-pro /
+  // gemini-3.8-flash 既拒绝 thinkingBudget:0，也拒绝 thinkingLevel:"minimal"，
+  // 省略反而是唯一对所有模型都 200 的选择。
+  assert.deepEqual(disabled.generationConfig, { maxOutputTokens: 1024 });
+  assert.equal(disabled.generationConfig.thinkingConfig, undefined);
 });
 
 test("google templates declare the native api type and stay metadata-compatible", () => {

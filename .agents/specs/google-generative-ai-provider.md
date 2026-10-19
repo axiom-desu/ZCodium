@@ -88,8 +88,24 @@ Gemini 的生成参数只有一个入口 `generationConfig`。写成顶层键（
 "maxOutputTokens": { "map": "{'generationConfig': {'maxOutputTokens': maxOutputTokens}}" }
 ```
 
-`reasoningLevel` 走 `generationConfig.thinkingConfig`：`disabled` → `{thinkingBudget: 0}`，
-`enabled` → `{includeThoughts: true}`。
+`reasoningLevel` 走 `generationConfig.thinkingConfig`，**但两个档位的写法不对称**（实测结论）：
+
+| 档位       | 发送内容                                         | 原因                       |
+| ---------- | ------------------------------------------------ | -------------------------- |
+| `enabled`  | `{thinkingLevel: "high", includeThoughts: true}` | `high` 对 8 个模型全部接受 |
+| `disabled` | **省略 `thinkingConfig`**（map 返回 `{}`）       | 见下                       |
+
+`disabled` 不能照直觉写 `{thinkingBudget: 0}` 或 `{thinkingLevel: "minimal"}`：
+
+- `thinkingBudget: 0` → `gemini-4-argon` 返回 400 `Thinking budget is not supported for this model`
+- `thinkingLevel: "minimal"` → `gemini-4-argon` / `3.1-pro` / `3.8-flash` / `3.7-flash` 返回 400
+- 省略字段 → 全部 200
+
+代价是部分模型（`3.1-pro`、`3.8-flash`、`3.6-flash`）在"关闭"档位下仍会思考，
+`thoughtsTokenCount > 0`。这是端点行为，不是本地可修正的；因此**不要**在 UI 上承诺
+"关闭思考"，只承诺"不做显式请求"。
+
+实测矩阵（8 模型 × 2 档位 = 16 组）全部 200。
 
 硬约束：**不从模型名或产品系列推断能力**。端点没给的字段整条缺席
 （`metadata[modelId] === undefined`），调用方必须退回既有规则匹配，不能当作
