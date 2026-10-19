@@ -22,6 +22,7 @@ export function ProviderModelCatalogDialog({
   items,
   loading = false,
   saving = false,
+  hintMessage = null,
   errorMessage = null,
   onOpenChange,
   onConfirm,
@@ -31,6 +32,8 @@ export function ProviderModelCatalogDialog({
   items: readonly ProviderModelCatalogItem[];
   loading?: boolean;
   saving?: boolean;
+  /** 预防性提示（如该端点可能不提供目录接口）；与 errorMessage 分开，避免被当成失败结果。 */
+  hintMessage?: string | null;
   errorMessage?: string | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (modelIds: readonly string[]) => void | Promise<void>;
@@ -121,6 +124,13 @@ export function ProviderModelCatalogDialog({
             ))}
           </ul>
         )}
+        {/* 预防性提示必须与失败结果并存：请求通常几毫秒就失败，
+            若用 "hint && !error" 它会被 errorMessage 立刻挤掉，用户根本看不到。 */}
+        {hintMessage ? (
+          <p role="note" className="text-ui-sm text-foreground-subtle">
+            {hintMessage}
+          </p>
+        ) : null}
         {errorMessage ? (
           <p role="alert" className="text-ui-sm text-destructive">
             {errorMessage}

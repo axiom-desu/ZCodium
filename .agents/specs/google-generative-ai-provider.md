@@ -128,6 +128,7 @@ Provider Config (api.type = google-generative-ai, baseUrl, access.apiKey)
 | `api.type` 为未知值         | 沿用现有 `Unsupported Provider API type` 抛错，不静默降级到别的格式                         |
 | 目录响应缺 `models` 数组    | 视为空目录（失败），让 fallback 路径有机会；不返回伪造模型                                  |
 | 目录项只有 id、没有上限字段 | 该模型 `metadata` 缺席，草稿不预填上限，回退既有模型规则                                    |
+| 端点不实现 `models.list`    | 「获取模型」**不禁用**：点击后先显示预防性提示，再照常请求并按真实结果报错                  |
 | 目录项 `name` 非 `models/*` | 仍取其最后一段作为 id，不因前缀缺失而丢弃                                                   |
 | 额度查询                    | `resolveCodingPlanQuotaUrl()` 对 Google 主机返回 `null`，额度面板走“未配置 Coding Plan”引导 |
 
@@ -144,6 +145,8 @@ Provider Config (api.type = google-generative-ai, baseUrl, access.apiKey)
 2. 「获取模型」对该格式请求 `{baseUrl}/models`，返回的列表不含 `models/` 前缀。
    端点返回 `inputTokenLimit` / `outputTokenLimit` 时，新加模型草稿带对应上下文与输出上限；
    未返回时草稿不带这两个字段（不补 0、不推断）。
+   2b. 对 `google-generative-ai` 格式点击「获取模型」时，弹窗**同时**显示预防性提示与真实失败结果；
+   提示不能被 `errorMessage` 挤掉（实测请求几毫秒即失败，用 `hint && !error` 会让提示永远不可见）。
 3. 鉴权使用 `x-goog-api-key`，不发送 `Authorization: Bearer` 或 `x-api-key`。
 4. 其它三种格式的请求报文与鉴权头完全不变（回归）。
 5. `providerFamilyDomain` 仍只有 `zai` / `bigmodel` 两个值，`family` 相关逻辑零改动。

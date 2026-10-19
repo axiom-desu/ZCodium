@@ -393,6 +393,7 @@ export function ProviderModelsSection({
   providerName,
   providerEnabled = true,
   providerAccess,
+  apiFormat,
   models,
   onTestModel,
   onModelCommit,
@@ -407,6 +408,8 @@ export function ProviderModelsSection({
   providerName?: string;
   providerEnabled?: boolean;
   providerAccess?: ProviderConfigObject["access"];
+  /** 用于判断该格式是否支持目录读取；少数原生端点不提供 models.list。 */
+  apiFormat?: ProviderApiType;
   models: ProviderSettingsFormModel[];
   onTestModel?: (model: string) => Promise<ModelConnectivityResult>;
   onModelCommit: (
@@ -442,6 +445,8 @@ export function ProviderModelsSection({
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogSaving, setCatalogSaving] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  // 与 catalogError 分开：这是"可能失败"的预防性提示，不是失败结果。
+  const [catalogHint, setCatalogHint] = useState<string | null>(null);
   const [catalogItems, setCatalogItems] = useState<readonly ProviderModelCatalogItem[]>([]);
   // 端点显式返回的能力/上限；仅用于预填草稿，不参与身份或规则判定。
   const [catalogMetadata, setCatalogMetadata] = useState<
@@ -465,6 +470,15 @@ export function ProviderModelsSection({
 
   const openCatalogDialog = useCallback(async () => {
     if (!onFetchModels) return;
+    // Gemini 原生端点（generativelanguage 系）不实现 models.list，请求必然 404。
+    // 不禁用按钮：照常尝试，但先给出"可能失败"的提示，用户仍可自己粘贴模型 ID。
+    if (apiFormat === "google-generative-ai") {
+      setCatalogHint(
+        intl.formatMessage({ id: "settings.modelProvider.modelCatalog.mayNotBeSupported" }),
+      );
+    } else {
+      setCatalogHint(null);
+    }
     const requestId = catalogRequestRef.current + 1;
     catalogRequestRef.current = requestId;
     setCatalogDialogOpen(true);
@@ -645,6 +659,7 @@ export function ProviderModelsSection({
         items={catalogItems}
         loading={catalogLoading}
         saving={catalogSaving}
+        hintMessage={catalogHint}
         errorMessage={catalogError}
         onOpenChange={setCatalogDialogOpen}
         onConfirm={(modelIds) => confirmCatalogSelection(modelIds)}
