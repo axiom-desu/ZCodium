@@ -10,7 +10,7 @@ use serde_json::json;
 fn render(view: &View, width: u16, height: u16, cache: &mut RenderCache) -> String {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|frame| draw(frame, view, cache)).unwrap();
+    terminal.draw(|frame| draw(frame, view, cache, 0)).unwrap();
     terminal
         .backend()
         .buffer()
@@ -32,7 +32,8 @@ fn layouts_survive_wide_narrow_and_tiny_buffers() {
     assert!(wide.contains("Context"));
     assert!(wide.contains("/work"));
     let narrow = render(&view, 80, 24, &mut cache);
-    assert!(narrow.contains("Message") || narrow.contains("输入"));
+    // 输入框标题跟随 permission mode，空输入显示提示词（与 TS TUI 一致）。
+    assert!(narrow.contains("Type a prompt") || narrow.contains("输入提示词"));
     view.sidebar_overlay = true;
     assert!(render(&view, 80, 24, &mut cache).contains("Context"));
     let _ = render(&view, 1, 1, &mut cache);
@@ -61,6 +62,8 @@ fn composer_keeps_unicode_cursor_visible_and_cache_invalidates() {
     let mut view = View::default();
     view.editor.insert("你🙂\nlong line");
     let mut cache = RenderCache::default();
+    // 欢迎页不走缓存，所以先放入一条正文再验证缓存命中/失效。
+    view.rows = vec![json!({"kind":"assistantText","text":"cached row"})];
     let initial = render(&view, 42, 12, &mut cache);
     assert!(initial.contains("long line"));
     let first = cache.hits;
@@ -144,7 +147,7 @@ fn no_color_and_tiny_unicode_cursor_stay_inside_terminal() {
     for (width, height) in [(1, 1), (2, 4), (8, 4), (40, 12), (140, 30)] {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal
-            .draw(|frame| draw(frame, &view, &mut RenderCache::default()))
+            .draw(|frame| draw(frame, &view, &mut RenderCache::default(), 0))
             .unwrap();
         let pos = terminal.get_cursor_position().unwrap();
         assert!(pos.x < width && pos.y < height);
@@ -167,4 +170,140 @@ fn ansi_and_osc_sequences_do_not_reach_buffer() {
     assert!(content.contains("safe"));
     assert!(!content.contains("\u{001b}"));
     assert!(!content.contains("title"));
+}
+
+fn screen_rows(
+    view: &View,
+    width: u16,
+    height: u16,
+    frame_ms: u64,
+) -> (Vec<String>, Vec<Vec<ratatui::style::Color>>) {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    let mut cache = RenderCache::default();
+    terminal
+        .draw(|frame| draw(frame, view, &mut cache, frame_ms))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let mut rows = Vec::new();
+    let mut colors = Vec::new();
+    for y in 0..height {
+        let mut line = String::new();
+        let mut row = Vec::new();
+        for x in 0..width {
+            let cell = &buffer.content[(y * width + x) as usize];
+            line.push_str(cell.symbol());
+            row.push(cell.fg);
+        }
+        rows.push(line);
+        colors.push(row);
+    }
+    (rows, colors)
+}
+
+fn mark_rows(rows: &[String]) -> Vec<usize> {
+    rows.iter()
+        .enumerate()
+        .filter(|(_, line)| line.contains("██"))
+        .map(|(index, _)| index)
+        .collect()
+}
+
+#[test]
+fn welcome_mark_is_centered_and_shimmers() {
+    let (rows, colors) = screen_rows(&View::default(), 150, 40, 0);
+    let mark = mark_rows(&rows);
+    // 第六行是纯 ╚ 收边，不含 '█'，所以含实心块的行是五行，标识整体仍是六行。
+    assert_eq!(
+        mark.len(),
+        5,
+        "welcome mark keeps its block rows (got {}): {rows:#?}",
+        mark.len()
+    );
+    assert!(
+        rows[mark[mark.len() - 1] + 1].contains("╚══════╝"),
+        "mark keeps its closing row"
+    );
+    assert!(
+        mark[0] >= 3,
+        "mark starts below the frame border: {}",
+        mark[0]
+    );
+    let first: Vec<char> = rows[mark[0]].chars().collect();
+    let start = first.iter().position(|c| *c == '█').expect("block glyph");
+    let end = first.iter().rposition(|c| *c == '█').unwrap_or(start) + 1;
+    let inner_left = start.saturating_sub(1);
+    let inner_right = 150usize.saturating_sub(2).saturating_sub(end);
+    assert!(
+        inner_left >= 5,
+        "mark is inset from the left edge: {inner_left}"
+    );
+    assert!(
+        inner_left.abs_diff(inner_right) <= 3,
+        "mark is horizontally centered: left={inner_left} right={inner_right}"
+    );
+    let subtitle = rows
+        .iter()
+        .position(|line| line.contains("/model"))
+        .expect("subtitle is rendered");
+    let subtitle_start = rows[subtitle]
+        .chars()
+        .collect::<Vec<_>>()
+        .iter()
+        .position(|c| *c == 'R')
+        .unwrap_or(0);
+    let subtitle_inner_left = subtitle_start.saturating_sub(1);
+    assert!(
+        subtitle_inner_left.abs_diff(inner_left) <= 3,
+        "subtitle is centered under the mark: {subtitle_inner_left}"
+    );
+    let (_, later_colors) = screen_rows(&View::default(), 150, 40, 450);
+    let early_row = &colors[mark[0]];
+    let later_row = &later_colors[mark[0]];
+    assert!(
+        early_row.iter().zip(later_row.iter()).any(|(a, b)| a != b),
+        "welcome mark shimmer advances with time"
+    );
+}
+
+#[test]
+fn welcome_fallback_and_composer_titles_follow_mode() {
+    let (rows, _) = screen_rows(&View::default(), 40, 14, 0);
+    let fallback = rows
+        .iter()
+        .position(|line| line.contains("ZCODIUM · Rust"))
+        .expect("narrow welcome fallback is rendered");
+    let fallback_chars: Vec<char> = rows[fallback].chars().collect();
+    let start = fallback_chars.iter().position(|c| *c == 'Z').unwrap_or(0);
+    let end = start + "ZCODIUM · Rust".chars().count();
+    let inner_left = start.saturating_sub(1);
+    let inner_right = 40usize.saturating_sub(2).saturating_sub(end);
+    assert!(
+        inner_left >= 3,
+        "narrow fallback stays centered: {inner_left}"
+    );
+    assert!(
+        inner_left.abs_diff(inner_right) <= 2,
+        "narrow fallback is centered: {inner_left}/{inner_right}"
+    );
+
+    let mut view = View::default();
+    view.state = json!({"config":{"mode":"build"}});
+    view.state["control"] = json!({});
+    let (rows, _) = screen_rows(&view, 100, 24, 0);
+    assert!(
+        rows.iter().any(|line| line.contains(" Build ")),
+        "composer title follows the permission mode"
+    );
+    assert!(
+        rows.iter().any(|line| line.contains("Type a prompt")),
+        "empty composer shows the prompt placeholder"
+    );
+
+    view.editor.insert("hello");
+    let (rows, _) = screen_rows(&view, 100, 24, 0);
+    assert!(
+        !rows.iter().any(|line| line.contains("Type a prompt")),
+        "placeholder disappears once the composer has text"
+    );
+    assert!(rows.iter().any(|line| line.contains("hello")));
 }
