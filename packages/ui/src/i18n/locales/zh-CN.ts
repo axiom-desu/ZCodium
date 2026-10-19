@@ -3253,6 +3253,9 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.modelCatalog.reason.api-key-missing": "请先填写 API Key",
   "settings.modelProvider.modelCatalog.reason.request-failed": "接口请求失败",
   "settings.modelProvider.modelCatalog.reason.empty-catalog": "接口未返回可用模型",
+  // Gemini 原生端点不实现 models.list，请求必然失败；不禁用按钮，只给预防性提示。
+  "settings.modelProvider.modelCatalog.mayNotBeSupported":
+    "该接口格式（Google Gemini 原生）通常不提供模型列表，可能无法自动获取。若失败，请关闭本窗口后用「添加模型」手动填写模型 ID。",
   "settings.modelProvider.modelId": "模型 ID",
   "settings.modelProvider.modelDisplayName": "显示名称",
   "settings.modelProvider.modelApiFormat.anthropic": "Anthropic Messages",

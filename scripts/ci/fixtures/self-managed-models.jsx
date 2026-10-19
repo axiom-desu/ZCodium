@@ -33,6 +33,26 @@ const account = {
 };
 let revision = 1;
 const providers = [account];
+if (params.get("mode") === "gemini-native") {
+  const config = {
+    group: "standard-personal",
+    access: { type: "api-key", apiKey: "fixture-gemini-key" },
+    api: {
+      type: "google-generative-ai",
+      baseUrl: "https://opencode.ai/inference/google/v1beta",
+    },
+  };
+  providers.push({
+    providerId: "personal:gemini",
+    providerName: "Gemini Native",
+    enabled: true,
+    executable: true,
+    personalConfig: config,
+    effectiveConfig: structuredClone(config),
+    models: [],
+    issues: [],
+  });
+}
 if (params.get("mode") === "legacy-api") {
   const config = {
     ...structuredClone(template.config),
@@ -189,6 +209,13 @@ const service = {
   },
   async listProviderModels(input) {
     fixture.calls.push(["listProviderModels", input]);
+    // Gemini 原生端点不实现 models.list；这里复现真实 404。
+    if (params.get("mode") === "gemini-native") {
+      return {
+        success: false,
+        error: { code: "request-failed", message: "HTTP 404" },
+      };
+    }
     return { success: true, modelIds: ["fixture-model", "catalog-model"], source: "primary" };
   },
 };

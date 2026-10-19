@@ -3469,6 +3469,9 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.modelCatalog.reason.api-key-missing": "Fill in the API Key first",
   "settings.modelProvider.modelCatalog.reason.request-failed": "The endpoint request failed",
   "settings.modelProvider.modelCatalog.reason.empty-catalog": "The endpoint returned no models",
+  // Native Gemini endpoints do not implement models.list; warn instead of disabling the button.
+  "settings.modelProvider.modelCatalog.mayNotBeSupported":
+    "This API format (Google Gemini native) usually has no model-list endpoint, so fetching may fail. If it does, close this dialog and add the model ID by hand.",
   "settings.modelProvider.modelId": "Model ID",
   "settings.modelProvider.modelDisplayName": "Display name",
   "settings.modelProvider.modelApiFormat.anthropic": "Anthropic messages",

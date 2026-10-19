@@ -256,6 +256,22 @@ try {
   );
   assert.equal(await page.getByText("Official account", { exact: true }).count(), 0);
   assert.equal(await page.getByTestId("model-provider-template-picker").count(), 0);
+  // Gemini 原生：按钮不禁用，点击后先给“可能不支持”的预防提示，再照常尝试并展示真实失败。
+  await page.goto(`http://127.0.0.1:${server.address().port}/?mode=gemini-native&locale=en-US`);
+  await page.getByTestId("model-provider-base-url-input").waitFor();
+  const fetchModels = page.getByTestId("model-provider-fetch-models-button");
+  assert.equal(await fetchModels.isDisabled(), false, "Gemini 原生不应禁用获取模型按钮");
+  await fetchModels.click();
+  await page.getByText(/usually has no model-list endpoint/).waitFor();
+  await page.getByRole("alert").waitFor();
+  // 提示语不能冒充失败结果：两者必须同时存在且角色不同（note vs alert）。
+  assert.equal(await fetchModels.isDisabled(), false);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page
+    .getByRole("note")
+    .waitFor({ state: "detached" })
+    .catch(() => {});
+
   assert.deepEqual(errors, []);
   assert.deepEqual(requests, []);
   console.log(
