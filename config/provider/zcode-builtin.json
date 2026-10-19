@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 38,
+  "revision": 39,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -2536,222 +2536,6 @@
       ],
       "modelApiRules": [
         {
-          "modelMatch": ".*gemini-4-argon-contributor(?:[.\\-:/\\[].*)?",
-          "apiTypeMatch": "google-generative-ai",
-          "config": {
-            "properties": {
-              "contextWindow": 1048576,
-              "inputFormat": {
-                "supportsText": true,
-                "supportsImage": true,
-                "supportsVideo": true,
-                "supportsAudio": true,
-                "supportsPdf": true
-              },
-              "outputFormat": {
-                "supportsText": true
-              }
-            },
-            "optionSpecs": {
-              "maxOutputTokens": {
-                "max": 943718
-              }
-            }
-          }
-        },
-        {
-          "modelMatch": ".*gemini-4-argon(?:[.\\-:/\\[].*)?",
-          "apiTypeMatch": "google-generative-ai",
-          "config": {
-            "properties": {
-              "contextWindow": 1048576,
-              "inputFormat": {
-                "supportsText": true,
-                "supportsImage": true,
-                "supportsVideo": true,
-                "supportsAudio": true,
-                "supportsPdf": true
-              },
-              "outputFormat": {
-                "supportsText": true
-              }
-            },
-            "optionSpecs": {
-              "maxOutputTokens": {
-                "max": 943718
-              }
-            }
-          }
-        },
-        {
-          "modelMatch": ".*gemini-3\\.5-flash-lite(?:[.\\-:/\\[].*)?",
-          "apiTypeMatch": "google-generative-ai",
-          "config": {
-            "properties": {
-              "contextWindow": 1048576,
-              "inputFormat": {
-                "supportsText": true,
-                "supportsImage": true,
-                "supportsVideo": true,
-                "supportsAudio": true,
-                "supportsPdf": true
-              },
-              "outputFormat": {
-                "supportsText": true
-              }
-            },
-            "optionSpecs": {
-              "maxOutputTokens": {
-                "max": 65536
-              }
-            }
-          }
-        },
-        {
-          "modelMatch": ".*gemini-3\\.8-flash(?:[.\\-:/\\[].*)?",
-          "apiTypeMatch": "google-generative-ai",
-          "config": {
-            "properties": {
-              "contextWindow": 1048576,
-              "inputFormat": {
-                "supportsText": true,
-                "supportsImage": true,
-                "supportsVideo": true,
-                "supportsAudio": true,
-                "supportsPdf": true
-              },
-              "outputFormat": {
-                "supportsText": true
-              }
-            },
-            "optionSpecs": {
-              "maxOutputTokens": {
-                "max": 65536
-              }
-            }
-          }
-        },
-        {
-          "modelMatch": ".*gemini-3\\.7-flash(?:[.\\-:/\\[].*)?",
-          "apiTypeMatch": "google-generative-ai",
-          "config": {
-            "properties": {
-              "contextWindow": 1048576,
-              "inputFormat": {
-                "supportsText": true,
-                "supportsImage": true,
-                "supportsVideo": true,
-                "supportsAudio": true,
-                "supportsPdf": true
-              },
-              "outputFormat": {
-                "supportsText": true
-              }
-            },
-            "optionSpecs": {
-              "maxOutputTokens": {
-                "max": 65536
-              }
-            }
-          }
-        },
-        {
-          "modelMatch": ".*gemini-3\\.6-flash(?:[.\\-:/\\[].*)?",
-          "apiTypeMatch": "google-generative-ai",
-          "config": {
-            "properties": {
-              "contextWindow": 1048576,
-              "inputFormat": {
-                "supportsText": true,
-                "supportsImage": true,
-                "supportsVideo": true,
-                "supportsAudio": true,
-                "supportsPdf": true
-              },
-              "outputFormat": {
-                "supportsText": true
-              }
-            },
-            "optionSpecs": {
-              "maxOutputTokens": {
-                "max": 65536
-              }
-            }
-          }
-        },
-        {
-          "modelMatch": ".*gemini-3\\.5-flash(?:[.\\-:/\\[].*)?",
-          "apiTypeMatch": "google-generative-ai",
-          "config": {
-            "properties": {
-              "contextWindow": 1048576,
-              "inputFormat": {
-                "supportsText": true,
-                "supportsImage": true,
-                "supportsVideo": true,
-                "supportsAudio": true,
-                "supportsPdf": true
-              },
-              "outputFormat": {
-                "supportsText": true
-              }
-            },
-            "optionSpecs": {
-              "maxOutputTokens": {
-                "max": 65536
-              }
-            }
-          }
-        },
-        {
-          "modelMatch": ".*gemini-3\\.1-pro(?:[.\\-:/\\[].*)?",
-          "apiTypeMatch": "google-generative-ai",
-          "config": {
-            "properties": {
-              "contextWindow": 1048576,
-              "inputFormat": {
-                "supportsText": true,
-                "supportsImage": true,
-                "supportsVideo": true,
-                "supportsAudio": true,
-                "supportsPdf": true
-              },
-              "outputFormat": {
-                "supportsText": true
-              }
-            },
-            "optionSpecs": {
-              "maxOutputTokens": {
-                "max": 65536
-              }
-            }
-          }
-        },
-        {
-          "modelMatch": ".*gemini-3-flash(?:[.\\-:/\\[].*)?",
-          "apiTypeMatch": "google-generative-ai",
-          "config": {
-            "properties": {
-              "contextWindow": 1048576,
-              "inputFormat": {
-                "supportsText": true,
-                "supportsImage": true,
-                "supportsVideo": true,
-                "supportsAudio": true,
-                "supportsPdf": true
-              },
-              "outputFormat": {
-                "supportsText": true
-              }
-            },
-            "optionSpecs": {
-              "maxOutputTokens": {
-                "max": 65536
-              }
-            }
-          }
-        },
-        {
           "modelMatch": ".*",
           "apiTypeMatch": "google-generative-ai",
           "config": {
@@ -3575,6 +3359,231 @@
         }
       ],
       "providerSiteRules": [
+        {
+          "modelMatch": ".*gemini-4-argon-contributor(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "google-generative-ai",
+          "baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?",
+          "config": {
+            "properties": {
+              "contextWindow": 1048576,
+              "inputFormat": {
+                "supportsText": true,
+                "supportsImage": true,
+                "supportsVideo": true,
+                "supportsAudio": true,
+                "supportsPdf": true
+              },
+              "outputFormat": {
+                "supportsText": true
+              }
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "max": 943718
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gemini-4-argon(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "google-generative-ai",
+          "baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?",
+          "config": {
+            "properties": {
+              "contextWindow": 1048576,
+              "inputFormat": {
+                "supportsText": true,
+                "supportsImage": true,
+                "supportsVideo": true,
+                "supportsAudio": true,
+                "supportsPdf": true
+              },
+              "outputFormat": {
+                "supportsText": true
+              }
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "max": 943718
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gemini-3\\.5-flash-lite(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "google-generative-ai",
+          "baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?",
+          "config": {
+            "properties": {
+              "contextWindow": 1048576,
+              "inputFormat": {
+                "supportsText": true,
+                "supportsImage": true,
+                "supportsVideo": true,
+                "supportsAudio": true,
+                "supportsPdf": true
+              },
+              "outputFormat": {
+                "supportsText": true
+              }
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "max": 65536
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gemini-3\\.8-flash(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "google-generative-ai",
+          "baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?",
+          "config": {
+            "properties": {
+              "contextWindow": 1048576,
+              "inputFormat": {
+                "supportsText": true,
+                "supportsImage": true,
+                "supportsVideo": true,
+                "supportsAudio": true,
+                "supportsPdf": true
+              },
+              "outputFormat": {
+                "supportsText": true
+              }
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "max": 65536
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gemini-3\\.7-flash(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "google-generative-ai",
+          "baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?",
+          "config": {
+            "properties": {
+              "contextWindow": 1048576,
+              "inputFormat": {
+                "supportsText": true,
+                "supportsImage": true,
+                "supportsVideo": true,
+                "supportsAudio": true,
+                "supportsPdf": true
+              },
+              "outputFormat": {
+                "supportsText": true
+              }
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "max": 65536
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gemini-3\\.6-flash(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "google-generative-ai",
+          "baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?",
+          "config": {
+            "properties": {
+              "contextWindow": 1048576,
+              "inputFormat": {
+                "supportsText": true,
+                "supportsImage": true,
+                "supportsVideo": true,
+                "supportsAudio": true,
+                "supportsPdf": true
+              },
+              "outputFormat": {
+                "supportsText": true
+              }
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "max": 65536
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gemini-3\\.5-flash(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "google-generative-ai",
+          "baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?",
+          "config": {
+            "properties": {
+              "contextWindow": 1048576,
+              "inputFormat": {
+                "supportsText": true,
+                "supportsImage": true,
+                "supportsVideo": true,
+                "supportsAudio": true,
+                "supportsPdf": true
+              },
+              "outputFormat": {
+                "supportsText": true
+              }
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "max": 65536
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gemini-3\\.1-pro(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "google-generative-ai",
+          "baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?",
+          "config": {
+            "properties": {
+              "contextWindow": 1048576,
+              "inputFormat": {
+                "supportsText": true,
+                "supportsImage": true,
+                "supportsVideo": true,
+                "supportsAudio": true,
+                "supportsPdf": true
+              },
+              "outputFormat": {
+                "supportsText": true
+              }
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "max": 65536
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gemini-3-flash(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "google-generative-ai",
+          "baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?",
+          "config": {
+            "properties": {
+              "contextWindow": 1048576,
+              "inputFormat": {
+                "supportsText": true,
+                "supportsImage": true,
+                "supportsVideo": true,
+                "supportsAudio": true,
+                "supportsPdf": true
+              },
+              "outputFormat": {
+                "supportsText": true
+              }
+            },
+            "optionSpecs": {
+              "maxOutputTokens": {
+                "max": 65536
+              }
+            }
+          }
+        },
         {
           "modelMatch": "glm-5\\.3-flash",
           "apiTypeMatch": "openai-chat-completions",
