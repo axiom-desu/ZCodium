@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 30,
+  "revision": 32,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -569,6 +569,59 @@
               "baseUrl": "https://opencode.ai/zen/go/v1"
             },
             "builtinModelIds": ["gpt-5.6-luna", "grok-4.6"],
+            "logo": {
+              "type": "builtin",
+              "key": "opencode"
+            }
+          }
+        },
+        {
+          "templateId": "opencode-go-google",
+          "templateNameMap": {
+            "zh-CN": "OpenCode Go (Google)",
+            "en-US": "OpenCode Go (Google)"
+          },
+          "config": {
+            "access": {
+              "type": "api-key",
+              "apiKeyManagementUrl": "https://opencode.ai/auth"
+            },
+            "api": {
+              "type": "google-generative-ai",
+              "baseUrl": "https://opencode.ai/inference/go/google/v1beta"
+            },
+            "builtinModelIds": ["gemini-4-argon-contributor"],
+            "logo": {
+              "type": "builtin",
+              "key": "opencode"
+            }
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "templateNameMap": {
+            "zh-CN": "OpenCode Zen (Google)",
+            "en-US": "OpenCode Zen (Google)"
+          },
+          "config": {
+            "access": {
+              "type": "api-key",
+              "apiKeyManagementUrl": "https://opencode.ai/auth"
+            },
+            "api": {
+              "type": "google-generative-ai",
+              "baseUrl": "https://opencode.ai/inference/google/v1beta"
+            },
+            "builtinModelIds": [
+              "gemini-4-argon",
+              "gemini-3.8-flash",
+              "gemini-3.7-flash",
+              "gemini-3.6-flash",
+              "gemini-3.5-flash",
+              "gemini-3.5-flash-lite",
+              "gemini-3.1-pro",
+              "gemini-3-flash"
+            ],
             "logo": {
               "type": "builtin",
               "key": "opencode"
@@ -4420,6 +4473,13 @@
           }
         },
         {
+          "templateId": "opencode-go-google",
+          "modelId": "gemini-4-argon-contributor",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
           "templateId": "opencode-go-messages",
           "modelId": "minimax-m3",
           "config": {
@@ -5068,6 +5128,62 @@
           "modelId": "gpt-5.1",
           "config": {
             "enabled": false
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-4-argon",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.8-flash",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.7-flash",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.6-flash",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.5-flash",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.5-flash-lite",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.1-pro",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3-flash",
+          "config": {
+            "enabled": true
           }
         },
         {

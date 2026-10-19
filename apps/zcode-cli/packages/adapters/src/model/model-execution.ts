@@ -5,6 +5,7 @@
 
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import {
@@ -28,7 +29,7 @@ import { createNetworkProxyFetch } from "../network/proxy-fetch.js";
 import { normalizeModelTlsFailure } from "./failure-tls.js";
 import { mergeModelRequestHeaders } from "./model-request-headers.js";
 
-export type AiSdkProviderKind = "openai" | "anthropic" | "openai-compatible";
+export type AiSdkProviderKind = "openai" | "anthropic" | "openai-compatible" | "google";
 
 export type EnvRecord = Record<string, string | undefined>;
 
@@ -302,6 +303,18 @@ export class AiSdkModelExecution {
         return provider as LanguageModelFactory;
       }
 
+      case "google": {
+        // Gemini 原生协议：模型在 URL 路径、x-goog-api-key 鉴权、contents/parts 报文。
+        // 协议映射交给 SDK，这里只保证 baseURL 用用户配置值，不改写成官方网关。
+        const provider = createGoogleGenerativeAI({
+          apiKey,
+          baseURL: providerConfig.baseURL,
+          fetch: optionFetch,
+          headers,
+        });
+        return provider as LanguageModelFactory;
+      }
+
       case "openai-compatible": {
         const provider = createOpenAICompatible<string, string, string, string>({
           name: providerConfig.name ?? providerId,
@@ -369,6 +382,8 @@ function toAiSdkProviderConfig(
       return { kind: "openai", ...common };
     case "openai-chat-completions":
       return { kind: "openai-compatible", name: providerId, ...common };
+    case "google-generative-ai":
+      return { kind: "google", ...common };
   }
   throw new Error(`Unsupported Provider API type: ${String(config.api.type)}`);
 }

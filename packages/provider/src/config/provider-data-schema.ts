@@ -5,6 +5,8 @@ export const providerApiTypeDataSchema = z.enum([
   "anthropic-messages",
   "openai-chat-completions",
   "openai-responses",
+  // Google Gemini 原生协议：模型在 URL 路径、x-goog-api-key 鉴权、contents/parts 报文。
+  "google-generative-ai",
 ]);
 export const providerGroupDataSchema = z.enum([
   "standard-personal",

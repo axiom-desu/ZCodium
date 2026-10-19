@@ -64,7 +64,10 @@ export function detectProviderBusinessFinishError(
 }
 
 function normalizeProviderKind(value: AiSdkProviderKind | string | undefined): AiSdkProviderKind {
-  return value === "openai" || value === "anthropic" || value === "openai-compatible"
+  return value === "openai" ||
+    value === "anthropic" ||
+    value === "openai-compatible" ||
+    value === "google"
     ? value
     : "openai-compatible";
 }

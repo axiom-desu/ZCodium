@@ -101,6 +101,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.81",
+    "@ai-sdk/google": "3.0.135",
     "@ai-sdk/openai": "^3.0.58",
     "@ai-sdk/openai-compatible": "^2.0.58",
     "@modelcontextprotocol/client": "2.0.0",
