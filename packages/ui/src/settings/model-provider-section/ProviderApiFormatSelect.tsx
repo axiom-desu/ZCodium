@@ -17,18 +17,22 @@ const PROVIDER_CONNECTION_API_FORMATS: readonly ProviderApiType[] = [
   "anthropic-messages",
   "openai-chat-completions",
   "openai-responses",
+  "google-generative-ai",
 ];
 
 const PROVIDER_CONNECTION_API_FORMAT_PATHS: Record<ProviderApiType, string> = {
   "anthropic-messages": "/v1/messages",
   "openai-chat-completions": "/chat/completions",
   "openai-responses": "/responses",
+  // Gemini 把模型名放进路径，这里只展示版本段 + 动作后缀，避免误导成固定路径。
+  "google-generative-ai": "/v1beta/models/{model}:generateContent",
 };
 
 const PROVIDER_CONNECTION_API_FORMAT_TITLE_IDS: Record<ProviderApiType, string> = {
   "anthropic-messages": "settings.modelProvider.apiFormat.title.anthropicMessages",
   "openai-chat-completions": "settings.modelProvider.apiFormat.title.chatCompletions",
   "openai-responses": "settings.modelProvider.apiFormat.title.responses",
+  "google-generative-ai": "settings.modelProvider.apiFormat.title.googleGenerativeAi",
 };
 
 export function resolveProviderConnectionApiFormatOptions(): ProviderApiType[] {

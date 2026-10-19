@@ -2882,6 +2882,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.apiFormat.title.chatCompletions": "Chat completions",
   "settings.modelProvider.apiFormat.title.responses": "Responses",
   "settings.modelProvider.apiFormat.title.anthropicMessages": "Anthropic messages",
+  "settings.modelProvider.apiFormat.title.googleGenerativeAi": "Google Gemini native",
   "settings.modelProvider.apiKey": "API key",
   // Account sign-in was removed; state the replacement path instead of leaving a dead form.
   "settings.modelProvider.accountAccessRetired":

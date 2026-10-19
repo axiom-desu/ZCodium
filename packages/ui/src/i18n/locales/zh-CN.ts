@@ -2706,6 +2706,7 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.apiFormat.title.chatCompletions": "Chat Completions",
   "settings.modelProvider.apiFormat.title.responses": "Responses",
   "settings.modelProvider.apiFormat.title.anthropicMessages": "Anthropic Messages",
+  "settings.modelProvider.apiFormat.title.googleGenerativeAi": "Google Gemini 原生",
   "settings.modelProvider.apiKey": "API Key",
   // 账号连接方式已移除；这里明确告知替代路径，避免用户把不可用当成配置错误。
   "settings.modelProvider.accountAccessRetired":

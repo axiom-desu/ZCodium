@@ -76,6 +76,61 @@ test("anthropic attempts use /v1/models first with version headers", () => {
   assert.equal(attempts[0]?.headers.Authorization, undefined);
 });
 
+test("google attempts use x-goog-api-key and avoid duplicating the version segment", () => {
+  const versioned = buildProviderModelCatalogAttempts({
+    apiType: "google-generative-ai",
+    baseUrl: "https://opencode.ai/inference/google/v1beta/",
+    apiKey: "key-google",
+  });
+  // baseUrl 已带 /v1beta；再拼一次会得到 /v1beta/v1beta/models。
+  assert.deepEqual(
+    versioned.map((attempt) => attempt.url),
+    [
+      "https://opencode.ai/inference/google/v1beta/models",
+      "https://opencode.ai/inference/google/v1beta/models",
+    ],
+  );
+  assert.equal(versioned[0]?.headers["x-goog-api-key"], "key-google");
+  // Gemini 只认 x-goog-api-key；Bearer 与 x-api-key 都应缺席。
+  assert.equal(versioned[0]?.headers.Authorization, undefined);
+  assert.equal(versioned[0]?.headers["x-api-key"], undefined);
+
+  const bare = buildProviderModelCatalogAttempts({
+    apiType: "google-generative-ai",
+    baseUrl: "https://generativelanguage.googleapis.com",
+    apiKey: "key-google",
+  });
+  assert.deepEqual(
+    bare.map((attempt) => attempt.url),
+    [
+      "https://generativelanguage.googleapis.com/models",
+      "https://generativelanguage.googleapis.com/v1beta/models",
+    ],
+  );
+});
+
+test("google catalog strips the models/ prefix from native names", async () => {
+  const result = await fetchProviderModelCatalog({
+    apiClient: {
+      async request() {
+        return new Response(
+          JSON.stringify({
+            models: [
+              { name: "models/gemini-4-argon" },
+              { name: "models/gemini-3.1-pro" },
+              { name: "gemini-3-flash" },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      },
+    },
+    request: { apiType: "google-generative-ai", baseUrl: "https://x.example/v1beta", apiKey: "k" },
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(result.modelIds, ["gemini-4-argon", "gemini-3.1-pro", "gemini-3-flash"]);
+});
+
 test("custom provider headers override built-in auth headers", () => {
   const attempts = buildProviderModelCatalogAttempts({
     apiType: "openai-chat-completions",
