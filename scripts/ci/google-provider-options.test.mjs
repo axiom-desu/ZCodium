@@ -15,10 +15,15 @@ const bundled = JSON.parse(
 
 function googleRule() {
   const rules = bundled.config.modelConfigRules.modelApiRules;
-  const rule = rules.find((candidate) => candidate.apiTypeMatch === "google-generative-ai");
+  // 取带 optionSpecs 的那条：纯元数据规则（contextWindow/inputFormat）不定义 map。
+  const rule = rules.find(
+    (candidate) =>
+      candidate.apiTypeMatch === "google-generative-ai" &&
+      candidate.config.optionSpecs?.maxOutputTokens?.map,
+  );
   assert.ok(
     rule,
-    "Gemini 需要一条 modelApiRules，否则请求体拿不到 maxOutputTokens / thinkingConfig",
+    "Gemini 需要一条带 optionSpecs 的 modelApiRules，否则请求体拿不到 maxOutputTokens / thinkingConfig",
   );
   return rule;
 }
@@ -70,6 +75,45 @@ test("google api rule keeps generation fields inside generationConfig", () => {
   // 省略反而是唯一对所有模型都 200 的选择。
   assert.deepEqual(disabled.generationConfig, { maxOutputTokens: 1024 });
   assert.equal(disabled.generationConfig.thinkingConfig, undefined);
+});
+
+test("google per-model rules resolve context and output limits without shadowing", () => {
+  const rules = bundled.config.modelConfigRules.modelApiRules.filter(
+    (r) => r.apiTypeMatch === "google-generative-ai",
+  );
+  // 顺序敏感：具体规则必须排在通配之前，否则 lite 会被 flash 覆盖、contributor 会被 argon 覆盖。
+  for (const rule of rules) new RegExp(rule.modelMatch);
+
+  const resolve = (modelId) => {
+    let contextWindow;
+    let maxOutputTokens;
+    for (const rule of rules) {
+      if (!new RegExp(rule.modelMatch).test(modelId)) continue;
+      const ctx = rule.config.properties?.contextWindow;
+      const max = rule.config.optionSpecs?.maxOutputTokens?.max;
+      if (ctx !== undefined) contextWindow = ctx;
+      if (max !== undefined) maxOutputTokens = max;
+    }
+    return { contextWindow, maxOutputTokens };
+  };
+
+  // 值来自 OpenRouter /api/v1/models 的 google/* 条目；OpenCode 自身不返回任何能力字段。
+  assert.deepEqual(resolve("gemini-4-argon"), { contextWindow: 1048576, maxOutputTokens: 943718 });
+  assert.deepEqual(resolve("gemini-4-argon-contributor"), {
+    contextWindow: 1048576,
+    maxOutputTokens: 943718,
+  });
+  assert.deepEqual(resolve("gemini-3.5-flash-lite"), {
+    contextWindow: 1048576,
+    maxOutputTokens: 65536,
+  });
+  assert.deepEqual(resolve("gemini-3.5-flash"), { contextWindow: 1048576, maxOutputTokens: 65536 });
+  assert.deepEqual(resolve("gemini-3.1-pro"), { contextWindow: 1048576, maxOutputTokens: 65536 });
+  // 未知模型不得被 Gemini 规则误伤。
+  assert.deepEqual(resolve("definitely-unknown-model"), {
+    contextWindow: undefined,
+    maxOutputTokens: undefined,
+  });
 });
 
 test("google templates declare the native api type and stay metadata-compatible", () => {
