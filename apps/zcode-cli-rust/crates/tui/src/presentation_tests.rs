@@ -335,7 +335,10 @@ fn sidebar_matches_ts_sections_from_real_state() {
     let view = sidebar_view();
     let (rows, _) = screen_rows(&view, 150, 40, 0);
     let text = rows.join("\n");
-    assert!(text.contains("ZCodium 0.1.0"), "product header: {text}");
+    assert!(
+        text.contains("ZCodium Rust 0.1.0"),
+        "product header: {text}"
+    );
     assert!(text.contains("Status"), "status section");
     assert!(
         text.contains("Subagents (2)"),

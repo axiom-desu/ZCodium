@@ -6,12 +6,9 @@ The Rust terminal sidebar must carry the same sections and reading order as the 
 
 Order, from the top:
 
-1. `ZCodium <version>` header: product name in accent, version muted.
-2. `Status`: current activity line, the last stop state, and the last error when present.
-3. `Subagents (n)`: running count, ended total, and up to three child session ids.
-4. `Modified Files`: files touched by file-diff tool cards in the loaded window, with `+additions -deletions`, capped at six rows.
-5. `Todos`: `Progress completed/total` plus up to six steps with `✔` / `▶` / `○` markers.
-6. Workspace path pinned to the bottom in muted text.
+1. `ZCodium Rust <version>` header: product name in accent, version muted.
+
+Version numbering stays per product. The Rust CLI reports its own crate version (`0.1.0` today) exactly like `--version`; it must not impersonate the TypeScript CLI train (`0.16.x`) or the desktop application version (`3.15.1-…`). The flavor in the header is what explains the different number to the user. 2. `Status`: current activity line, the last stop state, and the last error when present. 3. `Subagents (n)`: running count, ended total, and up to three child session ids. 4. `Modified Files`: files touched by file-diff tool cards in the loaded window, with `+additions -deletions`, capped at six rows. 5. `Todos`: `Progress completed/total` plus up to six steps with `✔` / `▶` / `○` markers. 6. Workspace path pinned to the bottom in muted text.
 
 Empty states are explicit (`No subagents yet.`, `No file changes yet.`, `No todos yet.`). Wide terminals show the sidebar as a 42-column panel; narrow terminals keep the existing `Ctrl-X,B` overlay and never shrink the conversation below the frame minimum.
 
