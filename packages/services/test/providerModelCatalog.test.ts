@@ -86,8 +86,8 @@ test("google attempts use x-goog-api-key and avoid duplicating the version segme
   assert.deepEqual(
     versioned.map((attempt) => attempt.url),
     [
-      "https://opencode.ai/inference/google/v1beta/models",
-      "https://opencode.ai/inference/google/v1beta/models",
+      "https://opencode.ai/inference/google/v1beta/models?pageSize=1000",
+      "https://opencode.ai/inference/google/v1beta/models?pageSize=1000",
     ],
   );
   assert.equal(versioned[0]?.headers["x-goog-api-key"], "key-google");
@@ -103,10 +103,32 @@ test("google attempts use x-goog-api-key and avoid duplicating the version segme
   assert.deepEqual(
     bare.map((attempt) => attempt.url),
     [
-      "https://generativelanguage.googleapis.com/models",
-      "https://generativelanguage.googleapis.com/v1beta/models",
+      "https://generativelanguage.googleapis.com/models?pageSize=1000",
+      "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
     ],
   );
+});
+
+// 官方 models.list 默认只回 50 条并给 nextPageToken，不显式要满页会静默丢模型。
+// 实测官方端点 63 个模型，默认页大小只能拿到 50 个。
+test("google catalog requests a full page so models are not silently dropped", () => {
+  for (const baseUrl of [
+    "https://generativelanguage.googleapis.com/v1beta",
+    "https://generativelanguage.googleapis.com",
+  ]) {
+    const attempts = buildProviderModelCatalogAttempts({
+      apiType: "google-generative-ai",
+      baseUrl,
+      apiKey: "k",
+    });
+    for (const attempt of attempts) {
+      assert.match(
+        attempt.url,
+        /[?&]pageSize=\d+/,
+        `Gemini 目录必须显式请求页大小，否则超过 50 个模型会被静默截断：${attempt.url}`,
+      );
+    }
+  }
 });
 
 test("google catalog strips the models/ prefix from native names", async () => {

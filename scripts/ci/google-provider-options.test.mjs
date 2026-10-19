@@ -116,10 +116,12 @@ test("google per-model rules are scoped to OpenCode and do not shadow", () => {
   };
 
   // 值来自 OpenRouter /api/v1/models 的 google/* 条目；OpenCode 自身不返回任何能力字段。
-  assert.deepEqual(resolve("gemini-4-argon"), { contextWindow: 1048576, maxOutputTokens: 943718 });
+  // argon 的输出上限来自 Google 官方 models.list 的 outputTokenLimit（32768）。
+  // OpenRouter 报的 943718 正好等于 context × 0.9，是推算值而非真实上限，不可采用。
+  assert.deepEqual(resolve("gemini-4-argon"), { contextWindow: 1048576, maxOutputTokens: 32768 });
   assert.deepEqual(resolve("gemini-4-argon-contributor"), {
     contextWindow: 1048576,
-    maxOutputTokens: 943718,
+    maxOutputTokens: 32768,
   });
   assert.deepEqual(resolve("gemini-3.5-flash-lite"), {
     contextWindow: 1048576,
