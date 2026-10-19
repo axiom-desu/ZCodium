@@ -33,7 +33,10 @@ export type {
   ProviderSettingsView,
 } from "@zcode/provider";
 
-export type { ProviderModelCatalogResult } from "./providerModelCatalog.js";
+export type {
+  ProviderModelCatalogMetadata,
+  ProviderModelCatalogResult,
+} from "./providerModelCatalog.js";
 
 export interface IProviderSettingsService {
   readonly onDidChange: Event<ProviderSettingsView>;

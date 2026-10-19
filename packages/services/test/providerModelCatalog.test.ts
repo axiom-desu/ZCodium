@@ -131,6 +131,59 @@ test("google catalog strips the models/ prefix from native names", async () => {
   assert.deepEqual(result.modelIds, ["gemini-4-argon", "gemini-3.1-pro", "gemini-3-flash"]);
 });
 
+test("google catalog maps only explicitly returned limits into metadata", async () => {
+  const result = await fetchProviderModelCatalog({
+    apiClient: {
+      async request() {
+        return new Response(
+          JSON.stringify({
+            models: [
+              {
+                name: "models/gemini-4-argon",
+                displayName: "Gemini 4 Argon",
+                inputTokenLimit: 1048576,
+                outputTokenLimit: 65536,
+                supportedGenerationMethods: ["generateContent", "countTokens"],
+              },
+              // 只有 id：元数据必须缺席，不能补零或推断。
+              { name: "models/gemini-3-flash" },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      },
+    },
+    request: { apiType: "google-generative-ai", baseUrl: "https://x.example/v1beta", apiKey: "k" },
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(result.modelIds, ["gemini-4-argon", "gemini-3-flash"]);
+  assert.deepEqual(result.metadata?.["gemini-4-argon"], {
+    contextWindow: 1048576,
+    maxOutputTokens: 65536,
+    displayName: "Gemini 4 Argon",
+    supportedGenerationMethods: ["generateContent", "countTokens"],
+  });
+  // 端点没给字段时整条缺席，调用方据此退回既有规则匹配。
+  assert.equal(result.metadata?.["gemini-3-flash"], undefined);
+});
+
+test("catalogs without token limits stay metadata-free", async () => {
+  const result = await fetchProviderModelCatalog({
+    apiClient: {
+      async request() {
+        return new Response(JSON.stringify({ data: [{ id: "gpt-x" }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    },
+    request: { apiType: "openai-chat-completions", baseUrl: "https://x.example", apiKey: "k" },
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(result.modelIds, ["gpt-x"]);
+  assert.equal(result.metadata, undefined);
+});
+
 test("custom provider headers override built-in auth headers", () => {
   const attempts = buildProviderModelCatalogAttempts({
     apiType: "openai-chat-completions",

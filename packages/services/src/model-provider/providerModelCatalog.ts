@@ -23,9 +23,31 @@ export interface ProviderModelCatalogRequest {
   readonly headers?: Readonly<Record<string, string>> | null;
 }
 
+/**
+ * 目录里携带的可信元数据。
+ *
+ * 只映射端点**显式返回**的字段，绝不从模型名或产品系列推断能力——
+ * 猜错会让用户按错误的上限裁剪上下文，或把不支持的功能误发出去。
+ */
+export interface ProviderModelCatalogMetadata {
+  /** 输入上限，对应 properties.contextWindow。 */
+  readonly contextWindow?: number;
+  /** 输出上限，对应 optionSpecs.maxOutputTokens.max。 */
+  readonly maxOutputTokens?: number;
+  /** 人类可读名称，仅用于选择器展示，不参与身份判定。 */
+  readonly displayName?: string;
+  /** 端点声明支持的方法（如 generateContent）；不推断，缺省即未知。 */
+  readonly supportedGenerationMethods?: readonly string[];
+}
+
 export interface ProviderModelCatalogSuccess {
   readonly success: true;
   readonly modelIds: readonly string[];
+  /**
+   * 与 modelIds 同键的元数据。缺失的键表示端点没有给出可映射字段，
+   * 调用方必须退回既有规则匹配，不能当成"零能力"。
+   */
+  readonly metadata?: Readonly<Record<string, ProviderModelCatalogMetadata>>;
   /** primary=首选端点直接成功；fallback=首选失败后换路径重试成功。 */
   readonly source: "primary" | "fallback";
 }
@@ -104,7 +126,57 @@ function resolveCatalogPaths(
   return ["/models", "/v1/models"];
 }
 
-function collectModelIds(payload: unknown): string[] {
+function readPositiveInt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : undefined;
+}
+
+function readStringList(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
+/**
+ * 只读端点显式字段。OpenAI/Anthropic 的目录响应没有 token 上限字段，
+ * 因此这里对它们自然返回 undefined，行为保持不变。
+ */
+function readCatalogMetadata(entry: unknown): ProviderModelCatalogMetadata | undefined {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return undefined;
+  const record = entry as {
+    displayName?: unknown;
+    inputTokenLimit?: unknown;
+    outputTokenLimit?: unknown;
+    supportedGenerationMethods?: unknown;
+  };
+  const contextWindow = readPositiveInt(record.inputTokenLimit);
+  const maxOutputTokens = readPositiveInt(record.outputTokenLimit);
+  const displayName =
+    typeof record.displayName === "string" && record.displayName.trim().length > 0
+      ? record.displayName.trim()
+      : undefined;
+  const supportedGenerationMethods = readStringList(record.supportedGenerationMethods);
+  if (
+    contextWindow === undefined &&
+    maxOutputTokens === undefined &&
+    displayName === undefined &&
+    supportedGenerationMethods === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+    ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
+    ...(displayName === undefined ? {} : { displayName }),
+    ...(supportedGenerationMethods === undefined ? {} : { supportedGenerationMethods }),
+  };
+}
+
+function collectCatalog(payload: unknown): {
+  modelIds: string[];
+  metadata: Record<string, ProviderModelCatalogMetadata>;
+} {
   const entries = (() => {
     if (Array.isArray(payload)) return payload;
     if (payload && typeof payload === "object") {
@@ -115,6 +187,7 @@ function collectModelIds(payload: unknown): string[] {
     return [];
   })();
   const modelIds: string[] = [];
+  const metadata: Record<string, ProviderModelCatalogMetadata> = {};
   for (const entry of entries) {
     // Gemini 原生目录用 name: "models/gemini-2.5-pro"；必须剥前缀，否则用户看到的 id
     // 与手填/其它来源不一致，选中后会被当成不同模型。
@@ -126,9 +199,11 @@ function collectModelIds(payload: unknown): string[] {
     const trimmed = rawId.trim().replace(/^models\//, "");
     if (!trimmed || modelIds.includes(trimmed)) continue;
     modelIds.push(trimmed);
+    const entryMetadata = readCatalogMetadata(entry);
+    if (entryMetadata) metadata[trimmed] = entryMetadata;
     if (modelIds.length >= MAX_MODEL_IDS) break;
   }
-  return modelIds;
+  return { modelIds, metadata };
 }
 
 /** 空目录按失败处理：错误路径常常返回 200 + 空 data，必须让 fallback 有机会。 */
@@ -163,7 +238,7 @@ export async function fetchProviderModelCatalog(options: {
     };
     try {
       const payload = await readApiJson<unknown>(options.apiClient, attempt.url, init);
-      const modelIds = collectModelIds(payload);
+      const { modelIds, metadata } = collectCatalog(payload);
       if (!isUsableCatalog(modelIds)) {
         if (!firstFailure) {
           firstFailure = {
@@ -173,7 +248,12 @@ export async function fetchProviderModelCatalog(options: {
         }
         continue;
       }
-      return { success: true, modelIds, source: index === 0 ? "primary" : "fallback" };
+      return {
+        success: true,
+        modelIds,
+        ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+        source: index === 0 ? "primary" : "fallback",
+      };
     } catch (error) {
       if (!firstFailure) {
         firstFailure = {

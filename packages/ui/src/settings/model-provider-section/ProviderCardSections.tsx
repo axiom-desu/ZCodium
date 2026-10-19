@@ -15,7 +15,7 @@ import type {
 import type { ModelConnectivityResult } from "@zcode/shared";
 import type { ProviderApiType } from "@zcode/provider";
 import { isApiKeyAccess } from "@zcode/provider";
-import type { ProviderModelCatalogResult } from "@zcode/services";
+import type { ProviderModelCatalogMetadata, ProviderModelCatalogResult } from "@zcode/services";
 import {
   TID_MODEL_PROVIDER_ADD_MODEL_BUTTON,
   TID_MODEL_PROVIDER_BASE_URL_INPUT,
@@ -362,6 +362,32 @@ function createEmptyModel(): ProviderSettingsFormModel {
   };
 }
 
+/**
+ * 把目录探测到的上限写进草稿。
+ *
+ * 只填 properties.contextWindow 与 optionSpecs.maxOutputTokens.max 这两个**有明确来源**的字段：
+ * 不用 displayName 覆盖模型 ID，也不从模型名推断视觉/工具能力——推断错了会让用户按错误上限
+ * 裁剪上下文，或把不支持的能力发出去。
+ */
+function withCatalogMetadata(
+  metadata: ProviderModelCatalogMetadata | undefined,
+): Pick<ProviderSettingsFormModel, "config"> | Record<string, never> {
+  if (!metadata) return {};
+  const { contextWindow, maxOutputTokens } = metadata;
+  if (contextWindow === undefined && maxOutputTokens === undefined) return {};
+  return {
+    config: {
+      properties: {
+        supportsToolCall: true,
+        ...(contextWindow === undefined ? {} : { contextWindow }),
+      },
+      ...(maxOutputTokens === undefined
+        ? {}
+        : { optionSpecs: { maxOutputTokens: { max: maxOutputTokens } } }),
+    },
+  };
+}
+
 export function ProviderModelsSection({
   providerId,
   providerName,
@@ -417,6 +443,10 @@ export function ProviderModelsSection({
   const [catalogSaving, setCatalogSaving] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogItems, setCatalogItems] = useState<readonly ProviderModelCatalogItem[]>([]);
+  // 端点显式返回的能力/上限；仅用于预填草稿，不参与身份或规则判定。
+  const [catalogMetadata, setCatalogMetadata] = useState<
+    Readonly<Record<string, ProviderModelCatalogMetadata>>
+  >({});
   const catalogRequestRef = useRef(0);
   const existingModelIds = useMemo(() => models.map((model) => model.modelId), [models]);
 
@@ -446,13 +476,16 @@ export function ProviderModelsSection({
       if (requestId !== catalogRequestRef.current) return;
       if (result.success) {
         setCatalogItems(resolveModelCatalogItems(result.modelIds, existingModelIds));
+        setCatalogMetadata(result.metadata ?? {});
         return;
       }
       setCatalogItems([]);
+      setCatalogMetadata({});
       setCatalogError(resolveCatalogFailureMessage(result));
     } catch (error) {
       if (requestId !== catalogRequestRef.current) return;
       setCatalogItems([]);
+      setCatalogMetadata({});
       setCatalogError(error instanceof Error ? error.message : String(error));
     } finally {
       if (requestId === catalogRequestRef.current) {
@@ -471,7 +504,11 @@ export function ProviderModelsSection({
       // 并发会把同一 Provider 的保存队列竞争暴露给用户。
       for (const modelId of modelIds) {
         try {
-          await onAddModel({ ...createEmptyModel(), modelId });
+          await onAddModel({
+            ...createEmptyModel(),
+            modelId,
+            ...withCatalogMetadata(catalogMetadata[modelId]),
+          });
           results.push(true);
         } catch (error) {
           logger.warn("[ModelProviderSection] 添加目录模型失败", { providerId, modelId, error });
@@ -491,7 +528,7 @@ export function ProviderModelsSection({
       }
       setCatalogDialogOpen(false);
     },
-    [intl, onAddModel, providerId],
+    [catalogMetadata, intl, onAddModel, providerId],
   );
 
   const resolveAddModelConfig = useCallback(
