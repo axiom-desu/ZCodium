@@ -97,7 +97,19 @@ def main():
 
     def wait_for(text, timeout=25): wait_until(lambda s: text in s, repr(text), timeout)
     def send(text): os.write(master, text.encode())
-    def ready(): wait_until(lambda s: bool(re.search(r"· ready(?:\s|└|$)", s.splitlines()[-1])), "idle footer")
+    def ready():
+        # 单帧 ready 可能是上一回合遗留；连续两帧才认为已经空闲，避免下一条输入被 busy 拒绝。
+        stable = {"seen": False}
+        def confirmed(s):
+            idle = bool(re.search(r"· ready(?:\s|└|$)", s.splitlines()[-1]))
+            if not idle:
+                stable["seen"] = False
+                return False
+            if stable["seen"]:
+                return True
+            stable["seen"] = True
+            return False
+        wait_until(confirmed, "idle footer")
     def prompt(text, response): send(text + "\r"); wait_for(response); ready()
     def restored():
         actual = termios.tcgetattr(slave)
@@ -154,7 +166,10 @@ def main():
         with open(os.path.join(cwd, "allowed.txt"), encoding="utf8") as f:
             if f.read() != "TUI_WRITE_MARKER\n": raise AssertionError("Write content mismatch")
         result["assertions"].append("Write allow/deny")
-        send("tui-question\r"); wait_for("Choose the TUI smoke answer"); send("SMOKE_ANSWER\r"); ready()
+        send("tui-question\r"); wait_for("Choose the TUI smoke answer"); send("SMOKE_ANSWER\r")
+        # 回答后 actor 还会继续这一轮；只看 footer 的 ready 会命中旧帧，
+        # 于是下一条 Enter 被 busy 拒绝并留下草稿。等回合真实收尾再继续。
+        wait_for("answer: SMOKE_ANSWER"); ready()
         result["assertions"].append("AskUserQuestion")
         send("slow request\r"); wait_for("partial"); send("\x03"); ready()
         prompt("after cancellation", "answer: after cancellation")
