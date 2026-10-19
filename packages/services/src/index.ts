@@ -7,6 +7,7 @@ export {
   type ModelSelectionView,
   type ModelSelectionViewInput,
   type ListProviderModelsInput,
+  type ProviderModelCatalogMetadata,
   type ProviderModelCatalogResult,
   type ProviderSettingsProviderView,
   type ProviderSettingsView,
