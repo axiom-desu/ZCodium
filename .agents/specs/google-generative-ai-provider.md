@@ -77,6 +77,29 @@ effectiveContextWindow = contextWindow - min(maxOutputTokens ?? 32K, 21K)
 这条映射是**正确且必要的一对**：只填前者会让压缩阈值按 32K 默认预留计算，
 只填后者则压缩时会按 200K 兜底窗口估算。
 
+### 模型能力来源（重要）
+
+**端点不提供能力元数据。** 实测 opencode Go/Zen：
+
+```
+404  /inference/google/v1beta/models          ← 原生 models.list 不存在
+404  /inference/go/google/v1beta/models
+404  /inference/google/v1beta/models/{id}     ← 单模型 GET 也不存在
+200  /zen/v1/models（OpenAI 兼容）            ← 只返回 {id, object, created, owned_by}
+```
+
+因此「获取模型」对这类端点必然失败（UI 已改为可点击 + 预防性提示），
+而 `contextWindow` / `maxOutputTokens` / 多模态能力**无法在运行时获得**。
+
+解决方式：把值作为**显式配置**写进 `modelApiRules`（`apiTypeMatch: "google-generative-ai"`），
+数据取自 OpenRouter `/api/v1/models` 的 `google/*` 条目
+（`context_length`、`top_provider.max_completion_tokens`、`architecture.input_modalities`）。
+
+这是"查到的常量"而不是"按模型名推断"，与前面的硬约束不冲突。
+
+规则顺序敏感：`gemini-3.5-flash-lite` 必须排在 `gemini-3.5-flash` 之前，
+`gemini-4-argon-contributor` 必须排在 `gemini-4-argon` 之前，否则长名会被短名规则先命中。
+
 ### Gemini 的 option map 必须嵌进 generationConfig
 
 Gemini 的生成参数只有一个入口 `generationConfig`。写成顶层键（OpenAI 风格）会被网关
