@@ -72,9 +72,10 @@ function setup() {
 }
 
 const { ProxyChannel } = await tsImport("../../packages/rpc/src/proxy-channel.ts", import.meta.url);
-test("retired quota, monitor and entitlement RPCs are absent without account or network dependencies", () => {
+test("retired quota, monitor and entitlement RPCs are absent without account dependencies", () => {
   const { service } = setup();
-  assert.deepEqual(Object.keys(service), ["getAppUsageSnapshot"]);
+  // getCodingPlanQuota 是用户自带 API Key 的额度查询，不含任何账号/权益依赖。
+  assert.deepEqual(Object.keys(service), ["getAppUsageSnapshot", "getCodingPlanQuota"]);
   const channel = ProxyChannel.fromService(service);
   for (const method of [
     "getSnapshot",

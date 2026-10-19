@@ -2707,6 +2707,9 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.apiFormat.title.responses": "Responses",
   "settings.modelProvider.apiFormat.title.anthropicMessages": "Anthropic Messages",
   "settings.modelProvider.apiKey": "API Key",
+  // 账号连接方式已移除；这里明确告知替代路径，避免用户把不可用当成配置错误。
+  "settings.modelProvider.accountAccessRetired":
+    "这条连接使用的是已移除的账号登录方式，现在无法使用，也不能手动填写 Key。请删除它，改用「BigModel Coding Plan」或「Z.ai Coding Plan」并填入你自己的 API Key。",
   "settings.modelProvider.apiKeyPlaceholder": "输入 API Key",
   "settings.modelProvider.apiKeyDisabledHint": "设置 API Key 后即可启用。",
   "settings.modelProvider.getApiKey": "获取 API Key",
@@ -3418,6 +3421,22 @@ const zhCN: Record<string, string> = {
   "settings.usage.range.30d": "近 30 日",
   "settings.usage.appUsageRangeTitle": "时间范围",
   "settings.usage.refresh": "刷新",
+  // Coding Plan 剩余额度：只用用户自己填的 API Key，不涉及账号登录。
+  "settings.usage.codingPlanQuota.title": "编程套餐剩余额度",
+  "settings.usage.codingPlanQuota.description":
+    "用你在模型设置里为 Coding Plan 填写的 API Key 查询，不会上传其他信息。",
+  "settings.usage.codingPlanQuota.apiKeyRequired":
+    "还没有可用的 Coding Plan API Key。请到「模型设置」选择 BigModel Coding Plan 或 Z.ai Coding Plan，并填入你从官方控制台获取的 API Key。",
+  "settings.usage.codingPlanQuota.noProvider":
+    "还没有配置 Coding Plan 连接。请到「模型设置」添加 BigModel Coding Plan 或 Z.ai Coding Plan，并填入 API Key。",
+  "settings.usage.codingPlanQuota.error": "额度查询失败，请稍后重试。",
+  "settings.usage.codingPlanQuota.empty": "接口没有返回可展示的额度信息。",
+  "settings.usage.codingPlanQuota.windowLimit": "5 小时 Prompt 池",
+  "settings.usage.codingPlanQuota.tokenLimit": "Token 额度",
+  "settings.usage.codingPlanQuota.genericLimit": "额度",
+  "settings.usage.codingPlanQuota.remainingValue": "剩余 {value}",
+  "settings.usage.codingPlanQuota.nextReset": "下次重置 {time}",
+  "settings.usage.codingPlanQuota.fetchedAt": "查询于 {time}",
   "settings.usage.loadingTitle": "正在统计中",
   "settings.usage.appUsageLoadingDescription": "正在读取本地应用会话历史，可能需要一点时间。",
   "settings.usage.error": "无法读取用量统计。请稍后重试，或检查网络和供应商配置。",

@@ -11,6 +11,31 @@ export interface UsageQuotaSnapshot {
   limits: UsageQuotaLimit[];
 }
 
+/**
+ * Coding Plan 剩余额度查询请求。
+ *
+ * 额度是远端事实、不做持久化：调用方每次传入当前的基线与 API Key，
+ * 服务只负责组请求，不保存第二份配置或快照。
+ */
+export interface CodingPlanQuotaRequest {
+  /** 仅为日志与展示归属，不参与鉴权。 */
+  providerId: string;
+  /** 该 Provider 配置里的 API 地址，用于判定 family 与网关来源。 */
+  baseUrl: string;
+  /** 用户自己填写的 Coding Plan API Key；空值必须由调用方拦下，不发请求。 */
+  apiKey: string;
+}
+
+/** 额度耗尽与"查不到额度"必须可区分，避免把失败渲染成 0%。 */
+export interface CodingPlanQuotaSnapshot {
+  fetchedAt: number;
+  family: "zai" | "bigmodel";
+  level: string | null;
+  limits: UsageQuotaLimit[];
+  /** 便于额度条直接渲染的主额度；无可用额度时为 null。 */
+  remaining: UsageQuotaLimit | null;
+}
+
 export interface UsageQuotaLimit {
   type: string;
   /** Start Plan 服务端额度桶及周期身份；周期时间为毫秒，供提醒去重。 */

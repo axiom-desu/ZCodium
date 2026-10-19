@@ -120,6 +120,7 @@ jobs:
           node scripts/ci/self-managed-models-smoke.mjs
           node scripts/ci/model-choice-smoke.mjs
           node scripts/ci/local-usage-smoke.mjs
+          node scripts/ci/coding-plan-quota-smoke.mjs
           node scripts/ci/local-automations-smoke.mjs
           node scripts/ci/local-context-smoke.mjs
           node scripts/ci/session-local-errors-smoke.mjs

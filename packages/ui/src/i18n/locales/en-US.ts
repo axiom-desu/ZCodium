@@ -2883,6 +2883,9 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.apiFormat.title.responses": "Responses",
   "settings.modelProvider.apiFormat.title.anthropicMessages": "Anthropic messages",
   "settings.modelProvider.apiKey": "API key",
+  // Account sign-in was removed; state the replacement path instead of leaving a dead form.
+  "settings.modelProvider.accountAccessRetired":
+    'This connection uses the retired account sign-in and cannot work, and a key cannot be entered by hand. Remove it and add "BigModel Coding Plan" or "Z.ai Coding Plan" with your own API key instead.',
   "settings.modelProvider.apiKeyPlaceholder": "Enter API key",
   "settings.modelProvider.apiKeyDisabledHint": "Set an API key to enable this provider.",
   "settings.modelProvider.getApiKey": "Get API key",
@@ -3620,6 +3623,22 @@ const enUS: Record<string, string> = {
   "settings.usage.range.30d": "Last 30 days",
   "settings.usage.appUsageRangeTitle": "Time range",
   "settings.usage.refresh": "Refresh",
+  // Coding Plan remaining quota: only the user's own API key, no account sign-in.
+  "settings.usage.codingPlanQuota.title": "Coding Plan remaining quota",
+  "settings.usage.codingPlanQuota.description":
+    "Queried with the Coding Plan API key you saved in model settings. Nothing else is uploaded.",
+  "settings.usage.codingPlanQuota.apiKeyRequired":
+    "No Coding Plan API key yet. Open Model settings, pick BigModel Coding Plan or Z.ai Coding Plan, and paste the key from your provider console.",
+  "settings.usage.codingPlanQuota.noProvider":
+    "No Coding Plan connection configured. Open Model settings and add BigModel Coding Plan or Z.ai Coding Plan with your API key.",
+  "settings.usage.codingPlanQuota.error": "Could not read the quota. Try again later.",
+  "settings.usage.codingPlanQuota.empty": "The endpoint returned no displayable quota.",
+  "settings.usage.codingPlanQuota.windowLimit": "5-hour prompt pool",
+  "settings.usage.codingPlanQuota.tokenLimit": "Token quota",
+  "settings.usage.codingPlanQuota.genericLimit": "Quota",
+  "settings.usage.codingPlanQuota.remainingValue": "{value} left",
+  "settings.usage.codingPlanQuota.nextReset": "Resets {time}",
+  "settings.usage.codingPlanQuota.fetchedAt": "Checked at {time}",
   "settings.usage.loadingTitle": "Computing usage",
   "settings.usage.appUsageLoadingDescription":
     "Reading local app session history, so it can take a moment.",

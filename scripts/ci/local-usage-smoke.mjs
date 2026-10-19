@@ -20,10 +20,12 @@ const { outputFiles } = await build({
     {
       name: "local-usage-only",
       setup(builder) {
+        // 额度展示只允许走"用户自带 API Key"这条链路；账号、权益、OAuth 仍然禁止。
         builder.onResolve(
           {
+            // shared/oauth.ts 只剩 Provider 标识类型，不是账号服务；只拦真正的账号/权益链路。
             filter:
-              /CodingPlan|codingPlan|useUsageEntitlement|usageEntitlement|useStableAccountAccess/,
+              /useUsageEntitlement|usageEntitlement|useStableAccountAccess|AccountAccess|OAuthService|oauthService|useOAuth/,
           },
           ({ path }) => {
             throw new Error(`Official usage dependency in local statistics: ${path}`);
@@ -80,7 +82,14 @@ try {
         name: locale === "en-US" ? /^Last (7|30) days$/ : /^近 (7|30) 日$/,
       });
       assert.equal(await tabs.count(), 2);
-      assert.equal(await page.getByText(/Coding Plan|套餐/).count(), 0);
+      // 未配置 Coding Plan 连接时必须给出"去填 Key"的引导，而不是零额度或账号入口。
+      await page
+        .getByText(
+          locale === "en-US"
+            ? /No Coding Plan connection configured/
+            : /还没有配置 Coding Plan 连接/,
+        )
+        .waitFor();
       // Actual range tabs preserve local queries and the selected state without account discovery.
       await tabs.nth(1).press("Enter");
       await page.getByText("30d-model", { exact: true }).first().waitFor();
