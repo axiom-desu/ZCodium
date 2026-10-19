@@ -66,8 +66,9 @@ pub(super) fn draw_sidebar(frame: &mut Frame<'_>, area: Rect, view: &View) {
 }
 
 fn header_line(width: usize) -> Line<'static> {
+    // 版本号按产品各自发布：Rust CLI 不冒充 TS CLI 的 0.16.x，也不套用桌面应用版本。
     let version = format!(" {}", env!("CARGO_PKG_VERSION"));
-    let name = "ZCodium";
+    let name = "ZCodium Rust";
     let version = truncate(&version, width.saturating_sub(name.chars().count()));
     Line::from(vec![
         Span::styled(
