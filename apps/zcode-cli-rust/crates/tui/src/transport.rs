@@ -15,6 +15,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use zcode_cli_core_api::{ClientMsg, Method, ServerMsg};
 
+const SHIMMER_FRAME_MS: u64 = 80;
+
 #[derive(Clone, Debug)]
 pub enum Resume {
     New,
@@ -130,18 +132,30 @@ pub async fn run(
         ..View::default()
     };
     session::open(&mut client, &mut view, &request, request.resume.clone()).await?;
-    view.push(view.text(
-        "/help for commands. Ctrl+C stops a turn; again when idle exits.",
-        "输入 /help 查看命令；Ctrl+C 取消运行，空闲时退出。",
-    ));
     let mut cache = terminal::RenderCache::default();
     let mut dirty = true;
     let mut sidebar_leader = false;
+    // 扫光只需要 UI 时钟：欢迎页可见时按 80ms 一帧推进，正文出现后立即停止重绘。
+    let started = std::time::Instant::now();
+    let mut frame_ms = 0u64;
+    let mut frame_bucket = u64::MAX;
     let mut redraw = tokio::time::interval(std::time::Duration::from_millis(50));
     loop {
         tokio::select! {
             _=cancel.cancelled()=>return Ok(130),
-            _=redraw.tick()=>{ if dirty { terminal.draw(|frame|terminal::draw(frame,&view,&mut cache))?; dirty=false; } continue; },
+            _=redraw.tick()=>{
+                // 欢迎页可见（无正文、无告警）时按 80ms 一帧推进扫光，正文出现后自然停止。
+                if crate::presentation::is_welcome(&view) {
+                    let elapsed = started.elapsed().as_millis() as u64;
+                    if elapsed / SHIMMER_FRAME_MS != frame_bucket {
+                        frame_bucket = elapsed / SHIMMER_FRAME_MS;
+                        frame_ms = elapsed;
+                        dirty = true;
+                    }
+                }
+                if dirty { terminal.draw(|frame|terminal::draw(frame,&view,&mut cache,frame_ms))?; dirty=false; }
+                continue;
+            },
             event=events.next()=>match event {
                 Some(Ok(Event::Key(key))) if key.kind==KeyEventKind::Press=>{
                     if key.code!=KeyCode::Char('b') && !(key.code==KeyCode::Char('x') && key.modifiers.contains(KeyModifiers::CONTROL)) { sidebar_leader=false; }
