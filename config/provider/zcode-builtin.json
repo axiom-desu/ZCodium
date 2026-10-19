@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 33,
+  "revision": 37,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -2548,7 +2548,7 @@
             "optionSpecs": {
               "reasoningLevel": {
                 "values": ["disabled", "enabled"],
-                "map": "reasoningLevel == \"disabled\"\n  ? {\n      \"generationConfig\": {\n        \"thinkingConfig\": {\n          \"thinkingBudget\": 0\n        }\n      }\n    }\n  : {\n      \"generationConfig\": {\n        \"thinkingConfig\": {\n          \"includeThoughts\": true\n        }\n      }\n    }"
+                "map": "reasoningLevel == \"disabled\"\n  ? {}\n  : {\n      \"generationConfig\": {\n        \"thinkingConfig\": {\n          \"thinkingLevel\": \"high\",\n          \"includeThoughts\": true\n        }\n      }\n    }"
               },
               "maxOutputTokens": {
                 "map": "{'generationConfig': {'maxOutputTokens': maxOutputTokens}}"
@@ -5152,62 +5152,6 @@
           }
         },
         {
-          "templateId": "opencode-zen-google",
-          "modelId": "gemini-4-argon",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-google",
-          "modelId": "gemini-3.8-flash",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-google",
-          "modelId": "gemini-3.7-flash",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-google",
-          "modelId": "gemini-3.6-flash",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-google",
-          "modelId": "gemini-3.5-flash",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-google",
-          "modelId": "gemini-3.5-flash-lite",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-google",
-          "modelId": "gemini-3.1-pro",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-google",
-          "modelId": "gemini-3-flash",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
           "templateId": "opencode-zen-messages",
           "modelId": "claude-fable-5",
           "config": {
@@ -5973,6 +5917,62 @@
         {
           "templateId": "anthropic",
           "modelId": "claude-fable-5-1",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-4-argon",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.8-flash",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.7-flash",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.6-flash",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.5-flash",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.5-flash-lite",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3.1-pro",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-google",
+          "modelId": "gemini-3-flash",
           "config": {
             "enabled": true
           }
