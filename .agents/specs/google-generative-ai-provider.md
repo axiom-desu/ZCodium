@@ -100,6 +100,35 @@ effectiveContextWindow = contextWindow - min(maxOutputTokens ?? 32K, 21K)
 规则顺序敏感：`gemini-3.5-flash-lite` 必须排在 `gemini-3.5-flash` 之前，
 `gemini-4-argon-contributor` 必须排在 `gemini-4-argon` 之前，否则长名会被短名规则先命中。
 
+### ⚠️ 临时补丁：作用域限定到 OpenCode，需要后续清理
+
+上述 Gemini 元数据规则**是给 OpenCode 擦屁股的临时补丁**，因此写在 `providerSiteRules`
+并用 `baseUrlMatch` 限定：
+
+```json
+"baseUrlMatch": "https://opencode\\.ai/inference/(?:go/)?google/v1beta/?"
+```
+
+**不能**写成全局 `modelApiRules`：那样会污染所有接 Gemini 的端点，
+用错误的 OpenCode 上限去覆盖用户自建代理或 Google 官方直连的真实能力。
+
+当前覆盖范围（实测）：
+
+| 端点                                          | 结果                           |
+| --------------------------------------------- | ------------------------------ |
+| `opencode.ai/inference/google/v1beta` (Zen)   | ✅ ctx 1048576 / maxOut 65536  |
+| `opencode.ai/inference/go/google/v1beta` (Go) | ✅ ctx 1048576 / maxOut 943718 |
+| `generativelanguage.googleapis.com/v1beta`    | ❌ 落到兜底 200K / 32K         |
+| 用户自建代理                                  | ❌ 落到兜底                    |
+
+**TODO（条件触发即可删除）**：当 OpenCode 的 Gemini 端点开始返回能力元数据
+（`models.list` 可用，或 OpenAI 兼容目录带上 `context_length`），
+应删除这批 `providerSiteRules`，改由 `ProviderModelCatalogSuccess.metadata` 自动填充，
+否则两边会出现两个事实源。
+
+同时遗留一项未做：Google 官方直连同样拿不到元数据（其 `models.list` 需要单独的
+fixture 验证），目前只能落兜底 200K；这属于独立议题，不与本补丁合并。
+
 ### Gemini 的 option map 必须嵌进 generationConfig
 
 Gemini 的生成参数只有一个入口 `generationConfig`。写成顶层键（OpenAI 风格）会被网关

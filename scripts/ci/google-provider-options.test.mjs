@@ -77,10 +77,25 @@ test("google api rule keeps generation fields inside generationConfig", () => {
   assert.equal(disabled.generationConfig.thinkingConfig, undefined);
 });
 
-test("google per-model rules resolve context and output limits without shadowing", () => {
-  const rules = bundled.config.modelConfigRules.modelApiRules.filter(
+test("google per-model rules are scoped to OpenCode and do not shadow", () => {
+  // 这批是给 OpenCode 擦屁股的临时补丁，必须限定 baseUrlMatch；
+  // 若挪回全局 modelApiRules，会用 OpenCode 的上限污染用户自建端点。
+  const rules = bundled.config.modelConfigRules.providerSiteRules.filter(
     (r) => r.apiTypeMatch === "google-generative-ai",
   );
+  assert.ok(rules.length > 0, "OpenCode Gemini 的上限补丁丢失");
+  for (const rule of rules) {
+    assert.match(
+      rule.baseUrlMatch,
+      /opencode/,
+      "Gemini 元数据规则必须限定 baseUrlMatch，不能全局生效",
+    );
+  }
+  const globalGoogleRules = bundled.config.modelConfigRules.modelApiRules.filter(
+    (r) =>
+      r.apiTypeMatch === "google-generative-ai" && r.config.properties?.contextWindow !== undefined,
+  );
+  assert.deepEqual(globalGoogleRules, [], "modelApiRules 不应包含 Gemini 的 contextWindow 覆盖");
   // 顺序敏感：具体规则必须排在通配之前，否则 lite 会被 flash 覆盖、contributor 会被 argon 覆盖。
   for (const rule of rules) new RegExp(rule.modelMatch);
 
@@ -89,6 +104,9 @@ test("google per-model rules resolve context and output limits without shadowing
     let maxOutputTokens;
     for (const rule of rules) {
       if (!new RegExp(rule.modelMatch).test(modelId)) continue;
+      // providerSiteRules 需要 baseUrl 匹配；统一按 Zen 网关注入。
+      if (!new RegExp(rule.baseUrlMatch).test("https://opencode.ai/inference/google/v1beta"))
+        continue;
       const ctx = rule.config.properties?.contextWindow;
       const max = rule.config.optionSpecs?.maxOutputTokens?.max;
       if (ctx !== undefined) contextWindow = ctx;
