@@ -1,4 +1,14 @@
 use super::presentation::{ACCENT, MUTED, TEXT, transcript_block};
+
+pub(super) const LOGO: [&str; 6] = [
+    "███████╗ ██████╗ ██████╗ ██████╗ ██╗██╗   ██╗███╗   ███╗",
+    "   ███╔╝██╔════╝██╔═══██╗██╔══██╗██║██║   ██║████╗ ████║",
+    "  ███╔╝ ██║     ██║   ██║██║  ██║██║██║   ██║██╔████╔██║",
+    " ███╔╝  ██║     ██║   ██║██║  ██║██║██║   ██║██║╚██╔╝██║",
+    "███████╗╚██████╗╚██████╔╝██████╔╝██║╚██████╔╝██║ ╚═╝ ██║",
+    "╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚═╝ ╚═════╝ ╚═╝     ╚═╝",
+];
+
 use crate::projection::View;
 use ratatui::{
     Frame,
@@ -34,7 +44,7 @@ pub(crate) fn draw_welcome(
 ) {
     let mut lines: Vec<Line<'static>> = Vec::new();
     if area.width >= 54 {
-        for line in crate::presentation_panels::LOGO {
+        for line in LOGO {
             lines.push(Line::from(shimmer_spans(line, frame_ms)));
         }
     } else {

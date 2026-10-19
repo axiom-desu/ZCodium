@@ -28,14 +28,14 @@ fn layouts_survive_wide_narrow_and_tiny_buffers() {
     view.directory = "/work".into();
     let mut cache = RenderCache::default();
     let wide = render(&view, 150, 40, &mut cache);
-    assert!(wide.contains("ZCODIUM"));
-    assert!(wide.contains("Context"));
+    assert!(wide.contains("ZCodium"));
+    assert!(wide.contains("Status"));
     assert!(wide.contains("/work"));
     let narrow = render(&view, 80, 24, &mut cache);
     // 输入框标题跟随 permission mode，空输入显示提示词（与 TS TUI 一致）。
     assert!(narrow.contains("Type a prompt") || narrow.contains("输入提示词"));
     view.sidebar_overlay = true;
-    assert!(render(&view, 80, 24, &mut cache).contains("Context"));
+    assert!(render(&view, 80, 24, &mut cache).contains("Status"));
     let _ = render(&view, 1, 1, &mut cache);
 }
 
@@ -306,4 +306,81 @@ fn welcome_fallback_and_composer_titles_follow_mode() {
         "placeholder disappears once the composer has text"
     );
     assert!(rows.iter().any(|line| line.contains("hello")));
+}
+
+fn sidebar_view() -> View {
+    let mut view = View::default();
+    view.sidebar = true;
+    view.directory = "/work/dir".into();
+    view.state = json!({
+        "control": {"phase": "completedSuccess", "canStop": false, "stopState": "idle", "lastError": null},
+        "config": {"mode": "build", "model": "m1"},
+        "subagents": {"revision": 1, "childSessionIds": ["child-a", "child-b"], "running": ["child-a", "child-b"], "endedTotal": 3},
+        "plan": {"items": [
+            {"id": "t1", "content": "first done", "status": "completed"},
+            {"id": "t2", "content": "second active", "status": "inProgress"},
+            {"id": "t3", "content": "third pending", "status": "pending"}
+        ]}
+    });
+    view.rows = vec![
+        json!({"kind":"toolCall","toolName":"Write","status":"done","output":{"display":{"kind":"file_diff","filePath":"/work/dir/a.rs","additions":3,"deletions":1,"structuredPatch":[]}}}),
+        json!({"kind":"toolCall","toolName":"Write","status":"done","output":{"display":{"kind":"file_diff","filePath":"/work/dir/a.rs","additions":2,"deletions":1,"structuredPatch":[]}}}),
+        json!({"kind":"toolCall","toolName":"Write","status":"done","output":{"display":{"kind":"file_diff","filePath":"/work/dir/b.rs","additions":7,"deletions":0,"structuredPatch":[]}}}),
+    ];
+    view
+}
+
+#[test]
+fn sidebar_matches_ts_sections_from_real_state() {
+    let view = sidebar_view();
+    let (rows, _) = screen_rows(&view, 150, 40, 0);
+    let text = rows.join("\n");
+    assert!(text.contains("ZCodium 0.1.0"), "product header: {text}");
+    assert!(text.contains("Status"), "status section");
+    assert!(
+        text.contains("Subagents (2)"),
+        "running subagents counted: {text}"
+    );
+    assert!(text.contains("Running 2"), "running line");
+    assert!(text.contains("ended 3"), "ended total");
+    assert!(text.contains("child-a"), "child session listed");
+    assert!(text.contains("Modified Files"), "modified files section");
+    assert!(text.contains("a.rs"), "first changed file");
+    assert!(text.contains("+5 -2"), "counts aggregate per path: {text}");
+    assert!(text.contains("b.rs"), "second changed file");
+    assert!(text.contains("Todos"), "todos section");
+    assert!(text.contains("Progress 1/3"), "todo progress");
+    assert!(
+        text.contains("first done") && text.contains("second active"),
+        "todo rows"
+    );
+    assert!(text.contains("/work/dir"), "workspace footer");
+    assert!(!text.contains("MCP"), "no fabricated MCP section");
+}
+
+#[test]
+fn sidebar_empty_states_are_explicit_and_bounded() {
+    let mut view = View::default();
+    view.sidebar = true;
+    let (rows, _) = screen_rows(&view, 150, 30, 0);
+    let text = rows.join("\n");
+    assert!(
+        text.contains("No subagents yet."),
+        "empty subagents: {text}"
+    );
+    assert!(text.contains("No file changes yet."), "empty files");
+    assert!(text.contains("No todos yet."), "empty todos");
+
+    // 超长内容必须截断，不能把侧栏撑开或换行挤进对话区。
+    let mut long = sidebar_view();
+    long.rows = vec![
+        json!({"kind":"toolCall","toolName":"Write","status":"done","output":{"display":{"kind":"file_diff","filePath":format!("/work/dir/{}","x".repeat(200)),"additions":1,"deletions":0,"structuredPatch":[]}}}),
+    ];
+    let (rows, _) = screen_rows(&long, 150, 30, 0);
+    assert!(rows.iter().all(|line| line.chars().count() <= 150));
+    let sidebar_line = rows
+        .iter()
+        .find(|line| line.contains("…/dir/xxx"))
+        .expect("long path is compressed to keep the file name readable");
+    assert!(sidebar_line.chars().count() <= 150);
 }
