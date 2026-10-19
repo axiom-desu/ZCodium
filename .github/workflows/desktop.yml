@@ -111,6 +111,8 @@ jobs:
         run: node scripts/ci/local-feedback-smoke.mjs
       - name: Conversation navigator browser checks
         run: node scripts/ci/conversation-navigator-smoke.mjs
+      - name: Web remote control dialog browser checks
+        run: node scripts/ci/web-remote-control-dialog-smoke.mjs
       - name: Imported conversation browser checks
         run: node scripts/ci/local-share-context-smoke.mjs
       - name: Self-managed model settings

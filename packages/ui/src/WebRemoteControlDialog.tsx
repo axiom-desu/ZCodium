@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useId, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,6 +78,7 @@ export const WebRemoteControlDialog = memo(function WebRemoteControlDialogCompon
   remoteSessionId?: string;
 }) {
   const { intl } = useZCodeIntl();
+  const headingId = useId();
   const [botsDialogOpen, setBotsDialogOpen] = useState(false);
   const [botEntryProvider, setBotEntryProvider] = useState<RemoteControlBotProvider | null>(null);
   const [refreshConfirmOpen, setRefreshConfirmOpen] = useState(false);
@@ -153,7 +154,7 @@ export const WebRemoteControlDialog = memo(function WebRemoteControlDialogCompon
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           showCloseButton={false}
-          className="max-h-[calc(100vh-6rem)] max-w-lg gap-0 overflow-hidden rounded-2xl p-0"
+          className="max-h-[calc(100vh-6rem)] w-[calc(100vw-2rem)] max-w-4xl gap-0 overflow-hidden rounded-2xl p-0"
         >
           <Button
             type="button"
@@ -167,12 +168,12 @@ export const WebRemoteControlDialog = memo(function WebRemoteControlDialogCompon
             onClick={() => onOpenChange(false)}
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{intl.formatMessage({ id: "common.close" })}</span>
           </Button>
           <div className="max-h-[calc(100vh-6rem)] min-h-0 overflow-y-auto p-5">
             <DialogHeader className="space-y-2 pr-8">
               <div className="flex items-center gap-2">
-                <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface text-primary">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-primary">
                   <MonitorSmartphone className="size-5" />
                 </div>
                 <div className="space-y-1">
@@ -184,107 +185,118 @@ export const WebRemoteControlDialog = memo(function WebRemoteControlDialogCompon
               </div>
             </DialogHeader>
 
-            <div className="mt-5 grid gap-4">
-              <WebRemoteControlEndpointSection />
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <section aria-labelledby={`${headingId}-qr`} className="flex min-w-0 flex-col gap-4">
+                <WebRemoteControlEndpointSection />
 
-              <section className="flex flex-col rounded-xl border border-border bg-card p-4">
-                <div className="mb-4 flex items-start gap-2">
-                  <MonitorSmartphone className="mt-0.5 size-4 shrink-0 text-foreground-subtle" />
-                  <div className="min-w-0 space-y-1">
-                    <div className="text-ui-base font-medium text-foreground">
-                      {intl.formatMessage({ id: "webRemoteControl.mobileQr.title" })}
+                <div className="flex min-w-0 flex-col rounded-xl border border-border bg-card p-4">
+                  <div className="mb-4 flex items-start gap-2">
+                    <MonitorSmartphone className="mt-0.5 size-4 shrink-0 text-foreground-subtle" />
+                    <div className="min-w-0 space-y-1">
+                      <h3
+                        id={`${headingId}-qr`}
+                        className="text-ui-base font-medium text-foreground"
+                      >
+                        {intl.formatMessage({ id: "webRemoteControl.mobileQr.title" })}
+                      </h3>
+                      <p className="text-ui-base/relaxed text-foreground-subtle">
+                        {intl.formatMessage({ id: "webRemoteControl.mobileQr.description" })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-background-alt p-4">
+                    {remote.qrDataUrl ? (
+                      <img
+                        src={remote.qrDataUrl}
+                        alt={intl.formatMessage({ id: "webRemoteControl.qrAlt" })}
+                        className="aspect-square w-full max-w-64 rounded-lg bg-white p-3"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 text-center text-ui-base text-foreground-subtle">
+                        <MonitorSmartphone className="size-5 animate-pulse" />
+                        <span>{intl.formatMessage({ id: "webRemoteControl.generating" })}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 space-y-1">
+                    <div className="flex items-center gap-2 text-ui-base font-medium text-foreground">
+                      <span>{intl.formatMessage({ id: "webRemoteControl.statusLabel" })}</span>
+                      {remote.status === "active" ? (
+                        <span className="inline-flex h-5 items-center rounded-full border border-border px-2 text-ui-xs font-medium leading-none text-foreground-subtle">
+                          {intl.formatMessage({ id: "webRemoteControl.statusTag.phone" })}
+                        </span>
+                      ) : null}
+                      {remote.status === "running" ? (
+                        <span className="inline-flex h-5 items-center rounded-full border border-border px-2 text-ui-xs font-medium leading-none text-foreground-subtle">
+                          {intl.formatMessage({ id: "webRemoteControl.statusTag.ready" })}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="text-ui-base/relaxed text-foreground-subtle">
-                      {intl.formatMessage({ id: "webRemoteControl.mobileQr.description" })}
+                      {failure
+                        ? intl.formatMessage({ id: FAILURE_MESSAGE_IDS[failure.reason] })
+                        : intl.formatMessage({ id: statusDetailId })}
                     </p>
                   </div>
-                </div>
 
-                <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-background-alt p-4">
-                  {remote.qrDataUrl ? (
-                    <img
-                      src={remote.qrDataUrl}
-                      alt={intl.formatMessage({ id: "webRemoteControl.qrAlt" })}
-                      className="size-64 max-w-full rounded-lg bg-white p-3"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center gap-3 text-center text-ui-base text-foreground-subtle">
-                      <MonitorSmartphone className="size-5 animate-pulse" />
-                      <span>{intl.formatMessage({ id: "webRemoteControl.generating" })}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 space-y-1">
-                  <div className="flex items-center gap-2 text-ui-base font-medium text-foreground">
-                    <span>{intl.formatMessage({ id: "webRemoteControl.statusLabel" })}</span>
-                    {remote.status === "active" ? (
-                      <span className="inline-flex h-5 items-center rounded-full border border-border px-2 text-ui-xs font-medium leading-none text-foreground-subtle">
-                        {intl.formatMessage({ id: "webRemoteControl.statusTag.phone" })}
-                      </span>
-                    ) : null}
-                    {remote.status === "running" ? (
-                      <span className="inline-flex h-5 items-center rounded-full border border-border px-2 text-ui-xs font-medium leading-none text-foreground-subtle">
-                        {intl.formatMessage({ id: "webRemoteControl.statusTag.ready" })}
-                      </span>
-                    ) : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="justify-center gap-2 enabled:cursor-pointer"
+                      disabled={!remote.qrUrl || remote.busy}
+                      onClick={() => void remote.copyLink()}
+                    >
+                      {intl.formatMessage({ id: "webRemoteControl.copyLink" })}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="justify-center gap-2 enabled:cursor-pointer"
+                      disabled={remote.busy}
+                      onClick={() => setRefreshConfirmOpen(true)}
+                    >
+                      {intl.formatMessage({ id: "webRemoteControl.refreshQr" })}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="justify-center gap-2 enabled:cursor-pointer"
+                      disabled={remote.busy || remote.status === "idle"}
+                      onClick={() => void remote.stop()}
+                    >
+                      {intl.formatMessage({ id: "webRemoteControl.stop" })}
+                    </Button>
                   </div>
-                  <p className="text-ui-base/relaxed text-foreground-subtle">
-                    {failure
-                      ? intl.formatMessage({ id: FAILURE_MESSAGE_IDS[failure.reason] })
-                      : intl.formatMessage({ id: statusDetailId })}
+                  <p className="mt-2 text-ui-xs/relaxed text-foreground-subtle">
+                    {intl.formatMessage({ id: "webRemoteControl.copyLink.description" })}
+                  </p>
+                  <p className="mt-1 text-ui-xs/relaxed text-foreground-subtle">
+                    {intl.formatMessage({ id: "webRemoteControl.singlePageNote" })}
                   </p>
                 </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="justify-center gap-2 enabled:cursor-pointer"
-                    disabled={!remote.qrUrl || remote.busy}
-                    onClick={() => void remote.copyLink()}
-                  >
-                    {intl.formatMessage({ id: "webRemoteControl.copyLink" })}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="justify-center gap-2 enabled:cursor-pointer"
-                    disabled={remote.busy}
-                    onClick={() => setRefreshConfirmOpen(true)}
-                  >
-                    {intl.formatMessage({ id: "webRemoteControl.refreshQr" })}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="justify-center gap-2 enabled:cursor-pointer"
-                    disabled={remote.busy || remote.status === "idle"}
-                    onClick={() => void remote.stop()}
-                  >
-                    {intl.formatMessage({ id: "webRemoteControl.stop" })}
-                  </Button>
-                </div>
-                <p className="mt-2 text-ui-xs/relaxed text-foreground-subtle">
-                  {intl.formatMessage({ id: "webRemoteControl.copyLink.description" })}
-                </p>
-                <p className="mt-1 text-ui-xs/relaxed text-foreground-subtle">
-                  {intl.formatMessage({ id: "webRemoteControl.singlePageNote" })}
-                </p>
               </section>
 
-              <section className="flex min-h-[360px] flex-col rounded-xl border border-border bg-card p-4">
+              <section
+                aria-labelledby={`${headingId}-bots`}
+                className="flex min-w-0 flex-col rounded-xl border border-border bg-card p-4"
+              >
                 <div className="mb-4 flex items-start gap-2">
                   <BotIcon className="mt-0.5 size-4 shrink-0 text-foreground-subtle" />
                   <div className="min-w-0 space-y-1">
-                    <div className="text-ui-base font-medium text-foreground">
+                    <h3
+                      id={`${headingId}-bots`}
+                      className="text-ui-base font-medium text-foreground"
+                    >
                       {intl.formatMessage({
                         id: "webRemoteControl.botChannel.title",
                       })}
-                    </div>
+                    </h3>
                     <p className="text-ui-base/relaxed text-foreground-subtle">
                       {intl.formatMessage({
                         id: "webRemoteControl.botChannel.description",
