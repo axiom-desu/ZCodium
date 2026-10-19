@@ -11,6 +11,7 @@ mod presentation_panels;
 #[cfg(test)]
 mod presentation_tests;
 mod presentation_text;
+mod presentation_welcome;
 mod projection;
 #[cfg(test)]
 mod projection_tests;
