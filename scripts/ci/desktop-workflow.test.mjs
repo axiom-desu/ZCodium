@@ -73,6 +73,7 @@ test("parallel packaging preserves coverage commands, full targets and current-r
     "pnpm vitest run",
     "node --test --test-isolation=none scripts/ci/*.test.mjs",
     "node scripts/ci/remote-form-smoke.mjs",
+    "node scripts/ci/web-remote-control-dialog-smoke.mjs",
   ]) {
     assert.ok(commands.includes(command), `missing coverage command: ${command}`);
   }
