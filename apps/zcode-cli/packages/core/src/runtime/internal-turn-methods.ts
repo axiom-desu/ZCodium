@@ -22,6 +22,7 @@ import type {
   ModelStreamRecoveryStatus,
   PartId,
   PermissionBrokerRequest,
+  PermissionBrokerResult,
   SessionEvent,
   SessionEventType,
   SessionId,
@@ -54,7 +55,6 @@ import type {
   PromptAdmissionOptions,
   PromptAdmissionReceipt,
   ParsedRewindCommand,
-  PermissionDecisionResult,
   ResolvedTurnAttachment,
   SelectionSideChatCreateOptions,
   StableConversationForkOptions,
@@ -237,7 +237,7 @@ export interface AgentRuntimeTurnMethods {
     traceContext: TraceContext;
   }): Promise<void>;
   emitPermissionRequest(toolCallId: ToolCallId, toolName: string, riskLevel: string): Promise<void>;
-  resolvePermission(toolCallId: ToolCallId, decision: PermissionDecisionResult): Promise<void>;
+  resolvePermission(toolCallId: ToolCallId, decision: PermissionBrokerResult): Promise<void>;
   getPendingPermissionRequests(): PermissionBrokerRequest[];
   getProjection(): Promise<SessionProjection>;
   readBackgroundBashOutput(workId: string, sessionId?: string): Promise<BackgroundBashOutputResult>;

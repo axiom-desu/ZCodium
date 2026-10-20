@@ -167,7 +167,6 @@ export type {
   PermissionBrokerRequest,
   PermissionBrokerRequestOptions,
   PermissionBrokerResult,
-  PermissionUpdate,
   ProjectId,
   SessionEvent,
   SessionEntryInfo,

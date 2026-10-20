@@ -46,7 +46,6 @@ import type {
   TurnSteerResult,
   PartId,
   PermissionBrokerPort,
-  PermissionUpdate,
   QueryId,
   RewindScope,
   RewindStrategy,
@@ -679,13 +678,6 @@ export interface ResumeSessionResult extends SessionHistoryHydrationResult {
   readFileStateSkippedRangeReadCount: number;
   readFileStateSkippedUnreadableEditCount: number;
   traceId: TraceId;
-}
-
-export interface PermissionDecisionResult {
-  allowed: boolean;
-  reason?: string;
-  modifiedInput?: unknown;
-  permissionUpdates?: PermissionUpdate[];
 }
 
 export interface ExecuteToolsOptions {

@@ -17,7 +17,6 @@ export type {
   ModelExecutionContext,
   PromptAdmissionOptions,
   PromptAdmissionReceipt,
-  PermissionDecisionResult,
   ResumeSessionOptions,
   ResumeSessionResult,
   StopActiveForegroundExecutionOptions,

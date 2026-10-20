@@ -23,6 +23,7 @@ import type {
   ModelToolContract,
   PermissionBrokerPort,
   PermissionBrokerRequest,
+  PermissionBrokerResult,
   ProjectId,
   SessionEventSink,
   SessionEventStorePort,
@@ -103,7 +104,6 @@ import type {
   ForegroundPromotionLeaseMode,
   ForegroundPromotionLeaseState,
   PendingModelChangeTimeline,
-  PermissionDecisionResult,
   MainTurnCacheHitAggregate,
   RuntimeTurnFileChangeMap,
   ResumeSessionOptions,
@@ -568,7 +568,7 @@ export interface AgentRuntime {
     options?: ExecuteToolsOptions,
   ): Promise<ExecuteToolsResult>;
   emitPermissionRequest(toolCallId: ToolCallId, toolName: string, riskLevel: string): Promise<void>;
-  resolvePermission(toolCallId: ToolCallId, decision: PermissionDecisionResult): Promise<void>;
+  resolvePermission(toolCallId: ToolCallId, decision: PermissionBrokerResult): Promise<void>;
   getPendingPermissionRequests(): PermissionBrokerRequest[];
   getProjection(): Promise<SessionProjection>;
   readBackgroundBashOutput(workId: string, sessionId?: string): Promise<BackgroundBashOutputResult>;

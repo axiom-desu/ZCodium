@@ -820,7 +820,6 @@
     "types\u0000apps/zcode-cli/packages/core/src/memory/recall/index.ts\u0000MemoryRecallType",
     "types\u0000apps/zcode-cli/packages/core/src/output.ts\u0000JsonValue",
     "types\u0000apps/zcode-cli/packages/core/src/runtime-task/workflow-notification-copy.ts\u0000WorkflowHoleNotificationInput",
-    "types\u0000apps/zcode-cli/packages/core/src/runtime.ts\u0000PermissionDecisionResult",
     "types\u0000apps/zcode-cli/packages/core/src/runtime.ts\u0000StopActiveForegroundExecutionOptions",
     "types\u0000apps/zcode-cli/packages/core/src/runtime.ts\u0000StopActiveForegroundExecutionResult",
     "types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000AgentProfile",

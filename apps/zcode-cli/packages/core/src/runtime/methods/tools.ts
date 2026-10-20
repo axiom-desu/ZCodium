@@ -27,11 +27,7 @@ import {
   findParallelGroupIndex,
   recordTurnFileChange,
 } from "../helpers/index.js";
-import type {
-  PermissionDecisionResult,
-  ExecuteToolsOptions,
-  ExecuteToolsResult,
-} from "../types.js";
+import type { ExecuteToolsOptions, ExecuteToolsResult } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { createMcpToolDisplay } from "../../tool/executor/result-display.js";
 
@@ -273,15 +269,12 @@ export async function emitPermissionRequest(
 export async function resolvePermission(
   this: AgentRuntimeInternal,
   toolCallId: ToolCallId,
-  decision: PermissionDecisionResult,
+  decision: PermissionBrokerResult,
 ): Promise<void> {
-  const brokerResult: PermissionBrokerResult = {
-    decision: decision.allowed ? "allow" : "deny",
-    reason: decision.reason,
-    modifiedInput: decision.modifiedInput,
-    permissionUpdates: decision.permissionUpdates,
-    resolvedAt: new Date(),
-  };
+  // 原实现用 decision.allowed 把应答压平成 allow/deny，会抹掉 escalate/modify。
+  // 该函数当前全仓零调用，因此这里直接沿用 contracts 的 broker 应答形状，
+  // 不再从简化版布尔字段反推 decision。
+  const brokerResult: PermissionBrokerResult = { ...decision, resolvedAt: new Date() };
 
   if (isResolvablePermissionBroker(this.permissionBroker)) {
     const resolved = this.permissionBroker.resolvePermission(toolCallId, brokerResult);
