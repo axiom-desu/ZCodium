@@ -156,7 +156,11 @@ createComputerUseRuntime(options?: {
 - 复核：`packages/services/src/cua-permission-broker/*`、`packages/desktop/src/main/cua*` 中只服务
   闭源 Helper 的安装/信任链部分，改为对接 cua-driver 的权限报告与 Electron 入口；不删仍需的权限 UI。
 
-## 实施顺序
+## 实施顺序（初始迁移计划，历史快照）
+
+> 下表是迁移开始时的计划，不代表当前完成状态：实际已落地的 runtime / surface / driver 资产打包等
+> 以当前源码、`scripts/cua-driver-runtime-assets.mjs` 与 `computer-use-platform-architecture.md` 为准；
+> 表中「未开始」不可当作当前待办，跨平台闭环也未在本轮重新验收。
 
 | 阶段 | 内容                                                                        | 状态                                       |
 | ---- | --------------------------------------------------------------------------- | ------------------------------------------ |

@@ -1,6 +1,6 @@
 # 格式门禁（Formatting Gate）
 
-本 spec 记录 `pnpm fmt:check` 作为 CI 门禁的规则、忽略清单的维护方式，以及为什么加入它。
+本 spec 记录 `pnpm gate:format`（原始真值 `pnpm fmt:check`）作为 CI 门禁的规则、忽略清单的维护方式，以及为什么加入它。
 
 ## 范围与产品规则
 
@@ -9,23 +9,27 @@
 - 门禁命令：CI 跑 `pnpm gate:format`（棘轮，存量在 `.gate-baseline/format.json`，只拦新增）；`pnpm fmt:check` 保留为原始真值（全量报错）
 - 写入者：本仓库源码由贡献者本地执行 `pnpm fmt`（= `oxfmt`，不带 `--check`）落盘；CI 只校验不改写
 
-**没有门禁的格式化必然复发。** 门禁之前的状态是：79 个文件不通过，其中 43 个是本仓库自己写的，且每个手写 PR 都会再添几个。所以「格式化」与「门禁」必须同时落地——只格式化不加门禁等于一次性美化。
+> 门禁引擎、基线结构与退出码的唯一所有者是 `quality-gates.md`；本 spec 只拥有**忽略清单**与
+> **格式化器版本边界**。本文的数值若标注「历史量测」，不代表当前 checkout。
+
+**没有门禁的格式化必然复发。** 门禁之前的状态（历史量测，2026-10 格式化落地前）是：79 个文件不通过，其中 43 个是本仓库自己写的，且每个手写 PR 都会再添几个。所以「格式化」与「门禁」必须同时落地——只格式化不加门禁等于一次性美化。
 
 ## 忽略清单的三类
 
-`.oxfmtrc.json` 的 `ignorePatterns` 只允许三类条目：
+根仓 `.oxfmtrc.json` 的 `ignorePatterns` 当前 45 条，**只能归入以下三类**。
+`.prettierignore` 的 `apps/zcode-cli/` 是工具版本边界（见后文），不是第四类，也不能用它的理由去放宽根 `ignorePatterns`。
 
-### 1. 生成物（不得格式化）
+### 1. 生成物与构建输出（不得格式化）
 
-生成物由脚本落盘，格式化会在下次生成时被覆盖，属无效改动。已收录：
+生成物由脚本落盘，格式化会在下次生成时被覆盖，属无效改动；构建输出本就不属于源码。已收录：
 
-| 条目                                                                                                                                           | 生成者                                                                                           |
-| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `CHANGELOG.md`                                                                                                                                 | `@release-it/conventional-changelog`（writer opts 见 `scripts/release-it/changelog-writer.mjs`） |
-| `THIRD-PARTY-NOTICES.md`                                                                                                                       | 三方声明生成流程                                                                                 |
-| `third-party/inventory.json`                                                                                                                   | 同上                                                                                             |
-| `third-party/upstream/**`、`third-party/native-search/licenses/**`、`third-party/runtime/*.txt`                                                | 上游/第三方原样收录                                                                              |
-| `packages/desktop/src/renderer/src/plugin-sandbox/genUiTweakRuntime.js`、`apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/**` | 产物式资源                                                                                       |
+| 条目                                                                                            | 生成者                                                                                           |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `CHANGELOG.md`                                                                                  | `@release-it/conventional-changelog`（writer opts 见 `scripts/release-it/changelog-writer.mjs`） |
+| `THIRD-PARTY-NOTICES.md`                                                                        | 三方声明生成流程                                                                                 |
+| `third-party/inventory.json`                                                                    | 同上                                                                                             |
+| `third-party/upstream/**`、`third-party/native-search/licenses/**`、`third-party/runtime/*.txt` | 上游/第三方原样收录                                                                              |
+| `apps/zcode-cli-rust/target/**`                                                                 | Cargo 构建输出（oxfmt 不读 `.git/info/exclude`，实测曾误报 1132 个文件）                         |
 
 ### 2. 与上游逐字节对齐的文件（保持不格式化）
 
@@ -38,23 +42,35 @@
 
 **不使用目录 glob。** `packages/services/src/bots/**` 这类目录仍在活跃开发，glob 会把未来的自有文件一并排除在格式之外；显式清单只钉住已知的上游继承文件。
 
-### 3. 内联产物
+### 3. 内联产物（源码目录内的产物式资源）
 
-见上表最后一行；与本 spec 同属「生成后落盘」。
+由生成器写入源码目录、内容为产物形态、格式化后会被下次生成覆盖的两条：
 
-### 4. 子仓自带的格式化器（不在本仓 oxfmt 范围内）
+- `packages/desktop/src/renderer/src/plugin-sandbox/genUiTweakRuntime.js`
+- `apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/**`
+
+与第 1 类的区别只是落点：它们位于源码树内，容易在评审时被误当成手写源码，所以单列一类。
+
+## 版本边界：`.prettierignore` 的 `apps/zcode-cli/`（不属于三类）
 
 根仓的 `.prettierignore` 里额外有一条 `apps/zcode-cli/`，它**不属于上述三类**，而是版本边界：
 
 - 根仓锁定 `oxfmt` 0.41.x，`apps/zcode-cli` 自带 `oxfmt` 0.47.x 与自己的 `format` / `format:check` 脚本
-- 实测同一批文件：根 0.41 会改写 379 个，子仓 0.47 只报 217 个——两者相差的 162 个纯属格式化器版本分歧
+- 实测根 0.41 会报 379 个文件，子仓 0.47 只报 217 个。**只能确认计数不同**：本次未做逐文件集合比对，
+  因此不能断言两者相差的 162 个纯属版本分歧（也可能含配置或依赖差异）。要删除该目录条目，必须先做
+  逐文件对照，确认差异全部来自版本，再对齐版本并重建基线
 - 因此根仓 oxfmt 不得跨目录改写子仓文件；否则两边 `format` 会互相推翻，形成反复回写
+
+同文件里还有两条 `apps/zcode-cli/packages/dynamic-workflow/tests/graphs/*.ts`：它们是刻意使用非法
+TS 语法的 fixture（`for await` 的非常规写法），oxfmt 解析会报错。这不是版本边界，也不是上述三类，
+而是**解析约束**；当前被 `apps/zcode-cli/` 目录条目顺带排除，所以显得冗余，但若以后移除目录条目，
+这两条必须保留。
 
 `oxfmt` 默认读取 `.gitignore` 与 `.prettierignore`（见 `oxfmt --help` 的 `--ignore-path`），所以这两处共同决定扫描范围。若要打开 CLI 的格式覆盖，**先对齐两个 `oxfmt` 版本**，再删 `apps/zcode-cli/` 这一条并重建基线；不得只删 ignore 条目。
 
 ## 维护规则
 
-1. **新增排除项必须在 PR 里写明理由**，且只能归入上三类之一。不得为「让门禁变绿」而排除自有源码。
+1. **新增排除项必须在 PR 里写明理由**，且只能归入 `.oxfmtrc.json` 的上三类之一。不得为「让门禁变绿」而排除自有源码；也不得把 `.prettierignore` 的版本边界当作新增排除项的入口。
 2. **自有源码不排除。** 本仓库自己写的文件一律格式化。
 3. **上游对齐类条目可以移除**，条件是：该文件已不再需要与上游逐字节对比（例如对应的上游能力已被本仓库重写取代，如 CUA 运行时），或该文件已被上游删除。
 4. 上游新版本进来后，若上游文件不满足 oxfmt，按第 2 类追加条目，并在同步 spec 里记一笔。
@@ -71,7 +87,11 @@
 
 **规则：提交前必须同时跑 `fmt:check` 与 `lint`。** 只跑一个会把冲突推迟到 CI：格式化可能让文件越过 400 行上限，而为了压行数又会让 `fmt:check` 变红。
 
-## 本次落地内容（基线证据）
+补充（与 `quality-gates.md` 一致）：lint 棘轮对**已超限文件继续增长不敏感**（每个文件只出 1 条
+`max-lines` 诊断，count 不变）。格式化会增加行数，所以「400 行已入 CI」不等于全覆盖，超限文件仍需
+人工拆分复核。
+
+## 本次落地内容（历史量测，2026-10）
 
 | 项                      | 数值                                                                                                                                            |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -79,7 +99,11 @@
 | 另有的误报              | 1132 个，全部来自 `apps/zcode-cli-rust/target`（oxfmt 不读 `.git/info/exclude`），已由 `ignorePatterns` 的 `apps/zcode-cli-rust/target/**` 修掉 |
 | 本次格式化              | 42 个自有文件（`+1088 / -488`），纯排版、零语义改动                                                                                             |
 | 顺带修掉                | `.oxlintrc.json` 的 test/spec 豁免漏了 `.mjs` / `.js`（见上节）                                                                                 |
-| 门禁后 `fmt:check`      | 全部通过（3113 个文件）                                                                                                                         |
+| 门禁后 `fmt:check`      | 全部通过（3113 个文件，历史量测）                                                                                                               |
+
+**当前实测（`e367c42f` 之后，本 spec 收尾时）**：`gate:format` 为 `format: OK`（0 entries / 0 baseline，
+exit 0）；`pnpm fmt:check` 通过，覆盖 3355 个文件（含本次新增的 `quality-gates.md`）。文件基数的差异来自后续增删文件，不代表忽略规则变化。
+oxfmt 在零目标时以 exit 2 + `Expected at least one target file` 失败，因此「扫描零文件」不会被当成干净。
 
 格式化前后测试结果不变，作为「纯排版」的证据：
 
@@ -93,3 +117,6 @@
 2. 新增自有源码未格式化时，`checks` job 的 `Format` 步骤必须失败——不得通过放宽 `ignorePatterns` 规避。
 3. 上游对齐类条目的增删必须在 commit 里可追溯（理由写在提交信息或本 spec）。
 4. 修改生成物的格式化规则时，必须同步修改生成器，不得只改 `ignorePatterns`。
+5. 基线更新必须人工审阅 `.gate-baseline/format.json` 的 diff，不得为了变绿把新增格式差异吞进基线；
+   判定与退出码规则见 `quality-gates.md`。
+6. 若本次未运行 CI，不得在 PR/spec 里声称 CI 通过；只报告本地实测结果。

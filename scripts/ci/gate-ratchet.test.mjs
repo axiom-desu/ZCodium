@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import {
   ISSUE_KINDS,
   KEY_SEPARATOR,
@@ -8,10 +10,13 @@ import {
   collectFormatEntries,
   collectKnipEntries,
   collectLintEntries,
+  compareCodePoints,
   compareEntries,
   decodeKey,
   encodeKey,
   formatReport,
+  isMainModule,
+  normalizeRepoPath,
   parseBaseline,
   parseFormatList,
   parseKnipOutput,
@@ -47,26 +52,26 @@ test("each knip issue kind is tracked separately", () => {
   assert.deepEqual(kinds, ["exports", "files", "types"]);
 });
 
-// 同一文件里 knip 会把重复导出组逐个列出，同名会重复出现；
-// 指纹去重后仍能捕获新增成员（A,B -> A,B,C 时 C 是新指纹）。
-test("duplicate export groups keep new members detectable", () => {
+// 实测 knip 6 的 json reporter 把 duplicates 输出成「组 → 成员」的嵌套数组，不是扁平成员列表。
+// 引擎沿用历史基线形状（每个文件一条、name 为空），所以同一文件新增重复成员不会单独计数；
+// 这里锁死真实形状校验与该已知不敏感，避免再误以为它能够捕获新增成员。
+test("duplicate groups use the real nested shape and collapse to one entry per file", () => {
   const before = collectKnipEntries([
-    { file: "src/a.ts", duplicates: [{ name: "A" }, { name: "B" }] },
+    { file: "src/a.ts", duplicates: [[{ name: "A" }, { name: "B" }]] },
   ]);
   const after = collectKnipEntries([
-    { file: "src/a.ts", duplicates: [{ name: "A" }, { name: "B" }, { name: "C" }] },
+    { file: "src/a.ts", duplicates: [[{ name: "A" }, { name: "B" }, { name: "C" }]] },
   ]);
-  assert.equal(before.size, 2);
-  assert.equal(after.size, 3);
-  const { regressions } = compareEntries(after, before);
-  assert.deepEqual(names(regressions), ["C"]);
+  assert.equal(before.size, 1);
+  assert.equal(after.size, 1);
+  assert.deepEqual([...after.keys()], [...before.keys()]);
+  assert.equal(decodeKey([...before.keys()][0]).fields[2], "");
 });
 
-// 同一个符号被多个重复组列两次时仍只算一条：累计次数会让「同一处债务」虚增，
-// 迁移后也无法与旧基线的一一对应关系对齐。
+// 同一个符号被多个重复组列两次时仍只算一条：累计次数会让「同一处债务」虚增。
 test("repeated knip members are collected as a set, not accumulated", () => {
   const entries = collectKnipEntries([
-    { file: "src/a.ts", duplicates: [{ name: "A" }, { name: "A" }] },
+    { file: "src/a.ts", duplicates: [[{ name: "A" }, { name: "A" }]] },
   ]);
   assert.equal(entries.size, 1);
   assert.equal([...entries.values()][0], 1);
@@ -88,16 +93,35 @@ test("compare reports additions and removals independently", () => {
 
 test("empty issues produce no entries", () => {
   assert.equal(collectKnipEntries([]).size, 0);
-  assert.equal(collectKnipEntries(undefined).size, 0);
+  assert.throws(() => collectKnipEntries(undefined), /不是数组/);
 });
 
-test("issue entries without a file path are skipped instead of becoming phantom keys", () => {
-  assert.equal(collectKnipEntries([{ exports: [{ name: "foo" }] }]).size, 0);
-  assert.equal(collectKnipEntries([{ file: "", exports: [{ name: "foo" }] }]).size, 0);
+// 缺 file 或坏条目必须抛错：静默跳过会让 knip 升级后的新告警直接消失。
+test("knip issues without a file or with malformed items are rejected, not skipped", () => {
+  assert.throws(() => collectKnipEntries([{ exports: [{ name: "foo" }] }]), /为空/);
+  assert.throws(() => collectKnipEntries([{ file: "", exports: [{ name: "foo" }] }]), /为空/);
+  assert.throws(() => collectKnipEntries([{ file: "src/a.ts", exports: [{ nope: 1 }] }]), /name/);
+  assert.throws(
+    () => collectKnipEntries([{ file: "src/a.ts", duplicates: [{ name: "A" }] }]),
+    /分组不是数组/,
+  );
 });
 
-test("every declared issue kind matches the knip json reporter field names", () => {
-  // 漏掉某个分类会让该分类的新增告警被静默放行，因此这里锁死清单。
+// 未知分类必须报错：knip 新增分类时不能静默放行；owners 是 json reporter 的元数据而非分类。
+test("unknown knip categories are rejected while reporter metadata is tolerated", () => {
+  assert.throws(
+    () => collectKnipEntries([{ file: "src/a.ts", brandNewKind: [] }]),
+    /未知分类 brandNewKind/,
+  );
+  const entries = collectKnipEntries([
+    { file: "src/a.ts", owners: [{ name: "@team" }], exports: [{ name: "x" }] },
+  ]);
+  assert.deepEqual([...entries.keys()], [encodeKey("knip", "exports", "src/a.ts", "x")]);
+});
+
+test("known knip issue categories retain the reviewed snapshot", () => {
+  // 这份清单只是「已审阅的已知分类快照」，不自动跟随 knip 版本变化；
+  // 真正的安全网是运行时拒绝未知分类（collectKnipEntries 抛错 → exit 2）。
   assert.deepEqual(
     [...ISSUE_KINDS].sort(),
     [
@@ -110,6 +134,8 @@ test("every declared issue kind matches the knip json reporter field names", () 
       "exports",
       "files",
       "namespaceMembers",
+      "nsExports",
+      "nsTypes",
       "optionalPeerDependencies",
       "types",
       "unlisted",
@@ -151,8 +177,10 @@ test("parseLintOutput tolerates a human readable prefix before the JSON payload"
   const stdout =
     'No files found to lint. Please check your paths and ignore patterns.\n{ "diagnostics": [' +
     '{"severity":"error","code":"eslint(max-lines)","filename":"src/a.ts"},' +
-    '{"severity":"warning","code":"eslint(no-unused-vars)","filename":"src/b.ts"}]}';
-  const diagnostics = parseLintOutput(stdout);
+    '{"severity":"warning","code":"eslint(no-unused-vars)","filename":"src/b.ts"}],' +
+    '"number_of_files": 2}';
+  const { diagnostics, numberOfFiles } = parseLintOutput(stdout);
+  assert.equal(numberOfFiles, 2);
   assert.equal(diagnostics.length, 2);
   assert.equal(diagnostics[0].severity, "error");
   assert.equal(diagnostics[0].code, "eslint(max-lines)");
@@ -166,6 +194,19 @@ test("parseLintOutput throws on garbage instead of silently reporting zero diagn
   assert.throws(() => parseLintOutput('{"diagnostics":{}}'), /缺少 diagnostics/);
 });
 
+// 实测空目录下 oxlint 输出 `number_of_files: 0` + exit 1；当成空 diagnostics 会静默放行。
+test("parseLintOutput rejects zero, missing or fractional number_of_files", () => {
+  const report = (numberOfFiles) =>
+    JSON.stringify({
+      diagnostics: [],
+      ...(numberOfFiles === undefined ? {} : { number_of_files: numberOfFiles }),
+    });
+  assert.throws(() => parseLintOutput(report(0)), /number_of_files=0/);
+  assert.throws(() => parseLintOutput(report(undefined)), /number_of_files=undefined/);
+  assert.throws(() => parseLintOutput(report(1.5)), /number_of_files=1\.5/);
+  assert.throws(() => parseLintOutput(report(-1)), /number_of_files=-1/);
+});
+
 test("collectLintEntries counts repeats per severity, code and file without mixing severities", () => {
   const entries = collectLintEntries([
     { severity: "warning", code: "eslint(no-unused-vars)", filename: "src/a.ts" },
@@ -176,6 +217,41 @@ test("collectLintEntries counts repeats per severity, code and file without mixi
   assert.equal(entries.size, 2);
   assert.equal(entries.get(encodeKey("lint", "warning", "eslint(no-unused-vars)", "src/a.ts")), 3);
   assert.equal(entries.get(encodeKey("lint", "error", "eslint(no-unused-vars)", "src/a.ts")), 1);
+});
+
+// 缺字段的历史实现会生成 `lint\0unknown\0\0` 幽灵 key；现在必须直接报错。
+test("invalid lint diagnostics are rejected instead of becoming phantom keys", () => {
+  assert.throws(() => collectLintEntries([{ message: "x" }]), /severity/);
+  assert.throws(
+    () => collectLintEntries([{ severity: "hint", code: "rule", filename: "src/a.ts" }]),
+    /severity/,
+  );
+  assert.throws(
+    () => collectLintEntries([{ severity: "error", code: "", filename: "src/a.ts" }]),
+    /缺少 code/,
+  );
+  assert.throws(
+    () => collectLintEntries([{ severity: "error", code: "rule", filename: "" }]),
+    /缺少 filename/,
+  );
+});
+
+// Windows 工具输出反斜杠；key 必须统一为正斜杠仓库相对路径，且不能折叠大小写。
+test("collected paths normalize windows separators and leading ./ without case folding", () => {
+  assert.equal(normalizeRepoPath("packages\\win\\A.ts"), "packages/win/A.ts");
+  assert.equal(normalizeRepoPath(".\\src\\b.ts"), "src/b.ts");
+  assert.equal(normalizeRepoPath("src/./c.ts"), "src/c.ts");
+  assert.equal(
+    [...collectFormatEntries(["packages\\win\\A.ts"])][0][0],
+    encodeKey("format", "packages/win/A.ts"),
+  );
+});
+
+// 真实 Windows 未在本环境实测：这里只锁死跨平台的数据规范化契约，不模拟 win32 的 path.resolve。
+test("path normalization rejects absolute and escaping paths instead of folding them away", () => {
+  for (const bad of ["/src/a.ts", "C:\\src\\a.ts", "../a.ts", "src/../../a.ts", "src/", ""]) {
+    assert.throws(() => normalizeRepoPath(bad), /仓库根相对路径|未逃逸/, bad);
+  }
 });
 
 test("parseFormatList drops empty lines and npx noise but keeps real file paths", () => {
@@ -241,41 +317,161 @@ test("compareEntries ignores unchanged counts", () => {
 test("baseline serialization sorts entries and round-trips counts", () => {
   const entries = new Map([
     [encodeKey("knip", "exports", "b.ts", "x"), 1],
-    [encodeKey("lint", "error", "rule", "a.ts"), 3],
+    [encodeKey("knip", "exports", "a.ts", "y"), 1],
   ]);
   const text = serializeBaseline(entries);
   const parsed = JSON.parse(text);
   assert.equal(parsed.version, 1);
   assert.deepEqual(
     parsed.entries.map((entry) => entry.key),
-    [encodeKey("knip", "exports", "b.ts", "x"), encodeKey("lint", "error", "rule", "a.ts")],
+    [encodeKey("knip", "exports", "a.ts", "y"), encodeKey("knip", "exports", "b.ts", "x")],
   );
   assert.deepEqual(
-    [...parseBaseline(text).entries()],
-    [...entries.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+    [...parseBaseline(text, { gate: "knip" }).entries()],
+    [...entries.entries()].sort((a, b) => compareCodePoints(a[0], b[0])),
   );
 });
 
-test("baseline parsing rejects corrupt files", () => {
-  assert.throws(() => parseBaseline("{oops", ".gate-baseline/knip.json"), /不是合法 JSON/);
-  assert.equal(parseBaseline('{"version":1}').size, 0);
+// localeCompare 会随 ICU 默认语言改变顺序（sv_SE 下 ä < z，C 下相反）；写入必须只由码点决定。
+test("baseline ordering uses code points rather than localeCompare", () => {
+  assert.deepEqual(["z", "ä", "A"].sort(compareCodePoints), ["A", "z", "ä"]);
+  const text = serializeBaseline(
+    new Map([
+      [encodeKey("format", "z.ts"), 1],
+      [encodeKey("format", "ä.ts"), 1],
+      [encodeKey("format", "A.ts"), 1],
+    ]),
+  );
+  assert.deepEqual(
+    JSON.parse(text).entries.map((entry) => entry.key),
+    [encodeKey("format", "A.ts"), encodeKey("format", "z.ts"), encodeKey("format", "ä.ts")],
+  );
+});
+
+test("baseline parsing rejects corrupt structure instead of treating it as empty", () => {
+  const parse = (value, gate = "knip") => parseBaseline(value, { gate });
+  assert.throws(() => parse("{oops"), /不是合法 JSON/);
+  assert.throws(() => parse('{"version":1}'), /entries 必须是数组/);
+  assert.throws(() => parse('{"version":2,"entries":[]}'), /version 必须是 1/);
+  assert.throws(() => parse('{"entries":[]}'), /version 必须是 1/);
+  assert.throws(() => parse('{"version":1,"entries":[],"extra":1}'), /未知字段 extra/);
+  assert.throws(
+    () =>
+      parse(
+        JSON.stringify({
+          version: 1,
+          entries: [{ key: ["knip", "exports", "src/a.ts"].join("\u0000"), count: 1 }],
+        }),
+      ),
+    /段数与 gate 不匹配/,
+  );
+  assert.throws(
+    () =>
+      parse(
+        JSON.stringify({ version: 1, entries: [{ key: "lint\0error\0rule\0src/a.ts", count: 1 }] }),
+      ),
+    /段数与 gate 不匹配/,
+  );
+  assert.throws(
+    () =>
+      parse(
+        JSON.stringify({
+          version: 1,
+          entries: [{ key: "knip\0exports\0src/a.ts\0foo", count: 2 }],
+        }),
+      ),
+    /必须为 1/,
+  );
+  assert.throws(
+    () =>
+      parse(
+        JSON.stringify({
+          version: 1,
+          entries: [{ key: "lint\0error\0rule\0src/a.ts", count: 0 }],
+        }),
+        "lint",
+      ),
+    /必须是正整数/,
+  );
+  assert.throws(
+    () =>
+      parse(
+        JSON.stringify({
+          version: 1,
+          entries: [
+            { key: "lint\0error\0rule\0src/a.ts", count: 1 },
+            { key: "lint\0error\0rule\0src/a.ts", count: 1 },
+          ],
+        }),
+        "lint",
+      ),
+    /key 重复/,
+  );
+  assert.throws(
+    () =>
+      parse(
+        JSON.stringify({
+          version: 1,
+          entries: [{ key: "lint\0error\0rule\0src\\a.ts", count: 1 }],
+        }),
+        "lint",
+      ),
+    /不是规范仓库相对形式/,
+  );
+  assert.throws(
+    () =>
+      parse(
+        JSON.stringify({
+          version: 1,
+          entries: [{ key: "lint\0error\0rule\0../a.ts", count: 1 }],
+        }),
+        "lint",
+      ),
+    /仓库相对路径/,
+  );
+  assert.throws(
+    () =>
+      parse(
+        JSON.stringify({
+          version: 1,
+          entries: [{ key: "lint\0error\0rule\0src/a.ts", count: 1, extra: 1 }],
+        }),
+        "lint",
+      ),
+    /未知字段 extra/,
+  );
+});
+
+// 旧基线不要求已排序：读取是 Map，顺序只影响 diff 可读性，不应因顺序拒绝。
+test("baseline parsing does not require the old file to be sorted", () => {
+  const text = JSON.stringify({
+    version: 1,
+    entries: [
+      { key: "format\0z.ts", count: 1 },
+      { key: "format\0ä.ts", count: 1 },
+    ],
+  });
+  assert.deepEqual(
+    [...parseBaseline(text, { gate: "format" }).keys()],
+    ["format\0z.ts", "format\0ä.ts"],
+  );
 });
 
 // knip 的 exports 字段不允许解析 knip/bin/knip.js，直接写死会 ERR_PACKAGE_PATH_NOT_EXPORTED；
 // 这里锁死「能定位到真实存在的 CLI 文件」。
-test("knip CLI is locatable without going through pnpm exec", () => {
-  const bin = resolveToolBin("knip", "knip.js", process.cwd());
+test("knip CLI is locatable without going through pnpm exec", async () => {
+  const bin = await resolveToolBin("knip", "knip.js", process.cwd());
   assert.ok(existsSync(bin), `knip CLI 不存在: ${bin}`);
   assert.match(bin, /node_modules[\\/]knip[\\/]bin[\\/]knip\.js$/);
 });
 
-test("all three gate CLIs resolve to real bin files", () => {
+test("all three gate CLIs resolve to real bin files", async () => {
   for (const [pkgName, binFileName] of [
     ["oxlint", "oxlint"],
     ["oxfmt", "oxfmt"],
     ["knip", "knip.js"],
   ]) {
-    const bin = resolveToolBin(pkgName, binFileName, process.cwd());
+    const bin = await resolveToolBin(pkgName, binFileName, process.cwd());
     assert.ok(existsSync(bin), `${pkgName} CLI 不存在: ${bin}`);
     assert.match(bin, /node_modules[\\/]/);
   }
@@ -312,6 +508,37 @@ test("report fails only when something regressed", () => {
   });
   assert.match(failed, /^knip: FAILED$/m);
   assert.match(failed, /^\+ 1 exports src\/a\.ts :: foo$/m);
+});
+
+// 入口判定必须是 file URL 比较：含空格路径下 `file://${argv[1]}` 永远不相等，会静默 exit 0。
+test("entry guard matches URL-encoded paths with spaces, CJK and percent signs", () => {
+  for (const name of ["space probe.mjs", "中文 目录/入口.mjs", "100%/a b.mjs"]) {
+    const entry = path.resolve("/tmp/gate entry", name);
+    assert.equal(isMainModule(pathToFileURL(entry).href, entry), true, name);
+    assert.equal(isMainModule(pathToFileURL(entry).href, `${entry}.other`), false, name);
+  }
+  assert.equal(isMainModule("file:///tmp/a.mjs", undefined), false);
+});
+
+// Windows 的盘符语义由 host 的 path.resolve/pathToFileURL 决定；这里不对 Linux 强加 win32 规则，
+// 只锁死「不手写反斜杠转换」。真实 Windows 未在本环境实测。
+test("entry guard does not invent win32 path semantics on posix hosts", () => {
+  const expected = process.platform === "win32";
+  assert.equal(isMainModule("file:///C:/repo/a%20b.mjs", "C:\\repo\\a b.mjs"), expected);
+});
+
+// 告警清零是合法终态：当前 0 条 + 基线 0 条必须是 OK + exit 0，不能为「看起来在管」注入条目。
+test("a zero-entry format baseline is clean rather than an error", () => {
+  const report = formatReport({
+    gate: "format",
+    total: 0,
+    baselineTotal: 0,
+    regressions: [],
+    improvements: [],
+  });
+  assert.match(report, /^format: OK$/m);
+  assert.match(report, /^entries: 0$/m);
+  assert.deepEqual(compareEntries(new Map(), new Map()), { regressions: [], improvements: [] });
 });
 
 test("report lists improvements with a tightening hint", () => {

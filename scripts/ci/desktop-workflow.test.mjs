@@ -66,8 +66,9 @@ test("parallel packaging preserves coverage commands, full targets and current-r
   const commands = jobs.checks.steps.map((step) => step.run ?? "").join("\n");
   for (const command of [
     "pnpm typecheck",
-    "pnpm lint",
-    "pnpm fmt:check",
+    "pnpm gate:lint",
+    "pnpm gate:format",
+    "pnpm gate:knip",
     "pnpm architecture:check",
     "pnpm -r --filter './apps/zcode-cli/packages/*' test",
     "pnpm vitest run",
@@ -91,6 +92,28 @@ test("parallel packaging preserves coverage commands, full targets and current-r
     assert.ok(verify >= 0 && prepare > verify && build > prepare);
     assert.ok(commands.some((command) => command.includes("--skip-prepare --skip-build")));
   }
+});
+
+test("checks job runs the three gate ratchets exactly, without bypass wrappers", async () => {
+  const jobs = await loadJobs();
+  // 门禁必须按精确命令串出现在 checks 里：任何前缀/后缀都可能被包装成不失败。
+  const gateSteps = jobs.checks.steps.filter((step) =>
+    /pnpm gate:(lint|format|knip)\b/.test(String(step.run ?? "")),
+  );
+  assert.deepEqual(
+    gateSteps.map((step) => String(step.run).trim()),
+    ["pnpm gate:lint", "pnpm gate:format", "pnpm gate:knip"],
+  );
+  for (const step of gateSteps) {
+    // CI 不得包装门禁：continue-on-error / || true / exit 0 都会把回归降级成通过。
+    assert.equal(step["continue-on-error"], undefined);
+    assert.doesNotMatch(String(step.run), /\|\|\s*true|;\s*exit 0\b/);
+    // 只跳过前置失败与取消，不用 always()/success() 改写门禁语义。
+    assert.equal(step.if, "${{ !cancelled() && steps.setup.outcome == 'success' }}");
+  }
+  // 原始真值命令不是 CI 替代：它们对存量债务必然报错，跑在 CI 会让门禁恒红。
+  const allRuns = jobs.checks.steps.map((step) => String(step.run ?? "")).join("\n");
+  assert.doesNotMatch(allRuns, /^\s*pnpm (?:lint|fmt:check)\s*$/m);
 });
 
 test("dual-product matrix expands four Exp jobs on PR/main and twelve jobs on dispatch/tag", async () => {

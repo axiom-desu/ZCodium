@@ -4,15 +4,28 @@
 **2026-06-04**，随 v3.15.1 于 **2026-10-10** 公开）。本 spec 把报告里的 P0/P1/P2 与工程化建议
 逐项对到当前 checkout，标出「两边都已做」「两边都欠」「只有我们欠」，作为后续重构的工单。
 
-结论先行：**报告点名的多数项，上游和本仓都没做。** 真正落地确认的只有 `modelAdapter?: any`
-（P0-B）与 tui 不再依赖 core（P1-E），加上本仓自己补的 P0-A（重复类型）与 knip 门禁。
-**最关键的一项 —— 拆 AgentRuntime God Object（P1-A）—— 两仓都原样付着装。** 所以这不是我们落后于上游，
-是一份双方共有的欠账（但也意味着：这些欠账不以上游为前置条件，可以自己推）。
+结论先行：表内 14 项对账中，**6 项两边都欠**、2 项两边都做（P0-B、P1-E）、3 项本仓领先
+（P0-A、`max-lines`、knip 进 CI），其余为待核/可做/不适用。本仓补上的是 P0-A（重复类型）与
+三个棘轮门禁（knip / lint / format）。
+**最关键的一项 —— 拆 AgentRuntime God Object（P1-A）—— 两仓都还欠着**（本仓 100 文件 /
+25891 行，上游 106 / 27219，见「[P1-A 现状](#p1-a-现状god-object-仍未拆)」）。
+这些欠账不以上游为前置条件，可以自己推。
 
-> 上一版本文曾把 P1-A 记为「已做」，依据是 `core/src/runtime.ts` 只有 39 行。那是误判：
-> 该文件只是 re-export barrel，真正的 God Object 在 `core/src/runtime/methods/`（100 文件 /
-> 25891 行）、`runtime/agent-runtime.ts`（655 行）与 `runtime/internal.ts`（147 行）里。
-> 核对数据见「[P1-A 现状](#p1-a-现状为什么上一版误判为已做)」。
+## 本 spec 依据的 commit 索引（`origin/main..HEAD`，ahead 5）
+
+| commit     | 内容                                                                                                                                     | 对本 spec 的影响                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `1b1b7420` | `docs(spec)`：建立本对账（只读，无代码改动）                                                                                             | 初版判定与量测                                      |
+| `41bdb3a3` | `feat(ci)`：knip 进 CI（`scripts/ci/knip-ratchet.mjs` + `.knip-baseline.json`）                                                          | 当时基线 1142 条；旧脚本/旧基线已在 `e367c42f` 删除 |
+| `da7185d1` | `refactor(core)`：P0-A 收敛两份重复类型                                                                                                  | 判定列 P0-A 改「已做」                              |
+| `e367c42f` | `feat(ci)`：单棘轮引擎 + 无 IO 纯解析层（`gate-ratchet.mjs` / `gate-ratchet-core.mjs`）+ 三个适配器，纳入 CLI lint，lint/format 基线入库 | 门禁语义改由 `quality-gates.md` 拥有                |
+| `e00ed2f8` | `chore(zcode-cua)`：官方 CUA 帧契约改为休眠并锁死恒否语义                                                                                | **仅索引**：不在 TS 治理/门禁范围内，无门禁影响     |
+
+`e00ed2f8` 只清理 CUA 帧契约占位并加测试，未触碰 `.gate-baseline/`、lint 配置或本 spec 的对账项。
+本轮文档收尾只改本文件与 `quality-gates.md`（未提交）：不新增源码、不刷新基线，也未运行远端 CI。
+
+> 状态约定：本文中的「实测」若带 commit/日期，属**历史量测**；「当前」指 `e00ed2f8` 的 checkout。
+> 门禁判定、退出码与基线校验的唯一所有者是 `quality-gates.md`，本文只保留对账结论。
 
 ## 基准与复现
 
@@ -39,11 +52,11 @@ ls apps/zcode-cli/packages/cli/src/tui-*.ts
 | P1-D | 将 cli 包中 `tui-*` 移入 tui 包       | ❌ **15 个**                        | ❌ **14 个**                                               | **两边都欠** |
 | P1-E | TUI 不直接依赖 core                   | ✅ 已修                             | ✅ 已修（无 `@zcode/core`）                                | 都做了       |
 | P1-F | 合并 shared-types 到 contracts        | ❌ 仍有                             | ❌ 52 行空壳                                               | 两边都欠     |
-| P2-A | 超 400 行文件拆分                     | —                                   | ⚠️ 规则启用但门禁有洞（见下）                              | **本仓可做** |
+| P2-A | 超 400 行文件拆分                     | —                                   | ✅ 规则生效且已入 lint 棘轮；⚠️ 对已超限文件继续增长不敏感 | **本仓可做** |
 | P2-E | 拆分 cli 单测文件                     | ❌ `cli.unit.test.ts` 6539 行       | ⚠️ 无该文件，因测试被大幅删除                              | 不适用       |
-| §5.2 | `max-lines` lint                      | 仅建议                              | ✅ 已启用                                                  | **本仓领先** |
+| §5.2 | `max-lines` lint                      | 仅建议                              | ✅ 已启用并进 CI（86 条 error 入基线）                     | **本仓领先** |
 | §5.2 | boundaries lint（tui 不 import core） | 仅建议                              | ⚠️ **未覆盖**（policy 里 `zcode-cli` 是 `managed: false`） | 两边都欠     |
-| §5.2 | **knip 进 CI**                        | ❌ 报告自述「已配置但未在 CI 执行」 | ✅ 已进（棘轮基线 1141 条）                                | **本仓领先** |
+| §5.2 | **knip 进 CI**                        | ❌ 报告自述「已配置但未在 CI 执行」 | ✅ 已进（单引擎 + 无 IO 纯解析层，棘轮基线 1141 条）       | **本仓领先** |
 
 ### P0-A：两份重复类型（本轮处理）
 
@@ -116,7 +129,8 @@ ls apps/zcode-cli/packages/cli/src/tui-*.ts
   只剩 `permission/service.ts:64` 与 `tool/scheduler.ts:18`；
 - `cd apps/zcode-cli/packages/core && npx tsc --noEmit` → exit 0（**必须单独跑**：仓库根的
   `pnpm typecheck` 不包含 `apps/zcode-cli`，见下节）；
-- `pnpm lint` → 50 warnings / 0 errors（与改动前一致）；
+- `pnpm lint` → 50 warnings / 0 errors（**历史量测，`da7185d1` 当时**：根 lint 尚未覆盖 `apps/zcode-cli`。
+  当前原始真值为 231 条诊断 / 86 error / 145 warning、4318 个文件，exit 1 属预期；`gate:lint` 180 entries 为 OK）；
 - `pnpm gate:knip` → `knip: OK`，基线从 1142 收紧到 **1141**（两次改变：`runtime.ts\0PermissionDecisionResult`
   被 resolved，以及 `deps.ts\0PermissionUpdate` 从未进基线所以只表现为 `new` 归零）；
 - `pnpm architecture:check --changed` → 0 violations；
@@ -125,25 +139,31 @@ ls apps/zcode-cli/packages/cli/src/tui-*.ts
 遗留（已在本节「本轮不做」列出）：`ToolScheduleState` vs `ToolSchedule` 仍是结构相同的两份；
 `toScheduleState` 仍只搬 3/8 个字段；`turn-state.ts` 的 `PermissionDecision` 与 contracts 重复。
 
-### 门禁覆盖实测：`apps/zcode-cli` 在三个根级门禁里都是盲区
+### 门禁覆盖：历史量测与当前状态
 
-这是写 P0-A 时顺带量出来的，比报告 §5.2 的描述更具体：
+**历史量测（写 P0-A 时，`da7185d1`）**：三个根级门禁都绕过 `apps/zcode-cli` ——
+`pnpm lint` 的 `.oxlintrc.json` 的 `ignorePatterns` 含 `apps/zcode-cli`；
+`pnpm fmt:check` 被 `.prettierignore` 排除；`pnpm typecheck` 的 project 列表不含 CLI。
+其中类型检查只是被间接覆盖（CI 的 `pnpm -r --filter './apps/zcode-cli/packages/*' build`
+走 `tsc` 发码）；lint 与格式完全没进门禁。当时 CLI 自身 `turbo run lint` 14 个任务里
+`@zcode/cli`、`@zcode/bootstrap`、`@zcode/tui` 失败，`@zcode/core` 单包 30 条 `max-lines` error。
 
-| 根级门禁                     | 是否覆盖 `apps/zcode-cli` | 证据                                                                                                                                                                                             |
-| ---------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pnpm lint`（oxlint）        | ❌ 不覆盖                 | `.oxlintrc.json` 的 `ignorePatterns` 含 `apps/zcode-cli`                                                                                                                                         |
-| `pnpm fmt:check`（oxfmt）    | ❌ 不覆盖                 | 从根执行 `npx oxfmt --check apps/zcode-cli/packages/core/src` → `Expected at least one target file`；对 `packages/services/src` 则正常扫 284 文件。CLI 下有自己的 `apps/zcode-cli/.oxfmtrc.json` |
-| `pnpm typecheck`（`tsc -b`） | ❌ 不覆盖                 | 根 script 的 project 列表里没有任何 `apps/zcode-cli/*`                                                                                                                                           |
+**当前（`e367c42f` 之后，本地实测）**：
 
-`apps/zcode-cli` 自己有 `lint: turbo run lint`、`format:check`、`typecheck` 三个脚本，
-**CI 一个都不调**。其中类型检查只是被间接覆盖（CI 的 `pnpm -r --filter './apps/zcode-cli/packages/*' build`
-走 `tsc` 发码，类型错误会失败）；**lint 与格式则完全没进门禁**。
+| 根级门禁                       | 是否覆盖 `apps/zcode-cli` | 当前证据                                                                                                                       |
+| ------------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm lint` / `gate:lint`      | ✅ 覆盖                   | `.oxlintrc.json` 的 `ignorePatterns` 已移除 `apps/zcode-cli`；扫描 4318 个文件，180 keys 中 145 个来自 CLI，86 条 error 入基线 |
+| `pnpm fmt:check`/`gate:format` | ❌ 仍排除                 | **有意为之的版本边界**：CLI 自带更高版本 oxfmt，跨目录改写会互相推翻，见 `formatting-gate.md`；不是遗漏，本 spec 不要求打开    |
+| `pnpm typecheck`（`tsc -b`）   | ❌ 仍不含                 | 根 project 列表无 CLI；类型由 CI 的 agent build 间接覆盖。**本 spec 不要求强行纳入**（会与 CLI 自身 tsc 重复）                 |
 
-实测 CLI 自身的 lint 现在是**红的**：`cd apps/zcode-cli && npx turbo run lint` → 14 个任务里
-`@zcode/cli`、`@zcode/bootstrap`、`@zcode/tui` 失败；仅 `@zcode/core` 一个包就有 30 条
-`max-lines` error。也就是说「把 CLI 纳入根 lint」不是一个开关，而是一次性清 30+ 条存量告警的工程。
+CLI 自身 lint 仍是红的（86 条 `max-lines` error），但已由 lint 棘轮承接：这是「存量债务入基线」，
+不是假绿，也不是覆盖已经清零。截至 `e367c42f` 没有修改 `.prettierignore` 与根 typecheck project 列表。
+**本次只关闭根 lint 盲区**；format 与 typecheck 的盲区仍保留（前者是版本边界，后者由 CI 的
+agent build 间接覆盖），属有意接受，不是遗漏。`verify:pre-push` 只跑 lint + format + architecture，
+不含 knip；CI 的 `checks` job 才跑三个 gate。
 
-**这也解释了为什么 P2-A（400 行）在 core 里形同虚设**：规则本身生效，但检查它的那个命令没人跑。
+**P2-A 的结论要改写**：400 行规则不再「没人跑」，但棘轮对已超限文件继续增长不敏感（见下节缺口三），
+所以只能说「已纳入门禁」，不能说「400 行已被完整执行」。
 
 ### P1-B：`deps.ts` 是当前最重的耦合点
 
@@ -158,10 +178,10 @@ ls apps/zcode-cli/packages/cli/src/tui-*.ts
 TS 侧却在 `core/src/runtime/deps.ts` 里把所有依赖汇成一个 321 行的重导出。两侧的边界标准不一致，
 继续对齐时会变成摩擦。
 
-### P1-A 现状（为什么上一版误判为已做）
+### P1-A 现状：God Object 仍未拆
 
-上一版把「`core/src/runtime.ts` 只有 39 行」当成 God Object 已拆的证据。实际上该文件只是 re-export
-barrel（把 `AgentRuntime` 与一堆类型重新导出），真正的东西在它下面：
+`core/src/runtime.ts` 只有 39 行，但它只是 re-export barrel（把 `AgentRuntime` 与一堆类型重新导出），
+不能当作已拆分的证据；真正的东西在它下面：
 
 | 指标                                                     |      本仓 |      上游 | 说明                             |
 | -------------------------------------------------------- | --------: | --------: | -------------------------------- |
@@ -173,7 +193,8 @@ barrel（把 `AgentRuntime` 与一堆类型重新导出），真正的东西在�
 | `core/src/runtime.ts`（barrel）                          |        39 |        40 | 仅 re-export，不是拆分证据       |
 | `PersistenceService`/`CompactManager`/`TurnOrchestrator` |    不存在 |    不存在 | 报告 P1-A 的 3 个目标服务        |
 
-**结论：报告 P1-A 的 5 个 Phase 一个都没落地，上游也没有。** 判定应为「两边都欠」，不是「都做了」。
+**结论：报告 P1-A 的目标服务（`PersistenceService`/`CompactManager`/`TurnOrchestrator`）两仓都不存在，
+`methods/` 仍是本仓 100 文件 / 25891 行、上游 106 / 27219 行。判定为「两边都欠」。**
 复现：
 
 ```bash
@@ -208,41 +229,38 @@ tui-workspace-git.ts 92       tui-workspace-paths.ts 134
 `client`+`transport` 传输 / `editor`+`picker`+`selector` 输入），而 TS 侧把 TUI 的启动、
 locale、stderr、workspace 路径都留在 `cli` 包里。两侧职责划分不一致，继续对齐时会反复绕。
 
-### P2-A：400 行规则的两个真实缺口（本仓可做）
+### P2-A：400 行规则的三个缺口（一已修、二待复核、三是棘轮固有）
 
 `max-lines` 在 `.oxlintrc.json` 声明为 `error`、`max: 400`、`skipBlankLines`/`skipComments`，
-且只对 test/spec 与 `i18n/locales/*.ts` 豁免。**规则本身有效**（合成 500 行文件确实报 error），
-但有两个缺口：
+且只对 test/spec 与 `i18n/locales/*.ts` 豁免。**规则本身有效**（合成 500 行文件确实报 error）。
 
-**缺口一：`ignorePatterns` 含 `apps/zcode-cli`**
+**缺口一（已修，`e367c42f`）：`ignorePatterns` 含 `apps/zcode-cli`**
 
-```json
-"ignorePatterns": ["dist-release", "packages/ui/src/components/ui",
-  "packages/ui/src/components/ai-elements", ".agents/skills",
-  "packages/formal-proof", "apps/zcode-cli", "docs/electron"]
-```
+历史量测时根 `pnpm lint` 完全不覆盖整个 CLI 包。当前 `.oxlintrc.json` 的 `ignorePatterns` 已无
+`apps/zcode-cli`，根 lint 实测扫描 4318 个文件，CLI 的 86 条 `max-lines` error 全部进入 lint 基线。
+CLI 包仍有自己的 `lint: turbo run lint`，与根规则的差异未逐包对账（不阻塞门禁）。
 
-根 `pnpm lint` 因此**完全不覆盖整个 CLI 包**（`apps/zcode-cli/packages` 共 296K 行 TS）。CLI 包靠 turbo 独立跑
-`oxlint src`（`apps/zcode-cli/package.json` 的 `lint: turbo run lint`），但 `packages/dynamic-workflow`
-层有自己的 `.oxlintrc.json`，各包规则是否一致未见对账。
-
-**缺口二：173 个文件用行内注释豁免**
+**缺口二（待复核）：行内豁免数量级**
 
 ```
 rg -l "eslint-disable max-lines|oxlint-disable max-lines" -g '*.ts' -g '*.tsx' | wc -l
-→ 173
+→ 171（历史量测为 173；`e367c42f` 删除了 2 处已失效的豁免）
 ```
 
-分布（按目录，共 173）：`packages/ui/src` 87、`packages/services/src` 29、`packages/desktop/src` 24、
+分布按历史量测（共 173）：`packages/ui/src` 87、`packages/services/src` 29、`packages/desktop/src` 24、
 `packages/shared/src` 11、`core/src` 8、`packages/web/src` 3、`packages/server/src` 3。
-**一半以上在 UI 包**，而不是原报告关心的 core。
-部分豁免带理由（例如 `botsService.ts` 首行注明「鉴权、命令路由、ZCode Agent 桥接收口集中在同一服务内」），
-但 **173 这个量级已经让 400 行规则名存实亡**。
+**一半以上在 UI 包**，而不是原报告关心的 core。部分豁免带理由（例如 `botsService.ts` 首行注明
+「鉴权、命令路由、ZCode Agent 桥接收口集中在同一服务内」），但 170+ 的量级仍需要逐个复核。
+口径差异：把 `-g '*.mjs'` 也算进来时当前为 176，与只算 ts/tsx 的 171 不是同一集合，引用时必须带口径。
 
-这两个缺口需要分别决策，不能混为一谈：缺口一是**门禁范围**问题（要不要把 CLI 纳入根 lint），
-缺口二是**豁免纪律**问题（173 个豁免是否逐个有理由、是否该定期复核）。
+**缺口三（棘轮固有，不能靠门禁解决）：已超限文件继续增长不敏感**
 
-### knip 已进 CI（棘轮，2026-10-20）
+lint 适配器的 key 是 `(severity, code, file)`，`max-lines` 对每个文件只出 1 条诊断。
+一个已超 400 行的文件从 500 行涨到 900 行，count 仍是 1，棘轮不报警。因此「`max-lines` 已进 CI」
+只覆盖「新增超限文件」，不覆盖「存量继续膨胀」，也不能声称 400 行已被完整执行；超限存量仍需人工拆分。
+详见 `quality-gates.md` 的「已知不敏感」。
+
+### knip 已进 CI（2026-10-20 起；`e367c42f` 并入单引擎）
 
 报告 §5.2 原文：
 
@@ -251,22 +269,33 @@ rg -l "eslint-disable max-lines|oxlint-disable max-lines" -g '*.ts' -g '*.tsx' |
 本仓此前同样状态：`package.json` 有 `knip` script 与 `knip@^6.0.6` 依赖，`AGENTS.md` 把 `pnpm knip`
 列为标准命令，但 `.github/workflows/` 下没有调用，`verify:pre-push` 也不含。
 
-**现在：** `scripts/ci/gate-ratchet.mjs` + `.gate-baseline/knip.json`，CI 的 `checks` job 在 `Architecture`
-之后跑 `pnpm gate:knip`，失败即阻断。
+**现在：** `scripts/ci/gate-ratchet.mjs` 的 knip 适配器 + `.gate-baseline/knip.json`（1141 条），
+CI 的 `checks` job 在 `Architecture` 之后跑 `pnpm gate:knip`，失败即阻断。`41bdb3a3` 引入的
+`pnpm knip:check` / `scripts/ci/knip-ratchet.mjs` / `.knip-baseline.json` 已在 `e367c42f` 删除，
+文档与脚本中不得再引用这三个旧名字。
 
-**为什么不直接跑 `pnpm knip`：** 首次实测 1142 条既有告警（未用导出 510、未用类型 283、未用文件 161、
-未声明依赖 92、未用依赖 51、重复导出 37、未用 devDependencies 32、未用二进制 1）。
-一次性清零不现实，直接当门禁只会立刻变红然后被 `continue-on-error` 绕过 —— 那正好是报告批评的形态。
+**为什么不直接跑 `pnpm knip`：** 首次实测 1142 条既有告警（`41bdb3a3` 时）。当前分类实测
+（2026-10-20）：未用导出 510、未用类型 282、未用文件 161、未声明依赖 92、未用依赖 51、
+未用 devDependencies 32、duplicates 12（文件级；原始为 37 组 / 74 成员）、未用二进制 1，
+合计 **1141** 条（P0-A 收紧后）。一次性清零不现实，直接当门禁只会立刻变红然后被
+`continue-on-error` 绕过 —— 那正好是报告批评的形态。
 
 **棘轮设计**（与 `scripts/architecture/architecture-check.mjs` 的 `.architecture-baseline.json` 同构）：
 
 | 决策     | 取值                                                   | 理由                                                                |
 | -------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
-| 指纹     | `分类\0文件\0符号名`                                   | 不含行列号；代码上下移动不产生基线抖动                              |
-| 判定     | 只对**新增**失败                                       | 允许逐步减少，不需要一次性清零                                      |
+| 指纹     | `knip\0分类\0文件\0符号名`                             | 不含行列号；代码上下移动不产生基线抖动；首段 gate 便于从基线反解    |
+| 判定     | 只对**新增或 count 上升**失败                          | 允许逐步减少，不需要一次性清零                                      |
 | 基线     | `.gate-baseline/knip.json`（只存指纹字串，按指纹排序） | 顺序无关；不重存 kind/file/name，避免字段与指纹漂移（115K vs 299K） |
 | 收紧     | `pnpm gate:baseline`                                   | 消除告警后手动收紧，避免基线虚高                                    |
 | 配置建议 | `--no-config-hints` 排除                               | 17 条 entry/project 提示属配置整理建议，不是死代码                  |
+
+**duplicates 的口径（实测纠正）**：knip 6 的 JSON 把 `duplicates` 输出为「组 → 成员」的嵌套
+数组，当前仓库实测 12 个文件 / 37 组 / 74 成员。基线沿用历史形状，按文件折叠成 12 条 `name`
+为空的 key，所以 1141 条里 duplicates 只占 12 条（不是 37 条），且**同一文件新增重复组或成员
+不会被检出**——只有某个文件第一次出现 duplicates 才会新增 key。此前把原始 37 组当成基线条目、
+或声称「新增成员可检出」都与实测不符。本轮保持基线集合不变、不刷新基线，这是**明确接受的
+残余限制**，不是已治理项（详见 `quality-gates.md`「已知不敏感」）。
 
 **两个已排除的坑（都是实测踩到的）：**
 
@@ -278,56 +307,66 @@ rg -l "eslint-disable max-lines|oxlint-disable max-lines" -g '*.ts' -g '*.tsx' |
 2. **knip 的 `issues` 数组顺序不稳定。** 同一份代码连跑两次，`issues` 条目顺序不同（内容一致）。
    因此判定走指纹集合而非文本 diff；实测两次运行指纹集合完全相同（1142 = 1142，差集为 0）。
 
-**已验证：** 新增一个未用文件后 `knip:check` 输出 `knip: FAILED` / `new: 1` 并 exit 1，删除后恢复 `OK`。
-基线首次生成 1142 条 / 115K，P0-A 后收紧到 **1141 条**（若同时存 kind/file/name 则为 299K，
-且多三个会与指纹漂移的字段）。
+**已验证（本地实测 2026-10-20）：** 集成测试用假工具覆盖「新增未用文件 → FAILED/exit 1、
+删除 → OK」、基线缺失/损坏/清零、locale 幂等、入口复制等 14 个场景；单测另 36 个。
+当前 `pnpm gate:knip` 实测 1141/1141、exit 0。基线首次生成 1142 条 / 115K，P0-A 后收紧到
+**1141 条**（若同时存 kind/file/name 则为 299K，且多三个会与指纹漂移的字段）。
+判定细节（count 语义、退出码、基线结构校验、排序）见 `quality-gates.md`。
 
-**已知风险（未在 CI 实机验证）：** 基线在本机（linux x64 / node 24.19.0）生成，CI 是
-ubuntu-24.04 x64 + mise 锁定的 node。knip 只分析源码、不执行代码，且 `dist`/`node_modules`
-不会进入指纹（实测 0 条），预期一致；但若首次 CI 运行报基线漂移，**按 CI 上的产物重新生成基线
-并在此记录差异原因**，不得用 `continue-on-error` 绕过。
+**已知风险（本地验证，远端 CI 待 PR 后回填）：** 基线在本机（linux x64 / node 24.19.0）生成，
+CI 是 ubuntu-24.04 x64 + mise 锁定的 node。knip 只分析源码、不执行代码，且 `dist`/`node_modules`
+不会进入指纹（实测 0 条），预期一致；但若远端 CI 报基线漂移，**按 CI 上的产物重新生成基线并在此
+记录差异原因**，不得用 `continue-on-error` 绕过。本任务未 commit/push，也未运行远端 CI。
 
 ## 所有者与边界
 
 - **本 spec 只做对账与工单排序，不改变任何运行时行为。** 所有条目的落地各自需要独立 spec。
-- 已确认「两边都欠」的项（P0-A / P1-B / P1-D / P1-F）**不以上游为前置条件**，可独立推进。
+- 已确认「两边都欠」的项（P1-B / P1-C / P1-D / P1-F 与 boundaries 规则）**不以上游为前置条件**，
+  可独立推进；P0-A 已由本仓完成（`da7185d1`）。
 - P1-D 迁移的 owner 是 `@zcode/cli` 与 `@zcode/tui` 的边界：迁移后 `cli` 只负责参数解析与命令路由，
   TUI 的启动、locale、stderr、workspace 路径归 `@zcode/tui`。这与 `desktop-cli-entry.md` 里
   「Main bootstrap 是公共启动分流唯一所有者」不冲突 —— 那是进程入口层，这是包内职责层。
-- P2-A 缺口一涉及 `.oxlintrc.json` 的 `ignorePatterns`，改动前必须确认
-  `apps/zcode-cli` 在根 lint 下不会引入大量既有告警；按 `formatting-gate.md` 的先例，
-  门禁变更必须同时给出「当前违规计数」与「忽略清单维护规则」。
+- P2-A 缺口一已由 `e367c42f` 修完（移除 `apps/zcode-cli` ignore，86 条 max-lines 入 lint 基线）；
+  剩余的是缺口二（171 处行内豁免复核）与缺口三（棘轮对已超限文件增长不敏感），后者不是改 ignore
+  能解决的问题。
+- 门禁引擎、基线结构与退出码的 owner 是 `quality-gates.md`；本 spec 只记录对账，不再复述判定规则。
+  修改 `.oxlintrc.json` / `.prettierignore` / 基线时必须同时给出门禁影响与当前违规计数。
 - 不修改 `apps/zcode-cli-rust`。Rust 侧有自己的 `check-zcode-cli-rust-boundaries.mjs`。
 
 ## 建议的推进顺序
 
-| 顺序 | 项           | 理由                                                                                | 预估     | 状态     |
-| ---- | ------------ | ----------------------------------------------------------------------------------- | -------- | -------- |
-| 1    | P0-A         | 纯类型迁移，编译器兜底；上游仍欠所以本仓现在领先                                    | 1 个 PR  | **已做** |
-| 2    | knip 进 CI   | 先拿到基线计数，否则后面重构没有 unused 证据                                        | 1 个 PR  | **已做** |
-| 3    | CLI 门禁覆盖 | 现状是 lint/格式/typecheck 三个根门禁都绕过 `apps/zcode-cli`，而 CLI 自身 lint 已红 | 1 个 PR  | 待做     |
-| 4    | P2-A 缺口二  | 173 个豁免逐个复核；已实测一半在 `packages/ui`                                      | 持续     | 待做     |
-| 4    | P1-D         | 与 Rust TUI 的职责划分对齐；本仓已无登录流程，可简化                                | 按子域拆 | 待做     |
-| 5    | P1-B         | 依赖 P1-D 完成后再动 `deps.ts`，避免同一批文件改两次                                | 按域拆   | 待做     |
-| 6    | P2-A 缺口二  | 173 个豁免逐个复核，工作量大且收益是纪律而非功能                                    | 持续     | 待做     |
-| —    | P1-C / P1-F  | 上游同样欠且无用户可见收益，暂不排期                                                | —        | 暂缓     |
+| 顺序 | 项                | 理由                                                                  | 预估     | 状态                 |
+| ---- | ----------------- | --------------------------------------------------------------------- | -------- | -------------------- |
+| 1    | P0-A              | 纯类型迁移，编译器兜底；上游仍欠所以本仓现在领先                      | 1 个 PR  | **已做**（da7185d1） |
+| 2    | knip 进 CI        | 先拿到基线计数，否则后面重构没有 unused 证据                          | 1 个 PR  | **已做**（41bdb3a3） |
+| 3    | CLI lint 覆盖     | 只纳入 lint；format 是版本边界、typecheck 已间接覆盖，均不强行并入    | 1 个 PR  | **已做**（e367c42f） |
+| 4    | P2-A 缺口二       | 171 处行内豁免逐个复核；历史实测一半在 `packages/ui`                  | 持续     | 待做                 |
+| 5    | P1-D              | 与 Rust TUI 的职责划分对齐；本仓已无登录流程，可简化                  | 按子域拆 | 待做                 |
+| 6    | P1-B              | 依赖 P1-D 完成后再动 `deps.ts`，避免同一批文件改两次                  | 按域拆   | 待做                 |
+| —    | P1-C / P1-F / CUA | 上游同样欠且无用户可见收益；CUA（e00ed2f8）只索引，不纳入 TS 治理排期 | —        | 暂缓                 |
 
 ## 验收
 
 1. 每条目落地时，本 spec 的判定列更新为「已做」并附 commit；不接受「对账过就等于做完」。
 2. P0-A：`rg "interface PermissionDecisionResult" apps/zcode-cli/packages` 只命中一处；
    `pnpm typecheck` 通过；相关 permission 测试通过。
-3. knip 进 CI：✅ **已完成** — workflow 的 `checks` job 有 `pnpm gate:knip`，退出码非 0 即阻断；
-   基线 1141 条（首次 1142，P0-A 后收紧）记录在 `.gate-baseline/knip.json`；新增告警实测会失败（见上节「已验证」）。
-4. P2-A 缺口一：给出「纳入前 / 纳入后」的 error 数与 warning 数；若纳入会产生大量既有告警，
-   则改为按目录分批纳入，并在 spec 里记录批次。
+3. 三个门禁进 CI：✅ **已完成** — workflow 的 `checks` job 依次跑 `pnpm gate:lint` / `gate:format` /
+   `architecture:check` / `pnpm gate:knip`，退出码非 0 即阻断；基线为 lint 180 entries
+   （231 诊断：86 error / 145 warning）、knip 1141、format 0，均记录在 `.gate-baseline/`。
+   门禁测试为 36 单测 + 14 集成 = 50（本地实测全绿）。这些数字与 `OK / exit 0` 是**本地验证**；
+   远端 CI 待 PR 后回填，不得据此声称 CI 已通过。
+4. P2-A 缺口一：✅ **已满足** — 纳入前根 lint 不扫 CLI、CLI 自身 lint 红；纳入后根 lint 实测
+   4318 个文件、231 条诊断（86 error / 145 warning）全部入基线，未按目录分批。
+   但棘轮对已超限文件继续增长不敏感，不能据此声称 400 行已全覆盖（见「缺口三」）。
 5. P1-D：`apps/zcode-cli/packages/cli/src/tui-*.ts` 归零；`@zcode/tui` 承担启动、locale、
    stderr、workspace 路径；CLI 包的 lint/typecheck/测试通过；Rust TUI 的两层划分保持不变。
 6. 每次落地后跑 `pnpm typecheck`、`pnpm lint`、`pnpm architecture:check --changed`，如实记录。
 
 ## 本轮已执行
 
-分两轮：第一轮只读对账，第二轮实施 P0-A 与 knip 门禁。
+分四轮：第一轮只读对账（`1b1b7420`）；第二轮 knip 门禁（`41bdb3a3`）与 P0-A（`da7185d1`）；
+第三轮 `e367c42f` 落地单文件棘轮门禁；第四轮（本次治理收尾）才把引擎抽成 `gate-ratchet.mjs` +
+`gate-ratchet-core.mjs` 两层、补齐严格输入校验与 50 个测试。`e00ed2f8` 只做索引，不扩大范围。
 
 **只读对账（第一轮）**：
 
@@ -341,14 +380,37 @@ ubuntu-24.04 x64 + mise 锁定的 node。knip 只分析源码、不执行代码�
 - `max-lines` 有效性：合成 500 行文件报 error（规则有效）；`botsService.ts`（5937 非空非注释行）
   0 error，因首行 `eslint-disable max-lines` 带理由豁免
 - 豁免面：`rg -l "eslint-disable max-lines|oxlint-disable max-lines"` → **173**，其中 `packages/ui/src` 87
-- 根级三个门禁对 `apps/zcode-cli` 的覆盖：全部不覆盖（oxfmt 用对照实验确认）
+- 根级三个门禁对 `apps/zcode-cli` 的覆盖：全部不覆盖（**第一轮当时**；现状见前文「门禁覆盖」，
+  oxfmt 用对照实验确认）
 - CLI 自身 lint 实测：`turbo run lint` 14 个任务，`@zcode/cli`/`@zcode/bootstrap`/`@zcode/tui` 失败；
   `@zcode/core` 单独 30 条 `max-lines` error
 
-**实施（第二轮）**：
+**实施（第二轮，`41bdb3a3` + `da7185d1`）**：
 
-- knip 门禁：`scripts/ci/gate-ratchet.mjs` + `.gate-baseline/knip.json`（1141 条）+ CI step + 26 个单测
-- P0-A：7 个文件收敛重复类型（见「落地结果（P0-A）」）
+- knip 门禁：`scripts/ci/knip-ratchet.mjs` + `.knip-baseline.json`（1142 条，后被取代）
+- P0-A：7 个文件收敛重复类型（见「落地结果（P0-A）」），knip 基线收紧到 1141
 
-未修改 `.oxlintrc.json`、未触碰 `apps/zcode-cli-rust` / `packages/ui` 与用户数据。
-`apps/zcode-cli` 的超 400 行存量告警（30 条）未清理——那是「CLI 门禁覆盖」这一项的输入。
+**实施（第三轮，`e367c42f`，门禁收尾）**：
+
+- `e367c42f` 时 `scripts/ci/gate-ratchet.mjs` 仍是单文件脚本（IO/CLI、解析、比较、基线读写同在一处）；
+  `gate-ratchet-core.mjs` 的抽离、严格输入校验与 50 个测试都是第四轮的事，不属于该 commit
+- 基线：`.gate-baseline/{knip,lint,format}.json` = 1141 / 180（231 诊断）/ 0
+- `package.json`：`gate:knip` / `gate:lint` / `gate:format` / `gate:baseline`，`verify:pre-push` 加入 lint+format
+- `.oxlintrc.json`：**移除了 `ignorePatterns` 里的 `apps/zcode-cli`**（第一/二轮未改；本轮改动是本次收尾的一部分）
+- `.prettierignore` 与根 typecheck project 列表**未改**：前者是版本边界，后者不要求强行覆盖
+- 未触碰 `apps/zcode-cli-rust` / `packages/ui` 与用户数据；CLI 的 86 条超 400 行存量告警未清理，
+  已入 lint 基线，拆分仍是后续工单
+
+**治理收尾（第四轮，本次）**：
+
+- 引擎分层：从单文件脚本抽出无 IO 的 `gate-ratchet-core.mjs`（解析、比较、基线序列化、报告），
+  入口仍是 `gate-ratchet.mjs`；这一层在 `e367c42f` 时不存在
+- 输入完整性收紧：knip/lint/format 的未知分类、缺字段、零扫描、基线结构损坏一律 exit 2
+- 测试补到 36 单测 + 14 集成 = 50，并纠正入口复制需带相邻 `gate-ratchet-core.mjs`、
+  `isMainModule` 的宿主语义与 knip `duplicates` 的文件级口径
+- CI 调用点切到 `pnpm gate:lint` / `gate:format` / `gate:knip`；workflow 回归测试断言精确命令串，
+  不得用 `continue-on-error` / `|| true` / `exit 0` 绕过
+- 远端 CI 结果待 PR 后回填；本文与 `quality-gates.md` 同步写为实际落地状态
+
+`e00ed2f8`（CUA 帧契约休眠）仅登记在 commit 索引：它不改门禁、不动基线，也不改变本文任何判定。
+门禁判定、退出码、基线校验与 50 个测试的验收见 `quality-gates.md`。
