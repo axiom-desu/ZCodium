@@ -11,6 +11,7 @@ import type {
   TurnId,
 } from "@zcode/contracts";
 import type { ModelToolCall as ToolCall } from "@zcode/contracts";
+import type { ToolScheduleItem } from "../tool/scheduler.js";
 
 // Re-export ToolCall for consumers of this module
 export type { ModelToolCall as ToolCall } from "@zcode/contracts";
@@ -121,12 +122,6 @@ export interface ToolScheduleState {
   items: ToolScheduleItem[];
   parallelGroups: ToolCallId[][];
   executionOrder: ToolCallId[];
-}
-
-export interface ToolScheduleItem {
-  toolCallId: ToolCallId;
-  dependencies: ToolCallId[];
-  canRunParallel: boolean;
 }
 
 export interface PermissionRequestState {
