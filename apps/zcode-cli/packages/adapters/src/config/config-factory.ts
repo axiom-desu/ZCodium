@@ -99,10 +99,10 @@ type OptionalPathLoadedConfig = Omit<LoadedConfig, "path"> & {
   path: string | undefined;
 };
 
-export type McpServerConfigSource = "system" | "project" | "user" | "env" | "cli";
-export type PluginConfigScope = "user" | "workspace";
+type McpServerConfigSource = "system" | "project" | "user" | "env" | "cli";
+type PluginConfigScope = "user" | "workspace";
 
-export interface PluginConfigSources {
+interface PluginConfigSources {
   dirs: {
     user: string[];
     workspace: string[];
