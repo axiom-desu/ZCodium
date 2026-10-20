@@ -31,6 +31,9 @@ coverage/
 z-work/
 openclaw/
 .run-logs/
+# 本地执行器（如 CLI 调试运行）直接落盘的 logs/ 日志目录，纯运行时产物；
+# 不忽略会让 git status 长期出现未跟踪项，也会被 oxfmt/oxlint 的目录扫描带进来。
+logs/
 .worktrees/
 packages/stream-animate/dist-server/
 packages/stream-animate/.stream-animate-data/

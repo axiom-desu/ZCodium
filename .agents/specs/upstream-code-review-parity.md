@@ -93,7 +93,7 @@ ls apps/zcode-cli/packages/cli/src/tui-*.ts
 - `rg "interface PermissionDecisionResult|interface ToolScheduleItem" apps/zcode-cli/packages`
   分别只命中 `permission/service.ts` 与 `tool/scheduler.ts`；
 - `pnpm typecheck` 通过；`pnpm lint` 无新增；`pnpm architecture:check --changed` 0 violations；
-- `pnpm knip:check` 为 OK（基线中 `runtime.ts\0PermissionDecisionResult` 那条会消失，属「已消除」
+- `pnpm gate:knip` 为 OK（基线中 `runtime.ts\0PermissionDecisionResult` 那条会消失，属「已消除」
   而非新增；需同步收紧基线）。
 
 #### 落地结果（P0-A）
@@ -117,7 +117,7 @@ ls apps/zcode-cli/packages/cli/src/tui-*.ts
 - `cd apps/zcode-cli/packages/core && npx tsc --noEmit` → exit 0（**必须单独跑**：仓库根的
   `pnpm typecheck` 不包含 `apps/zcode-cli`，见下节）；
 - `pnpm lint` → 50 warnings / 0 errors（与改动前一致）；
-- `pnpm knip:check` → `knip: OK`，基线从 1142 收紧到 **1141**（两次改变：`runtime.ts\0PermissionDecisionResult`
+- `pnpm gate:knip` → `knip: OK`，基线从 1142 收紧到 **1141**（两次改变：`runtime.ts\0PermissionDecisionResult`
   被 resolved，以及 `deps.ts\0PermissionUpdate` 从未进基线所以只表现为 `new` 归零）；
 - `pnpm architecture:check --changed` → 0 violations；
 - 改动的两个超 400 行文件行数与 HEAD 完全一致（655 / 437），未引入新超行。
@@ -251,8 +251,8 @@ rg -l "eslint-disable max-lines|oxlint-disable max-lines" -g '*.ts' -g '*.tsx' |
 本仓此前同样状态：`package.json` 有 `knip` script 与 `knip@^6.0.6` 依赖，`AGENTS.md` 把 `pnpm knip`
 列为标准命令，但 `.github/workflows/` 下没有调用，`verify:pre-push` 也不含。
 
-**现在：** `scripts/ci/knip-ratchet.mjs` + `.knip-baseline.json`，CI 的 `checks` job 在 `Architecture`
-之后跑 `pnpm knip:check`，失败即阻断。
+**现在：** `scripts/ci/gate-ratchet.mjs` + `.gate-baseline/knip.json`，CI 的 `checks` job 在 `Architecture`
+之后跑 `pnpm gate:knip`，失败即阻断。
 
 **为什么不直接跑 `pnpm knip`：** 首次实测 1142 条既有告警（未用导出 510、未用类型 283、未用文件 161、
 未声明依赖 92、未用依赖 51、重复导出 37、未用 devDependencies 32、未用二进制 1）。
@@ -260,13 +260,13 @@ rg -l "eslint-disable max-lines|oxlint-disable max-lines" -g '*.ts' -g '*.tsx' |
 
 **棘轮设计**（与 `scripts/architecture/architecture-check.mjs` 的 `.architecture-baseline.json` 同构）：
 
-| 决策     | 取值                                              | 理由                                                                |
-| -------- | ------------------------------------------------- | ------------------------------------------------------------------- |
-| 指纹     | `分类\0文件\0符号名`                              | 不含行列号；代码上下移动不产生基线抖动                              |
-| 判定     | 只对**新增**失败                                  | 允许逐步减少，不需要一次性清零                                      |
-| 基线     | `.knip-baseline.json`（只存指纹字串，按指纹排序） | 顺序无关；不重存 kind/file/name，避免字段与指纹漂移（115K vs 299K） |
-| 收紧     | `pnpm knip:baseline`                              | 消除告警后手动收紧，避免基线虚高                                    |
-| 配置建议 | `--no-config-hints` 排除                          | 17 条 entry/project 提示属配置整理建议，不是死代码                  |
+| 决策     | 取值                                                   | 理由                                                                |
+| -------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
+| 指纹     | `分类\0文件\0符号名`                                   | 不含行列号；代码上下移动不产生基线抖动                              |
+| 判定     | 只对**新增**失败                                       | 允许逐步减少，不需要一次性清零                                      |
+| 基线     | `.gate-baseline/knip.json`（只存指纹字串，按指纹排序） | 顺序无关；不重存 kind/file/name，避免字段与指纹漂移（115K vs 299K） |
+| 收紧     | `pnpm gate:baseline`                                   | 消除告警后手动收紧，避免基线虚高                                    |
+| 配置建议 | `--no-config-hints` 排除                               | 17 条 entry/project 提示属配置整理建议，不是死代码                  |
 
 **两个已排除的坑（都是实测踩到的）：**
 
@@ -317,8 +317,8 @@ ubuntu-24.04 x64 + mise 锁定的 node。knip 只分析源码、不执行代码�
 1. 每条目落地时，本 spec 的判定列更新为「已做」并附 commit；不接受「对账过就等于做完」。
 2. P0-A：`rg "interface PermissionDecisionResult" apps/zcode-cli/packages` 只命中一处；
    `pnpm typecheck` 通过；相关 permission 测试通过。
-3. knip 进 CI：✅ **已完成** — workflow 的 `checks` job 有 `pnpm knip:check`，退出码非 0 即阻断；
-   基线 1141 条（首次 1142，P0-A 后收紧）记录在 `.knip-baseline.json`；新增告警实测会失败（见上节「已验证」）。
+3. knip 进 CI：✅ **已完成** — workflow 的 `checks` job 有 `pnpm gate:knip`，退出码非 0 即阻断；
+   基线 1141 条（首次 1142，P0-A 后收紧）记录在 `.gate-baseline/knip.json`；新增告警实测会失败（见上节「已验证」）。
 4. P2-A 缺口一：给出「纳入前 / 纳入后」的 error 数与 warning 数；若纳入会产生大量既有告警，
    则改为按目录分批纳入，并在 spec 里记录批次。
 5. P1-D：`apps/zcode-cli/packages/cli/src/tui-*.ts` 归零；`@zcode/tui` 承担启动、locale、
@@ -347,7 +347,7 @@ ubuntu-24.04 x64 + mise 锁定的 node。knip 只分析源码、不执行代码�
 
 **实施（第二轮）**：
 
-- knip 门禁：`scripts/ci/knip-ratchet.mjs` + `.knip-baseline.json`（1141 条）+ CI step + 11 个单测
+- knip 门禁：`scripts/ci/gate-ratchet.mjs` + `.gate-baseline/knip.json`（1141 条）+ CI step + 26 个单测
 - P0-A：7 个文件收敛重复类型（见「落地结果（P0-A）」）
 
 未修改 `.oxlintrc.json`、未触碰 `apps/zcode-cli-rust` / `packages/ui` 与用户数据。

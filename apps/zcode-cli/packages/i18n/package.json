@@ -16,7 +16,7 @@
     "clean": "node ../../scripts/clean-dist.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
-    "lint:fix": "oxlint --write src"
+    "lint:fix": "oxlint --fix src"
   },
   "dependencies": {
     "@zcode/contracts": "workspace:*"
