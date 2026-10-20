@@ -49,6 +49,12 @@ jobs:
       - name: Architecture
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm architecture:check
+      # knip 早已配置却从未进入 CI（上游 code review 报告 §5.2 同样点名这一点）。
+      # 既有告警千余条，直接当门禁会立刻变红，因此走 .knip-baseline.json 棘轮：
+      # 只对新增的未用导出/类型/文件/依赖失败，允许逐步收紧。见 knip-ratchet.mjs。
+      - name: Unused code and dependencies
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm knip:check
       - name: Plugin UI domain regressions
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm vitest run --config packages/ui/vitest.config.ts packages/ui/src/plugin-ui/domain packages/ui/src/plugin-ui/contract.test.ts

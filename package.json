@@ -36,6 +36,8 @@
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "knip": "knip",
+    "knip:check": "node scripts/ci/knip-ratchet.mjs check",
+    "knip:baseline": "node scripts/ci/knip-ratchet.mjs baseline:update",
     "count-lines": "bash scripts/count-lines.sh",
     "prepare:remote-assets": "pnpm --filter @zcode/desktop prepare:remote-assets",
     "doctor:macos-release": "bash scripts/doctor-macos-release-app.sh",
