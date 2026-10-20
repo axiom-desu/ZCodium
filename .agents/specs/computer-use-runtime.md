@@ -109,6 +109,43 @@ createComputerUseRuntime(options?: {
 | 参数校验失败         | `actionSent:false`                                                |
 | abort                | 传播 `AbortError`，不产生新副作用                                 |
 
+## 官方 CUA 帧契约：休眠（不实现、不删除）
+
+`packages/zcode-cua/frame-contract.js` 是上游开源时留下的官方 CUA 帧契约占位。剩余 5 个函数
+（`isOfficialCuaImageRefText`、`containsOfficialCuaImageRefCredentialText`、
+`findOfficialCuaFrameContentPair`、`preserveOfficialCuaFrameResult`、`attestOfficialCuaFrameContent`）
+有真实调用点，但恒返回 `false` / `undefined` / 原样返回。
+
+**决定：休眠。** 理由是两条路都不成立：
+
+- **不能实现。** 信封格式只存在于闭源 producer 里：`parseOfficialCuaImageRef(text) → { authority }`
+  这个形状在全仓零出现，没有测试、没有 fixture、没有 spec。硬写就是编协议。
+- **不值得删。** 该概念已织进 runtime（`runtime/methods/subagent.ts` 16 处、`call-runner.ts` 9 处、
+  `result-serialization.ts` 11 处）、UI（`ui/src/v4/conversationCuaGroups.ts` 8 处）与 TUI 审批面板，
+  跨切面约 30 个文件，收益只有「去掉一个休眠概念」。
+
+**恒否是正确否定，不是 bug。** 本仓没有官方 producer，任何结果都不可能携带官方帧信封，
+所以「不是官方帧」的答案是 false。**禁止改成恒 true**：
+
+| 若改成 true                                 | 后果                                                                                                                                             |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `isOfficialCuaImageRefText`                 | `mcp/image-normalization.ts` 会剥掉**每一条** MCP 文本块；`node-repl-host/result.ts` 的 `keepLatestCuaFrame` 只保留最后一对 image/text，其余全删 |
+| `attestOfficialCuaFrameContent`             | 伪造 attestation 通过 `call-runner.ts` 的最终证明闸门，等于假安全；同时关掉现存那道硬报错                                                        |
+| `findOfficialCuaFrameContentPair`           | pair 不在 index 0/1 时 `result-content-projection.ts` 抛 `OfficialCuaFrameContractError`                                                         |
+| `containsOfficialCuaImageRefCredentialText` | `tool-result-media-projection.ts` 把所有文本当凭证引用                                                                                           |
+
+**两个已知的潜在 fail-open（接受现状，记录在案）**：
+
+1. `core/src/mcp/image-normalization.ts` 的「剥离第三方伪造 image_ref」分支永不触发
+   —— 若未来接入会产出官方帧的 server，伪造引用会进模型上下文。
+2. `node-repl-host/src/result.ts` 的 `keepLatestCuaFrame` 永不去重
+   —— 「只有最新 raster 有效」的契约静默失效，旧帧会累积。
+
+两者都需要先有官方 producer 才会激活。语义由 `packages/zcode-cua/test/frame-contract.test.mjs`
+锁定：谁把谓词改成 true，测试会先报错。
+
+**重新评估的触发条件**：本仓开始随包分发官方 CUA producer，或拿到其信封格式规范。
+
 ## 迁移边界
 
 - 保留并在原位改写：`apps/zcode-cli/packages/zcode-cua-plugin`、`node-repl-host` 的 CUA bridge/broker。

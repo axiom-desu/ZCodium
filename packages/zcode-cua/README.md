@@ -13,6 +13,13 @@ ZCode 侧的 Computer Use 运行时适配器。原生执行层复用唯一一个
 绝不伪造成功。broker RPC、Helper install/launch/verify、PiP session 等旧
 接口仍为 API-compatible 占位，权限端口保持 fail-closed 语义。
 
+`frame-contract` 的谓词同样是占位：官方 CUA 帧的真实实现随闭源 producer 一起
+未发布，本仓没有任何位置能产出官方帧信封，因此这些谓词恒为否定（`false` /
+`undefined` / 原样返回）属于正确否定，不是 bug，不能改成恒真。由此留下两个潜在
+fail-open：`apps/zcode-cli` 里「伪造 `image_ref` 剥离」分支永不触发，
+`node-repl-host` 的 `keepLatestCuaFrame` 永不去重。如需支持官方 CUA，须按 producer
+发布的信封格式实现，不在调用方猜测。
+
 设计与迁移边界见 [`.agents/specs/computer-use-runtime.md`](../../.agents/specs/computer-use-runtime.md)。
 
 ## 兼容层（老 GNOME / Wayland）
