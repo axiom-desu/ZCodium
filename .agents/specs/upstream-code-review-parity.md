@@ -37,7 +37,7 @@ ls apps/zcode-cli/packages/cli/src/tui-*.ts
 | P2-E | 拆分 cli 单测文件                     | ❌ `cli.unit.test.ts` 4573 行          | ✅ 结构已变，无该文件               | 不适用       |
 | §5.2 | `max-lines` lint                      | 仅建议                                 | ✅ 已启用                           | **本仓领先** |
 | §5.2 | boundaries lint（tui 不 import core） | 仅建议                                 | ✅ `architecture:check` 覆盖        | **本仓领先** |
-| §5.2 | **knip 进 CI**                        | ❌ 报告自述「已配置但未在 CI 执行」    | ❌ 同样没进                         | **两边都欠** |
+| §5.2 | **knip 进 CI**                        | ❌ 报告自述「已配置但未在 CI 执行」    | ✅ 已进（棘轮基线 1142 条）         | **本仓领先** |
 
 ### P0-A：重复类型两处仍在（可直接修）
 
@@ -125,20 +125,54 @@ rg -l "eslint-disable max-lines|oxlint-disable max-lines" -g '*.ts' -g '*.tsx' |
 这两个缺口需要分别决策，不能混为一谈：缺口一是**门禁范围**问题（要不要把 CLI 纳入根 lint），
 缺口二是**豁免纪律**问题（173 个豁免是否逐个有理由、是否该定期复核）。
 
-### knip 未进 CI（两边都欠）
+### knip 已进 CI（棘轮，2026-10-20）
 
 报告 §5.2 原文：
 
 > `knip` 检测 unused exports（**当前已配置但未在 CI 执行**）
 
-本仓同样状态：`package.json` 有 `knip` script 与 `knip@^6.0.6` 依赖，`AGENTS.md` 把 `pnpm knip`
-列为标准命令，但 `.github/workflows/` 下**没有任何 workflow 调用它**，`verify:pre-push`
-（`pnpm run lint && pnpm run architecture:check -- --changed`）也不含。
+本仓此前同样状态：`package.json` 有 `knip` script 与 `knip@^6.4.1` 依赖，`AGENTS.md` 把 `pnpm knip`
+列为标准命令，但 `.github/workflows/` 下没有调用，`verify:pre-push` 也不含。
+
+**现在：** `scripts/ci/knip-ratchet.mjs` + `.knip-baseline.json`，CI 的 `checks` job 在 `Architecture`
+之后跑 `pnpm knip:check`，失败即阻断。
+
+**为什么不直接跑 `pnpm knip`：** 首次实测 1142 条既有告警（未用导出 510、未用类型 283、未用文件 161、
+未声明依赖 92、未用依赖 51、重复导出 37、未用 devDependencies 32、未用二进制 1）。
+一次性清零不现实，直接当门禁只会立刻变红然后被 `continue-on-error` 绕过 —— 那正好是报告批评的形态。
+
+**棘轮设计**（与 `scripts/architecture/architecture-check.mjs` 的 `.architecture-baseline.json` 同构）：
+
+| 决策     | 取值                                              | 理由                                                                |
+| -------- | ------------------------------------------------- | ------------------------------------------------------------------- |
+| 指纹     | `分类\0文件\0符号名`                              | 不含行列号；代码上下移动不产生基线抖动                              |
+| 判定     | 只对**新增**失败                                  | 允许逐步减少，不需要一次性清零                                      |
+| 基线     | `.knip-baseline.json`（只存指纹字串，按指纹排序） | 顺序无关；不重存 kind/file/name，避免字段与指纹漂移（115K vs 299K） |
+| 收紧     | `pnpm knip:baseline`                              | 消除告警后手动收紧，避免基线虚高                                    |
+| 配置建议 | `--no-config-hints` 排除                          | 17 条 entry/project 提示属配置整理建议，不是死代码                  |
+
+**两个已排除的坑（都是实测踩到的）：**
+
+1. **不能走 `pnpm exec knip`。** pnpm 会把 engine 提示写到 stdout
+   （`apps/zcode-cli | WARN Unsupported engine...`），JSON 报告被污染成无法解析的文本，
+   门禁会随 node/pnpm 版本随机失败。改为 `require.resolve("knip")` 定位包入口再回推
+   `bin/knip.js`，用 `process.execPath` 直接启动。注意 knip 的 `exports` 字段不允许直接解析
+   `knip/bin/knip.js`（`ERR_PACKAGE_PATH_NOT_EXPORTED`）。
+2. **knip 的 `issues` 数组顺序不稳定。** 同一份代码连跑两次，`issues` 条目顺序不同（内容一致）。
+   因此判定走指纹集合而非文本 diff；实测两次运行指纹集合完全相同（1142 = 1142，差集为 0）。
+
+**已验证：** 新增一个未用文件后 `knip:check` 输出 `knip: FAILED` / `new: 1` 并 exit 1，删除后恢复 `OK`。
+基线 1142 条 / 115K（若同时存 kind/file/name 则为 299K，且多三个会与指纹漂移的字段）。
+
+**已知风险（未在 CI 实机验证）：** 基线在本机（linux x64 / node 24.19.0）生成，CI 是
+ubuntu-24.04 x64 + mise 锁定的 node。knip 只分析源码、不执行代码，且 `dist`/`node_modules`
+不会进入指纹（实测 0 条），预期一致；但若首次 CI 运行报基线漂移，**按 CI 上的产物重新生成基线
+并在此记录差异原因**，不得用 `continue-on-error` 绕过。
 
 ## 所有者与边界
 
 - **本 spec 只做对账与工单排序，不改变任何运行时行为。** 所有条目的落地各自需要独立 spec。
-- 已确认「两边都欠」的项（P0-A / P1-B / P1-D / P1-F / knip）**不以上游为前置条件**，可独立推进。
+- 已确认「两边都欠」的项（P0-A / P1-B / P1-D / P1-F）**不以上游为前置条件**，可独立推进。
 - P1-D 迁移的 owner 是 `@zcode/cli` 与 `@zcode/tui` 的边界：迁移后 `cli` 只负责参数解析与命令路由，
   TUI 的启动、locale、stderr、workspace 路径归 `@zcode/tui`。这与 `desktop-cli-entry.md` 里
   「Main bootstrap 是公共启动分流唯一所有者」不冲突 —— 那是进程入口层，这是包内职责层。
@@ -149,22 +183,23 @@ rg -l "eslint-disable max-lines|oxlint-disable max-lines" -g '*.ts' -g '*.tsx' |
 
 ## 建议的推进顺序
 
-| 顺序 | 项          | 理由                                                            | 预估     |
-| ---- | ----------- | --------------------------------------------------------------- | -------- |
-| 1    | P0-A        | 纯类型迁移，编译器兜底；两边都欠且风险最低                      | 1 个 PR  |
-| 2    | knip 进 CI  | 只加一行 workflow；先拿到基线计数，否则后面重构没有 unused 证据 | 1 个 PR  |
-| 3    | P2-A 缺口一 | 先量化 `apps/zcode-cli` 纳入根 lint 的告警数，再决定是否纳入    | 1 个 PR  |
-| 4    | P1-D        | 与 Rust TUI 的职责划分对齐；本仓已无登录流程，可简化            | 按子域拆 |
-| 5    | P1-B        | 依赖 P1-D 完成后再动 `deps.ts`，避免同一批文件改两次            | 按域拆   |
-| 6    | P2-A 缺口二 | 173 个豁免逐个复核，工作量大且收益是纪律而非功能                | 持续     |
-| —    | P1-C / P1-F | 上游同样欠且无用户可见收益，暂不排期                            | —        |
+| 顺序 | 项          | 理由                                                         | 预估     | 状态     |
+| ---- | ----------- | ------------------------------------------------------------ | -------- | -------- |
+| 1    | P0-A        | 纯类型迁移，编译器兜底；两边都欠且风险最低                   | 1 个 PR  | 待做     |
+| 2    | knip 进 CI  | 先拿到基线计数，否则后面重构没有 unused 证据                 | 1 个 PR  | **已做** |
+| 3    | P2-A 缺口一 | 先量化 `apps/zcode-cli` 纳入根 lint 的告警数，再决定是否纳入 | 1 个 PR  | 待做     |
+| 4    | P1-D        | 与 Rust TUI 的职责划分对齐；本仓已无登录流程，可简化         | 按子域拆 | 待做     |
+| 5    | P1-B        | 依赖 P1-D 完成后再动 `deps.ts`，避免同一批文件改两次         | 按域拆   | 待做     |
+| 6    | P2-A 缺口二 | 173 个豁免逐个复核，工作量大且收益是纪律而非功能             | 持续     | 待做     |
+| —    | P1-C / P1-F | 上游同样欠且无用户可见收益，暂不排期                         | —        | 暂缓     |
 
 ## 验收
 
 1. 每条目落地时，本 spec 的判定列更新为「已做」并附 commit；不接受「对账过就等于做完」。
 2. P0-A：`rg "interface PermissionDecisionResult" apps/zcode-cli/packages` 只命中一处；
    `pnpm typecheck` 通过；相关 permission 测试通过。
-3. knip 进 CI：workflow 里有 `pnpm knip`，且失败会阻断；首次运行记录基线计数。
+3. knip 进 CI：✅ **已完成** — workflow 的 `checks` job 有 `pnpm knip:check`，退出码非 0 即阻断；
+   基线 1142 条记录在 `.knip-baseline.json`；新增告警实测会失败（见上节「已验证」）。
 4. P2-A 缺口一：给出「纳入前 / 纳入后」的 error 数与 warning 数；若纳入会产生大量既有告警，
    则改为按目录分批纳入，并在 spec 里记录批次。
 5. P1-D：`apps/zcode-cli/packages/cli/src/tui-*.ts` 归零；`@zcode/tui` 承担启动、locale、
