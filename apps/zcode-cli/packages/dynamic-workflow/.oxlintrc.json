@@ -1,11 +1,6 @@
 {
-  // 本包自带的 oxlint 配置：必须显式存在，否则从仓库根运行 `pnpm --filter @zcode/dynamic-workflow lint`
-  // 时配置自动发现会向上找到根 .oxlintrc.json，而根配置的 ignorePatterns 含 "apps/zcode-cli"，
-  // 导致整个包 0 个文件可 lint、以 exit 1 失败。就近发现本文件后，规则仍通过 extends
-  // 完整继承根配置，只有下方 ignorePatterns 是本包特有的差异。
-  //
-  // 分析测试的图体语料（顶层 return、顶层 for-await、裸 agent()）不是合法模块语法，
-  // 在 ignorePatterns 统一排除——根 `pnpm lint` 与包内 lint 两个入口共用这一份豁免清单。
+  // 本包的 oxlint 配置：规则通过 extends 继承根配置，根配置已覆盖本包（apps/zcode-cli），
+  // 因此这里不重复声明规则。保留下方包级 fixture 路径排除，它们只收窄本目录的扫描范围。
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["../../../../.oxlintrc.json"],
   "ignorePatterns": [
