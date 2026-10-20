@@ -21,7 +21,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --test-isolation=none test/*.test.ts",
     "lint": "oxlint src",
-    "lint:fix": "oxlint --write src"
+    "lint:fix": "oxlint --fix src"
   },
   "dependencies": {
     "@zcode/adapters": "workspace:*",

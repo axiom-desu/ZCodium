@@ -1,0 +1,4569 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "key": "knip\u0000binaries\u0000.github/workflows/desktop.yml\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/package.json\u0000dotenv",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/package.json\u0000proxy-agent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/packages/adapters/package.json\u0000cheerio",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/packages/browser-use-plugin/package.json\u0000@modelcontextprotocol/server",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/packages/browser-use-plugin/package.json\u0000@zcode/contracts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/packages/browser-use-plugin/package.json\u0000@zcode/shared",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/packages/browser-use-plugin/package.json\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/packages/cli/package.json\u0000@zcode/dynamic-workflow-runtime",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/packages/core/package.json\u0000cheerio",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000apps/zcode-cli/packages/swift-bridge/package.json\u0000@zcode/shared-types",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000package.json\u0000d3-path",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000package.json\u0000tailwind-scrollbar-hide",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000@babel/runtime",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000@larksuiteoapi/node-sdk",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000@lydell/node-pty-linux-arm64",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000@lydell/node-pty-linux-x64",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000@zcode/provider",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000module-details-from-path",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000node-forge",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000ssh2",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/desktop/package.json\u0000yauzl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/provider/package.json\u0000@zcode/model-option-map",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000@lydell/node-pty-darwin-arm64",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000@lydell/node-pty-darwin-x64",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000@lydell/node-pty-linux-arm64",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000@lydell/node-pty-linux-x64",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000axios",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000combined-stream",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000follow-redirects",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000form-data",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000node-forge",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000node-pty",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000proxy-from-env",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000undici",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000yaml",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000yauzl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/server/package.json\u0000yazl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000@dnd-kit/dom",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000@dnd-kit/helpers",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000@dnd-kit/react",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000@radix-ui/react-radio-group",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000@rive-app/react-webgl2",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000@stripe/react-stripe-js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000@stripe/stripe-js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000@xyflow/react",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000ansi-to-react",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000embla-carousel-react",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000highlight.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000marked",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000dependencies\u0000packages/ui/package.json\u0000use-stick-to-bottom",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/package.json\u0000c8",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/package.json\u0000oxlint",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/package.json\u0000postject",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/package.json\u0000tsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/packages/bootstrap/package.json\u0000@types/yazl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/packages/bootstrap/package.json\u0000@zcode/formal-proof",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/packages/bootstrap/package.json\u0000yazl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/packages/browser-use-plugin/package.json\u0000@modelcontextprotocol/client",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/packages/browser-use-plugin/package.json\u0000@zcode/adapters",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/packages/browser-use-plugin/package.json\u0000@zcode/bootstrap",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/packages/browser-use-plugin/package.json\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/packages/node-repl-host/package.json\u0000@modelcontextprotocol/client",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/packages/tui/package.json\u0000tsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000apps/zcode-cli/tools/repo-snapshot-parody/package.json\u0000tsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000package.json\u0000@release-it/conventional-changelog",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000package.json\u0000@tanstack/react-virtual",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000package.json\u0000conventional-changelog-writer",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000package.json\u0000dotenv",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000package.json\u0000istanbul-lib-instrument",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000package.json\u0000lint-staged",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000package.json\u0000postject",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000package.json\u0000turbo",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/desktop/package.json\u0000@electron/asar",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/desktop/package.json\u0000@electron/rebuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/desktop/package.json\u0000@types/yauzl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/desktop/package.json\u0000istanbul-lib-instrument",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/desktop/package.json\u0000tailwindcss",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/provider-node/package.json\u0000@zcode/model-option-map",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/services/package.json\u0000@pierre/diffs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/services/package.json\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/web/package.json\u0000tailwindcss",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000devDependencies\u0000packages/web/package.json\u0000ws",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000apps/zcode-cli/packages/adapters/src/exec/execution-command.ts\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000apps/zcode-cli/packages/contracts/src/tools/target.ts\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000apps/zcode-cli/packages/contracts/src/workflow/index.ts\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/desktop/src/main/browserView/electronBrowserWebmRecorder.ts\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/shared/src/bots.ts\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/shared/src/streaming-tool-input-preview.ts\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/shared/src/task-realtime-core.ts\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/shared/src/validation.ts\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/shared/src/webRemoteControl/status.ts\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/ui/src/app-shell/workflow-artifacts/presets/ArtifactChartView.tsx\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/ui/src/SSHDialog.tsx\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/ui/src/ToolCallBlocks/renderers/cuaIcon.tsx\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/device/process-probe.ts\u0000PROCESS_PROBE_SAMPLE_TIMEOUT_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/exec/bash-shell-provider.ts\u0000isExecutableCandidate",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/exec/windows-executable.ts\u0000getWindowsEnvValue",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000deriveCredentialPair",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000isCanonicalCredentials",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000MCP_OAUTH_CANONICAL_CREDENTIALS_KEY",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000MCP_OAUTH_CREDENTIALS_VERSION",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000MCP_OAUTH_SUPPORTED_CREDENTIAL_VERSIONS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/storage/fs-fault-injection.ts\u0000ZCODE_E2E_FS_FAULTS_ALLOW_ENV",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/storage/fs-fault-injection.ts\u0000ZCODE_E2E_FS_FAULTS_ENV",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000BUNDLED_SKILL_PACK_DIRECTORY_NAME",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000BUNDLED_SKILL_PACK_REQUIRED_PATHS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000BUNDLED_SKILL_PACK_SKILLS_DIRECTORY",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000findMissingBundledSkillPackPaths",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000SEA_BUNDLED_SKILL_ASSET_PREFIX",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/dynamic-workflow-run-holes.ts\u0000coldCompiledHoles",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/dynamic-workflow-run-launch.ts\u0000journalActorResolvedModel",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts\u0000OFFICIAL_BROWSER_USE_REQUIRED_SEED_PATHS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts\u0000OFFICIAL_DOCUMENTS_REQUIRED_SEED_PATHS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts\u0000OFFICIAL_PDF_REQUIRED_SEED_PATHS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/official-plugin-runtime.ts\u0000officialPluginHostPrefixArgs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/workflow-actor-model.ts\u0000WorkflowActorPinnedModelError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/workflow-driver-quiescence.ts\u0000AMEND_TRANSCRIPT_QUIESCE_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/builtin-workflow-command.ts\u0000BUILTIN_WORKFLOW_COMMAND",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/builtin-workflow-command.ts\u0000BUILTIN_WORKFLOW_COMMAND_ARGUMENT_HINT",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/builtin-workflow-command.ts\u0000BUILTIN_WORKFLOW_COMMAND_DESCRIPTION",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/mcp-config.ts\u0000ZCODE_CUA_BROKER_SOCKET_ENV",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/executor.ts\u0000V4SessionNotFoundError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/fork-edit-retry.ts\u0000V4ForkTargetNotLatestSegmentError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/queue.ts\u0000V4SessionIdleTimeoutError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/session-flow.ts\u0000V4SessionIdleTimeoutError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/prompt-turn.ts\u0000resolveTurnAutomationId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/prompt-turn.ts\u0000V4PromptRejectedError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/record-access.ts\u0000V4SessionNotFoundError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/conversation-telemetry-facts.ts\u0000streamingParentToolCallId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/mcp-elicitation.ts\u0000MCP_ELICITATION_FREE_TEXT_OPTION",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/mcp-elicitation.ts\u0000readMcpElicitationFields",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/projection-rows.ts\u0000buildUserInputRow",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/sessions-index-fanout-throttle.ts\u0000WORKFLOW_PROGRESS_INDEX_FANOUT_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mapper.ts\u0000mapMessageWithParts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mapper.ts\u0000mapSessionEvent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mapper.ts\u0000mapSessionEvents",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/appTools.ts\u0000buildMcpUiAppToolInstanceKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/index.ts\u0000assertMcpUiServerScope",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/index.ts\u0000createMcpUiHandlers",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/index.ts\u0000createMcpUiSessionAccess",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/plugin-ui-surfaces.ts\u0000listPluginUiSurfacesFromPlugins",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server-operations.ts\u0000onSessionEvent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/session-debug.ts\u0000readSessionDebug",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/session-mapper.ts\u0000mapSessionEvents",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-bundled-skill-assets.mjs\u0000bundledSkillPackRequiredPaths",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-bundled-skill-assets.mjs\u0000bundledSkillPackRootPath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-bundled-skill-assets.mjs\u0000bundledSkillPackSkillsDirectory",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-bundled-skill-assets.mjs\u0000seaBundledSkillAssetPrefix",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-bundled-skill-assets.mjs\u0000seaBundledSkillManifestAssetKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-node-download.mjs\u0000downloadFile",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-official-plugin-assets.mjs\u0000officialSeaPlugins",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-official-plugin-assets.mjs\u0000seaOfficialPluginAssetPrefix",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-official-plugin-assets.mjs\u0000seaOfficialPluginManifestAssetKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-playwright-assets.mjs\u0000seaPlaywrightAssetPrefix",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-playwright-assets.mjs\u0000seaPlaywrightManifestAssetKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-provider-config-assets.mjs\u0000SEA_ZCODE_BUILTIN_PROVIDER_CONFIG_ASSET_KEY",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-runtime-tool-assets.mjs\u0000seaRuntimeToolAssetPrefix",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-runtime-tool-assets.mjs\u0000seaRuntimeToolManifestAssetKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-runtime-tool-prepare.mjs\u0000resolveSeaRuntimeToolPreparationPlan",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/sea-tui-assets.mjs\u0000seaTuiManifestAssetKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/upload-progress.mjs\u0000formatBytes",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/windows-authenticode.mjs\u0000readWindowsAuthenticodeDirectory",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/scripts/windows-authenticode.mjs\u0000removeWindowsAuthenticodeSignatureFromBuffer",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000manualSkillCommandUsage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/src/command-center/slash-commands.ts\u0000manualSkillCommandUsage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/cli/src/provider-runtime-env.ts\u0000SEA_ZCODE_BUILTIN_PROVIDER_CONFIG_ASSET_KEY",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/contracts/src/events/event-reducer-helpers.ts\u0000positiveInteger",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/browser-client/facade.ts\u0000AlertDialog",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/browser-client/facade.ts\u0000BeforeUnloadDialog",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/browser-client/facade.ts\u0000BrowserCapabilityCollection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/browser-client/facade.ts\u0000BrowserUser",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/browser-client/facade.ts\u0000ConfirmDialog",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/browser-client/facade.ts\u0000PromptDialog",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/compact/index.ts\u0000DEFAULT_COMPACT_CONTEXT_WINDOW",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/compact/index.ts\u0000getMessagesToSummarize",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/compact/manual.ts\u0000getMessagesToSummarize",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/compact/policy.ts\u0000DEFAULT_COMPACT_CONTEXT_WINDOW",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/memory/recall/index.ts\u0000formatMemoryManifest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000buildExploreSystemPrompt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000buildGeneralPurposeSystemPrompt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000DEFAULT_COMPACT_CONTEXT_WINDOW",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000DEFAULT_SUBAGENT_TYPE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000escapeGoalPromptText",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000EXPLORE_AGENT_ALLOWED_TOOLS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000EXPLORE_AGENT_TYPE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000formatGoalCompletionVerificationFailurePrompt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000formatGoalCompletionVerificationPassedContent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000formatTodoStateForModel",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000GENERAL_PURPOSE_AGENT_TYPE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000getMessagesToSummarize",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000join",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000MEDIA_BUDGET_CURRENT_IMAGE_TOO_LARGE_ERROR_CODE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000MEDIA_BUDGET_CURRENT_VIDEO_TOO_LARGE_ERROR_CODE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000READ_VIDEO_MAX_INPUT_BYTES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000VIDEO_INPUT_MAX_BYTES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/helpers/attachments.ts\u0000inferImageMimeFromPath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/helpers/attachments.ts\u0000parseDataUrlHeader",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/helpers/attachments.ts\u0000prepareImageDataUrl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/methods/context.ts\u0000buildContextHistoryEntries",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/methods/dynamic-workflow-run-settings.ts\u0000buildSettingsMessageText",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/methods/streaming-recovery.ts\u0000START_PLAN_BUSY_AUTO_RETRY_EXHAUSTED_MESSAGE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/types.ts\u0000INLINE_TEXT_ATTACHMENT_MAX_BYTES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/session-context/read-session-context.ts\u0000extractSessionReferences",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/session-context/references.ts\u0000extractSessionReferences",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/subagent/explore.ts\u0000buildExploreSystemPrompt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/subagent/profile.ts\u0000DEFAULT_SUBAGENT_TYPE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/executor/events.ts\u0000emitSkippedToolError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/amend-workflow-retune.ts\u0000notRetunableFailure",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/amend-workflow-retune.ts\u0000retuneUnchangedFailure",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/amend-workflow-retune.ts\u0000runSettledFailure",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash-metadata.ts\u0000getBashActivityDescription",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash-metadata.ts\u0000getBashAutoClassifierInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash-metadata.ts\u0000getBashDescription",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash-metadata.ts\u0000getBashToolUseSummary",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash-metadata.ts\u0000getBashUserFacingName",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash.ts\u0000getBashActivityDescription",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash.ts\u0000getBashAutoClassifierInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash.ts\u0000getBashDescription",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash.ts\u0000getBashToolUseSummary",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash.ts\u0000getBashUserFacingName",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/fill-workflow-hole.ts\u0000FILL_WORKFLOW_HOLE_ERROR_CODE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/generated/bash-command-registry.ts\u0000BASH_COMMAND_REGISTRY_HASH",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/generated/bash-command-registry.ts\u0000BASH_COMMAND_REGISTRY_VERSION",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/read-pdf.ts\u0000formatFileSize",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/read-text.ts\u0000addReadLineNumbers",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/read.ts\u0000addReadLineNumbers",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/webfetch.ts\u0000clearWebFetchCacheForTests",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-drafts.ts\u0000WORKFLOW_DRAFT_FALLBACK_SLUG",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-fill-files.ts\u0000WORKFLOW_FILL_FILE_RETENTION_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-path-source.ts\u0000resolveWorkflowScriptFilePath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-skill-gate.ts\u0000isDynamicWorkflowSkillLoaded",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-skill-gate.ts\u0000WORKFLOW_SKILL_NOT_LOADED_CODE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/index.ts\u0000builtInTools",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/debug/server/observation-events.ts\u0000fingerprintObservationSources",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/plugin-creator-plugin/skills/plugin-creator/scripts/validate-plugin.mjs\u0000validatePlugin",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-input.ts\u0000filterSelectionItems",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard-helpers.ts\u0000CTRL_C_EXIT_CONFIRMATION_WINDOW_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000completeEffortCommand",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000completeModeCommand",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000completeModelCommand",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000completeSlashCommand",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000createCtrlCExitGuard",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000CTRL_C_EXIT_CONFIRMATION_WINDOW_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000isModeSwitchKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000resetCtrlCExitGuard",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000resolveCtrlCExitIntent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000shouldHandleInputHistoryNavigation",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-logo.ts\u0000ZCODIUM_LOGO_LINES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-sidebar.tsx\u0000SIDEBAR_CONTENT_WIDTH",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-tool-transcript.ts\u0000formatFileDiffDisplay",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-transcript-components.tsx\u0000MessageRow",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-workflow-card.tsx\u0000actorRowsForCard",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-workflow-card.tsx\u0000MAX_ACTOR_ROWS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-workflow-mirror.ts\u0000workflowRunStepCounts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/state.ts\u0000normalizePromptInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/defaults.ts\u0000DARK_TUI_THEME",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/defaults.ts\u0000LIGHT_TUI_THEME",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000BUILTIN_TUI_THEMES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000DARK_TUI_THEME",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000getActiveTuiThemeMode",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000inferThemeModeFromTerminalColors",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000isTuiThemeMode",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000LIGHT_TUI_THEME",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000resolveInitialTerminalThemeMode",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000themeToLegacyPalette",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/legacy-palette.ts\u0000themeToLegacyPalette",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/state.ts\u0000getActiveTuiThemeMode",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/terminal.ts\u0000inferThemeModeFromTerminalColors",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-envelope.mjs\u0000isFrameAuthorityText",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-envelope.mjs\u0000parseJsonObject",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-envelope.mjs\u0000projectToHost",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-envelope.mjs\u0000readMessage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-envelope.mjs\u0000readNotReady",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-envelope.mjs\u0000readReceipt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-envelope.mjs\u0000stripForDisplay",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-errors.mjs\u0000decideRetryPolicy",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-errors.mjs\u0000POINTLESS_RETRY_CODES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-errors.mjs\u0000REACQUIRE_FIRST_CODES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-target.mjs\u0000locateTextRange",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-target.mjs\u0000resolveTarget",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/state.ts\u0000canonicalizeManifestForHash",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/state.ts\u0000sanitizePendingUpload",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/tar.ts\u0000__testing",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/vault.ts\u0000unwrapContentKeyForTest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/app-asar-repack.mjs\u0000ASAR_UNPACK_NATIVE_GLOB",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/app-asar-repack.mjs\u0000createAppAsarPackArgs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/desktop-product-identity.mjs\u0000isPreviewIdentityRequested",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/desktop-product-identity.mjs\u0000resolveWindowsAppUserModelId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/desktop-product-identity.mjs\u0000ZCODE_PREVIEW_IDENTITY_ENV",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/devElectronAppBundle.mjs\u0000DEV_ELECTRON_APP_BUNDLE_ID",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/devElectronAppBundle.mjs\u0000DEV_ELECTRON_APP_NAME",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/devElectronAppBundle.mjs\u0000DEV_ELECTRON_BUNDLE_FORMAT",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/devElectronAppBundle.mjs\u0000DEV_ELECTRON_PROTOCOL_SCHEME",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/devElectronAppBundle.mjs\u0000patchDevElectronInfoPlist",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/devElectronAppBundle.mjs\u0000resolveDevElectronAppBundlePath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/koffi-package-assets.mjs\u0000stageKoffiIntoBundledAgents",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/node-pty-package-assets.mjs\u0000resolveSourceNodePtyPrebuildPath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/packaged-sourcemap-cleanup.mjs\u0000removeSourceMapFilesInDirectory",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/packaged-sourcemap-cleanup.mjs\u0000stripSourceMappingUrlComments",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/packaged-sourcemap-cleanup.mjs\u0000stripSourceMappingUrlCommentsInDirectory",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/patch-nsis-install-section.mjs\u0000PATCH_MARKER",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/patch-nsis-install-section.mjs\u0000patchNsisInstallSectionSource",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/runtime-dependency-closure.mjs\u0000collectRuntimeModuleClosure",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/stage-agent-bundle.mjs\u0000AGENT_BUNDLE_SOURCE_RELATIVE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/stage-agent-bundle.mjs\u0000resolveAgentBundlePaths",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/host/remoteMediaPreviewProxy.ts\u0000waitForDrainOrDisconnect",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/about.ts\u0000readBuildMetadata",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/browserView/browserCommandExecutor.ts\u0000isAllowedBrowserUrl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/chromeProfileDiscovery.ts\u0000buildStandardChromeInstallations",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/chromeProfileDiscovery.ts\u0000parseRunningChromeInstallations",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopCommandHandlers.ts\u0000clearCodingPlanWebviewStorage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopCommandHandlers.ts\u0000openChangelog",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopCuaPermissionIpc.ts\u0000isCuaPermissionIpcSupported",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopNetworkTelemetry.ts\u0000flushNetworkDiagnostics",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopResourceTelemetry.ts\u0000resolveResourceUsageScene",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopRuntimeEnv.ts\u0000desktopRuntimeEnv",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopStabilityTelemetry.ts\u0000getStabilityLifecycleScene",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopStabilityTelemetry.ts\u0000notifyStabilityLifecycle",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopWindowButtonPosition.ts\u0000WINDOWS_TITLE_BAR_HEIGHT_PX",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopWindowButtonPosition.ts\u0000WINDOWS_WINDOW_CONTROLS_BASE_RIGHT_PADDING_PX",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/desktopZoom.ts\u0000DESKTOP_ZOOM_FACTOR_STEP",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/localDiagnosticSink.ts\u0000setDesktopDiagnosticConsumer",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/localMediaPreviewProtocol.ts\u0000buildLocalMediaPreviewUrl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/logRetention.ts\u0000cleanupExpiredLogFiles",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/index.ts\u0000getSourceDescriptor",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/index.ts\u0000MCP_SOURCE_DESCRIPTORS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/types.ts\u0000getSourceDescriptor",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/types.ts\u0000MCP_SOURCE_DESCRIPTORS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/csp.ts\u0000PLUGIN_SANDBOX_CSP_HOST_SAFE_ID",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/csp.ts\u0000PLUGIN_SANDBOX_PERMISSIONS_POLICY",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000attachPluginSandboxGuest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000buildPluginSandboxCsp",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000configurePluginSandboxGuest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000createPluginSandboxProtocolHandler",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000createPluginSandboxRegistry",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000injectPluginSandboxAliasScript",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000installPluginSandboxProtocol",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000parsePluginSandboxUrl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000PLUGIN_SANDBOX_SHELL_CSP",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000PLUGIN_SANDBOX_USER_GESTURE_TTL_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/permissions.ts\u0000readPluginSandboxIdFromPluginUrl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000injectPluginSandboxAliasScript",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000PLUGIN_SANDBOX_ALIAS_SCRIPT_FILE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000PLUGIN_SANDBOX_ALIAS_SCRIPT_PATH",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000PLUGIN_SANDBOX_SHELL_HTML_FILE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000uninstallPluginSandboxProtocol",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/registry.ts\u0000PLUGIN_SANDBOX_USER_GESTURE_TTL_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/resourceManagerWindow.ts\u0000getResourceManagerWindowId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/webRemoteControl/mobileAppAssets.ts\u0000resolveMobileAppRoot",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/webRemoteControl/transportState.ts\u0000buildStatusSnapshot",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/webRemoteControl/transportState.ts\u0000idleStatus",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/renderer/src/plugin-sandbox/desktopPluginSandboxPlatform.ts\u0000parsePluginSandboxPortsMessage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/provider/src/config/rule-data-schema.ts\u0000manualModelConfigSchema",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/server/src/hostCapability.ts\u0000DEFAULT_HOST_CAPABILITY_TTL_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/botsDeliveryLog.ts\u0000BOTS_DELIVERY_WINDOW",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/channelRuntime.ts\u0000BOT_RUNTIME_LOCK_LEASE_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/channelRuntime.ts\u0000isBotRuntimeLockConflictError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/config.ts\u0000BOTS_LEGACY_MODEL_CACHE_FILE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/config.ts\u0000BOTS_MODEL_CACHE_FILE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/config.ts\u0000createDefaultBotCommands",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/modelSelectionHelpers.ts\u0000resolveTaskModel",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/providers/feishuProvider.ts\u0000countFeishuCardTaggedElements",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/providers/feishuProvider.ts\u0000createFeishuWebSocketEventHandlers",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/providers/feishuProvider.ts\u0000FEISHU_STREAMING_CARD_TAGGED_ELEMENT_BUDGET",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/providers/feishuProvider.ts\u0000splitFeishuStreamingCardStates",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/fs/atomicFileUtils.ts\u0000atomicWriteJson",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/hooks/workspaceHookConfigMutation.ts\u0000WorkspaceHookMutationError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/hooks/workspaceHookConfigMutation.ts\u0000writeWorkspaceHookConfiguredToggle",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/model-provider/legacyModelProviderSerialized.ts\u0000modelProviderCatalogFileSchema",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/model-provider/legacyModelProviderSerialized.ts\u0000modelProviderDisplayOrderStateSchema",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/model-provider/legacyModelProviderSerialized.ts\u0000modelProviderStoreFileSchema",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/plugin-ui-bridge/pluginUiBridgeService.ts\u0000assertUiReadResourceSize",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/plugin-ui-bridge/pluginUiBridgeService.ts\u0000pickHtmlContent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/plugin-ui-bridge/pluginUiBridgeService.ts\u0000pickHtmlResource",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/process/processResourceSampler.ts\u0000parseLinuxVmRssKb",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/providers/api/nodeApiNetwork.ts\u0000resolveHostProxyForUrl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/providers/api/requestIdHeaders.ts\u0000REQUEST_ID_HEADER_NAME",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/providers/api/requestIdHeaders.ts\u0000withRequestIdHeaderRecord",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/session/automationIntervalCarrier.ts\u0000InvalidAutomationIntervalCarrierError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/session/automationRepo.ts\u0000AutomationCreateLimitError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/session/automationService.ts\u0000InvalidAutomationIntervalCarrierError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/session/claude-native/claudeNativeSessionImportParser.ts\u0000extractClaudeNativeSessionHeadInfo",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/session/claude-native/claudeNativeSessionImportParser.ts\u0000hasClaudeNativeSidechainMarker",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/skills/skillDiscoveryWalk.ts\u0000SKILL_SCAN_EXCLUDED_DIRECTORY_NAMES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/storage/app/scanJob.ts\u0000isAbortError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/subagents/subagentStorage.ts\u0000resolveConfigPath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/usage-stats/codingPlanQuota.ts\u0000buildCodingPlanQuotaHeaders",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/usage-stats/codingPlanQuota.ts\u0000normalizeQuotaLimits",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/usage-stats/codingPlanQuota.ts\u0000pickPrimaryQuotaLimit",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/usage-stats/codingPlanQuota.ts\u0000resolveCodingPlanQuotaUrl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/services/src/zcode-agent/zcodeV4HostCommand.ts\u0000uuidv7",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/shared/src/mcp-apps/contract.example.ts\u0000exampleCspExperimental",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/shared/src/mcp-apps/contract.example.ts\u0000examplePortName",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/shared/src/mcp-apps/contract.example.ts\u0000exampleSetWidgetStateMethod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/BackgroundTaskElapsedLabel.tsx\u0000BackgroundTaskElapsedLabel",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/botsUi.ts\u0000BOT_REPLY_GRANULARITIES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/botsUi.ts\u0000DEFAULT_BOT_REPLY_GRANULARITY_ENTRY",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/chat-input-toolbar/contextUsage.tsx\u0000getContextCompressionCommand",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/chat-input-toolbar/contextUsage.tsx\u0000getRenderableTaskUsage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/chat-input-toolbar/display.tsx\u0000getContextCompressionCommand",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/chat-input-toolbar/display.tsx\u0000getRenderableTaskUsage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyScratchWorkspaceDialog.tsx\u0000getScratchWorkspaceLocationHint",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyScratchWorkspaceDialog.tsx\u0000getScratchWorkspaceNameErrorKind",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyState.tsx\u0000getScratchWorkspaceLocationHint",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyState.tsx\u0000getScratchWorkspaceNameErrorKind",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatErrorBanner.tsx\u0000resolveChatErrorBannerDisplayMessage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/embeddedBrowserHelpers.ts\u0000isAllowedBrowserUrl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/gen-ui/host.ts\u0000createGenUiPage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/gen-ui/index.ts\u0000createGenUiPage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useAlertDialog",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useBaseWorkspaceServices",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useGitAutoRefresh",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useOnboardingRecordService",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000usePlugins",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useSkills",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useTaskNativeSessionLogFile",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useTaskSessionFilePath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useWatchedReaddir",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useWorkspaceHomePath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/index.ts\u0000useZCodeAgentService",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/useAlertDialog.ts\u0000useAlertDialog",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/useBuiltinProviderConfigFile.ts\u0000resolveBuiltinProviderConfigDisabledReason",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/useCodingPlanQuota.ts\u0000hasPendingCodingPlanConnection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/useCodingPlanQuota.ts\u0000resolveCodingPlanQuotaCandidates",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/useFileWatcherService.ts\u0000useWatchedReaddir",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/hooks/usePlugins.ts\u0000usePlugins",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/assistantFileReferences.ts\u0000hasAssistantPreviewFileChangeCandidates",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/assistantPreviewCards.ts\u0000hasAssistantPreviewFileChangeCandidates",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/assistantPreviewCards.ts\u0000isAssistantPreviewHtmlPath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/chatAttachmentErrors.ts\u0000MissingInlineImageContentError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/chatAttachments.ts\u0000countClipboardTextLines",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/chatAttachments.ts\u0000MissingInlineImageContentError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/chatAttachments.ts\u0000OversizedInlineImageAttachmentError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/codeViewer.ts\u0000buildUnifiedDiff",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/keyboardShortcuts.ts\u0000matchesCtrlShortcut",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/modelConfigSync.ts\u0000parseCustomProviderIdFromSupplierKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/providerBusinessError.ts\u0000SUSPICIOUS_EMPTY_MODEL_RESULT_MESSAGE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/registryProviderView.ts\u0000resolveProviderBaseURL",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/taskChangeSummary.ts\u0000buildPerTurnChangeSummaries",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/taskChangeSummary.ts\u0000buildTaskChangeSummary",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/taskListMetaSync.ts\u0000insertTaskIntoTaskCaches",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/taskListMetaSync.ts\u0000syncTaskMetaToTaskCaches",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/toolCallSummary.ts\u0000getCompactToolCallSummary",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/toolCallSummary.ts\u0000isCompactToolCallFinishedState",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/workspaceSidePane.ts\u0000encodeSidePaneTabIdPart",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/zcodeSessionProjection.ts\u0000zcodeSessionSettingsToConfigOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ModelTrajectoryPane.tsx\u0000resolveTrajectoryInputMessages",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ModelTrajectoryPane.tsx\u0000resolveTrajectoryTimelineItems",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ModelTrajectoryTimeline.tsx\u0000resolveTrajectoryInputMessages",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/onboarding/OnboardingDialog.tsx\u0000shouldAutoScanOnboardingSessions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/onboarding/OnboardingFlowParts.tsx\u0000OnboardingAgentSettingsStep",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/adapters/pluginUiDownloads.ts\u0000createPluginUiDownloadHandler",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/adapters/PluginUiModelContextChip.tsx\u0000TID_PLUGIN_UI_MODEL_CONTEXT_CHIP",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/adapters/pluginUiModelContextEvents.ts\u0000registerPluginUiModelContextReceiver",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/adapters/pluginUiPageRegistry.ts\u0000notifyPluginUiPageCreated",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiAppTools.ts\u0000PLUGIN_UI_APP_TOOL_RPC_ATTEMPTS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiAppTools.ts\u0000PLUGIN_UI_APP_TOOL_RPC_RETRY_DELAY_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiDisclosureStore.ts\u0000resetPluginUiDisclosureForTest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiInstanceStore.ts\u0000resetPluginUiInstancesForTest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiResourceNotificationBus.ts\u0000registerPluginUiResourceTarget",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiResourceNotificationBus.ts\u0000resetPluginUiResourceTargetsForTest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiSurfaceFeedStore.ts\u0000resetPluginUiSurfaceFeedsForTest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiSurfaceFeedStore.ts\u0000subscribePluginUiSurfaceFeeds",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiSurfaceStore.ts\u0000resetPluginUiSurfacesForTest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/app/pluginUiWidgetStateStore.ts\u0000resetPluginUiWidgetStateForTest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/components/PluginUiFollowUpDialogHost.tsx\u0000TID_PLUGIN_UI_FOLLOW_UP_DIALOG",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/components/PluginUiFollowUpDialogHost.tsx\u0000TID_PLUGIN_UI_FOLLOW_UP_SEND",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/components/PluginUiFollowUpDialogHost.tsx\u0000TID_PLUGIN_UI_FOLLOW_UP_TEXT",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx\u0000buildPluginUiLauncherItemId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/domain/pluginUiDownloadFile.ts\u0000sanitizePluginUiDownloadFileName",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/domain/pluginUiInstancePolicy.ts\u0000PLUGIN_UI_AUTO_EXPAND_TURNS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/domain/pluginUiModelContext.ts\u0000PLUGIN_UI_MODEL_CONTEXT_BLOCK_TITLE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/domain/pluginUiModelContext.ts\u0000PLUGIN_UI_MODEL_CONTEXT_MAX_CHARS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/domain/pluginUiStyleVariables.ts\u0000PLUGIN_UI_STYLE_VARIABLE_SOURCES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/hostPrimitives.ts\u0000onSandboxPageRemoved",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/hostPrimitives.ts\u0000registerPluginUiSessionActions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/index.ts\u0000buildPluginUiLauncherItemId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/index.ts\u0000createPluginUiMessagePortTransport",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/index.ts\u0000createPluginUiPagePlane",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/index.ts\u0000getPluginUiSessionActions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/index.ts\u0000readPluginUiStyleVariables",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/index.ts\u0000resolvePluginUiSurfaceTitle",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/index.ts\u0000usePluginUiSurfaces",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts\u0000createPluginUiSidePaneTab",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/resource-manager/resourceUsageView.ts\u0000roundPercent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/root/useRemoteWorkspaceHistory.ts\u0000reconnectRemoteWorkspaceHistoryEntry",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/AutomationDesignPrimitives.tsx\u0000AutomationCancelActionIcon",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/AutomationDesignPrimitives.tsx\u0000AutomationIdleTimeIcon",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/AutomationDesignPrimitives.tsx\u0000AutomationInfoIcon",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/AutomationIcons.tsx\u0000AutomationCancelActionIcon",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/AutomationIcons.tsx\u0000AutomationIdleTimeIcon",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000BIGMODEL_REGISTRATION_URL",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000CODING_PLAN_PROVIDER_SPECS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000generateId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PRESET_PROVIDER_SPEC_BY_ID",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PRESET_PROVIDER_SPECS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PRESET_SUBSCRIPTION_TIMEOUT_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/ProviderApiFormatSelect.tsx\u0000resolveProviderConnectionApiFormatOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/ProviderCardSections.tsx\u0000formatModelContextWindowLabel",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/ProviderCardSections.tsx\u0000resolveProviderConnectionApiFormatDisplayLabel",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/ProviderCardSections.tsx\u0000resolveProviderConnectionApiFormatOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/utils.tsx\u0000createCodingPlanProviderNodeKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/utils.tsx\u0000createPresetProviderNodeKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/utils.tsx\u0000fuzzyMatch",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/utils.tsx\u0000handleEndpointSuggestionPopoverOpenAutoFocus",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/utils.tsx\u0000resolveEndpointSuggestionOpenRequest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/utils.tsx\u0000resolveModelProviderNavLogo",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/ModelProviderSection.tsx\u0000fuzzyMatch",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/ModelProviderSection.tsx\u0000handleEndpointSuggestionPopoverOpenAutoFocus",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/ModelProviderSection.tsx\u0000resolveEndpointSuggestionOpenRequest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/PluginComponentGroups.tsx\u0000PluginComponentGroups",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/pluginStoreListing.ts\u0000formatCanonicalPluginName",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/pluginStoreListing.ts\u0000KNOWN_CATEGORY_ORDER",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/pluginStoreListing.ts\u0000resolveLocalizedText",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/PluginStoreListView.tsx\u0000SegmentPill",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/RemoteSkillSyncDialog.tsx\u0000RemoteSkillSyncSelectionList",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/RemoteSkillSyncDialog.tsx\u0000shouldToggleRemoteSkillSyncCardSelection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/RemoteSkillSyncSelectionList.tsx\u0000shouldToggleRemoteSkillSyncCardSelection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/saved-workflows/AutomationsPageTitleSwitch.tsx\u0000AutomationsPageTitleSwitch",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/settingsPageConfig.ts\u0000SETTINGS_SECTIONS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/usage-stats/AppUsagePanel.tsx\u0000formatAppUsageDuration",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/usage-stats/usageStatsUiParts.tsx\u0000RANGE_OPTIONS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/TaskList.tsx\u0000deriveTaskLeadingIndicator",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/renderers/create-workflow.tsx\u0000readWorkflowKindMessageId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/renderers/EditInlineDiffContent.tsx\u0000buildInlineDiffHighlightCode",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/renderers/EditInlineDiffContent.tsx\u0000getInlineDiffHighlightLine",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/ToolCallProgressIndicator.tsx\u0000TID_TOOL_CALL_PROGRESS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/v4/buildTaskListResultFromSessions.ts\u0000joinTaskListUnreadAt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/v4/commandFactory.ts\u0000uuidv7",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/v4/diagnostics/ConversationDiagnosticAttachment.tsx\u0000useScopedConversationDiagnosticForegroundEnabled",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/v4/diagnostics/ConversationDiagnosticAttachment.tsx\u0000useScopedConversationDiagnostics",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/v4/sessionsIndexStore.ts\u0000applySessionsIndexFrame",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/v4/taskListItemStabilization.ts\u0000areTaskListItemsEquivalent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/v4/timelineScrollAnchor.ts\u0000distanceToBottom",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/shared.tsx\u0000cloneView",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/shared.tsx\u0000removeTaskFromGroupedView",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/shared.tsx\u0000TASK_GROUP_ROW_CLASS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/view.ts\u0000cloneView",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/view.ts\u0000removeTaskFromGroupedView",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/virtualized-group-task-list.tsx\u0000GROUPED_TASK_ROW_ESTIMATE_PX",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/virtualized-group-task-list.tsx\u0000GROUPED_TASK_VIRTUALIZATION_THRESHOLD",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/virtualized-group-task-list.tsx\u0000shouldVirtualizeGroupedTasks",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/virtualized-top-level-list.tsx\u0000GROUPED_TOP_LEVEL_VIRTUALIZATION_THRESHOLD",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/virtualized-top-level-list.tsx\u0000shouldVirtualizeGroupedTopLevelNodes",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar.tsx\u0000applyWorkspaceTriggerSelection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar.tsx\u0000WorkspaceSidebarCollapsedRail",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar/WorkspaceSidebarCollapsedRail.tsx\u0000WorkspaceSidebarCollapsedRail",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar/workspaceSidebarSelection.ts\u0000applyWorkspaceTriggerSelection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/vite/pdfJsCMapsPlugin.ts\u0000listPdfJsCMapAssets",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/vite/pdfJsCMapsPlugin.ts\u0000resolvePdfJsCMapsDirectory",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/web/src/mobile/protocol.ts\u0000readPairingParamsFromLocation",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/zcode-cua/compatible/evdev.js\u0000EVDEV_CODES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/zcode-cua/compatible/evdev.js\u0000MOUSE_BUTTONS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/zcode-cua/compatible/executor.js\u0000CompatError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/zcode-cua/compatible/helper-client.js\u0000DEFAULT_HELPER_PATH",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/zcode-server-cli/src/packaging/nodeDistMirror.ts\u0000DEFAULT_NODE_DIST_BASE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/zcode-server-cli/src/runtime/paths.ts\u0000isPathWithin",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/zcode-server-cli/src/server-core/hostCapability.ts\u0000DEFAULT_HOST_CAPABILITY_TTL_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/architecture/index.mjs\u0000loadPolicy",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/builtin-provider-config.mjs\u0000resolveBuiltinProviderBuildEnvironment",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/cua-license-review.mjs\u0000verifyCuaLicenseReview",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/intranetDefaults.mjs\u0000DEFAULT_INTRANET_MACHINE_HOST",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/intranetDefaults.mjs\u0000INTRANET_ASSET_BASE_URL",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/intranetDefaults.mjs\u0000INTRANET_ASSET_SERVICE_PORT",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/intranetDefaults.mjs\u0000INTRANET_DEPS_BASE_URL",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/intranetDefaults.mjs\u0000INTRANET_MACHINE_HOST",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/lib/desktop-deb-smoke.mjs\u0000expectedDebIdentity",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/lib/zcode-cli-rust-interop-fixture.mjs\u0000contentText",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/lib/zcodeCliRustCommandTransforms.mjs\u0000EXPECTED_ZOD_VERSION",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-bundle-meta.mjs\u0000resolveNativeSearchBundleMetaPath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-config.mjs\u0000getNativeSearchProducerOutputIds",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-config.mjs\u0000NATIVE_SEARCH_PREBUILT_RELEASES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-config.mjs\u0000NATIVE_SEARCH_PRODUCER_ARCHIVE_SHA256_BY_TARGET",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-config.mjs\u0000NATIVE_SEARCH_RIPGREP_REVISION",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-config.mjs\u0000NATIVE_SEARCH_SOURCE_ARCHIVES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-config.mjs\u0000resolveNativeSearchPrebuiltRelease",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-unix.mjs\u0000assertLinuxNativeSearchBuildEnvironment",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-unix.mjs\u0000createBfsBuildEnvironment",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-unix.mjs\u0000resolveNativeUnixBuildConfig",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-verify.mjs\u0000getAllowedLinuxNativeSearchDependencies",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-verify.mjs\u0000getRequiredGlibcVersions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-verify.mjs\u0000verifyLinuxGlibcBaseline",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-verify.mjs\u0000verifyMacosDeploymentTarget",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-windows-pe.mjs\u0000readWindowsPeMetadata",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-windows.mjs\u0000resolveNativeWindowsBuildConfig",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/prebuilt-binary-extract.mjs\u0000extractPrebuiltArchive",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/prebuilt-binary-extract.mjs\u0000findPrebuiltBinary",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/release-it/changelog-writer.mjs\u0000extractCommitBodyBullets",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/remote-native-search-tools-config.mjs\u0000LEGACY_REMOTE_RIPGREP_ARCHIVE_SHA256_BY_TARGET",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/remote-native-search-tools-config.mjs\u0000LEGACY_REMOTE_RIPGREP_VERSION",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/third-party-notices.mjs\u0000readNodeNotices",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/third-party-npm.mjs\u0000assertProductionGraphs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/third-party-npm.mjs\u0000collectNpmNotices",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/third-party-npm.mjs\u0000hashBytes",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/third-party-npm.mjs\u0000missingProductionPackages",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/third-party-npm.mjs\u0000readPackageNotices",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/third-party-npm.mjs\u0000readWorkspaceProductionGraph",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/third-party-npm.mjs\u0000scanInstalledPackages",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/zcode-cli-rust-interop-runtime.mjs\u0000contentText",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/zcode-cli-rust-node-compare.mjs\u0000diffPath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/zcode-cli-rust-performance.mjs\u0000artifactScope",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/zcode-cli-rust-performance.mjs\u0000hashArtifact",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/zcode-cli-rust-performance.mjs\u0000main",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/zcode-cli-rust-permission-fixtures.mjs\u0000permissionData",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/adapters/src/model/anthropic-request-metadata.ts\u0000apps/zcode-cli/packages/adapters/src/model/anthropic-request-metadata.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/module.ts\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/module.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/node-repl-host/dist-types/browser-bridge.d.ts\u0000apps/zcode-cli/packages/node-repl-host/dist-types/browser-bridge.d.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/node-repl-host/dist-types/cua-bridge.d.ts\u0000apps/zcode-cli/packages/node-repl-host/dist-types/cua-bridge.d.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/node-repl-host/dist-types/cua-broker.d.ts\u0000apps/zcode-cli/packages/node-repl-host/dist-types/cua-broker.d.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/node-repl-host/dist-types/process-lifecycle.d.ts\u0000apps/zcode-cli/packages/node-repl-host/dist-types/process-lifecycle.d.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/node-repl-host/dist-types/result.d.ts\u0000apps/zcode-cli/packages/node-repl-host/dist-types/result.d.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/node-repl-host/dist-types/runtime-bridge.d.ts\u0000apps/zcode-cli/packages/node-repl-host/dist-types/runtime-bridge.d.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/node-repl-host/dist-types/server.d.ts\u0000apps/zcode-cli/packages/node-repl-host/dist-types/server.d.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/node-repl-host/dist-types/tool-contract.d.ts\u0000apps/zcode-cli/packages/node-repl-host/dist-types/tool-contract.d.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/cover_validate.js\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/cover_validate.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2pdf-next.js\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2pdf-next.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2poster.js\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2poster.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/restore-legacy-sessions-plugin/skills/restore-legacy-sessions/scripts/restore-conversation.mjs\u0000apps/zcode-cli/packages/restore-legacy-sessions-plugin/skills/restore-legacy-sessions/scripts/restore-conversation.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/restore-legacy-sessions-plugin/skills/restore-legacy-sessions/scripts/scan-legacy-sessions.mjs\u0000apps/zcode-cli/packages/restore-legacy-sessions-plugin/skills/restore-legacy-sessions/scripts/scan-legacy-sessions.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/superpowers-plugin/skills/brainstorming/scripts/helper.js\u0000apps/zcode-cli/packages/superpowers-plugin/skills/brainstorming/scripts/helper.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/superpowers-plugin/skills/brainstorming/scripts/server.cjs\u0000apps/zcode-cli/packages/superpowers-plugin/skills/brainstorming/scripts/server.cjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/superpowers-plugin/skills/systematic-debugging/condition-based-waiting-example.ts\u0000apps/zcode-cli/packages/superpowers-plugin/skills/systematic-debugging/condition-based-waiting-example.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/superpowers-plugin/skills/writing-skills/render-graphs.js\u0000apps/zcode-cli/packages/superpowers-plugin/skills/writing-skills/render-graphs.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/calendar.js\u0000apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/calendar.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/standalone-host-bridge.js\u0000apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/standalone-host-bridge.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/standalone-shell.js\u0000apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/standalone-shell.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/visualize.css\u0000apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/visualize.css",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000apps/zcode-cli/scripts/shadow-replay.mjs\u0000apps/zcode-cli/scripts/shadow-replay.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/conversation-docker-plan.mjs\u0000packages/desktop/scripts/conversation-docker-plan.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/desktop-product-identity.d.mts\u0000packages/desktop/scripts/desktop-product-identity.d.mts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-e2e.mjs\u0000packages/desktop/scripts/gen-ui-e2e.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-fixture/main.ts\u0000packages/desktop/scripts/gen-ui-fixture/main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-fixture/offline-checks.ts\u0000packages/desktop/scripts/gen-ui-fixture/offline-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-fixture/output-files.ts\u0000packages/desktop/scripts/gen-ui-fixture/output-files.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-fixture/preload.ts\u0000packages/desktop/scripts/gen-ui-fixture/preload.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-fixture/presentation-checks.ts\u0000packages/desktop/scripts/gen-ui-fixture/presentation-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-fixture/react.tsx\u0000packages/desktop/scripts/gen-ui-fixture/react.tsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-fixture/renderer.ts\u0000packages/desktop/scripts/gen-ui-fixture/renderer.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-fixture/runtime-checks.ts\u0000packages/desktop/scripts/gen-ui-fixture/runtime-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/gen-ui-fixture/standalone-checks.ts\u0000packages/desktop/scripts/gen-ui-fixture/standalone-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-e2e.mjs\u0000packages/desktop/scripts/mcp-apps-host-e2e.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/agent.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/agent.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/chain-combinations.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/chain-combinations.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/chain-main.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/chain-main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/guest-evaluation.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/guest-evaluation.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/main.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-checks.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-empty-main.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-empty-main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-environment.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-environment.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-late-checks.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-late-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-lifecycle-checks.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-lifecycle-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-main.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-model-checks.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-model-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-permission-checks.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-permission-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-renderer.tsx\u0000packages/desktop/scripts/mcp-apps-host-fixture/managed-renderer.tsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/mcp-server.mjs\u0000packages/desktop/scripts/mcp-apps-host-fixture/mcp-server.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/model.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/model.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/preload.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/preload.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/renderer.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/renderer.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/retention-main.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/retention-main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/retention-renderer.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/retention-renderer.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/rows-main.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/rows-main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/rows-renderer.tsx\u0000packages/desktop/scripts/mcp-apps-host-fixture/rows-renderer.tsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/sampling-database.mjs\u0000packages/desktop/scripts/mcp-apps-host-fixture/sampling-database.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/sampling-extra-checks.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/sampling-extra-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/sampling-main.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/sampling-main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/showcase-main.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/showcase-main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/storage-checks.ts\u0000packages/desktop/scripts/mcp-apps-host-fixture/storage-checks.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/mcp-apps-host-fixture/widget.tsx\u0000packages/desktop/scripts/mcp-apps-host-fixture/widget.tsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/powershell-command.d.mts\u0000packages/desktop/scripts/powershell-command.d.mts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/target-platform.d.mts\u0000packages/desktop/scripts/target-platform.d.mts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/scripts/write-dev-ready-marker.mjs\u0000packages/desktop/scripts/write-dev-ready-marker.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/src/main/crashDumpAnnotations.ts\u0000packages/desktop/src/main/crashDumpAnnotations.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/src/main/pluginSandbox/module.ts\u0000packages/desktop/src/main/pluginSandbox/module.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/src/renderer/src/plugin-sandbox/genUiTweakRuntime.d.ts\u0000packages/desktop/src/renderer/src/plugin-sandbox/genUiTweakRuntime.d.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/src/renderer/src/plugin-sandbox/main.ts\u0000packages/desktop/src/renderer/src/plugin-sandbox/main.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/desktop/src/renderer/src/plugin-sandbox/relay.ts\u0000packages/desktop/src/renderer/src/plugin-sandbox/relay.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/services/src/gen-ui/contract.example.ts\u0000packages/services/src/gen-ui/contract.example.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/services/src/gen-ui/index.ts\u0000packages/services/src/gen-ui/index.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/services/src/gen-ui/module.ts\u0000packages/services/src/gen-ui/module.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/services/src/plugin-ui-bridge/module.ts\u0000packages/services/src/plugin-ui-bridge/module.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/services/src/providers/api/apiEndpoints.ts\u0000packages/services/src/providers/api/apiEndpoints.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/services/src/providers/api/apiKeyHeaders.ts\u0000packages/services/src/providers/api/apiKeyHeaders.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/services/src/providers/api/index.ts\u0000packages/services/src/providers/api/index.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/services/src/providers/api/networkErrorClassifier.ts\u0000packages/services/src/providers/api/networkErrorClassifier.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/services/src/runtime-tools/clientPlatform.ts\u0000packages/services/src/runtime-tools/clientPlatform.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/shared/src/gen-ui/contract.example.ts\u0000packages/shared/src/gen-ui/contract.example.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/shared/src/gen-ui/module.ts\u0000packages/shared/src/gen-ui/module.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/shared/src/mcp-apps/module.ts\u0000packages/shared/src/mcp-apps/module.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/chat-input-toolbar/contextQuotaMeterGrid.ts\u0000packages/ui/src/chat-input-toolbar/contextQuotaMeterGrid.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/gen-ui/contract.example.ts\u0000packages/ui/src/gen-ui/contract.example.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/gen-ui/module.ts\u0000packages/ui/src/gen-ui/module.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/lib/accountProviderAccess.ts\u0000packages/ui/src/lib/accountProviderAccess.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/lib/rendererZCodeEndpoint.ts\u0000packages/ui/src/lib/rendererZCodeEndpoint.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/lib/teamPlanDisplayName.ts\u0000packages/ui/src/lib/teamPlanDisplayName.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/lib/usageErrorCopy.ts\u0000packages/ui/src/lib/usageErrorCopy.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/lib/zcodeTaskUsageFallback.ts\u0000packages/ui/src/lib/zcodeTaskUsageFallback.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/plugin-ui/module.ts\u0000packages/ui/src/plugin-ui/module.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/root/botsTaskBroadcast.ts\u0000packages/ui/src/root/botsTaskBroadcast.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/root/botsTaskStreamBroadcast.ts\u0000packages/ui/src/root/botsTaskStreamBroadcast.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/src/root/useBotBroadcastEffects.ts\u0000packages/ui/src/root/useBotBroadcastEffects.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/ui/vitest.holes.config.ts\u0000packages/ui/vitest.holes.config.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/web/src/mobile/main.tsx\u0000packages/web/src/mobile/main.tsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/web/src/mobile/MobileApp.tsx\u0000packages/web/src/mobile/MobileApp.tsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/zcode-cua/compatible/helper/gnome-extension/extension.js\u0000packages/zcode-cua/compatible/helper/gnome-extension/extension.js",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/zcode-server-cli/scripts/verify-remote-ssh-target.mjs\u0000packages/zcode-server-cli/scripts/verify-remote-ssh-target.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000packages/zcode-server-cli/scripts/verify-remote-ssh.mjs\u0000packages/zcode-server-cli/scripts/verify-remote-ssh.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/benchmarks/conversation-navigator-previews.mjs\u0000scripts/benchmarks/conversation-navigator-previews.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/benchmarks/conversation-turn-render-units.mjs\u0000scripts/benchmarks/conversation-turn-render-units.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/benchmarks/plugin-ui-instance-derivation.mjs\u0000scripts/benchmarks/plugin-ui-instance-derivation.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/build-desktop-agent-cli.mjs\u0000scripts/build-desktop-agent-cli.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/desktop-deb-smoke.mjs\u0000scripts/ci/desktop-deb-smoke.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/bundled-plugin-marketplace.jsx\u0000scripts/ci/fixtures/bundled-plugin-marketplace.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/cli-local-provider.ts\u0000scripts/ci/fixtures/cli-local-provider.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/cli-self-managed-commands.ts\u0000scripts/ci/fixtures/cli-self-managed-commands.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/client-catalog.jsx\u0000scripts/ci/fixtures/client-catalog.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/coding-plan-quota.jsx\u0000scripts/ci/fixtures/coding-plan-quota.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/conversation-export.jsx\u0000scripts/ci/fixtures/conversation-export.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/conversation-import.jsx\u0000scripts/ci/fixtures/conversation-import.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/conversation-navigator.jsx\u0000scripts/ci/fixtures/conversation-navigator.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/image-search-config.jsx\u0000scripts/ci/fixtures/image-search-config.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-automation-tools.ts\u0000scripts/ci/fixtures/local-automation-tools.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-automations.jsx\u0000scripts/ci/fixtures/local-automations.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-context.jsx\u0000scripts/ci/fixtures/local-context.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-credential-store.ts\u0000scripts/ci/fixtures/local-credential-store.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-feedback.jsx\u0000scripts/ci/fixtures/local-feedback.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-model-requests.ts\u0000scripts/ci/fixtures/local-model-requests.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-onboarding.jsx\u0000scripts/ci/fixtures/local-onboarding.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-onboarding.ts\u0000scripts/ci/fixtures/local-onboarding.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-preferences.jsx\u0000scripts/ci/fixtures/local-preferences.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-share-context.jsx\u0000scripts/ci/fixtures/local-share-context.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/local-usage.jsx\u0000scripts/ci/fixtures/local-usage.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/mcp-self-managed.ts\u0000scripts/ci/fixtures/mcp-self-managed.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/model-choice.jsx\u0000scripts/ci/fixtures/model-choice.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/no-official-purchase.jsx\u0000scripts/ci/fixtures/no-official-purchase.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/personal-provider-provisioning.ts\u0000scripts/ci/fixtures/personal-provider-provisioning.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/remote-form.jsx\u0000scripts/ci/fixtures/remote-form.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/retired-idle-execution.ts\u0000scripts/ci/fixtures/retired-idle-execution.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/root-startup-leaves.jsx\u0000scripts/ci/fixtures/root-startup-leaves.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/root-startup.jsx\u0000scripts/ci/fixtures/root-startup.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/scheduler-process.mjs\u0000scripts/ci/fixtures/scheduler-process.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/self-managed-models.jsx\u0000scripts/ci/fixtures/self-managed-models.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/session-local-errors.jsx\u0000scripts/ci/fixtures/session-local-errors.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/tui-model-setup.ts\u0000scripts/ci/fixtures/tui-model-setup.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/tui-quit-burst.mjs\u0000scripts/ci/fixtures/tui-quit-burst.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/tui-quit.ts\u0000scripts/ci/fixtures/tui-quit.ts",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/web-entry-ui.jsx\u0000scripts/ci/fixtures/web-entry-ui.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/fixtures/web-remote-control-dialog-smoke.jsx\u0000scripts/ci/fixtures/web-remote-control-dialog-smoke.jsx",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/tui-quit-smoke.mjs\u0000scripts/ci/tui-quit-smoke.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/ci/web-remote-control-mobile-smoke.mjs\u0000scripts/ci/web-remote-control-mobile-smoke.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/compile-desktop-agent-bytecode.cjs\u0000scripts/compile-desktop-agent-bytecode.cjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/desktop-agent-bytecode-runtime.cjs\u0000scripts/desktop-agent-bytecode-runtime.cjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/dev/zcode-stdio-tap.mjs\u0000scripts/dev/zcode-stdio-tap.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/diagnostic-log-catalog.mjs\u0000scripts/diagnostic-log-catalog.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/generate-third-party-notices.mjs\u0000scripts/generate-third-party-notices.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/lib/zcode-cli-rust-desktop-app.mjs\u0000scripts/lib/zcode-cli-rust-desktop-app.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/lib/zcode-cli-rust-desktop-build.mjs\u0000scripts/lib/zcode-cli-rust-desktop-build.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/lib/zcode-cli-rust-desktop-env.mjs\u0000scripts/lib/zcode-cli-rust-desktop-env.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/lib/zcode-cli-rust-desktop-network.mjs\u0000scripts/lib/zcode-cli-rust-desktop-network.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/licenses.mjs\u0000scripts/licenses.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/sync-cua-license-review.mjs\u0000scripts/sync-cua-license-review.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/sync-rust-tui-notices.mjs\u0000scripts/sync-rust-tui-notices.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/zcode-cli-rust-desktop-smoke.mjs\u0000scripts/zcode-cli-rust-desktop-smoke.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/zcode-distribution-smoke.mjs\u0000scripts/zcode-distribution-smoke.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000files\u0000scripts/zcode-distribution/runner.mjs\u0000scripts/zcode-distribution/runner.mjs",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/adapters/src/device/process-probe.ts\u0000ProcessProbeCommandResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/adapters/src/device/process-probe.ts\u0000ProcessProbeExecFile",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000McpOAuthCanonicalCredentials",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/adapters/src/network/incoming-response.ts\u0000IncomingResponse",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000ResolveBundledSkillRootsOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/dynamic-workflow-import.ts\u0000AmendImportOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/dynamic-workflow-run-holes.ts\u0000ProjectRunHolesInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/dynamic-workflow-run-retune.ts\u0000DynamicWorkflowRunRetuneContext",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/provider-registry-model-runtime.ts\u0000RuntimeModelFactory",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/subagent-observation.ts\u0000SubagentTranscriptSnapshot",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/types.ts\u0000WorkflowAgentRunner",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/workflow-driver.ts\u0000ActorRuntimeFactory",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/mcp-elicitation.ts\u0000McpElicitationSchemaField",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/sessions-index-fanout-throttle.ts\u0000FanoutTimerHandle",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/sessions-index-fanout-throttle.ts\u0000SessionsIndexFanoutThrottleOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/appTools.ts\u0000McpUiAppToolsHost",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/appToolsContract.ts\u0000McpUiAppToolAcceptedResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/appToolsContract.ts\u0000McpUiUnregisterAppToolsParams",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/appToolsContract.ts\u0000McpUiUnregisterAppToolsResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/handlers.ts\u0000CreateMcpUiHandlersOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/instances.ts\u0000McpUiInstanceBinding",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server.ts\u0000ZCodeProtocolAgentDependencies",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server.ts\u0000ZCodeProtocolSessionRecord",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterCheckpoint",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterCustomCommand",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterCustomCommandContent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterCustomCommandListOutcome",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterDeps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterExpertWorkflowResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterForkResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterLocaleResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterMcpStatus",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterModelOption",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterSession",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterSkill",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterSkillListOutcome",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterTarget",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000CommandCenterTargetStatus",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/command-center.ts\u0000SwitchableCommandCenterMode",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/plugins-command-shared.ts\u0000PluginScope",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/plugins-command.ts\u0000PluginsCommandDependencies",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/cli/src/run.ts\u0000RunDependencies",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/agent/read-file-state-hydrator.ts\u0000ReadFileStateHydrationResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/browser-client/facade.ts\u0000BrowserHistoryEntry",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/browser-client/facade.ts\u0000BrowserHistoryOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/browser-client/facade.ts\u0000Point",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/browser-client/playwright.ts\u0000SelectOptionInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/browser-client/playwright.ts\u0000WaitForState",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/memory/recall/index.ts\u0000MemoryManifestEntry",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/memory/recall/index.ts\u0000MemoryRecallType",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/output.ts\u0000JsonValue",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime-task/workflow-notification-copy.ts\u0000WorkflowHoleNotificationInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime.ts\u0000StopActiveForegroundExecutionOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime.ts\u0000StopActiveForegroundExecutionResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000AgentProfile",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000CompactPreservedSegment",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000InteractionRequestOrigin",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000ModelEvent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000ModelOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000ModelProperties",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000ModelVideoContentBlock",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000ReadFileStateHydrationResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000SessionMailboxEnvelope",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000SessionModeChangedPayload",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000SubagentTaskSnapshot",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000TokenUsageInfo",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/helpers/compact-selection.ts\u0000CompactEntrySelection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/helpers/compact.ts\u0000CompactEntrySelection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/methods/sample-model.ts\u0000SampleModelInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/methods/target-completion-verification.ts\u0000TargetCompletionVerificationResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/types.ts\u0000ProviderContextUsageSnapshot",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/executor.ts\u0000ToolExecutorOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/executor/result-display.ts\u0000McpToolDisplayMetadata",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash-background-lifecycle.ts\u0000BashBackgroundLifecycleMode",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/handlers/bash-background-lifecycle.ts\u0000BashBackgroundLifecycleResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-draft-read-state.ts\u0000WorkflowDraftAuthoringTool",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-fill-files.ts\u0000WriteWorkflowFillFileInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-path-source.ts\u0000WorkflowScriptFile",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-path-source.ts\u0000WorkflowScriptFileResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/json-schema.ts\u0000ToolInputValidationIssue",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/tool/json-schema.ts\u0000ToolInputValidationPath",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/dynamic-workflow/src/engine/engine-phase-stamp.ts\u0000InstancePhases",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000TuiLegacyPalette",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000TuiThemePreference",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/packages/tui/src/theme/types.ts\u0000TuiThemePreference",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/prompt-trajectory/src/derive.ts\u0000TrajectoryJsonlEntry",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/gate.ts\u0000ParodyGateInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/gate.ts\u0000ParodyGateResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/scan.ts\u0000ScanDecision",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/scan.ts\u0000ScanResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/scan.ts\u0000SkipReason",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/server.ts\u0000ReceivedSnapshot",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/server.ts\u0000SnapshotServer",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/server.ts\u0000StartServerOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/tar.ts\u0000WriteTarGzResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/types.ts\u0000WorkspaceKey",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/upload.ts\u0000UploadInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/upload.ts\u0000UploadResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/vault.ts\u0000DecryptArchiveInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/vault.ts\u0000EncryptArchiveInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/vault.ts\u0000EncryptArchiveResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000apps/zcode-cli/tools/repo-snapshot-parody/src/vault.ts\u0000LocalVault",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/browserView/browserCommandExecutor.ts\u0000BrowserPoint",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/browserView/browserCommandExecutor.ts\u0000ControlledViewCdp",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/browserView/browserCommandExecutor.ts\u0000ControlledViewWebContents",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/chromeProfileDiscovery.ts\u0000ChromeInstallationCandidate",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/cliDispatch.ts\u0000CliPlan",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/cliDispatch.ts\u0000CliRuntime",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/desktopAgentRuntimeEnv.ts\u0000ZCodeAgentServerRuntime",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/desktopAgentRuntimeEnv.ts\u0000ZCodeAgentServerRuntimeEnv",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/desktopCuaPermissionIpc.ts\u0000RegisterCuaPermissionIpcHandlersOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/desktopRuntimeEnv.ts\u0000BuildHostProcessEnvOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/mcpUserDirectory/index.ts\u0000McpConfigKeyName",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/mcpUserDirectory/index.ts\u0000McpSourceDescriptor",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/mcpUserDirectory/types.ts\u0000McpSourceDescriptor",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/networkTelemetryAggregator.ts\u0000NetworkErrorKind",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/contract.ts\u0000IPluginSandboxPlatform",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/guestPolicy.ts\u0000AttachPluginSandboxGuestInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/guestPolicy.ts\u0000PluginSandboxGuestDecision",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/guestPolicy.ts\u0000PluginSandboxMessageChannel",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/guestPolicy.ts\u0000PluginSandboxMessagePort",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/host.ts\u0000PluginSandboxHost",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/permissions.ts\u0000PluginSandboxPermissionDecision",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/permissions.ts\u0000PluginSandboxPermissionDialogText",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000PluginSandboxProtocolHost",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000PluginSandboxRequestTarget",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000PluginSandboxSchemeRegistrar",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/pluginSandbox/registry.ts\u0000CreatePluginSandboxRegistryOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/processResourceRoleClassifier.ts\u0000ChromiumRoleAggregate",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/processResourceSystemWindowAggregator.ts\u0000SystemResourceWindowReport",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/processResourceWindowAggregator.ts\u0000ProcessRoleWindowReport",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/resourceMetricsStats.ts\u0000AggregateStats",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/authorization.ts\u0000StartAuthorizationTarget",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/authProvider.ts\u0000WebRemoteControlRelayAuthProvider",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/bridgeController.ts\u0000BridgeOpenRequest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/bridgeController.ts\u0000BridgeOpenResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/bridgeController.ts\u0000WebRemoteControlLogger",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/deviceTransport.ts\u0000LanDeviceTransportOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/deviceTransport.ts\u0000WebRemoteControlDeviceTransport",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/deviceTransport.ts\u0000WebRemoteControlDeviceTransportEvents",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/hostBridge.ts\u0000OpenHostBridgeParams",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/hostBridge.ts\u0000OpenHostBridgeResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/hostBridge.ts\u0000WebRemoteControlHostAttachment",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/hostBridge.ts\u0000WebRemoteControlRpcBridge",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/index.ts\u0000CreateWebRemoteControlOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/ipc.ts\u0000RegisterWebRemoteControlIpcOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/lanEndpoint.ts\u0000LanEndpointDeviceHandle",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/lanEndpoint.ts\u0000LanEndpointDeviceHandlers",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/lanEndpoint.ts\u0000LanEndpointOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/lanEndpoint.ts\u0000WebRemoteControlEndpointDeviceState",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/manager.ts\u0000WebRemoteControlOpenBridgeResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/payloadRouter.ts\u0000PayloadRouterContext",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/payloadRouter.ts\u0000PayloadRouterDeps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/qrUrl.ts\u0000WebRemoteControlQrUrlParams",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/qrUrl.ts\u0000WebRemoteControlThemeSeed",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/relayTransport.ts\u0000RelayDeviceTransportOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/renderer/src/plugin-sandbox/aliasRuntime.ts\u0000AliasAppLike",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/desktop/src/renderer/src/plugin-sandbox/aliasRuntime.ts\u0000PluginSandboxAliasRuntime",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/provider/src/config/manual-model-config.ts\u0000ManualModelConfig",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/provider/src/config/rule-data-schema.ts\u0000ManualModelConfig",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/relay/src/registry.ts\u0000RelayPairEntry",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/relay/src/registry.ts\u0000RelayRegistryOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/relay/src/server.ts\u0000RelayServerHandle",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/relay/src/server.ts\u0000RelayServerOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/server/buildRemoteValidation.ts\u0000RemoteServerBundleValidationInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/server/src/hostCapability.ts\u0000HostCapabilityStore",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/server/src/hostCapability.ts\u0000HostCapabilityStoreOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/bots/botsDeliveryLog.ts\u0000BotsDeliveryRecord",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/bots/providers/providerRequest.ts\u0000BotProviderJsonResponse",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/bots/providers/providerRequest.ts\u0000BotProviderResponse",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/git/repo/gitCliRepo.ts\u0000GitLineStat",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/git/repo/gitCliRepo.ts\u0000GitResolvedRepository",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/hooks/workspaceHookConfigMutation.ts\u0000AtomicWorkspaceHookConfigWriteOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/model-provider/providerSettingsConnectivity.ts\u0000ModelConnectivityResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/plugin-ui-bridge/index.ts\u0000PluginUiAppToolsServiceDependencies",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/plugin-ui-bridge/index.ts\u0000PluginUiBridgeServiceDependencies",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/plugin-ui-bridge/pluginUiAppToolsService.ts\u0000PluginUiAppToolsServiceDependencies",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/plugin-ui-bridge/pluginUiBridgeService.ts\u0000PluginUiBridgeServiceDependencies",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/providers/api/nodeApiNetwork.ts\u0000HostApiNetworkOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/runtime-tools/runtimeCommandEnv.ts\u0000LoginShellExecutor",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/runtime-tools/runtimeLoginShellEnvCapture.ts\u0000LoginShellExecutor",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/setting/legacyAccountConnectionSettings.ts\u0000LegacyTeamConnection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageCategoryId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageCategoryUsage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageCleanability",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageCleanRequest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageCleanResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageEntryUsage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StoragePathError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageRootId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageRootSpec",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageRootUsage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageScanStatus",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageVolume",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageVolumeGroup",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/usage-stats/codingPlanQuota.ts\u0000CodingPlanQuotaErrorCode",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/usage-stats/codingPlanQuota.ts\u0000CodingPlanQuotaFailure",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/usage-stats/codingPlanQuota.ts\u0000CodingPlanQuotaResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/zcode-agent/cuaOperationTurnTracker.ts\u0000CuaOperationWorkspaceTarget",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/shared/src/providers.ts\u0000ZCodeProvider",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/shared/src/zcode-protocol-v4/workflow-runs-unlisted.ts\u0000WorkflowRunUnlistedDelta",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/embeddedBrowserHelpers.ts\u0000BrowserNavigationRequest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/gen-ui/domain/references.ts\u0000GenUiPart",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/gen-ui/host.ts\u0000GenUiPage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/hooks/useBuiltinProviderConfigFile.ts\u0000BuiltinProviderConfigFileInfo",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/hooks/useBuiltinProviderConfigFile.ts\u0000BuiltinProviderConfigFileState",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/hooks/useCodingPlanQuota.ts\u0000CodingPlanQuotaCandidate",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/hooks/useCodingPlanQuota.ts\u0000UsageQuotaLimit",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/hooks/useConversationImport.tsx\u0000ConversationImportAction",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/hooks/useWebRemoteControl.ts\u0000UseWebRemoteControlResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/lib/assistantPreviewCards.ts\u0000AssistantFileReference",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/lib/permissionRequest.ts\u0000PermissionRequestFileChange",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/lib/permissionRequest.ts\u0000PermissionRequestPreview",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/lib/toolCallSummary.ts\u0000CompactToolCallState",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/lib/toolCallSummary.ts\u0000ToolCallChangeStat",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/lib/toolCallSummary.ts\u0000ToolCallSummary",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/lib/toolCallSummary.ts\u0000ToolCallSummarySource",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/logger.ts\u0000LogLevel",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/adapters/pluginUiDownloads.ts\u0000PluginUiDownloadHandlerDeps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts\u0000PluginUiInteractionScope",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/adapters/usePluginUiContextImages.ts\u0000PluginUiContextImagesPort",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/adapters/usePluginUiHost.ts\u0000UsePluginUiHostInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/adapters/usePluginUiHost.ts\u0000UsePluginUiHostResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/adapters/usePluginUiSurfaces.ts\u0000UsePluginUiSurfacesInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/app/pluginUiAppTools.ts\u0000PluginUiAppTools",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/app/pluginUiFollowUpDialogStore.ts\u0000PluginUiFollowUpRequest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/app/pluginUiHostAppHandlers.ts\u0000PluginUiHostAppHandlerDeps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/app/pluginUiResourceSubscriptions.ts\u0000PluginUiResourceSubscriptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/app/pluginUiResourceSubscriptions.ts\u0000PluginUiResourceSubscriptionsDeps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/app/pluginUiSurfaceStore.ts\u0000PluginUiSurface",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/components/PluginUiCard.tsx\u0000PluginUiCardProps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx\u0000PluginUiLauncherItemsProps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/domain/buildPluginUiHostCapabilities.ts\u0000PluginUiHostCapabilityInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/domain/buildPluginUiHostContext.ts\u0000PluginUiHostContextInput",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/domain/pluginUiDownloadFile.ts\u0000PluginUiDownloadPlan",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/domain/pluginUiFollowUp.ts\u0000PluginUiFollowUpPromptResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/domain/pluginUiImageBlocks.ts\u0000PluginUiImageBlocksResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/domain/pluginUiModelContext.ts\u0000ParsedPluginUiContextPrompt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/domain/pluginUiStyleVariables.ts\u0000PluginUiStyleVariableSource",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/domain/pluginUiToolFeed.ts\u0000PluginUiLegacyToolCall",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/index.ts\u0000OpenScopedPluginUiSideTabRequest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/index.ts\u0000PluginUiInstanceDerivation",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/index.ts\u0000PluginUiRowPinContext",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts\u0000OpenScopedPluginUiSideTabRequest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/settings/automationTemplateCatalog.ts\u0000AutomationTemplateLocalizedText",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000CodingPlanEntitlementState",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PresetProviderSpec",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/settings/pluginStoreListing.ts\u0000PluginUpdateStatus",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/settings/RemoteSkillSyncDialog.tsx\u0000RemoteSkillSyncRow",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/settingsPageHelpers.tsx\u0000Locale",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/settingsPageHelpers.tsx\u0000LocalePreference",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/settingsPageHelpers.tsx\u0000SettingsSectionId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/SortableWorkspaceSidebar.tsx\u0000SortableBindings",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/store/alertDialogStore.ts\u0000AlertDialogRequest",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/store/zcodeSessionStore.ts\u0000TaskNavEntry",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/store/zcodeSessionStore.ts\u0000TaskNavigationHistory",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/store/zcodeSessionStore.ts\u0000WorkspaceNavEntry",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/renderers/createWorkflowInput.ts\u0000WorkflowRetuneCall",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/shared.tsx\u0000EditKindLabelId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/shared.tsx\u0000EditOperationKind",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/shared.tsx\u0000RawToolCallFileSummary",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/toolResultDisplay.ts\u0000ToolResultDisplay",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/updateReleaseNotes.ts\u0000LocalizedUpdateReleaseNotes",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/v4/composer/useComposerAttachments.ts\u0000ComposerAttachmentUploadItem",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/v4/composer/useComposerAttachments.ts\u0000ComposerAttachmentUploadStatus",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/v4/conversationShareAttempt.ts\u0000ConversationShareAttempt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/workspace-grouped-tasks/shared.tsx\u0000GroupedTaskInsertPosition",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/workspace-grouped-tasks/view.ts\u0000GroupedTaskInsertPosition",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/WorkspaceHeaderSections.tsx\u0000WorkspaceHeaderActionSectionProps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/WorkspaceHeaderSections.tsx\u0000WorkspaceHeaderTitleSectionProps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/WorkspaceHeaderSections/WorkspaceHeaderActionSection.tsx\u0000WorkspaceHeaderActionSectionProps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/vite/pdfJsCMapsPlugin.ts\u0000PdfJsCMapAsset",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/web/src/mobile/connectionPresentation.ts\u0000MobileConnectionDetail",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/web/src/mobile/connectionPresentation.ts\u0000MobileConnectionPresentation",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/web/src/mobile/connectionPresentation.ts\u0000MobileConnectionSnapshot",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/web/src/mobile/protocol.ts\u0000MobileClientEvents",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/web/src/mobile/protocol.ts\u0000MobilePairingParams",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/web/src/mobile/protocol.ts\u0000TaskAccessParams",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/web/src/mobile/protocol.ts\u0000TaskStreamParams",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/web/src/mobile/workspaceBridgeLifecycle.ts\u0000WorkspaceBridgeTarget",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/zcode-server-cli/src/platform/serviceManager.ts\u0000ServiceDescriptor",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/zcode-server-cli/src/server-core/hostCapability.ts\u0000HostCapabilityStoreOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000apps/zcode-cli/packages/node-repl-host/src/cua-bridge.ts\u0000@modelcontextprotocol/sdk",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000apps/zcode-cli/packages/node-repl-host/test/cua-bridge.test.ts\u0000@modelcontextprotocol/sdk",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000packages/desktop/src/host/storagePreparationProcesses.ts\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000packages/desktop/src/host/tasksStorageWorker.ts\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000packages/desktop/src/main/manifestUpdateProvider.ts\u0000builder-util-runtime",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000packages/desktop/src/main/pluginSandbox/capture.ts\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000packages/desktop/src/main/pluginSandbox/genUiVendor.ts\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000packages/desktop/src/renderer/src/plugin-sandbox/genUi.ts\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000packages/ui/vite/pdfJsCMapsPlugin.ts\u0000vite",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/architecture/policy.mjs\u0000yaml",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/browser-without-payment.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/builtin-plugin-assets.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/bundled-client-catalog.test.mjs\u0000croner",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/bundled-client-catalog.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/bundled-client-catalog.test.mjs\u0000lucide-react",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/bundled-help-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/bundled-help-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/bundled-plugin-marketplace-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/bundled-plugin-marketplace-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/cli-branding.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/client-catalog-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/client-catalog-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/coding-plan-quota-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/coding-plan-quota-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/conversation-archive.test.mjs\u0000yazl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/conversation-export-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/conversation-export-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/conversation-import-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/conversation-import-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/conversation-navigator-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/conversation-navigator-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/cua-actions-smoke.mjs\u0000@modelcontextprotocol/client",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/cua-actions-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/cua-driver-smoke.mjs\u0000@modelcontextprotocol/client",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/desktop-cli-entry.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/desktop-workflow.test.mjs\u0000yaml",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/desktop-workspace-deep-link.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/http-remote-assets.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/image-search-config-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/image-search-config-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-automations-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-automations-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-context-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-context-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-feedback-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-feedback-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-onboarding-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-onboarding-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-preferences-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-preferences-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-scheduler.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-share-context-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-share-context-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-share-context.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-usage-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-usage-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/local-usage.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/model-choice-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/model-choice-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/no-official-purchase-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/no-official-purchase-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/packaged-asar-finalize.test.mjs\u0000@electron/asar",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/remote-assets-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/remote-form-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/remote-form-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/remote-pty-build.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/retired-web-oauth.test.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/root-startup-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/root-startup-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/self-managed-models-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/self-managed-models-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/session-local-errors-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/session-local-errors-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/web-entry-without-oauth-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/web-entry-without-oauth-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/web-entry-without-oauth-smoke.mjs\u0000ws",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/web-remote-control-dialog-smoke.mjs\u0000@tailwindcss/vite",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/web-remote-control-dialog-smoke.mjs\u0000@vitejs/plugin-react",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/web-remote-control-dialog-smoke.mjs\u0000esbuild",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/web-remote-control-dialog-smoke.mjs\u0000playwright-core",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/ci/web-remote-control-dialog-smoke.mjs\u0000vite",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/cua-license-review.mjs\u0000yaml",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/generate-zcode-cli-rust-config-schema.mjs\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/generate-zcode-cli-rust-protocol-schema.mjs\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/lib/zcodeCliRustCommandTransforms.mjs\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/package-native-search-tools.mjs\u0000yazl",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/remote-pty-build.mjs\u0000@lydell/node-pty-linux-x64",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/rolling-app-version.test.ts\u0000semver",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/tests/zcode-cli-rust-command-transforms.test.mjs\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/third-party-npm.mjs\u0000yaml",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/zcode-cli-rust-node-projection-schemas.mjs\u0000zod",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000unlisted\u0000scripts/zcode-cli-rust-node-projection-schemas.mjs\u0000zod-to-json-schema",
+      "count": 1
+    }
+  ]
+}

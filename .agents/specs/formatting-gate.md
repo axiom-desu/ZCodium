@@ -6,6 +6,7 @@
 
 - 格式化器：`oxfmt`（配置在 `.oxfmtrc.json`，版本以 `package.json` 的 `devDependencies.oxfmt` 为准）
 - 门禁位置：`.github/workflows/desktop.yml` 的 `checks` job，排在 `Lint` 之后、`Architecture` 之前
+- 门禁命令：CI 跑 `pnpm gate:format`（棘轮，存量在 `.gate-baseline/format.json`，只拦新增）；`pnpm fmt:check` 保留为原始真值（全量报错）
 - 写入者：本仓库源码由贡献者本地执行 `pnpm fmt`（= `oxfmt`，不带 `--check`）落盘；CI 只校验不改写
 
 **没有门禁的格式化必然复发。** 门禁之前的状态是：79 个文件不通过，其中 43 个是本仓库自己写的，且每个手写 PR 都会再添几个。所以「格式化」与「门禁」必须同时落地——只格式化不加门禁等于一次性美化。
@@ -40,6 +41,16 @@
 ### 3. 内联产物
 
 见上表最后一行；与本 spec 同属「生成后落盘」。
+
+### 4. 子仓自带的格式化器（不在本仓 oxfmt 范围内）
+
+根仓的 `.prettierignore` 里额外有一条 `apps/zcode-cli/`，它**不属于上述三类**，而是版本边界：
+
+- 根仓锁定 `oxfmt` 0.41.x，`apps/zcode-cli` 自带 `oxfmt` 0.47.x 与自己的 `format` / `format:check` 脚本
+- 实测同一批文件：根 0.41 会改写 379 个，子仓 0.47 只报 217 个——两者相差的 162 个纯属格式化器版本分歧
+- 因此根仓 oxfmt 不得跨目录改写子仓文件；否则两边 `format` 会互相推翻，形成反复回写
+
+`oxfmt` 默认读取 `.gitignore` 与 `.prettierignore`（见 `oxfmt --help` 的 `--ignore-path`），所以这两处共同决定扫描范围。若要打开 CLI 的格式覆盖，**先对齐两个 `oxfmt` 版本**，再删 `apps/zcode-cli/` 这一条并重建基线；不得只删 ignore 条目。
 
 ## 维护规则
 
@@ -78,7 +89,7 @@
 
 ## 验收场景
 
-1. `pnpm fmt:check` 在干净检出上必须通过；失败即 CI 红。
+1. `pnpm gate:format` 在干净检出上必须通过（基线内差异允许存在）；若 `pnpm fmt:check` 失败于**基线外的新文件**，即 CI 红。
 2. 新增自有源码未格式化时，`checks` job 的 `Format` 步骤必须失败——不得通过放宽 `ignorePatterns` 规避。
 3. 上游对齐类条目的增删必须在 commit 里可追溯（理由写在提交信息或本 spec）。
 4. 修改生成物的格式化规则时，必须同步修改生成器，不得只改 `ignorePatterns`。

@@ -7,7 +7,7 @@
     "build": "node scripts/clean-build.mjs && tsc -p tsconfig.server.json && vite build",
     "dev": "tsx scripts/dev.ts",
     "lint": "oxlint src server scripts",
-    "lint:fix": "oxlint --write src server scripts",
+    "lint:fix": "oxlint --fix src server scripts",
     "start": "node dist-server/server/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "node --import tsx --test --test-isolation=none test/*.test.ts"

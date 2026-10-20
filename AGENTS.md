@@ -11,18 +11,22 @@
 
 以下命令从仓库根目录执行：
 
-| 用途             | 命令                                                   |
-| ---------------- | ------------------------------------------------------ |
-| 类型检查         | `pnpm typecheck`                                       |
-| Lint             | `pnpm lint` / `pnpm lint:fix`                          |
-| 格式检查         | `pnpm fmt:check`                                       |
-| 桌面开发         | `pnpm dev:desktop`                                     |
-| Web 开发         | `pnpm dev:web`                                         |
-| 提交前检查       | `pnpm verify:pre-push`（Lint 与架构检查）              |
-| 架构检查         | `pnpm architecture:check --changed`                    |
-| 模块阅读包       | `pnpm architecture:context <module-id>`                |
-| 未使用依赖与导出 | `pnpm knip`（原始报告）/ `pnpm knip:check`（棘轮门禁） |
-| 导出引用查询     | `pnpm dep:refs --list-exports <file>`                  |
+| 用途             | 命令                                                     |
+| ---------------- | -------------------------------------------------------- |
+| 类型检查         | `pnpm typecheck`                                         |
+| Lint             | `pnpm lint` / `pnpm lint:fix`                            |
+| 格式检查         | `pnpm fmt:check`                                         |
+| 桌面开发         | `pnpm dev:desktop`                                       |
+| Web 开发         | `pnpm dev:web`                                           |
+| 提交前检查       | `pnpm verify:pre-push`（Lint/格式棘轮与架构检查）        |
+| 架构检查         | `pnpm architecture:check --changed`                      |
+| 模块阅读包       | `pnpm architecture:context <module-id>`                  |
+| 未使用依赖与导出 | `pnpm knip`（原始报告）/ `pnpm gate:knip`（棘轮门禁）    |
+| 棘轮门禁         | `pnpm gate:lint` / `pnpm gate:format` / `pnpm gate:knip` |
+| 收紧棘轮基线     | `pnpm gate:baseline`（依次刷新三个基线）                 |
+| 导出引用查询     | `pnpm dep:refs --list-exports <file>`                    |
+
+`pnpm lint` / `pnpm fmt:check` 是「原始真值」：存量债务会报错，用于查看当前全量问题；`pnpm gate:lint` / `pnpm gate:format` / `pnpm gate:knip` 是棘轮门禁：存量收在 `.gate-baseline/`，只拦新增，CI 跑的是后者。
 
 测试入口以目标包当前的 `package.json` 和实际测试文件为准，不假定存在统一的单测或 E2E 命令。
 

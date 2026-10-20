@@ -1,5 +1,4 @@
 import { safeLogArgs } from "@zcode/shared";
-/* eslint-disable max-lines -- shared node_repl host 的 worker、CUA bridge 和生命周期必须保持同一边界。 */
 import { resolve } from "node:path";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
 import { INVALID_PARAMS, Server, type Tool } from "@modelcontextprotocol/server";

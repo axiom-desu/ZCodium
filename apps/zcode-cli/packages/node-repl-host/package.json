@@ -17,7 +17,7 @@
     "build": "tsc && node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --test-isolation=none test/*.test.ts",
-    "lint": "oxlint src --no-ignore"
+    "lint": "oxlint src"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.0.0",
