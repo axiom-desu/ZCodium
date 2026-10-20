@@ -120,7 +120,7 @@ export interface KnownMarketplaceRecord {
   cacheTransactionId?: string;
 }
 
-export interface MarketplaceRefreshFailure {
+interface MarketplaceRefreshFailure {
   code: PluginDiagnostic["code"];
   failedAt: string;
   message: string;
@@ -151,7 +151,7 @@ interface MarketplaceInstallResult {
   installed: InstalledPluginRecord[];
 }
 
-export interface PluginValidationDiagnostic {
+interface PluginValidationDiagnostic {
   code: PluginDiagnostic["code"];
   message: string;
   path?: string;

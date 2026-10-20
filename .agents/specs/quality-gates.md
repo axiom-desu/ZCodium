@@ -129,7 +129,7 @@ knip 的 `duplicates` 在真实 JSON 报告里是「组 → 成员」的嵌套�
 - `version` 升级必须写迁移；不得静默忽略未知 version（对应上面的结构校验）。
 - 基线只存 key 与 count，不重复存 kind/file/name 字段。
 
-## 当前基线快照（本地实测 2026-10-20；远端 CI 待 PR 后回填）
+## 基线快照（PR 前本地实测，2026-10-20）
 
 | gate   | entries | 诊断总量                      | 基线 sum | 本地 gate 结果 | 原始真值                                           |
 | ------ | ------: | ----------------------------- | -------: | -------------- | -------------------------------------------------- |
@@ -141,8 +141,28 @@ knip 的 `duplicates` 在真实 JSON 报告里是「组 → 成员」的嵌套�
 - knip 的 1141 条按分类：exports 510、types 282、files 161、unlisted 92、dependencies 51、
   devDependencies 32、duplicates 12（文件级）、binaries 1。原始报告是 634 个 issue 对象；
   duplicates 原始为 37 组 / 74 成员，被折叠成 12 条文件 key，所以原始条目数与基线条目数不相等。
-- 以上数字与 `OK / exit 0` 是**本地实测**。本任务没有运行远端 CI，不得据此声称 CI 通过；
-  远端 CI 结果待 PR 后由父任务回填。
+- 以上数字与 `OK / exit 0` 是 **PR 前本地实测**，不是远端 CI 结果；实际 CI 结果见下一节。
+
+## CI 复验记录（PR#85 首轮）
+
+- **失败事实**：PR#85 首轮 CI 在精确 HEAD `eff88e64` 的 `pnpm gate:knip` 步骤失败，
+  run id `39398035529`；报告新增 5 个 `types` 条目（1146 vs 基线 1141），其余 gate 不受影响。
+- **5 个导出名**（均为 `export` 但无跨文件消费者）：
+  `apps/zcode-cli/packages/adapters/src/config/config-factory.ts` 的
+  `McpServerConfigSource` / `PluginConfigScope` / `PluginConfigSources`；
+  `apps/zcode-cli/packages/adapters/src/plugins/marketplace.ts` 的
+  `MarketplaceRefreshFailure` / `PluginValidationDiagnostic`。
+- **零跨文件消费证据**：`git grep -n '\b<name>\b'`（排除 `*.md`）只命中两个源文件内部的声明与使用；
+  唯一域外引用是 `apps/zcode-cli-rust/crates/plugins/src/list.rs` 的注释文本，不构成 TS 消费。
+- **决定**：5 个类型收为文件内私有（只删除 `export` 关键词），保留 type/interface 结构、字段与返回接口；
+  不改返回类型、不删逻辑。**不刷新 `.gate-baseline/knip.json`，不把该项加入忽略/允许列表。**
+- **本地口径未复现**：同 HEAD 本地 `pnpm gate:knip` 为 1141（`CI=true` 亦为 1141）。
+  该差异原因尚未确认，本地 `dist` 存在只是待验证假设之一，不作为结论；本次只按 CI 证据做 TS 治理修正，
+  不据此改动基线或断言 CI 已通过。
+- **回归约束**：`scripts/ci/ts-governance-types.test.mjs` 用 TypeScript compiler API 解析这 2 个源文件，
+  断言 5 个类型仍存在且不再导出，并断言 P0-A 移除的 `PermissionDecisionResult` / `ToolScheduleItem`
+  不在本地重新声明、仍走权威定义。测试只读源码，无运行时变更。
+- **状态**：以上为本地验证；远端 CI 结果以 PR#85 重新运行后的实际结论为准，**本记录不宣称 CI 已通过**。
 
 ## 已知不敏感（不得声称全覆盖）
 
@@ -209,8 +229,8 @@ knip 的 `duplicates` 在真实 JSON 报告里是「组 → 成员」的嵌套�
   11. lint 非法诊断字段 → exit 2，不产生幽灵 key。
   12. Windows 风格路径归一为正斜杠、保留大小写。
 - **验收**：两条测试命令全绿（36 + 14 = 50）；`pnpm gate:knip` / `gate:lint` / `gate:format`
-  均 OK；`pnpm fmt:check` 覆盖新文件后仍通过。以上均为**本地验证**；远端 CI 待 PR 后回填，
-  不得提前写成 CI 通过。
+  均 OK；`pnpm fmt:check` 覆盖新文件后仍通过。以上均为**本地验证**；远端 CI 状态见「CI 复验记录」，
+  不得把本地结果写成 CI 通过。
 
 ## 相关 spec
 

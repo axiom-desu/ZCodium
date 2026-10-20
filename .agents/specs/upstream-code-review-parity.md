@@ -316,7 +316,14 @@ CI 的 `checks` job 在 `Architecture` 之后跑 `pnpm gate:knip`，失败即阻
 **已知风险（本地验证，远端 CI 待 PR 后回填）：** 基线在本机（linux x64 / node 24.19.0）生成，
 CI 是 ubuntu-24.04 x64 + mise 锁定的 node。knip 只分析源码、不执行代码，且 `dist`/`node_modules`
 不会进入指纹（实测 0 条），预期一致；但若远端 CI 报基线漂移，**按 CI 上的产物重新生成基线并在此
-记录差异原因**，不得用 `continue-on-error` 绕过。本任务未 commit/push，也未运行远端 CI。
+记录差异原因**，不得用 `continue-on-error` 绕过。这是 PR 前记录的环境风险，实际首轮 CI 结果见下文。
+
+**首轮远端 CI 实测（PR#85、HEAD `eff88e64`）：** `gate:knip` 报新增 5 个 `types`（1146 vs 1141），
+run id `39398035529`，失败。5 个符号是 adapters 的 `McpServerConfigSource` / `PluginConfigScope` /
+`PluginConfigSources` / `MarketplaceRefreshFailure` / `PluginValidationDiagnostic`，经全仓
+`git grep` 确认无跨文件消费，已收为文件内私有；**基线未刷新、未忽略该项**。本地同 HEAD（含
+`CI=true`）仍为 1141，差异原因未确认，不得把「本地 dist」当作已证实原因。首轮 CI 结果为失败；
+后续重跑的实际结论回填到 `quality-gates.md` 的「CI 复验记录」，本文不宣称 CI 已通过。
 
 ## 所有者与边界
 
@@ -354,7 +361,7 @@ CI 是 ubuntu-24.04 x64 + mise 锁定的 node。knip 只分析源码、不执行
    `architecture:check` / `pnpm gate:knip`，退出码非 0 即阻断；基线为 lint 180 entries
    （231 诊断：86 error / 145 warning）、knip 1141、format 0，均记录在 `.gate-baseline/`。
    门禁测试为 36 单测 + 14 集成 = 50（本地实测全绿）。这些数字与 `OK / exit 0` 是**本地验证**；
-   远端 CI 待 PR 后回填，不得据此声称 CI 已通过。
+   远端 CI 结果见上文「首轮远端 CI 实测」，不得据此声称 CI 已通过。
 4. P2-A 缺口一：✅ **已满足** — 纳入前根 lint 不扫 CLI、CLI 自身 lint 红；纳入后根 lint 实测
    4318 个文件、231 条诊断（86 error / 145 warning）全部入基线，未按目录分批。
    但棘轮对已超限文件继续增长不敏感，不能据此声称 400 行已全覆盖（见「缺口三」）。
