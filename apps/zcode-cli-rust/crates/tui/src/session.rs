@@ -189,36 +189,12 @@ pub(crate) async fn set_setting(
 }
 
 /// Slash operations are requests to the actor, not mutations of a second session store.
+/// 目录/帮助/压缩/档位由 `command_dispatch` 执行；此处保留原调用界面给 transport 与测试。
 pub(crate) async fn slash(
     client: &mut Client<'_>,
     view: &mut View,
     request: &Request,
     text: &str,
 ) -> Result<bool> {
-    let words: Vec<_> = text.split_whitespace().collect();
-    match words.as_slice() {
-        ["/quit" | "/exit"] => return Ok(true),
-        ["/help"] => view.push(view.text("/help /new /sessions /resume <id> /mode <mode> /model [provider model [reasoning]] /quit", "/help 帮助 · /new 新会话 · /sessions 列表 · /resume <id> 恢复 · /mode <模式> · /model [provider model [reasoning]] · /quit 退出")),
-        ["/new"] => open(client,view,request,Resume::New).await?,
-        ["/resume",id] => open(client,view,request,Resume::Id((*id).into())).await?,
-        ["/sessions"] => {
-            let data=client.call(view,Method::SessionList,json!({"workspace":request.workspace})).await?;
-            for session in data["sessions"].as_array().into_iter().flatten() {
-                view.push(&format!("{} {}",session["sessionId"].as_str().unwrap_or("?"),session["title"].as_str().unwrap_or("")));
-            }
-        }
-        ["/mode",mode] => { set_setting(client,view,Method::SessionSetMode,json!({"sessionId":view.session,"mode":mode})).await?; }
-        ["/model"] => {
-            for model in view.models.clone() { view.push(&format!("{} {}",model["ref"]["providerId"].as_str().unwrap_or(""),model["ref"]["modelId"].as_str().unwrap_or(""))); }
-            view.push(view.text("Use /model <providerId> <modelId> [reasoningLevel]", "使用 /model <providerId> <modelId> [reasoningLevel]"));
-        }
-        ["/model",provider,model] | ["/model",provider,model,_] => {
-            let mut selection=json!({"providerId":provider,"modelId":model});
-            let level=words.get(3).copied().or_else(||view.models.iter().find(|m|m["ref"]["providerId"]==*provider && m["ref"]["modelId"]==*model).and_then(|m|m["reasoning"]["defaultLevel"].as_str()));
-            if let Some(level)=level { selection["options"]=json!({"reasoningLevel":level}); }
-            set_setting(client,view,Method::SessionSetModel,json!({"sessionId":view.session,"model":selection})).await?;
-        }
-        _ => bail!("Unknown command. /help"),
-    }
-    Ok(false)
+    crate::command_dispatch::dispatch(client, view, request, text).await
 }

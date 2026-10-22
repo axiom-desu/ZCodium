@@ -51,6 +51,12 @@ impl Editor {
         self.cursor = 0;
         std::mem::take(&mut self.text)
     }
+    /// 整段替换（补全写回/恢复草稿）；游标落在末尾，避免在旧偏移上继续编辑。
+    pub fn replace_all(&mut self, text: &str) {
+        self.text.clear();
+        self.text.push_str(text);
+        self.cursor = self.text.len();
+    }
     pub fn cursor_line_col(&self) -> (usize, usize) {
         let before = &self.text[..self.cursor];
         (

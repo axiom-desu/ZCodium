@@ -70,7 +70,7 @@ impl Drop for TerminalGuard {
     }
 }
 
-async fn enter(
+pub(crate) async fn enter(
     client: &mut Client<'_>,
     view: &mut View,
     request: &Request,
@@ -107,6 +107,39 @@ async fn enter(
         session::submit(client, view, request, text).await?;
     }
     Ok(false)
+}
+
+/// Enter 的唯一提交入口：先接受补全候选，再清空草稿走原 enter 分流；
+/// 任何本地/远端拒绝都把同一份草稿放回编辑器，真实事件与测试共用这条路径。
+pub(crate) async fn submit_editor(
+    client: &mut Client<'_>,
+    view: &mut View,
+    request: &Request,
+) -> Result<bool> {
+    // Tab/Enter 只写回 canonical `/name`，真正的路由仍由 enter 负责。
+    view.accept_completion();
+    let text = view.editor.clear();
+    match enter(client, view, request, &text).await {
+        Ok(quit) => Ok(quit),
+        Err(error) => {
+            view.push(&format!("Error: {error}"));
+            view.editor.replace_all(&text);
+            Ok(false)
+        }
+    }
+}
+
+/// Paste 的唯一入口：选择器只把原文交给 filter，编辑器才做控制字符替换。
+///
+/// 选择器 filter 需要看到原始 ESC 才能让 `clean_terminal` 完整剥离 ANSI/OSC；
+/// 旧实现先 `sanitize` 把 ESC 换成 `�`，选择器于是把转义序列当成搜索词，
+/// 粘贴带颜色的模型名后过滤结果永远是空。
+pub(crate) fn paste_into(view: &mut View, text: &str) {
+    if let Some(selector) = view.selector.as_mut() {
+        selector.push_filter(text);
+    } else {
+        view.editor.insert(&sanitize(text));
+    }
 }
 
 pub async fn run(
@@ -167,9 +200,12 @@ pub async fn run(
                         view.selector=None;
                     } else if view.selector.is_some() {
                         match key.code {
-                            KeyCode::Esc => {if let Some(s)=view.selector.take(){view.editor.insert(&s.draft);}},
+                            KeyCode::Esc => {if let Some(s)=view.selector.take(){view.editor.replace_all(&s.draft);}}
                             KeyCode::Up => if let Some(s)=view.selector.as_mut(){s.move_by(-1)},
                             KeyCode::Down => if let Some(s)=view.selector.as_mut(){s.move_by(1)},
+                            KeyCode::Backspace => if let Some(s)=view.selector.as_mut(){s.backspace_filter()},
+                            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL)=> if let Some(s)=view.selector.as_mut(){s.clear_filter()},
+                            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL|KeyModifiers::ALT)=> if let Some(s)=view.selector.as_mut(){s.push_filter(&c.to_string())},
                             KeyCode::Enter => if let Err(error)=picker::confirm(&mut client,&mut view,&request).await {view.push(&error.to_string());},
                             _=>{}
                         }
@@ -179,38 +215,32 @@ pub async fn run(
                         if terminal.size()?.width<=120 {view.sidebar_overlay = !view.sidebar_overlay;} else {view.sidebar = !view.sidebar;view.sidebar_overlay=false;}
                         sidebar_leader=false;
                     },
+                    (KeyCode::Esc,_) if view.completion.visible()=>view.completion.dismiss(),
                     (KeyCode::Esc,_) if view.sidebar_overlay=>view.sidebar_overlay=false,
-                    (KeyCode::Char('c'),m) if m.contains(KeyModifiers::CONTROL)=>{
-                        if view.busy() { if let Err(error)=session::stop(&mut client,&mut view).await {view.push(&error.to_string());} }
-                        else{return Ok(0);}
-                    }
-                    (KeyCode::Char('d'),m) if m.contains(KeyModifiers::CONTROL)=>{
-                        if view.busy(){let _=session::stop(&mut client,&mut view).await;}
-                        return Ok(0);
-                    }
                     (KeyCode::Enter,m) if m.intersects(KeyModifiers::SHIFT|KeyModifiers::ALT)=>view.editor.insert("\n"),
                     (KeyCode::Enter,_)=>{
-                        let text=view.editor.clear();
-                        match enter(&mut client,&mut view,&request,&text).await {
-                            Ok(true)=>return Ok(0), Ok(false)=>{},
-                            Err(error)=>{view.push(&format!("Error: {error}"));view.editor.insert(&text);}
-                        }
+                        if submit_editor(&mut client,&mut view,&request).await?{return Ok(0);}
                         view.follow=true;
                     }
+                    (KeyCode::Tab,_)=>view.accept_completion(),
+                    (KeyCode::Char('u'),m) if m.contains(KeyModifiers::CONTROL)=>{view.editor.clear();},
                     (KeyCode::Char(c),m) if !m.intersects(KeyModifiers::CONTROL|KeyModifiers::ALT)=>view.editor.insert(&c.to_string()),
                     (KeyCode::Backspace,_)=>view.editor.backspace(), (KeyCode::Delete,_)=>view.editor.delete(),
                     (KeyCode::Left,_)=>view.editor.left(), (KeyCode::Right,_)=>view.editor.right(),
                     (KeyCode::Home,_)=>view.editor.home(), (KeyCode::End,_)=>view.editor.end(),
+                    (KeyCode::Up,_) if view.completion.visible()=>view.completion.move_by(-1),
+                    (KeyCode::Down,_) if view.completion.visible()=>view.completion.move_by(1),
                     (KeyCode::Up|KeyCode::PageUp,_)=>{view.follow=false;view.scroll=view.scroll.saturating_sub(5);},
                     (KeyCode::Down|KeyCode::PageDown,_)=>{view.follow=false;view.scroll=view.scroll.saturating_add(5);},
                     _=>{}
                 }}},
-                Some(Ok(Event::Paste(text)))=>view.editor.insert(&sanitize(&text)),
+                Some(Ok(Event::Paste(text))) => paste_into(&mut view, &text),
                 Some(Ok(Event::Resize(_, _)))=>{}, Some(Err(error))=>return Err(error.into()),
                 None=>return Ok(0), _=>{}
             },
             message=client.next()=>{ client.observe(&mut view,message?).await?; }
         }
+        view.sync_completion();
         dirty = true;
         if view.resync {
             client.refresh(&mut view).await?;
