@@ -4,7 +4,7 @@
 
 用户要求 Rust CLI 以当前 TS TUI 为参照现代化，并为 TS TUI 增加 `/quit`。本轮改造实际终端界面与交互，不把 Node/TS 前端包装成 Rust 原生 TUI，也不声称凭一个视觉更新就完整实现 TS 的所有扩展能力。参考当前 `apps/zcode-cli/packages/tui/src/` 的 sidebar、theme、Logo、Markdown、工具、选择与审批面板；保留上轮 provider discovery 和已开 PR 的改动，不覆盖 `logs/`。
 
-欢迎页标识居中、扫光效果以及输入框标题/占位提示的对外契约单独记录在 `.agents/specs/cli-rust-welcome-brand-parity.md`；侧栏分区对齐记录在 `.agents/specs/cli-rust-sidebar-parity.md`。两个 spec 同样只调整展示层，不引入新的业务状态。
+欢迎页标识居中、扫光效果以及输入框标题/占位提示的对外契约单独记录在 `.agents/specs/cli-rust-welcome-brand-parity.md`；侧栏分区对齐记录在 `.agents/specs/cli-rust-sidebar-parity.md`。两个 spec 同样只调整展示层，不引入新的业务状态。后续 `/compact`、`/effort`、slash 补全、选择过滤与 composer/时间线对齐见 `.agents/specs/cli-rust-tui-parity.md`；该增量不代表完整 TS TUI 功能对等。
 
 ## 产品规则与界面
 

@@ -5,11 +5,72 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const TITLE = "Generate a concise title for this coding session.";
+const ASK_USER_QUESTION_TOOL = "AskUserQuestion";
+/** Rust domain 的 `QuestionInput::answer` 成功文案固定前缀。 */
+const ANSWER_PREFIX = "User has answered your questions:";
 
 /** The text of a chat message content (string or parts). */
 export function contentText(content) {
   if (typeof content === "string") return content;
   return (content ?? []).map((part) => (typeof part?.text === "string" ? part.text : "")).join("");
+}
+
+/**
+ * AskUserQuestion 的真实调用参数：schema 只接受 `questions` 数组，每项必须带
+ * question/header/multiSelect 与 2-4 个 {label, description} 选项。旧 fixture 传单数
+ * `question` + 字符串 `options`，Rust 直接以参数错误失败，待回答面板根本没出现，
+ * SMOKE_ANSWER 只能退化成一个普通 prompt。选项固定两条，让面板在 6 行帮助区里
+ * 完整显示问题、两个选项和问答页脚，探针才能确认交互真实挂起。
+ */
+function askUserQuestionArgs() {
+  return {
+    questions: [
+      {
+        question: "Choose the TUI smoke answer",
+        header: "TUI smoke",
+        multiSelect: false,
+        options: [
+          { label: "SMOKE_ANSWER", description: "Use the scripted first answer." },
+          { label: "SMOKE_ALTERNATE", description: "Use the alternate scripted answer." },
+        ],
+      },
+    ],
+  };
+}
+
+/**
+ * AskUserQuestion 的成功结果由 Rust domain 的 `QuestionInput::answer` 生成：
+ * `User has answered your questions: "<question>"="<answer>". ...`。按 tool_call_id 找回
+ * 原始调用参数，再用问题文本精确匹配答案；参数/协议错误文本与别的工具结果都不可能命中。
+ * OpenAI chat 线上会剥离 `_zcode_tool_failed`，所以这个真实关联就是「非错误」判据。
+ */
+function askUserQuestionAnswer(messages, toolMessage) {
+  const text = contentText(toolMessage.content);
+  // domain 只在这个前缀下输出答案；错误文本或别的工具输出里即使带 "q"="a" 也不算作答。
+  if (!text.startsWith(ANSWER_PREFIX)) return undefined;
+  for (const message of messages) {
+    for (const entry of message.tool_calls ?? []) {
+      if (entry.id !== toolMessage.tool_call_id) continue;
+      if (entry.function?.name !== ASK_USER_QUESTION_TOOL) continue;
+      let args;
+      try {
+        args = JSON.parse(entry.function.arguments ?? "");
+      } catch {
+        return undefined;
+      }
+      for (const question of Array.isArray(args?.questions) ? args.questions : []) {
+        const prefix = `"${question?.question}"="`;
+        const start = text.indexOf(prefix);
+        if (start < 0) continue;
+        const end = text.indexOf('"', start + prefix.length);
+        if (end < 0) continue;
+        const answer = text.slice(start + prefix.length, end).trim();
+        if (answer) return answer;
+      }
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -60,17 +121,32 @@ export async function modelServer({ root, ignoreSystemReminders = false }) {
         },
         "tool_calls",
       );
-    if (last?.role === "tool") return send({ content: "tool done" }, "stop");
+    // 只有拿到同一 AskUserQuestion 调用的真实回答才算问答完成；旧 `tool done` 文本既可能是
+    // 工具参数错误的结果，也可能是别的工具，不能当作 AskUserQuestion 的完成信号。
+    if (last?.role === "tool") {
+      const answer = askUserQuestionAnswer(messages, last);
+      if (answer) return send({ content: `question answered: ${answer}` }, "stop");
+      const asksQuestion = messages.some((message) =>
+        (message.tool_calls ?? []).some(
+          (entry) =>
+            entry.id === last.tool_call_id && entry.function?.name === ASK_USER_QUESTION_TOOL,
+        ),
+      );
+      return send(
+        {
+          content: asksQuestion
+            ? "question unanswered: missing real AskUserQuestion answer"
+            : "tool done",
+        },
+        "stop",
+      );
+    }
     if (text.includes("use tool")) return call("Read", { file_path: "note.txt" });
     if (text.startsWith("tui-write-allow"))
       return call("Write", { file_path: "allowed.txt", content: "TUI_WRITE_MARKER\n" });
     if (text.startsWith("tui-write-deny"))
       return call("Write", { file_path: "denied.txt", content: "TUI_DENIED_MARKER\n" });
-    if (text.startsWith("tui-question"))
-      return call("AskUserQuestion", {
-        question: "Choose the TUI smoke answer",
-        options: ["SMOKE_ANSWER", "Other"],
-      });
+    if (text.startsWith("tui-question")) return call(ASK_USER_QUESTION_TOOL, askUserQuestionArgs());
     if (text.includes("shell")) {
       if (!shellPidFile || !resolve(shellPidFile).startsWith(`${resolve(root)}/`))
         throw new Error(

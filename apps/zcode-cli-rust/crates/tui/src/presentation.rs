@@ -1,7 +1,9 @@
 pub(crate) use super::presentation_welcome::is_welcome;
 use super::{
     presentation_markdown::{clean_terminal, markdown_into, tool_card},
-    presentation_panels::{draw_selector, draw_sidebar},
+    presentation_markers::marker_line,
+    presentation_panels::{draw_selector_localized, draw_sidebar},
+    presentation_status::composer_status,
     presentation_text,
     presentation_welcome::draw_welcome,
 };
@@ -173,18 +175,10 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
         }
     }
     if status_height > 0 {
+        // 输入框下方只显示 model / provider / thought，与 TS app-input-status 同层次；
+        // session/运行状态仍由侧栏 Status 与输入占位提示承担。
         frame.render_widget(
-            Paragraph::new(clean_terminal(&format!(
-                "{} · {} · {} · {}",
-                view.session,
-                clean_terminal(view.mode()),
-                field(&view.state["config"]["model"]),
-                view.text(
-                    if view.busy() { "running" } else { "ready" },
-                    if view.busy() { "运行中" } else { "就绪" }
-                )
-            )))
-            .style(Style::default().fg(MUTED)),
+            Paragraph::new(composer_status(view, areas[3].width)),
             areas[3],
         );
     }
@@ -195,8 +189,11 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
         frame.render_widget(ratatui::widgets::Clear, overlay);
         draw_sidebar(frame, overlay, view);
     }
+    // 输入补全面板画在选择器之前，由 completion 模块自己负责边界与清屏。
+    crate::completion::draw(frame, bounds, &view.completion, view.zh);
     if let Some(selector) = &view.selector {
-        draw_selector(frame, bounds, selector);
+        // 选择器过滤/空结果提示跟随 view.zh，与原 typed choice 保存同一份选项。
+        draw_selector_localized(frame, bounds, selector, view.zh);
     }
     if view.no_color {
         for cell in &mut frame.buffer_mut().content {
@@ -237,7 +234,7 @@ fn cached_lines<'a>(view: &View, width: u16, cache: &'a mut RenderCache) -> &'a 
     }
     &cache.lines
 }
-fn render_rows(view: &View) -> Vec<Line<'static>> {
+pub(crate) fn render_rows(view: &View) -> Vec<Line<'static>> {
     let budget = crate::projection::MAX_RENDER_BYTES;
     let mut alerts = Vec::new();
     for notice in &view.notices {
@@ -285,7 +282,15 @@ fn render_rows(view: &View) -> Vec<Line<'static>> {
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             )));
         }
-        if kind == "toolCall" {
+        if kind == "timelineMarker" {
+            // 只展示 core/domain 真实写入的 marker 字段；未知 marker 不占一行。
+            // 旧实现先在分支内补一个空行、循环末尾再补一个，marker 后出现双空行；
+            // 这里只用统一的块尾空行，未知 marker 直接跳过整块。
+            let Some(line) = marker_line(row, view.zh) else {
+                continue;
+            };
+            chunk.push(line);
+        } else if kind == "toolCall" {
             tool_card(&mut chunk, row);
         } else {
             markdown_into(
@@ -308,11 +313,4 @@ fn render_rows(view: &View) -> Vec<Line<'static>> {
     }
     lines.extend(selected_alerts.into_iter().rev());
     lines
-}
-fn field(value: &serde_json::Value) -> String {
-    value
-        .as_str()
-        .filter(|s| !s.is_empty())
-        .map(clean_terminal)
-        .unwrap_or_else(|| "—".into())
 }

@@ -16,7 +16,15 @@ Interactive default mode is `build`; explicit `--mode` is preserved. Enter sends
 Alt/Shift+Enter inserts a newline, bracketed paste accepts multiple lines, and
 Ctrl+C cancels a running turn or exits when idle. `/help`, `/new`, `/sessions`,
 `/resume <id>`, `/mode <mode>`, `/model [provider model [reasoning]]`, and `/quit`
-use the same Rust actor and persisted session store. Permission choices require
+use the same Rust actor and persisted session store. `/compact [instructions]`
+(alias `/compress`) uses the actor's existing compaction admission; `/effort [list|level]`
+(alias `/variant`) reads and changes the current model's supported reasoning levels.
+Slash suggestions support Tab completion and Enter confirmation; model/mode/session
+pickers support text filtering, Ctrl-U clearing, and Escape draft restoration.
+The composer shows the committed model, provider, and reasoning level, and compaction
+markers render actual actor status. This incremental scope is documented in
+[TUI parity](../../.agents/specs/cli-rust-tui-parity.md), not full TS frontend parity.
+Permission choices require
 explicit input (`y`/`n` or an offered option ID); questions accept one answer per
 line. Non-TTY users should use `-p`; `app-server --stdio` is unchanged.
 

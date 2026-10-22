@@ -1,4 +1,5 @@
 use crate::{
+    completion::Completion,
     editor::{Editor, sanitize},
     selector::Selector,
 };
@@ -83,6 +84,7 @@ pub(crate) struct View {
     pub seq: u64,
     pub notices: Vec<String>,
     pub editor: Editor,
+    pub completion: Completion,
     pub scroll: usize,
     pub follow: bool,
     pub pending_submit: bool,
@@ -99,6 +101,21 @@ pub(crate) struct View {
 impl View {
     pub fn text<'a>(&self, en: &'a str, zh: &'a str) -> &'a str {
         if self.zh { zh } else { en }
+    }
+    /// 补全只看本地草稿：选择器、审批问答或 busy 时不展示，避免抢走原交互。
+    pub fn completion_enabled(&self) -> bool {
+        self.selector.is_none() && self.interaction().is_none() && !self.busy()
+    }
+    /// 每个真实键/paste/快照后收敛补全；不引入计时器或第二份草稿。
+    pub fn sync_completion(&mut self) {
+        let enabled = self.completion_enabled();
+        self.completion.reconcile(self.editor.text(), enabled);
+    }
+    /// Tab/Enter 的写回动作：只改编辑器，不发送命令、不建 accepted 队列。
+    pub fn accept_completion(&mut self) {
+        if let Some(replacement) = self.completion.replacement() {
+            self.editor.replace_all(&replacement);
+        }
     }
     pub fn push(&mut self, text: &str) {
         self.display_revision = self.display_revision.wrapping_add(1);
@@ -123,6 +140,8 @@ impl View {
         self.display_revision = self.display_revision.wrapping_add(1);
         if self.session != snapshot["sessionId"].as_str().unwrap_or_default() {
             self.selector = None;
+            // 补全是会话内的本地展示状态；切会话必须失效，不把旧草稿候选带到新会话。
+            self.completion = Completion::default();
         }
         self.session = snapshot["sessionId"].as_str().unwrap_or_default().into();
         self.rows = snapshot["rows"]["window"]

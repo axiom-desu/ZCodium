@@ -280,62 +280,81 @@ fn compress_path(path: &str) -> String {
     }
 }
 
-pub(super) fn draw_selector(
+/// `zh` 由调用方传入（presentation 传 `view.zh`）；过滤行与空结果提示都走这里。
+pub(super) fn draw_selector_localized(
     frame: &mut Frame<'_>,
     bounds: Rect,
     selector: &crate::selector::Selector,
+    zh: bool,
 ) {
     if bounds.width < 8 || bounds.height < 4 {
         return;
     }
+    let filtered = selector.filtered_options();
+    let rows = filtered.len();
     let width = bounds.width.saturating_sub(8).clamp(1, 72);
-    let height = bounds
-        .height
-        .saturating_sub(6)
-        .min(selector.options.len() as u16 + 4)
-        .max(3);
+    let inner_width = width.saturating_sub(2) as usize;
+    let height = bounds.height.saturating_sub(6).min(rows as u16 + 4).max(4);
     let popup = Rect::new(
         bounds.x + (bounds.width - width) / 2,
         bounds.y + (bounds.height - height) / 2,
         width,
         height,
     );
-    let choices = selector
-        .options
-        .iter()
-        .enumerate()
-        .skip(
-            selector
-                .selected
-                .saturating_sub(height.saturating_sub(3) as usize),
-        )
-        .take(height.saturating_sub(2) as usize)
-        .map(|(i, (_, label))| {
-            Line::from(Span::styled(
-                format!(
-                    "{} {}",
-                    if i == selector.selected { "›" } else { " " },
-                    clean_terminal(label)
-                ),
-                if i == selector.selected {
-                    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(TEXT)
-                },
-            ))
-        })
-        .collect::<Vec<_>>();
+    let capacity = height.saturating_sub(3) as usize;
+    let start = selector.selected.saturating_sub(capacity.saturating_sub(1));
+    let label = if zh { "筛选" } else { "Filter" };
+    let mut lines = vec![Line::from(Span::styled(
+        truncate(
+            &clean_terminal(&format!("{label}: {}▌", selector.filter)),
+            inner_width,
+        ),
+        Style::default().fg(TEXT),
+    ))];
+    if rows == 0 {
+        lines.push(Line::from(Span::styled(
+            truncate(
+                &clean_terminal(view_text(zh, "No matching choices", "没有匹配的选项")),
+                inner_width,
+            ),
+            Style::default().fg(MUTED),
+        )));
+    } else {
+        lines.extend(filtered.iter().enumerate().skip(start).take(capacity).map(
+            |(i, (_, label))| {
+                Line::from(Span::styled(
+                    truncate(
+                        &format!(
+                            "{} {}",
+                            if i == selector.selected { "›" } else { " " },
+                            clean_terminal(label)
+                        ),
+                        inner_width,
+                    ),
+                    if i == selector.selected {
+                        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(TEXT)
+                    },
+                ))
+            },
+        ));
+    }
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Block::default().style(Style::default().bg(Color::Rgb(22, 27, 34))),
         popup,
     );
     frame.render_widget(
-        Paragraph::new(choices).block(
+        Paragraph::new(lines).block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(clean_terminal(&selector.title)),
         ),
         popup,
     );
+}
+
+fn view_text<'a>(zh: bool, en: &'a str, localized: &'a str) -> &'a str {
+    if zh { localized } else { en }
 }
