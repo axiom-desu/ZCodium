@@ -63,6 +63,8 @@ export function onToolCallScheduled(
         op: "row.upserted",
         row: {
           ...existing,
+          // scheduled 的目标身份必须覆盖流式阶段可能留下的包装名；迟到原始流不得再改回。
+          toolName: payload.toolName,
           ...(payload.assistantMessageId
             ? { assistantResponseId: String(payload.assistantMessageId) }
             : {}),

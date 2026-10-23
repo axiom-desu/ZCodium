@@ -16,7 +16,7 @@ const MAX_BODY: usize = 1 << 20;
 
 /// 读到 `\r\n\r\n` 请求头边界，再按 `Content-Length` 读完请求体；
 /// 返回 `false` 表示连接在完整请求到达前关闭，不应计数。
-pub(super) async fn read_request(socket: &mut TcpStream) -> std::io::Result<bool> {
+pub(super) async fn read_request(socket: &mut TcpStream) -> std::io::Result<Option<Vec<u8>>> {
     let mut buffer = Vec::with_capacity(4096);
     let mut chunk = [0u8; 4096];
     let head_end = loop {
@@ -28,7 +28,7 @@ pub(super) async fn read_request(socket: &mut TcpStream) -> std::io::Result<bool
         }
         let read = socket.read(&mut chunk).await?;
         if read == 0 {
-            return Ok(false);
+            return Ok(None);
         }
         buffer.extend_from_slice(&chunk[..read]);
     };
@@ -40,11 +40,12 @@ pub(super) async fn read_request(socket: &mut TcpStream) -> std::io::Result<bool
     while buffer.len() < head_end + content_length {
         let read = socket.read(&mut chunk).await?;
         if read == 0 {
-            return Ok(false);
+            return Ok(None);
         }
         buffer.extend_from_slice(&chunk[..read]);
     }
-    Ok(true)
+    // 返回完整原始请求（头 + body）：wire 用例要断言真实发出的字段，而不是内部结构。
+    Ok(Some(buffer))
 }
 
 /// 严格解析 `Content-Length`：存在即必须是合法非负十进制且在 cap 内；

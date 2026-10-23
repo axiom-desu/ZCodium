@@ -44,6 +44,7 @@ async fn process(
     let output = super::context::hidden_request(
         model,
         (messages, &[]),
+        &crate::contract::ModelRequestOptions::default(),
         sink,
         "web_fetch_processing",
         cancel,
@@ -163,9 +164,15 @@ async fn search(
     let tools = [web::search::provider_tool(args)];
     let auxiliary = model.auxiliary();
     let model = auxiliary.as_deref().unwrap_or(model);
-    let output =
-        super::context::hidden_request(model, (messages, &tools), sink, "web_search_tool", cancel)
-            .await?;
+    let output = super::context::hidden_request(
+        model,
+        (messages, &tools),
+        &crate::contract::ModelRequestOptions::default(),
+        sink,
+        "web_search_tool",
+        cancel,
+    )
+    .await?;
     let text = output.message["content"].as_str().unwrap_or("");
     let elapsed = started.elapsed().as_millis() as u64;
     let usage = crate::domain::usage::model_usage(&output.usage);

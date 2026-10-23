@@ -56,6 +56,8 @@ pub struct PromptArgs {
     pub data_dir: Option<String>,
     pub config: Option<String>,
     pub locale: String,
+    /// `--toolsearch-mode auto|native|local|off`（缺省 off）。
+    pub tool_search_mode: zcode_cli_domain::tool_search::Mode,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -87,6 +89,17 @@ pub fn parse(argv: &[String]) -> Result<Parsed, ArgError> {
                 "Unsupported --mode value: {raw}. Supported modes: build, edit, plan, yolo."
             ));
         }
+    };
+    let tool_search_mode = match values.string("toolsearch-mode") {
+        None => zcode_cli_domain::tool_search::Mode::Off,
+        Some(value) => match zcode_cli_domain::tool_search::Mode::parse(value) {
+            Some(mode) => mode,
+            None => {
+                return fail(format!(
+                    "Unsupported --toolsearch-mode value: {value}. Supported values: auto, native, local, off."
+                ));
+            }
+        },
     };
     let browser = values.string("browser-use");
     if let Some(value) = browser.filter(|v| !v.eq_ignore_ascii_case("headless")) {
@@ -189,6 +202,7 @@ pub fn parse(argv: &[String]) -> Result<Parsed, ArgError> {
         verbose: values.flag("verbose"),
         data_dir: values.string("data-dir").map(str::to_owned),
         config: values.string("config").map(str::to_owned),
+        tool_search_mode,
         locale: values.string("locale").unwrap_or("auto").to_owned(),
     };
     if tui {

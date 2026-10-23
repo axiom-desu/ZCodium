@@ -28,4 +28,8 @@ pub struct AppServerArgs {
     pub surface: String,
     #[arg(long)]
     pub prepare_storage: bool,
+    /// ToolSearch 启动偏好（缺省 off；不写 session/用户配置）。
+    /// 不传时允许 Desktop Host 的 `runtimeConfig.toolSearch.mode` 生效。
+    #[arg(long, value_parser=["auto","native","local","off"])]
+    pub toolsearch_mode: Option<String>,
 }

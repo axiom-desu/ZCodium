@@ -118,6 +118,8 @@ export function getZCodePluginsOverview(
       marketplace: ZCODE_OFFICIAL_PLUGIN_MARKETPLACE,
       version: def.version,
       installed: false,
+      // 可恢复条目只带 listing 时会丢掉 "ui"，卸载后的文档插件会从「UI 插件」掉进分类分组。
+      ...(def.componentTypes ? { componentTypes: [...def.componentTypes] } : {}),
       ...(listing ? { listing } : {}),
     };
   });

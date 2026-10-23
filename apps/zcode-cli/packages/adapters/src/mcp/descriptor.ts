@@ -11,13 +11,22 @@ export function normalizeMcpToolDescriptor(
   serverName: string,
   tool: unknown,
   timeoutMs?: number,
+  alwaysLoad?: boolean,
 ): McpToolDescriptor {
   const record = isRecord(tool) ? tool : {};
+  const meta = isRecord(record._meta) ? record._meta : {};
   const toolName = typeof record.name === "string" ? record.name : "unknown";
   // 插件 UI：tools/list 的 `_meta` 只在这里读一次，归一化成 descriptor.ui；下游不再碰原始 _meta。
   const ui = normalizeMcpToolUiMeta(record._meta);
   return {
     serverName,
+    // server 级 alwaysLoad 与 tool 级 `_meta["anthropic/alwaysLoad"]` 都只控制模型请求中的
+    // schema 曝光，不构成授权或官方信任，也不改变 MCP 初始化。
+    alwaysLoad: alwaysLoad === true || meta["anthropic/alwaysLoad"] === true,
+    searchHint:
+      typeof meta["anthropic/searchHint"] === "string"
+        ? meta["anthropic/searchHint"].replace(/\s+/g, " ").trim()
+        : undefined,
     toolName,
     name: `mcp__${sanitizeMcpName(serverName)}__${sanitizeMcpName(toolName)}`,
     description: typeof record.description === "string" ? record.description : undefined,

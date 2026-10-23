@@ -263,6 +263,7 @@ export async function autoCompactIfNeeded(
         phase: context.phase,
         trigger: CompactTrigger.Auto,
         activeEntries,
+        getContinuationTools: context.getContinuationTools,
         ...(context.model ? { model: context.model } : {}),
       },
     );
@@ -368,6 +369,7 @@ export async function reactiveCompactAfterContextExceeded(
         phase: CompactPhase.Reactive,
         trigger: CompactTrigger.Reactive,
         activeEntries,
+        getContinuationTools: context.getContinuationTools,
         model: context.model,
       },
     );

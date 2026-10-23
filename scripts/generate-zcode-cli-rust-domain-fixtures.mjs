@@ -10,7 +10,7 @@ import { parseEnvConfig } from "../apps/zcode-cli/packages/adapters/src/config/e
 import { createConfigPort } from "../apps/zcode-cli/packages/adapters/src/config/index.ts";
 import { DefaultRuntimeConfig } from "../apps/zcode-cli/packages/contracts/src/config/index.ts";
 import { workspaceHookFixtures } from "./zcode-cli-rust-workspace-hook-fixtures.mjs";
-import { permissionFixtures } from "./zcode-cli-rust-permission-fixtures.mjs";
+import { permissionData, permissionFixtures } from "./zcode-cli-rust-permission-fixtures.mjs";
 
 const configInputs = {
   empty: {},
@@ -180,3 +180,5 @@ await emit(
   workspaceHookFixtures(),
 );
 await emit("../apps/zcode-cli-rust/crates/domain/fixtures/permission.json", permissionFixtures());
+// Rust 二进制内嵌的权限能力表：同样只来自当前 TS builtInTools metadata。
+await emit("../apps/zcode-cli-rust/crates/domain/schema/tool-permissions.json", permissionData());

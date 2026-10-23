@@ -19,6 +19,12 @@ pub struct ModelConfig {
     pub headers: std::collections::BTreeMap<String, String>,
     #[serde(skip)]
     pub account_access: Option<serde_json::Value>,
+    /// 非秘密的 `access.type`（Node `resolveToolSearchCapability` 的第一个入参）。
+    #[serde(skip)]
+    pub access_type: Option<String>,
+    /// 非秘密的 `access.mode`（只有 `zhipu-account` 才有 coding-plan 模式）。
+    #[serde(skip)]
+    pub access_mode: Option<String>,
     #[serde(skip)]
     pub option_patches: Vec<serde_json::Value>,
     #[serde(default)]

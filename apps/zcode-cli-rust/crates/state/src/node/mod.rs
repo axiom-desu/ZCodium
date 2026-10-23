@@ -23,6 +23,7 @@ pub mod open;
 mod open_error;
 pub mod resume;
 pub mod sessions;
+mod sessions_write;
 pub mod settings;
 pub mod shared;
 mod side_chat;
@@ -36,7 +37,13 @@ mod compact_tests;
 #[cfg(test)]
 mod fixture_tests;
 #[cfg(test)]
+#[path = "listing_tests.rs"]
+mod listing_tests;
+#[cfg(test)]
 mod repo_tests;
+#[cfg(test)]
+#[path = "session_soft_delete_tests.rs"]
+mod session_soft_delete_tests;
 #[cfg(test)]
 #[path = "session_tests.rs"]
 mod session_tests;

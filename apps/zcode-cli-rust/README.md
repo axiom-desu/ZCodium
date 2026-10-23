@@ -10,6 +10,7 @@ cargo build --locked --manifest-path apps/zcode-cli-rust/Cargo.toml --bin zcode-
 apps/zcode-cli-rust/target/debug/zcode-cli-rust --cwd /path/to/workspace
 apps/zcode-cli-rust/target/debug/zcode-cli-rust --continue
 apps/zcode-cli-rust/target/debug/zcode-cli-rust -p "one prompt"
+apps/zcode-cli-rust/target/debug/zcode-cli-rust --toolsearch-mode local
 ```
 
 Interactive default mode is `build`; explicit `--mode` is preserved. Enter sends,
@@ -51,6 +52,22 @@ Permission choices require
 explicit input (`y`/`n` or an offered option ID); questions accept one answer per
 line. Non-TTY users should use `-p`; `app-server --stdio` is unchanged.
 
+### Upstream 3.16 runtime slice
+
+`--toolsearch-mode auto|native|local|off` defaults to `off` for the standalone CLI/TUI.
+Native requires Anthropic Messages; Auto uses the provider's actual capabilities and
+coding-plan configuration, otherwise Local when tool calls are supported. Local discovers
+schemas through `ToolSearch` and runs deferred targets through `DeferredToolCall` on the
+same permission/hook/execution path. References, announcements and the active compact
+checkpoint survive SQLite cold restore; Desktop uses the existing Host startup-preferences
+RPC unless the CLI mode was explicitly supplied.
+
+This slice also adds shared TS/Rust session soft deletion (retaining message history),
+persisted last outcomes, failed-request usage, stable path-attachment recovery and temporary
+Bash output preparation. It does **not** complete the two entire upstream releases; project,
+remote and remaining UI work is tracked in the [sync spec](../../.agents/specs/upstream-3.16-sync.md).
+Rust's cross-tool input-validation/search-guidance boundary remains an explicit gap there.
+
 Packaged desktop executables expose `zcodium-exp --cli …` (TS) and
 `zcodium-rust --cli …` (Rust); without `--cli` they still open the GUI. This does
 not install a global CLI alias automatically or change the GUI runtime defaults.
@@ -67,7 +84,9 @@ baseline and its provider-discovery mode also pass. The responsive acceptance
 `node scripts/zcode-cli-rust-responsive-smoke.mjs` adds 62 real SQLite-lock PTY checks
 and 4 model requests, including queue edit continuation and exit before unlocking.
 The ACK/lint checkpoint reports 769 Rust tests passed (1 ignored), including 277 TUI
-tests; Node drivers 63 and CI scripts 442 passed. These are scoped local results;
+tests; Node drivers 63 and CI scripts 445 passed. The subsequent upstream runtime slice
+reports 869 Rust passes (1 ignored), with the same PTY/interop suites passing on fresh
+builds. These are scoped local results;
 exact PR HEAD CI and merge evidence are recorded separately. This is not full
 TS TUI parity: the visible transcript is a bounded snapshot window, and advanced terminal
 plugin/marketplace, memory/CUA and rich terminal widgets are not claimed. Native

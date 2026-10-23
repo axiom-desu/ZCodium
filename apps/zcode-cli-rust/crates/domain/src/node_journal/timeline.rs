@@ -241,11 +241,15 @@ pub fn reminder_records(
     (message, part): (&str, &str),
     now: u64,
     (source, content): (&str, &str),
+    announcement: Option<&Value>,
     selection: &Value,
     tools: &Value,
 ) -> (Value, Vec<Value>) {
-    let metadata =
-        json!({"runtimeMessage": {"source": source}, "source": source, "visibility": "model-only"});
+    let mut runtime = json!({"source": source});
+    if let Some(announcement) = announcement {
+        runtime["toolSearchAnnouncement"] = announcement.clone();
+    }
+    let metadata = json!({"runtimeMessage": runtime, "source": source, "visibility": "model-only"});
     let mut info = json!({"id": message, "sessionID": host.session, "role": "user", "time": {"created": now},
         "agent": host.agent, "metadata": metadata});
     if selection.is_object() {

@@ -7,6 +7,7 @@ import {
   type ErrorAttribution,
   type ModelErrorCode,
   type ModelId,
+  type ModelUsage,
 } from "@zcode/contracts";
 
 export const ModelErrorSource = {
@@ -42,12 +43,15 @@ export function createLocalProviderConfigurationErrorContext(
 export interface AiSdkModelAdapterErrorOptions {
   cause?: unknown;
   context?: Record<string, unknown>;
+  /** Provider 在失败响应里真实报告的用量；缺省不伪造 0。 */
+  usage?: ModelUsage;
 }
 
 export class AiSdkModelAdapterError extends Error {
   readonly code: ModelErrorCode;
   readonly cause?: unknown;
   readonly context?: Record<string, unknown>;
+  readonly usage?: ModelUsage;
 
   constructor(code: ModelErrorCode, message: string, options?: AiSdkModelAdapterErrorOptions) {
     super(message);
@@ -55,6 +59,7 @@ export class AiSdkModelAdapterError extends Error {
     this.code = code;
     this.cause = options?.cause;
     this.context = options?.context;
+    this.usage = options?.usage;
   }
 
   enrichContext(context: Record<string, unknown>): this {

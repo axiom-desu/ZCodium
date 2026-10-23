@@ -157,6 +157,7 @@ export type {
   ModelReasoningContentBlock,
   ModelToolCall,
   ModelToolContract,
+  ToolSearchExecutionContext,
   ModelUsage,
   ModelUsageSummary,
   PendingSteerInputInfo,

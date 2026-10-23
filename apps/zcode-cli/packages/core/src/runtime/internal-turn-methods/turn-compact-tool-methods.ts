@@ -62,6 +62,7 @@ export interface TurnCompactToolMethods {
       trigger?: CompactTrigger;
       model?: Model;
       activeEntries?: readonly RuntimeMessageEntry[];
+      getContinuationTools?: () => readonly import("@zcode/contracts").ModelToolContract[];
     },
   ): Promise<{
     displayText: string;

@@ -24,7 +24,6 @@ export async function repairSubagentTaskIndex(params: {
     const sessions = await agentService.listSessions({
       ...target,
       sessionIds: batch,
-      includeArchived: true,
       runtimePolicy: "existing-only",
     });
     // 旧 Agent 不支持参数时直接失败；缺失记录、跨身份结果和已失效订阅均不能推断为可删除。

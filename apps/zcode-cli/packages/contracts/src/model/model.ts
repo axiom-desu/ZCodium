@@ -9,6 +9,7 @@ import type {
 } from "./index.js";
 import { modelSelectionSchema, type ModelSelection } from "@zcode/shared/model-selection";
 import type { ModelPropertiesData, ModelOptionSpecsData } from "@zcode/shared/model-config";
+import type { ToolSearchCapability } from "../tools/tool-search.js";
 
 export type { ModelSelection } from "@zcode/shared/model-selection";
 
@@ -31,6 +32,8 @@ export interface ModelOptions {
 export interface ModelRequest {
   messages: ModelInputMessage[];
   tools?: ModelToolContract[];
+  /** 仅代表 Native 协议：Local 开启也不会发送 beta/defer_loading/tool_reference。 */
+  toolSearchEnabled?: boolean;
   responseJsonSchema?: JsonSchema;
   options?: ModelOptions;
   abortSignal?: AbortSignal;
@@ -42,6 +45,8 @@ export type ModelResult = ModelTextResult;
 export type ModelEvent = ModelStreamEvent;
 
 export interface Model {
+  /** 接口能力声明；只有 Anthropic Messages 的 toolSearch.protocolSupported 为真。 */
+  readonly requestCapabilities?: { readonly toolSearch?: ToolSearchCapability };
   readonly providerId: ModelProviderId;
   readonly modelId: ModelId;
   readonly displayName?: string;

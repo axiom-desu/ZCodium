@@ -5,6 +5,524 @@
   "decisions": [
     {
       "context": {
+        "toolName": "ToolSearch",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "build",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": true,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": false,
+        "permission": {
+          "permission": "tool.search",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": false
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "allow",
+        "ruleId": "mode.build.readOnly",
+        "reason": "Build mode allows read-only tools",
+        "riskLevel": "low",
+        "sideEffectScope": "none"
+      }
+    },
+    {
+      "context": {
+        "toolName": "ToolSearch",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "edit",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": true,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": false,
+        "permission": {
+          "permission": "tool.search",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": false
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "allow",
+        "ruleId": "mode.build.readOnly",
+        "reason": "Build mode allows read-only tools",
+        "riskLevel": "low",
+        "sideEffectScope": "none"
+      }
+    },
+    {
+      "context": {
+        "toolName": "ToolSearch",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "yolo",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": true,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": false,
+        "permission": {
+          "permission": "tool.search",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": false
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "allow",
+        "ruleId": "mode.yolo",
+        "reason": "Yolo mode bypasses permission prompts",
+        "riskLevel": "low",
+        "sideEffectScope": "none"
+      }
+    },
+    {
+      "context": {
+        "toolName": "ToolSearch",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "auto",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": true,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": false,
+        "permission": {
+          "permission": "tool.search",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": false
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "deny",
+        "ruleId": "mode.auto.unimplemented",
+        "reason": "Auto mode is reserved but not implemented yet",
+        "riskLevel": "low",
+        "sideEffectScope": "none"
+      }
+    },
+    {
+      "context": {
+        "toolName": "ToolSearch",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "build",
+        "planEnabled": true
+      },
+      "capability": {
+        "readOnly": true,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": false,
+        "permission": {
+          "permission": "tool.search",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": false
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "allow",
+        "ruleId": "mode.plan.readOnly",
+        "reason": "Plan mode allows read-only tool execution",
+        "riskLevel": "low",
+        "sideEffectScope": "none"
+      }
+    },
+    {
+      "context": {
+        "toolName": "ToolSearch",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "yolo",
+        "planEnabled": true
+      },
+      "capability": {
+        "readOnly": true,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": false,
+        "permission": {
+          "permission": "tool.search",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": false
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "allow",
+        "ruleId": "mode.plan.readOnly",
+        "reason": "Plan mode allows read-only tool execution",
+        "riskLevel": "low",
+        "sideEffectScope": "none"
+      }
+    },
+    {
+      "context": {
+        "toolName": "ToolSearch",
+        "input": {},
+        "riskLevel": "low",
+        "workingDirectory": "/w",
+        "mode": "edit",
+        "planEnabled": true
+      },
+      "capability": {
+        "readOnly": true,
+        "destructive": false,
+        "sideEffectScope": "none",
+        "riskLevel": "low",
+        "needsApproval": false,
+        "permission": {
+          "permission": "tool.search",
+          "riskLevel": "low",
+          "sideEffectScope": "none",
+          "needsApproval": false
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "allow",
+        "ruleId": "mode.plan.readOnly",
+        "reason": "Plan mode allows read-only tool execution",
+        "riskLevel": "low",
+        "sideEffectScope": "none"
+      }
+    },
+    {
+      "context": {
+        "toolName": "DeferredToolCall",
+        "input": {},
+        "riskLevel": "high",
+        "workingDirectory": "/w",
+        "mode": "build",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "system",
+        "riskLevel": "high",
+        "needsApproval": true,
+        "permission": {
+          "permission": "tool.deferred_call",
+          "riskLevel": "high",
+          "sideEffectScope": "system",
+          "needsApproval": true
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "ask",
+        "ruleId": "mode.build.highRisk",
+        "reason": "High risk tools require explicit approval",
+        "riskLevel": "high",
+        "sideEffectScope": "system"
+      }
+    },
+    {
+      "context": {
+        "toolName": "DeferredToolCall",
+        "input": {},
+        "riskLevel": "high",
+        "workingDirectory": "/w",
+        "mode": "edit",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "system",
+        "riskLevel": "high",
+        "needsApproval": true,
+        "permission": {
+          "permission": "tool.deferred_call",
+          "riskLevel": "high",
+          "sideEffectScope": "system",
+          "needsApproval": true
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "ask",
+        "ruleId": "mode.build.highRisk",
+        "reason": "High risk tools require explicit approval",
+        "riskLevel": "high",
+        "sideEffectScope": "system"
+      }
+    },
+    {
+      "context": {
+        "toolName": "DeferredToolCall",
+        "input": {},
+        "riskLevel": "high",
+        "workingDirectory": "/w",
+        "mode": "yolo",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "system",
+        "riskLevel": "high",
+        "needsApproval": true,
+        "permission": {
+          "permission": "tool.deferred_call",
+          "riskLevel": "high",
+          "sideEffectScope": "system",
+          "needsApproval": true
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "allow",
+        "ruleId": "mode.yolo",
+        "reason": "Yolo mode bypasses permission prompts",
+        "riskLevel": "high",
+        "sideEffectScope": "system"
+      }
+    },
+    {
+      "context": {
+        "toolName": "DeferredToolCall",
+        "input": {},
+        "riskLevel": "high",
+        "workingDirectory": "/w",
+        "mode": "auto",
+        "planEnabled": false
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "system",
+        "riskLevel": "high",
+        "needsApproval": true,
+        "permission": {
+          "permission": "tool.deferred_call",
+          "riskLevel": "high",
+          "sideEffectScope": "system",
+          "needsApproval": true
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "deny",
+        "ruleId": "mode.auto.unimplemented",
+        "reason": "Auto mode is reserved but not implemented yet",
+        "riskLevel": "high",
+        "sideEffectScope": "system"
+      }
+    },
+    {
+      "context": {
+        "toolName": "DeferredToolCall",
+        "input": {},
+        "riskLevel": "high",
+        "workingDirectory": "/w",
+        "mode": "build",
+        "planEnabled": true
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "system",
+        "riskLevel": "high",
+        "needsApproval": true,
+        "permission": {
+          "permission": "tool.deferred_call",
+          "riskLevel": "high",
+          "sideEffectScope": "system",
+          "needsApproval": true
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "deny",
+        "ruleId": "mode.plan.nonReadOnly",
+        "reason": "Plan mode only allows read-only, non-destructive tools",
+        "riskLevel": "high",
+        "sideEffectScope": "system"
+      }
+    },
+    {
+      "context": {
+        "toolName": "DeferredToolCall",
+        "input": {},
+        "riskLevel": "high",
+        "workingDirectory": "/w",
+        "mode": "yolo",
+        "planEnabled": true
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "system",
+        "riskLevel": "high",
+        "needsApproval": true,
+        "permission": {
+          "permission": "tool.deferred_call",
+          "riskLevel": "high",
+          "sideEffectScope": "system",
+          "needsApproval": true
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "deny",
+        "ruleId": "mode.plan.nonReadOnly",
+        "reason": "Plan mode only allows read-only, non-destructive tools",
+        "riskLevel": "high",
+        "sideEffectScope": "system"
+      }
+    },
+    {
+      "context": {
+        "toolName": "DeferredToolCall",
+        "input": {},
+        "riskLevel": "high",
+        "workingDirectory": "/w",
+        "mode": "edit",
+        "planEnabled": true
+      },
+      "capability": {
+        "readOnly": false,
+        "destructive": false,
+        "sideEffectScope": "system",
+        "riskLevel": "high",
+        "needsApproval": true,
+        "permission": {
+          "permission": "tool.deferred_call",
+          "riskLevel": "high",
+          "sideEffectScope": "system",
+          "needsApproval": true
+        }
+      },
+      "config": {
+        "allowedTools": [],
+        "disallowedTools": [],
+        "autoApproveHighRisk": false
+      },
+      "projectRules": null,
+      "sessionRules": [],
+      "expected": {
+        "decision": "deny",
+        "ruleId": "mode.plan.nonReadOnly",
+        "reason": "Plan mode only allows read-only, non-destructive tools",
+        "riskLevel": "high",
+        "sideEffectScope": "system"
+      }
+    },
+    {
+      "context": {
         "toolName": "Read",
         "input": {
           "file_path": "/etc/passwd"

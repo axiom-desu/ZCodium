@@ -113,6 +113,7 @@ impl Engine {
         history.agent_profile = session.agent_profile.clone();
         history.tool_disallowlist = submission.tool_disallowlist;
         history.tool_filter = session.runtime.tools.clone();
+        history.tool_search_mode = session.runtime.tool_search_mode;
         history.anomaly_guard = self.anomaly_guard;
         history.compact_failures = session.runtime.compact_failures;
         // Node turnNumber：本轮输入之前已有用户消息（或已压缩）即非首轮。

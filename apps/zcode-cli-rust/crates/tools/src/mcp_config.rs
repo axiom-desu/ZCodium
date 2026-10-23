@@ -17,6 +17,8 @@ pub(super) struct Server {
     pub timeout: std::time::Duration,
     pub workspace: bool,
     pub enabled: bool,
+    /// `alwaysLoad`：只接受布尔值，保留 false，未配置/非布尔为 None。
+    pub always_load: Option<bool>,
 }
 impl Server {
     pub fn parse(name: &str, mut raw: Value, cwd: &Path) -> Result<Self> {
@@ -97,6 +99,7 @@ impl Server {
             cwd: config::resolve(cwd, raw["cwd"].as_str().unwrap_or(".")),
             workspace: raw["isolation"] == "workspace",
             enabled: raw["enabled"] != false && raw["enable"] != false,
+            always_load: raw["alwaysLoad"].as_bool(),
             raw,
             transport,
             timeout: std::time::Duration::from_millis(timeout),
@@ -116,6 +119,7 @@ impl Server {
             cwd: cwd.into(),
             workspace: false,
             timeout: std::time::Duration::from_secs(30),
+            always_load: None,
         })
     }
     pub fn key(&self, session: &str) -> String {

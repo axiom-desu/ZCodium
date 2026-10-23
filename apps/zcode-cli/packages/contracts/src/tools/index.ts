@@ -54,6 +54,10 @@ export * from "./resume-workflow-run.js";
 export * from "./escalate.js";
 export * from "./resolve-workflow-question.js";
 export * from "./workflow-observation-display.js";
+// ToolSearch 的契约面：名字常量、模式枚举、输入/输出 schema 与引用块由 core 的搜索、
+// 请求投影和 adapter 的 wire 编码共同读取，漏掉这两行这些消费方都拿不到同一份定义。
+export * from "./tool-search.js";
+export * from "./deferred-tool-call.js";
 export * from "./tool-result-metadata.js";
 export * from "./performance.js";
 

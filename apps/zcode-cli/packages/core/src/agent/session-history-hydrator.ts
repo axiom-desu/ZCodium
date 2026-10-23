@@ -1,42 +1,29 @@
+import { ModelCallWrapperSchema } from "@zcode/contracts";
+import { hydrateCompactDiscovery, hydrateToolSearchContent } from "./tool-search-hydration.js";
 import { runtimeInputMetadata } from "./runtime-input-presentation.js";
 // ============================================================
 // Session History Hydration - rebuild provider-visible context
 // ============================================================
 
-import { modelMessageContentToText, selectActiveConversationBranch } from "@zcode/contracts";
+import { selectActiveConversationBranch } from "@zcode/contracts";
 import type {
-  FilePart,
   MessagePart,
   MessageWithParts,
-  ModelMessageContent,
-  ModelMessageContentBlock,
   MessageId,
   ToolArtifactStorePort,
+  ToolPart,
 } from "@zcode/contracts";
-import { wrapSystemReminderForSource } from "../system-reminder/source.js";
-import {
-  buildPromptAttachmentReminderBodies,
-  type PromptAttachmentReminderInput,
-} from "../system-reminder/prompt-attachment.js";
 import { persistedTokenUsageBaseline } from "./message-history-usage.js";
-import {
-  systemReminderAttachmentEntry,
-  type MessageHistory,
-  type RuntimeMessageEntry,
-  type ToolCallInput,
-} from "./message-history.js";
+import { type MessageHistory, type ToolCallInput } from "./message-history.js";
 import {
   assistantReasoningFromParts,
   assistantTextFromParts,
   isToolPart,
-  metadataFromUserParts,
   providerToolNameFromPart,
-  isProviderWrappedSystemReminderText,
-  runtimeMessageMetadataFromPartMetadata,
   syntheticSystemReminderAttachmentFromParts,
-  syntheticSystemReminderAttachmentFromTextPart,
 } from "./session-history-metadata.js";
 import { compactActiveSessionMessages, isActiveCompactionBoundaryPart } from "./compact-session.js";
+import { userEntriesFromParts } from "./session-history-user-entries.js";
 import { filePartToContentBlock, projectPersistedToolMediaContent } from "./file-part-hydration.js";
 import { selectToolPartsForHistory } from "./tool-part-order.js";
 
@@ -107,13 +94,31 @@ export async function hydrateMessageHistoryFromSession(input: {
 
       const entries = await userEntriesFromParts(parts, input.artifactStore);
       if (entries.length === 0) continue;
+      // 有效 compact 边界携带的发现检查点挂在 summary entry 上；Local 在两次 compact
+      // 之间据此提升目标 schema，不能只留在 compaction part 里。
+      const boundaryPart = parts.find(isActiveCompactionBoundaryPart);
+      const compactBoundary =
+        boundaryPart?.type === "compaction"
+          ? hydrateCompactDiscovery(boundaryPart.compactBoundary)
+          : undefined;
+      if (compactBoundary && entries[0]) {
+        entries[0] = {
+          ...entries[0],
+          metadata: {
+            ...(entries[0].metadata ?? { source: "legacy_synthetic" as const }),
+            compactBoundary,
+          },
+        };
+      }
       const presentation = runtimeInputMetadata(
         (message.info.metadata as Record<string, unknown> | undefined)?.inputPresentation,
       );
       input.history.addEntries(
         presentation
           ? entries.map((entry) =>
-              entry.kind === "attachment" ? entry : { ...entry, metadata: presentation },
+              entry.kind === "attachment"
+                ? entry
+                : { ...entry, metadata: { ...entry.metadata, ...presentation } },
             )
           : entries,
       );
@@ -141,6 +146,7 @@ export async function hydrateMessageHistoryFromSession(input: {
         (part): ToolCallInput => ({
           id: part.callID,
           input: part.state.input,
+          modelCallWrapper: modelCallWrapperFromPart(part),
           name: providerToolNameFromPart(part),
         }),
       ),
@@ -154,6 +160,7 @@ export async function hydrateMessageHistoryFromSession(input: {
 
     for (const part of toolParts) {
       const providerToolName = providerToolNameFromPart(part);
+      const modelCallWrapper = modelCallWrapperFromPart(part);
       if (part.state.status === "completed") {
         // live tool result 使用结构化媒体，但旧恢复只读取 output 摘要，
         // 导致模型切换或冷恢复后丢失 Read/MCP 产生的真实媒体。
@@ -173,8 +180,19 @@ export async function hydrateMessageHistoryFromSession(input: {
                 attachmentBlocks,
               )
             : undefined;
-        const content = projectedMediaContent ?? part.state.output;
-        input.history.addToolResult(part.callID, providerToolName, content, true);
+        // 合法 modelContent（有序文本/引用）优先：ToolSearch 的发现集合只从真实引用恢复。
+        const content =
+          hydrateToolSearchContent(part.state.metadata?.modelContent) ??
+          projectedMediaContent ??
+          part.state.output;
+        input.history.addToolResult(
+          part.callID,
+          providerToolName,
+          content,
+          true,
+          false,
+          modelCallWrapper,
+        );
         continue;
       }
 
@@ -185,14 +203,24 @@ export async function hydrateMessageHistoryFromSession(input: {
         input.history.addToolResult(
           part.callID,
           providerToolName,
-          typeof persistedModelContent === "string" ? persistedModelContent : part.state.error,
+          hydrateToolSearchContent(persistedModelContent) ??
+            (typeof persistedModelContent === "string" ? persistedModelContent : part.state.error),
           false,
+          true,
+          modelCallWrapper,
         );
         continue;
       }
 
       interruptedToolCount++;
-      input.history.addToolResult(part.callID, providerToolName, INTERRUPTED_TOOL_RESULT, false);
+      input.history.addToolResult(
+        part.callID,
+        providerToolName,
+        INTERRUPTED_TOOL_RESULT,
+        false,
+        true,
+        modelCallWrapper,
+      );
     }
   }
 
@@ -202,6 +230,11 @@ export async function hydrateMessageHistoryFromSession(input: {
     messageCount: activeMessages.length,
     partCount,
   };
+}
+
+function modelCallWrapperFromPart(part: ToolPart) {
+  const parsed = ModelCallWrapperSchema.safeParse(part.metadata?.modelCallWrapper);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function activeSessionMessages(
@@ -267,161 +300,4 @@ function dedupeParts(parts: MessagePart[]): MessagePart[] {
     byId.set(part.id, part);
   }
   return [...byId.values()];
-}
-
-async function userEntriesFromParts(
-  parts: MessagePart[],
-  artifactStore: ToolArtifactStorePort | undefined,
-): Promise<RuntimeMessageEntry[]> {
-  const attachmentBlocks: ModelMessageContentBlock[] = [];
-  // 媒体数据块（image/video）统一后置组，恢复顺序对齐 live 主路径 [text, media]。
-  const inlineMediaBlocks: ModelMessageContentBlock[] = [];
-  const promptBlocks: ModelMessageContentBlock[] = [];
-  const syntheticAttachmentEntries: RuntimeMessageEntry[] = [];
-  const promptAttachmentEntries: RuntimeMessageEntry[] = [];
-
-  for (const part of parts) {
-    if (part.type === "text" && !part.ignored) {
-      const syntheticAttachment = syntheticSystemReminderAttachmentFromTextPart(part);
-      if (syntheticAttachment) {
-        syntheticAttachmentEntries.push({
-          kind: "attachment",
-          content: syntheticAttachment.content,
-          metadata: syntheticAttachment.metadata,
-        });
-        continue;
-      }
-      promptBlocks.push({ type: "text", text: textPartToProviderText(part) });
-      continue;
-    }
-
-    if (part.type === "file") {
-      const block = await filePartToContentBlock(part, artifactStore);
-      // local_ref 是附件恢复历史时的唯一路径句柄，不能因为 metadata_only 过滤。
-      if (block.type === "text") {
-        const promptAttachmentInput = promptAttachmentReminderInputForFilePart(part, block);
-        if (promptAttachmentInput) {
-          const reminderBody =
-            buildPromptAttachmentReminderBodies(promptAttachmentInput).join("\n");
-          promptAttachmentEntries.push(
-            systemReminderAttachmentEntry("prompt_attachment", reminderBody),
-          );
-          continue;
-        }
-      }
-      if (block.type === "image" || block.type === "video") {
-        inlineMediaBlocks.push(block);
-      } else {
-        attachmentBlocks.push(block);
-      }
-      continue;
-    }
-
-    if (part.type === "agent") {
-      promptBlocks.push({ type: "text", text: `[Selected agent: ${part.name}]` });
-    }
-  }
-
-  const content = contentFromUserBlocks(
-    [...attachmentBlocks, ...promptBlocks, ...inlineMediaBlocks],
-    {
-      preserveBlocks: attachmentBlocks.length > 0 || inlineMediaBlocks.length > 0,
-    },
-  );
-  const hasUserContent = modelMessageContentToText(content).trim().length > 0;
-  const userMetadata = metadataFromUserParts(parts);
-  // 文本附件从原始 file part 恢复为 prompt_attachment 后，空正文的
-  // real_user envelope 曾被 trim 判空丢弃，导致 live 与 resume 的 provider history 不一致。
-  // 这里只恢复 Agent 内存锚点；bare-empty 和纯 synthetic/meta user 仍不生成空消息。
-  const shouldRestoreRealUserEnvelope =
-    hasUserContent || (userMetadata.source === "real_user" && promptAttachmentEntries.length > 0);
-  if (
-    !shouldRestoreRealUserEnvelope &&
-    syntheticAttachmentEntries.length === 0 &&
-    promptAttachmentEntries.length === 0
-  ) {
-    return [];
-  }
-  return [
-    ...(shouldRestoreRealUserEnvelope
-      ? [
-          {
-            message: { role: "user" as const, content },
-            metadata: userMetadata,
-          },
-        ]
-      : []),
-    ...syntheticAttachmentEntries,
-    ...promptAttachmentEntries,
-  ];
-}
-
-function contentFromUserBlocks(
-  blocks: readonly ModelMessageContentBlock[],
-  options: { preserveBlocks?: boolean } = {},
-): ModelMessageContent {
-  if (options.preserveBlocks) {
-    return blocks.map((block) => ({ ...block })) as ModelMessageContentBlock[];
-  }
-  const textBlocks = blocks.filter(
-    (block): block is Extract<ModelMessageContentBlock, { type: "text" }> => block.type === "text",
-  );
-  if (blocks.length === textBlocks.length) {
-    return textBlocks
-      .map((block) => block.text)
-      .filter(Boolean)
-      .join("\n\n");
-  }
-  return blocks.map((block) => ({ ...block })) as ModelMessageContentBlock[];
-}
-
-function promptAttachmentReminderInputForFilePart(
-  part: FilePart,
-  block: Extract<ModelMessageContentBlock, { type: "text" }>,
-): (PromptAttachmentReminderInput & { content: string; kind: "file" | "inline_text" }) | undefined {
-  if (!part.mime.startsWith("text/")) return undefined;
-  if (!part.source) {
-    return {
-      content: block.text,
-      kind: "inline_text",
-      label: part.filename,
-      preview: part.metadata?.preview,
-    };
-  }
-  if (part.metadata?.storageKind !== "inline") return undefined;
-  if (
-    part.metadata.recoverability !== "provider_ready" &&
-    part.metadata.recoverability !== "preview_only"
-  ) {
-    return undefined;
-  }
-  if (part.metadata.preview?.text !== block.text) return undefined;
-  return {
-    content: block.text,
-    kind: "file",
-    label: part.source.text.value ?? part.filename,
-    preview: part.metadata.preview,
-  };
-}
-
-function textPartToProviderText(part: Extract<MessagePart, { type: "text" }>): string {
-  if (!part.synthetic) {
-    return part.text;
-  }
-  if (isProviderWrappedSystemReminderText(part.text)) {
-    return part.text;
-  }
-
-  const runtimeMetadata = runtimeMessageMetadataFromPartMetadata(part.metadata);
-  if (runtimeMetadata?.source === "task_status" && part.metadata?.source !== "background_task") {
-    return wrapSystemReminderForSource("task_status", part.text);
-  }
-  if (
-    runtimeMetadata?.source === "queued_system_notification" ||
-    part.metadata?.source === "subagent"
-  ) {
-    // subagent notification 同样只在 provider history 恢复时包外层，避免改动 session/UI raw transcript。
-    return wrapSystemReminderForSource("queued_system_notification", part.text);
-  }
-  return part.text;
 }

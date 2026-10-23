@@ -43,8 +43,9 @@ pub fn local_reference((original, path): Local, mime: &str, size: u64, reason: &
     let text = format!(
         "Attached {mime}: {original}\nThe file was sent by local path because {why}.\nUse the available file reading tools if you need to inspect the file contents."
     );
+    // 首发说明只存在于 contentBlock 时，冷恢复会丢失降级原因和读取提示，改变模型历史前缀。
     let meta = json!({"originalUrl": original, "recoverability": "metadata_only",
-        "sizeBytes": size, "storageKind": "local_ref"});
+        "sizeBytes": size, "storageKind": "local_ref", "pathReferenceText": text});
     NodeFile {
         part: part(
             mime,
@@ -73,6 +74,9 @@ pub fn local_failed(
         meta.insert("sizeBytes".into(), size.into());
     }
     meta.insert("storageKind".into(), "local_ref".into());
+    let text = format!("[Attached {mime}: {original}]");
+    // 未发送的本地文件同样保存首发说明原文，冷恢复按同一字节重建。
+    meta.insert("pathReferenceText".into(), text.clone().into());
     let meta = serde_json::Value::Object(meta);
     NodeFile {
         part: part(
@@ -82,7 +86,7 @@ pub fn local_failed(
             Some(local_source(original, path)),
             meta,
         ),
-        block: text_block(&format!("[Attached {mime}: {original}]")),
+        block: text_block(&text),
     }
 }
 

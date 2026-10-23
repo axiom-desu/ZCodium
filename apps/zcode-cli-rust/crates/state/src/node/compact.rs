@@ -104,6 +104,10 @@ pub fn summary(conn: &Connection, session: &str, done: &Value, now: i64) -> Resu
             "headMessageId": head.id(), "tailMessageId": tail.id()}),
         );
     }
+    put(
+        "preCompactDiscoveredTools",
+        done["preCompactDiscoveredTools"].clone(),
+    );
     put("summaryMessageIds", json!([summary_id]));
     put("customInstructions", done["customInstructions"].clone());
     put("traceId", done["traceId"].clone());
@@ -144,7 +148,15 @@ pub fn summary(conn: &Connection, session: &str, done: &Value, now: i64) -> Resu
         );
         save(
             conn,
-            timeline::reminder_records(&host, ids, now_ms, text, selection, tools),
+            timeline::reminder_records(
+                &host,
+                ids,
+                now_ms,
+                text,
+                reminder.get("toolSearchAnnouncement"),
+                selection,
+                tools,
+            ),
             now,
         )?;
     }

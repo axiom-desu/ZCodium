@@ -10,6 +10,7 @@ import { AiSdkModelAdapterError } from "./errors.js";
 import { createGenerateTextOptions } from "./runner-options.js";
 import { detectProviderBusinessFinishError } from "./provider-finish-business-error.js";
 import {
+  createEmptyContextExceededError,
   getGenerateTextResultMetadata,
   isZeroOutputModelCompletion,
   logGenerateTextDiagnostics,
@@ -36,7 +37,7 @@ import type {
   ResolvedAiSdkModel,
 } from "./runner-runtime.js";
 import { retryAllowedByFailurePolicy } from "./workflow-model-failure-policy.js";
-import { modelFailureStatusFields } from "./runner-failure-status.js";
+import { failureUsageFields, modelFailureStatusFields } from "./runner-failure-status.js";
 import { repairReasoningHistoryAfterSignatureRejection } from "./reasoning-history-normalization.js";
 import { admitAttempt, type AttemptAdmission } from "./request-admission.js";
 import {
@@ -49,7 +50,11 @@ import {
   publishGenerateTextCompleted,
   waitForGenerateTextOrAbort,
 } from "./runner-generate-support.js";
-import { publishRetryScheduledStatus, statusPublishOptions } from "./runner-status-publish.js";
+import {
+  publishRetryBackoffCancellation,
+  publishRetryScheduledStatus,
+  statusPublishOptions,
+} from "./runner-status-publish.js";
 
 export async function runGenerateText(input: {
   env: EnvRecord;
@@ -186,6 +191,19 @@ export async function runGenerateText(input: {
       }
       const { usage, toolCalls, toolResults, sources, text, reasoning } =
         normalizeGenerateTextOutput(result, input.request, input.logger);
+      const contextError = createEmptyContextExceededError({
+        finishReason: result.finishReason,
+        rawFinishReason: result.rawFinishReason ?? result.providerMetadata?.rawFinishReason,
+        // 空文本但带签名的 reasoning 仍算有效输出，不能当成空超窗。
+        hasAssistantContent:
+          text.length > 0 ||
+          (reasoning ?? []).some(
+            (block) => block.text.length > 0 || Object.keys(block.providerOptions ?? {}).length > 0,
+          ),
+        toolCallCount: toolCalls?.length ?? 0,
+        usage,
+      });
+      if (contextError) throw contextError;
       const reasoningLength = (reasoning ?? []).reduce(
         (total, block) => total + block.text.length,
         0,
@@ -194,6 +212,9 @@ export async function runGenerateText(input: {
         input.request.preserveProviderStreamBoundaries !== true &&
         isZeroOutputModelCompletion({
           finishReason: result.finishReason,
+          rawFinishReason:
+            result.rawFinishReason ??
+            (result.providerMetadata as Record<string, unknown> | undefined)?.rawFinishReason,
           reasoningLength,
           textLength: text.length,
           toolCallCount: toolCalls?.length ?? 0,
@@ -312,6 +333,8 @@ export async function runGenerateText(input: {
           retryable: canRetry,
           statusCode: failure.statusCode,
           ...modelFailureStatusFields(error, failure, options ? "response" : "prepare"),
+          // 失败响应里已报告的用量随终止失败结算一次（成功路径仍只有 ModelComplete）。
+          ...failureUsageFields(error),
           timestamp: new Date(completedAt).toISOString(),
           type: "model_request_failed",
         },
@@ -386,31 +409,14 @@ export async function runGenerateText(input: {
       try {
         await sleep(delayMs, input.request.abortSignal);
       } catch (sleepError) {
-        const sleepFailure = classifyModelFailure(sleepError, input.request.abortSignal);
-        const sleepResponseHeaders = sanitizeModelNetworkHeaders(
-          getResponseHeaders(unwrapRetryError(sleepError)),
-        );
-        await publishModelStatus(
-          {
-            ...statusContext,
-            attempt,
-            message: sleepFailure.message,
-            reason: sleepFailure.reason,
-            requestHeaderCount,
-            requestHeaders,
-            responseHeaderCount: Object.keys(sleepResponseHeaders).length,
-            responseHeaders: sleepResponseHeaders,
-            retryable: false,
-            statusCode: sleepFailure.statusCode,
-            ...modelFailureStatusFields(sleepError, sleepFailure, "connect"),
-            timestamp: new Date().toISOString(),
-            type: "model_request_failed",
-          },
-          {
-            // 退避期间票据已归还：这次取消不属于任何一次尝试，不转投票据。
-            ...statusPublishOptions(input),
-          },
-        );
+        // 退避期间票据已归还：这次取消不属于任何一次尝试，不转投票据。
+        const sleepFailure = await publishRetryBackoffCancellation({
+          attempt,
+          error: sleepError,
+          input,
+          requestHeaders,
+          statusContext,
+        });
         throw toAdapterError(sleepError, sleepFailure, statusContext, attempt, {
           errorPhase: "connect",
         });

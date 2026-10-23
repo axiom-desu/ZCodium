@@ -98,3 +98,22 @@ fn input_params_match_zod() {
     check(crate::legacy_input_params::compact, &fixtures["compact"]);
     check(crate::legacy_input_params::goal, &fixtures["goal"]);
 }
+
+#[test]
+fn runtime_config_tool_search_mode_is_strict() {
+    let base = serde_json::json!({
+        "workspace": {"workspacePath": "/w", "workspaceKey": "/w"}
+    });
+    let mut local = base.clone();
+    local["runtimeConfig"] = serde_json::json!({"toolSearch": {"mode": "local"}});
+    assert_eq!(
+        create(&local).unwrap()["runtimeConfig"]["toolSearch"]["mode"],
+        "local"
+    );
+    let mut invalid = base.clone();
+    invalid["runtimeConfig"] = serde_json::json!({"toolSearch": {"mode": "sometimes"}});
+    assert!(create(&invalid).is_err());
+    let mut unknown = base;
+    unknown["runtimeConfig"] = serde_json::json!({"toolSearch": {"mode": "off"}, "other": 1});
+    assert!(create(&unknown).is_err());
+}

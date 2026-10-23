@@ -72,7 +72,9 @@ const sendMessageHandler: ToolHandler = async (input, context) => {
 export const sendMessageToolEntry: ToolEntry = {
   capability: "Send a short message to a local agent",
   metadata: {
+    shouldDefer: true,
     name: SEND_MESSAGE_TOOL_NAME,
+    searchHint: "send messages to agent teammates",
     description: SEND_MESSAGE_PROVIDER_DESCRIPTION,
     readOnly: false,
     destructive: false,

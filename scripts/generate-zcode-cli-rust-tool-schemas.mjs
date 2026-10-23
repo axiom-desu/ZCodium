@@ -15,6 +15,10 @@ import {
   todoReadToolEntry,
   todoWriteToolEntry,
 } from "../apps/zcode-cli/packages/core/src/tool/handlers/todo.ts";
+import { deferredToolCallEntry } from "../apps/zcode-cli/packages/core/src/tool/handlers/deferred-tool-call.ts";
+import { toolSearchToolEntry } from "../apps/zcode-cli/packages/core/src/tool/handlers/tool-search.ts";
+import { builtInTools } from "../apps/zcode-cli/packages/core/src/tool/handlers/index.ts";
+import { LOCAL_TOOL_SEARCH_DESCRIPTION } from "../apps/zcode-cli/packages/core/src/tool/search/description.ts";
 
 const toolSchemas = [
   ["Agent", "agent", "AgentInputJsonSchema"],
@@ -34,6 +38,8 @@ const toolSchemas = [
   ["AskUserQuestion", "ask-user-question", "AskUserQuestionInputJsonSchema"],
   ["WebFetch", "webfetch", "WebFetchInputJsonSchema"],
   ["WebSearch", "websearch", "WebSearchInputJsonSchema"],
+  ["ToolSearch", "tool-search", "ToolSearchInputJsonSchema"],
+  ["DeferredToolCall", "deferred-tool-call", "DeferredToolCallInputJsonSchema"],
 ];
 const schemas = {};
 for (const [name, file, key] of toolSchemas) {
@@ -74,6 +80,35 @@ const assets = [
     },
   ],
   ["tools", "tool_schemas.json", schemas],
+  // 控制入口描述来自真实注册 entry/固定文案，避免 Rust 再手写一份 schema 或文案。
+  [
+    "domain",
+    "tool_search_descriptions.json",
+    {
+      ToolSearch: {
+        native: toolSearchToolEntry.metadata.description,
+        local: LOCAL_TOOL_SEARCH_DESCRIPTION,
+      },
+      DeferredToolCall: { native: deferredToolCallEntry.metadata.description },
+    },
+  ],
+  // 常驻/deferred/并发安全事实来自真实 builtInTools metadata，不维护第二份名单。
+  [
+    "domain",
+    "tool_search_metadata.json",
+    Object.fromEntries(
+      builtInTools.map((entry) => [
+        entry.metadata.name,
+        {
+          shouldDefer: entry.metadata.shouldDefer === true,
+          alwaysLoad: entry.metadata.alwaysLoad === true,
+          searchHint: entry.metadata.searchHint ?? null,
+          concurrentSafe: entry.metadata.concurrentSafe === true,
+          providerVisible: entry.metadata.providerVisible !== false,
+        },
+      ]),
+    ),
+  ],
   ["tools", "skill_description.json", skillToolEntry.metadata.description],
   [
     "tools",

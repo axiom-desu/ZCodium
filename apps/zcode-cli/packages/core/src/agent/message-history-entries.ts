@@ -67,7 +67,30 @@ export function cloneTokenUsageInfo(tokens: TokenUsageInfo): TokenUsageInfo {
 export function cloneRuntimeMessageMetadata(
   metadata: RuntimeMessageMetadata | undefined,
 ): RuntimeMessageMetadata | undefined {
-  return metadata ? { ...metadata } : undefined;
+  if (!metadata) return undefined;
+  return {
+    ...metadata,
+    // 增量公告与 compact 边界是历史事实：复制时各自持有数组，不能共享可变引用。
+    ...(metadata.compactBoundary
+      ? {
+          compactBoundary: {
+            ...metadata.compactBoundary,
+            preCompactDiscoveredTools: metadata.compactBoundary.preCompactDiscoveredTools
+              ? [...metadata.compactBoundary.preCompactDiscoveredTools]
+              : undefined,
+          },
+        }
+      : {}),
+    ...(metadata.toolSearchAnnouncement
+      ? {
+          toolSearchAnnouncement: {
+            addedNames: [...metadata.toolSearchAnnouncement.addedNames],
+            removedNames: [...metadata.toolSearchAnnouncement.removedNames],
+            readdedNames: [...metadata.toolSearchAnnouncement.readdedNames],
+          },
+        }
+      : {}),
+  };
 }
 
 export function messageFromEntryInput(
@@ -104,6 +127,7 @@ export function cloneModelInputMessage(message: ModelInputMessage): ModelInputMe
   };
   if (message.cacheControl) next.cacheControl = { ...message.cacheControl };
   if (message.toolCalls) next.toolCalls = message.toolCalls.map((toolCall) => ({ ...toolCall }));
+  if (message.modelCallWrapper !== undefined) next.modelCallWrapper = message.modelCallWrapper;
   if (message.toolCallId) next.toolCallId = message.toolCallId;
   // 空字符串是可恢复调用的 provider 原始名称，不能在 request-local clone 时按 falsy 丢失。
   if (message.toolName !== undefined) next.toolName = message.toolName;

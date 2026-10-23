@@ -243,3 +243,36 @@ fn help_and_version_come_before_the_prompt() {
     // 帮助之前的校验仍然先报错（Node run.ts 的顺序）。
     assert!(parse(&args(&["--mode", "x", "--help"])).is_err());
 }
+
+#[test]
+fn toolsearch_mode_defaults_off_and_rejects_unknown_values() {
+    // 缺省 off：不传参数、CLI 其它入口都使用完整工具目录。
+    assert_eq!(
+        prompt(&["-p", "hi"]).tool_search_mode,
+        zcode_cli_domain::tool_search::Mode::Off
+    );
+    for (raw, mode) in [
+        ("auto", zcode_cli_domain::tool_search::Mode::Auto),
+        ("native", zcode_cli_domain::tool_search::Mode::Native),
+        ("local", zcode_cli_domain::tool_search::Mode::Local),
+        ("off", zcode_cli_domain::tool_search::Mode::Off),
+    ] {
+        assert_eq!(
+            prompt(&["-p", "hi", "--toolsearch-mode", raw]).tool_search_mode,
+            mode
+        );
+    }
+    // TUI 入口(s)继承同一启动偏好。
+    assert_eq!(
+        tui_args(&["--toolsearch-mode", "local"]).tool_search_mode,
+        zcode_cli_domain::tool_search::Mode::Local
+    );
+    for bad in ["force", "AUTO", "native,local", ""] {
+        assert!(
+            parse(&args(&["-p", "hi", "--toolsearch-mode", bad])).is_err(),
+            "{bad} must be rejected"
+        );
+    }
+    // 旧开关不再接受。
+    assert!(parse(&args(&["-p", "hi", "--enable-toolsearch"])).is_err());
+}

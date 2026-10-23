@@ -81,6 +81,7 @@ export async function executeTools(
     traceContext,
     subagentModelOverride: options?.subagentModelOverride,
     model: options?.model,
+    toolSearch: options?.toolSearch,
   });
   let results: ToolExecutionResult[] = [];
 

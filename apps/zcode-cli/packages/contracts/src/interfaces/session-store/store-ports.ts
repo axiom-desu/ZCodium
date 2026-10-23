@@ -51,6 +51,8 @@ export interface SessionStorePort {
   commitSharedContextImportBundle?(bundle: SharedContextImportCommitBundle): Promise<SessionInfo>;
   transitionSharedContextImport?(input: SharedContextImportTransition): Promise<boolean>;
   updateSession(input: UpdateSessionInput): Promise<SessionInfo>;
+  /** 只写一次删除时间（首时间保持）；正文保留，普通列表永不返回软删除行。 */
+  softDeleteSession?(sessionID: SessionId, timeDeleted?: number): Promise<void>;
   getSession(sessionID: SessionId): Promise<SessionInfo | null>;
   listSessions(input?: ListSessionsInput): Promise<SessionInfo[]>;
   /**

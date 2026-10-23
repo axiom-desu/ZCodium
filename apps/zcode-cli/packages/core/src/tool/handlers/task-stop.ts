@@ -97,7 +97,9 @@ export const taskStopToolEntry: ToolEntry = {
   aliases: ["KillShell", "KillBash"],
   capability: "Stop a running background task by ID",
   metadata: {
+    shouldDefer: true,
     name: TASK_STOP_TOOL_NAME,
+    searchHint: "kill a running background task",
     description: TASK_STOP_PROVIDER_DESCRIPTION,
     readOnly: false,
     destructive: false,
@@ -155,11 +157,7 @@ function formatTaskStopModelContent(output: unknown): string {
   return JSON.stringify(TaskStopOutputSchema.parse(output));
 }
 
-function taskStopError(
-  message: string,
-  code: 1 | 3,
-  context: Record<string, unknown>,
-): Error {
+function taskStopError(message: string, code: 1 | 3, context: Record<string, unknown>): Error {
   return createCoreError(CoreErrorType.ToolExecutionFailed, message, {
     context: {
       ...context,

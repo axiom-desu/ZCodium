@@ -42,6 +42,8 @@ export interface ModelToolContract {
   sideEffectScope?: ModelToolSideEffectScope;
   permission?: ToolPermissionSpec;
   resultBudget?: ToolResultBudget;
+  /** Native 模式下该工具 schema 已随本次请求发现并展开，adapter 据此标注 defer_loading。 */
+  deferLoading?: boolean;
   execute?: (input: unknown, context: ModelToolExecutionContext) => Promise<unknown> | unknown;
 }
 

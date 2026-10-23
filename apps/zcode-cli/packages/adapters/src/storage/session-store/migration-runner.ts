@@ -192,7 +192,9 @@ function* migrationSteps(
           total: SQLITE_MIGRATIONS.length,
         };
         // 本 hotfix 只调整启动等待；执行与账本校验共用冻结原 SQL，避免维护两套转换语义。
-        db.exec(migration.sql);
+        // 提供 apply 的迁移自己负责幂等守卫（例如列已存在的历史库），SQL 仍用于账本 checksum。
+        if (migration.apply) migration.apply(db);
+        else db.exec(migration.sql);
         if (migrationFacts) migrationFacts.executedCount++;
         db.prepare(
           "insert into schema_migration (id, checksum, app_version, time_applied) values (?, ?, ?, ?)",

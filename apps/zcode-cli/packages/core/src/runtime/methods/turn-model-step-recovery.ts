@@ -1,6 +1,7 @@
 import { CompactTrigger } from "../deps.js";
 import { traceContextToLogContext, TurnMachineImpl } from "../deps.js";
 import { createCompactRapidRefillError } from "../helpers/index.js";
+import { getTurnTools } from "./turn-tool-visibility.js";
 import type { RuntimeMessageEntry } from "../../agent/message-history.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import type { RegularTurnLoopState } from "./turn-loop-state.js";
@@ -62,6 +63,7 @@ export async function recoverModelStepAfterContextExceeded(
     state.turnAbortSignal,
     {
       activeEntries,
+      getContinuationTools: () => getTurnTools(this, state),
       modelStepIndex,
       rapidRefillCount: rapidRefill.consecutiveRapidRefills,
       model: state.model,

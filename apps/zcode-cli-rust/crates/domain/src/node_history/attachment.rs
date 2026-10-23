@@ -87,6 +87,12 @@ fn source_ref(part: &Value, mime: &str) -> Value {
 /// Node `filePartToContentBlock`.
 pub(super) fn file_block(part: &Value, artifacts: ArtifactReader) -> Value {
     let mime = part["mime"].as_str().unwrap_or("");
+    // 这是已发给模型的说明，不是文件内容；直接恢复原文，不重新读取或推测降级原因。
+    if part["metadata"]["storageKind"] == "local_ref"
+        && let Some(text) = part["metadata"]["pathReferenceText"].as_str()
+    {
+        return json!({"type": "text", "text": text});
+    }
     let data = data_url(part, artifacts);
     if let Some(data) = data.as_deref() {
         if is_image(mime) {

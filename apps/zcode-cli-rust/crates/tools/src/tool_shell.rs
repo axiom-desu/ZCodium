@@ -3,7 +3,7 @@ use super::tool_process::run;
 use super::tools::{boolean, keys, string};
 use crate::contract::{EventSink, ToolError, ToolOutput};
 use anyhow::{Context, Result, bail};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -26,12 +26,18 @@ pub struct ShellTasks {
     pub(super) jobs: Mutex<HashMap<String, HashMap<String, Arc<Job>>>>,
     /// Complete child environment (Node `buildExecutionEnv`).
     pub(super) env: Arc<[(String, String)]>,
+    /// Bash 输出首选的 tmp 父目录（Node `bashOutputTempDir`）；`None` 只用 artifacts。
+    bash_temp_parent: Option<PathBuf>,
+    /// 进程生命周期内唯一的 `zcode-bash-*` 根目录；创建失败不缓存。
+    bash_temp: super::bash_temp::TempRoot,
 }
 impl ShellTasks {
-    pub fn new(env: Arc<[(String, String)]>) -> Self {
+    pub fn new(env: Arc<[(String, String)]>, bash_temp_parent: Option<PathBuf>) -> Self {
         Self {
             jobs: Mutex::default(),
             env,
+            bash_temp_parent,
+            bash_temp: super::bash_temp::TempRoot::default(),
         }
     }
     pub async fn call(
@@ -144,20 +150,43 @@ impl ShellTasks {
                 }))
             }
         };
-        tokio::fs::create_dir_all(artifacts).await?;
+        let started = std::time::Instant::now();
+        if cancel.is_cancelled() {
+            // Node `createStoppedResult(..., "cancelled", "Execution cancelled before spawn")`：
+            // spawn 之前已取消是 cancelled 结果，不是 ToolError；也不为它创建输出文件。
+            return Ok(stopped(
+                &command,
+                "Execution cancelled before spawn",
+                started,
+            ));
+        }
         let id = super::id();
-        let path = artifacts.join(format!("{id}.output"));
-        let combined = Arc::new(Mutex::new(tokio::fs::File::create(&path).await?));
+        // 路径与句柄必须在 spawn 之前冻结：tmp 优先，只有精确 errno 才降级回 artifacts。
+        let prepared = super::bash_temp::prepare(
+            self.bash_temp_parent.as_deref(),
+            artifacts,
+            &id,
+            &self.bash_temp,
+        )
+        .await?;
+        if cancel.is_cancelled() {
+            // 准备期取消：不 spawn，只删除本次新建的空文件；分类仍是同一 cancelled 结果。
+            super::bash_temp::discard(prepared).await;
+            return Ok(stopped(
+                &command,
+                "Execution cancelled before spawn",
+                started,
+            ));
+        }
         let launch = Launch {
             id,
-            path,
-            combined,
+            path: prepared.path,
+            combined: prepared.combined,
             command: command.clone(),
             description,
         };
         if !background {
             // Node：超时的前台命令转入后台（sleep 开头的命令除外），没有会话 owner 时照旧超时终止。
-            let started = std::time::Instant::now();
             if let (Some(sink), Some(deadline)) = (sink, timeout)
                 && auto_eligible(&command)
             {
@@ -223,6 +252,14 @@ impl ShellTasks {
         }
         Ok(())
     }
+}
+/// Node `createStoppedResult`：未 spawn 的取消/关闭是 cancelled 结果，字段与运行期取消
+/// 的 shell data 同形，只是没有执行产物（无路径、无退出码）。
+fn stopped(command: &str, message: &str, started: std::time::Instant) -> ToolOutput {
+    let data = json!({"stdout":"","stderr":message,"status":"cancelled","interrupted":true,
+        "timedOut":false,"cancelled":true,"stdoutTruncated":false,"stdoutBytes":0,
+        "stderrBytes":0,"persistedOutputSize":0});
+    shell_output(command, data, Some(started))
 }
 /// Node `formatBashModelContent`; `failed` is Node's provider `is_error`.
 /// `started` is `None` for a background launch.

@@ -65,6 +65,8 @@ jobs:
         run: pnpm check:zcode-cli-rust-contract-assets
       - name: Domain fixture drift
         run: pnpm check:zcode-cli-rust-domain-fixtures
+      - name: Node state fixture drift
+        run: pnpm check:zcode-cli-rust-state-fixtures
       # M4/M5 driver 会用 --offline 构建 Rust examples；独立 runner 没有 Rust job 的缓存。
       # 在本 job 准备工具链和锁定依赖，避免本机旧 registry 让缺失前置条件漏检。
       - uses: dtolnay/rust-toolchain@stable

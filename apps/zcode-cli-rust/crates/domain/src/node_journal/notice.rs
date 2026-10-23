@@ -28,6 +28,8 @@ pub fn runtime_message(source: &str) -> Value {
         "todo_reminder" | "goal_state_change" | "plugin_reference" | "selection_side_chat" => {
             source
         }
+        // ToolSearch 公告沿用 Node 的 legacy_synthetic runtime message。
+        "tool_search_announcement" => "legacy_synthetic",
         "goal-continuation" => "target_continuation",
         _ => "rewind_notice",
     };
@@ -67,13 +69,21 @@ impl Session {
             .unwrap_or_default();
         let mut message_metadata: Map<String, Value> = extra.clone();
         message_metadata.shift_remove("runtimeMessage");
+        message_metadata.shift_remove(crate::tool_search::ANNOUNCEMENT_KEY);
         message_metadata.insert("source".into(), n.source.into());
         message_metadata.insert("visibility".into(), visibility.into());
         let mut part_metadata = extra;
-        let runtime = part_metadata
+        let mut runtime = part_metadata
             .get("runtimeMessage")
             .cloned()
             .unwrap_or_else(|| runtime_message(n.source));
+        // 增量公告事实与正文同次保存，冷恢复据此避免重复公告。
+        if let Some(announcement) = part_metadata
+            .get(crate::tool_search::ANNOUNCEMENT_KEY)
+            .cloned()
+        {
+            runtime["toolSearchAnnouncement"] = announcement;
+        }
         part_metadata.insert("runtimeMessage".into(), runtime);
         part_metadata.insert("source".into(), n.source.into());
         part_metadata.insert("visibility".into(), visibility.into());

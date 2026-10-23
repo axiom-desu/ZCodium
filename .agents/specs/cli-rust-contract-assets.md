@@ -10,7 +10,7 @@ Rust host/storage/config/trust/context/logging、root/runtime、domain/config、
 
 ## 生成契约
 
-适配三个必要生成器：config schema、tool/prompt assets、Node projection schemas。生成目标限于 Rust domain/schema/config.json、node-projection.json、tools/tool_schemas 与 generator 当前实际提供的 prompt/tool json 资产。所有生成器须支持 `--check`，且 imports 均解析到本仓库现存 named exports；不能恢复已删除 TS 模块。TS 未提供的工具按 unsupported 处理，不凭上游数据补齐。
+适配三个必要生成器：config schema、tool/prompt assets、Node projection schemas。生成目标限于 Rust domain/schema/config.json、node-projection.json、tools/tool_schemas 与 generator 当前实际提供的 prompt/tool json 资产。所有生成器须支持 `--check`，且 imports 均解析到本仓库现存 named exports；不能恢复已删除 TS 模块。TS 未提供的工具按 unsupported 处理，不凭上游数据补齐。domain fixtures 生成器同时输出 `domain/schema/tool-permissions.json`（Rust 二进制内嵌的能力表，直接投影当前 `builtInTools` metadata，含 ToolSearch 只读/免审批与 DeferredToolCall 非只读事实）；`generate-zcode-cli-rust-state-fixtures.mjs` 用真实 TS session-store/runtime 重放固定场景，生成 `state/fixtures/node-{db,cold,sessions}.json`，三者同样支持 `--check`。
 
 ## Config 与独立 TS oracles
 
@@ -22,11 +22,11 @@ TS CLI workspace config 用户路径为 `.zcodium`，Rust runtime fallback `home
 
 ## SQL 冻结与一致性
 
-Rust state SQL 逐 migration id、statement bytes 对照 CLI `SQLITE_MIGRATIONS`（含 0020、0021、0022 源文件）并以 Node session-store 为唯一账本。历史 SQL/checksum 冻结，不为通过校验而修改旧 checksum，也不删除历史 DWF SQL；本适配不启用动态工作流。聚焦 check driver 复用现有 `syncNodeMigrations` 原流程并验证 ids/bytes 与 TS 一致。差异先记录、解释并按 TS 正确生成/校验，不能改写历史迁移掩盖差异。
+Rust state SQL 逐 migration id、statement bytes 对照 CLI `SQLITE_MIGRATIONS`（含 0020、0021、0022、0023 源文件）并以 Node session-store 为唯一账本。历史 SQL/checksum 冻结，不为通过校验而修改旧 checksum，也不删除历史 DWF SQL；本适配不启用动态工作流。聚焦 check driver 复用现有 `syncNodeMigrations` 原流程并验证 ids/bytes 与 TS 一致。差异先记录、解释并按 TS 正确生成/校验，不能改写历史迁移掩盖差异。
 
 ## 验收
 
-- Node 生成器运行后紧接 `--check`；Rust assets 可由 TS 真源重现。
+- Node 生成器运行后紧接 `--check`；Rust assets 可由 TS 真源重现。CI 依次运行 `check:zcode-cli-rust-protocol-schema`、`check:zcode-cli-rust-contract-assets`、`check:zcode-cli-rust-domain-fixtures`、`check:zcode-cli-rust-state-fixtures`。
 - 对应 TS oracle focused tests、改动文件 oxfmt/oxlint、`pnpm typecheck`、`pnpm lint`、`pnpm architecture:check --changed`。
 - 可用时只运行 Rust domain tests；Rust 整体测试待平台 executor 完成后统一验证。不得启动真实模型/runtime/DB；测试仅使用 tempdir/local fixture。
 - 测试报告 schema 总数、已确认同步数、路径差分用例、脚本入口及最多四项待适配问题。

@@ -258,7 +258,7 @@
     "apps/zcode-cli/tools/prompt-trajectory/package.json": "f1dff3a19f177b4732352f81b97b23f47b2f26c4487697dbf4bdba22fbd4c1bf",
     "apps/zcode-cli/tools/repo-snapshot-parody/package.json": "4a593bc9624d5bd03d6cd7834606fc999627f3c7d8397ce18788a0a3505d5f10",
     "apps/zcode-cli/tools/typescript/package.json": "23d7e50d2089d205ce3022c5bafbb6b3e31d000e41ac678a5934e0b72627cf3a",
-    "package.json": "299abe2fba131cff963e176033e061e20b860217a8e4593932270a4f36f39fdc",
+    "package.json": "70596e5146c79bfecc3db860c4cd75f3743e90fe3e15db3b6ec4f534a1b31395",
     "packages/client/package.json": "e76f441549130dc3e5e68072a36b6cb9044e19a6625f1e813f19a4def2b1b689",
     "packages/desktop/package.json": "810356e481be261a0f8039ba24b1e929ed92da3a23fa9f2a50e02dc59f096a00",
     "packages/desktop/src/renderer/public/material-icons/3d.svg": "9527b849f0fba57ca7640e2717b3a19cb5f5e046712cbbd8b75d73af338c68fb",

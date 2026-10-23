@@ -28,6 +28,7 @@ impl WorkspaceRef {
 pub struct ListParams {
     pub workspace: Option<WorkspaceRef>,
     pub session_ids: Option<Vec<String>>,
+    /// @deprecated 旧发送端兼容：仍解析但忽略；列表排除条件只看 `time_deleted`。
     #[serde(default)]
     pub include_archived: bool,
     pub limit: Option<u64>,
@@ -114,7 +115,12 @@ pub struct SessionListing {
     pub parent_id: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,
+    /// Node `SessionInfo.time.archived`：历史列只读兼容，不由它推导 `deleted_at`。
     pub archived_at: Option<u64>,
+    /// Node `SessionInfo.time.deleted`（`time_deleted`）：只由软删除产生。
+    pub deleted_at: Option<u64>,
+    /// Node `SessionInfo.lastOutcome`：上次轮次结果，不替代当前 running phase。
+    pub last_outcome: Option<String>,
 }
 impl SessionListing {
     pub fn projection(&self, requested: Option<&WorkspaceRef>) -> Value {

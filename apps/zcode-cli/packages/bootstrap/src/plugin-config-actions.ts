@@ -160,5 +160,6 @@ export async function describeZCodePlugin(
     marketplace: options.marketplace,
     name: options.pluginName,
     storageRoot: pluginStorageRoot,
+    ...(options.withWriteLock ? { withWriteLock: options.withWriteLock } : {}),
   });
 }

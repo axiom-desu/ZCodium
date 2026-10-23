@@ -38,6 +38,8 @@ const OPTIONS: &[(&str, Option<char>, bool, bool)] = &[
     ("sparse", None, true, true),
     ("data-dir", None, true, false),
     ("config", None, true, false),
+    // S6：ToolSearch 启动偏好（缺省 off）；旧 --enable-toolsearch 不再接受。
+    ("toolsearch-mode", None, true, false),
 ];
 
 #[derive(Default)]

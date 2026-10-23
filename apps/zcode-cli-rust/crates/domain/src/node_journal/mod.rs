@@ -124,6 +124,15 @@ pub struct Tool {
     pub input: Value,
     pub started: Option<u64>,
     pub done: bool,
+    /// `DeferredToolCall` 包装标记（Node `part.metadata.modelCallWrapper`）。
+    pub wrapper: Option<String>,
+}
+
+/// Node part metadata：只有包装调用携带严格 `modelCallWrapper` 字面量。
+pub(super) fn tool_metadata(tool: &Tool) -> Option<serde_json::Value> {
+    tool.wrapper
+        .as_ref()
+        .map(|wrapper| serde_json::json!({"modelCallWrapper": wrapper}))
 }
 
 /// One Node repository write, stamped with the time it happened (Node's

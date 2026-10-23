@@ -121,7 +121,7 @@ async fn local_sse_fixtures_cover_all_protocols_and_terminal_error() {
     use crate::contract::ModelPort;
     use tokio_util::sync::CancellationToken;
 
-    async fn request(api: &str, stream: &'static str) -> Result<serde_json::Value> {
+    async fn request(api: &str, stream: &'static str) -> Result<crate::contract::ModelOutput> {
         let fixture = Fixture::start(move |_| Reply::Close(Response::sse(stream))).await;
         let deadline = Bounded::new();
         let (event_sink, _events) = sink();
@@ -135,8 +135,7 @@ async fn local_sse_fixtures_cover_all_protocols_and_terminal_error() {
                     &CancellationToken::new(),
                 ),
             )
-            .await
-            .map(|output| output.message);
+            .await;
         fixture
             .finish(&deadline)
             .await
@@ -145,20 +144,20 @@ async fn local_sse_fixtures_cover_all_protocols_and_terminal_error() {
     }
 
     let chat = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
-    assert_eq!(
-        request("openai-chat-completions", chat).await.unwrap()["content"],
-        "ok"
-    );
+    let chat = request("openai-chat-completions", chat).await.unwrap();
+    assert_eq!(chat.message["content"], "ok");
+    // Chat 原生帧没有协议翻译字段：回落归一化原因。
+    assert_eq!(chat.raw_finish_reason.as_deref(), Some("stop"));
     let responses = "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"id\":\"m1\",\"type\":\"message\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"item_id\":\"m1\",\"delta\":\"ok\"}\n\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"id\":\"m1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"id\":\"m1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}],\"usage\":{}}}\n\n";
-    assert_eq!(
-        request("openai-responses", responses).await.unwrap()["content"],
-        "ok"
-    );
+    let responses = request("openai-responses", responses).await.unwrap();
+    assert_eq!(responses.message["content"], "ok");
+    // Responses `completed` 的翻译帧显式 `_zcode_raw_finish: null`：provider 没有
+    // 原始 finish reason，不能把归一化 `stop` 伪造成 raw（与 TS providerMetadata 对齐）。
+    assert_eq!(responses.raw_finish_reason, None);
     let anthropic = "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":1}}}\n\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":1}}\n\ndata: {\"type\":\"message_stop\"}\n\n";
-    assert_eq!(
-        request("anthropic-messages", anthropic).await.unwrap()["content"],
-        "ok"
-    );
+    let anthropic = request("anthropic-messages", anthropic).await.unwrap();
+    assert_eq!(anthropic.message["content"], "ok");
+    assert_eq!(anthropic.raw_finish_reason.as_deref(), Some("end_turn"));
     let error = "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"message\":\"fixture rejection\"}}}\n\n";
     assert!(request("openai-responses", error).await.is_err());
 }

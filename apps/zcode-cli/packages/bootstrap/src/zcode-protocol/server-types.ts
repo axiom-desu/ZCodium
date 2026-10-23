@@ -14,6 +14,7 @@ import type { McpProcessTracker } from "@zcode/adapters";
 import type { WorkspaceHookPolicyProvider } from "@zcode/core";
 import {
   zcodeProtocolErrorCodes,
+  type AppToolSearchMode,
   type ZCodeAutomationBotDeliveryTarget,
   type ZCodeDeliveryKind,
   type ModelSelection,
@@ -79,6 +80,8 @@ export interface ZCodeProtocolToolInputTransmissionState {
 
 export interface ZCodeProtocolSessionRecord {
   app: ZCodeApp;
+  /** 启动时解析的工具搜索模式：fork/子 Agent 继承，热 resume 保持原值。 */
+  toolSearchMode: AppToolSearchMode;
   memoryEnabled: boolean;
   nativeSearchEnhancementsEnabled: boolean;
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;

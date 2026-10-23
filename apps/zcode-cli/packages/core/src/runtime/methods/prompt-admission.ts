@@ -4,6 +4,7 @@ import type { PromptRuntimeCommand } from "../command-queue.js";
 import { createRuntimeCommandId } from "../command-queue.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { enqueueCancellableRuntimeCommand } from "./runtime-command-submit.js";
+import { acceptSubmissionModelSelection } from "./turn-model.js";
 import type {
   ActiveTurnStartReservation,
   ExecuteTurnOptions,
@@ -97,11 +98,21 @@ export async function admitPrompt(
     turnId,
   };
   this.reserveTurnStart(turnId, turnTraceContext, "regular");
+  let selectionAccepted = Promise.resolve();
 
   const executeOptions = options as ExecuteTurnOptions | undefined;
   const completion = enqueueCancellableRuntimeCommand<TurnResult, PromptRuntimeCommand>(this, {
     abortSignal: options?.abortSignal,
     onCommandCancelled: () => this.releaseTurnStart(turnId),
+    // 接纳点：已过取消检查、尚未入队 drain。会话选型在这里固定，旧排队输入不会倒写较新的选择。
+    onCommandAccepted: () => {
+      selectionAccepted = acceptSubmissionModelSelection(
+        this,
+        options?.intent,
+        turnTraceContext,
+        options?.modelExecution,
+      );
+    },
     createCommand: ({ reject, resolve }) => ({
       attachments,
       createdAt: new Date(),
@@ -122,6 +133,7 @@ export async function admitPrompt(
   });
   // admission 已经完成；执行失败由现有 turn 事件/调用方消费，不制造 unhandled rejection。
   void completion.catch(() => undefined);
+  await selectionAccepted;
   return { completion, kind: "started", turnId };
 }
 

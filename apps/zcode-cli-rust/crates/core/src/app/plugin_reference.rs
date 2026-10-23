@@ -85,11 +85,12 @@ pub(super) async fn inject(
         source: "plugin_reference",
         body,
         message: message.clone(),
+        metadata: None,
         committed,
     })
     .await?;
     // owner 提交并持久化后才进入模型请求，冷恢复与热会话的历史前缀一致。
-    super::agent_loop::durable(receipt, cancel).await?;
+    super::durable::durable(receipt, cancel).await?;
     history.push(message);
     Ok(())
 }

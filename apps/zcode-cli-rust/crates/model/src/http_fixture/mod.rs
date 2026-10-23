@@ -113,6 +113,8 @@ pub struct Fixture {
     accepted: Arc<AtomicUsize>,
     complete: Arc<AtomicUsize>,
     arrivals: Arc<Mutex<Vec<Instant>>>,
+    /// 每个完整请求的原始字节（头 + body），供 wire 断言。
+    requests: Arc<Mutex<Vec<String>>>,
     observed: mpsc::UnboundedReceiver<usize>,
     observed_count: usize,
     shutdown: CancellationToken,
@@ -131,6 +133,7 @@ impl Fixture {
         let accepted = Arc::new(AtomicUsize::new(0));
         let complete = Arc::new(AtomicUsize::new(0));
         let arrivals = Arc::new(Mutex::new(Vec::new()));
+        let requests = Arc::new(Mutex::new(Vec::new()));
         let (observed_tx, observed) = mpsc::unbounded_channel();
         let shutdown = CancellationToken::new();
         let responder: Responder = Arc::new(responder);
@@ -138,6 +141,7 @@ impl Fixture {
             let accepted = accepted.clone();
             let complete = complete.clone();
             let arrivals = arrivals.clone();
+            let requests = requests.clone();
             let shutdown = shutdown.clone();
             async move {
                 let mut tasks = JoinSet::new();
@@ -149,11 +153,12 @@ impl Fixture {
                             accepted.fetch_add(1, Ordering::SeqCst);
                             let complete = complete.clone();
                             let arrivals = arrivals.clone();
+                            let requests = requests.clone();
                             let responder = responder.clone();
                             let observed = observed_tx.clone();
                             let shutdown = shutdown.clone();
                             tasks.spawn(async move {
-                                handle(socket, complete, arrivals, responder, observed, shutdown).await;
+                                handle(socket, complete, (arrivals, requests), responder, observed, shutdown).await;
                             });
                         }
                     }
@@ -169,6 +174,7 @@ impl Fixture {
             accepted,
             complete,
             arrivals,
+            requests,
             observed,
             observed_count: 0,
             shutdown,
@@ -183,6 +189,11 @@ impl Fixture {
     /// 每个请求被完整读取并计数时的时刻，下标为请求序号。
     pub fn arrivals(&self) -> Vec<Instant> {
         self.arrivals.lock().unwrap().clone()
+    }
+
+    /// 已完整读取的原始请求文本，下标与 [`Self::arrivals`] 一致。
+    pub fn requests(&self) -> Vec<String> {
+        self.requests.lock().unwrap().clone()
     }
 
     /// 等到至少 `count` 个请求被观测到；channel 提前关闭立即失败。
@@ -222,19 +233,24 @@ impl Drop for Fixture {
     }
 }
 
+#[allow(clippy::type_complexity)]
 async fn handle(
     mut socket: tokio::net::TcpStream,
     complete: Arc<AtomicUsize>,
-    arrivals: Arc<Mutex<Vec<Instant>>>,
+    (arrivals, requests): (Arc<Mutex<Vec<Instant>>>, Arc<Mutex<Vec<String>>>),
     responder: Responder,
     observed: mpsc::UnboundedSender<usize>,
     shutdown: CancellationToken,
 ) {
-    if !matches!(read_request(&mut socket).await, Ok(true)) {
+    let Ok(Some(raw)) = read_request(&mut socket).await else {
         return;
-    }
+    };
     let number = complete.fetch_add(1, Ordering::SeqCst);
     arrivals.lock().unwrap().push(Instant::now());
+    requests
+        .lock()
+        .unwrap()
+        .push(String::from_utf8_lossy(&raw).into_owned());
     let _ = observed.send(number);
     match responder(number) {
         Reply::Close(response) => {
@@ -351,46 +367,5 @@ pub async fn expect_text_event(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use futures_util::FutureExt;
-    use tokio::net::TcpStream;
-
-    /// channel 提前关闭必须立即失败，不能把 `recv()` 正常结束当成事件命中。
-    #[tokio::test]
-    async fn wait_for_event_fails_immediately_when_the_channel_closes() {
-        let deadline = Bounded::new();
-        let (tx, mut events) = mpsc::channel::<RunEvent>(1);
-        drop(tx);
-        let started = Instant::now();
-        let outcome = std::panic::AssertUnwindSafe(wait_for_event(
-            &deadline,
-            &mut events,
-            "an event that never arrives",
-            |_| true,
-        ))
-        .catch_unwind()
-        .await;
-        assert!(outcome.is_err(), "closed channel must fail the wait");
-        assert!(
-            started.elapsed() < Duration::from_secs(1),
-            "closed channel must fail immediately, waited {:?}",
-            started.elapsed()
-        );
-    }
-
-    /// 正常请求完成后、`finish` 前出现的迟到连接必须计入 accepted；
-    /// `finish` 先 drain backlog，而不是直接 abort 造成 under-count。
-    #[tokio::test]
-    async fn late_connection_before_finish_is_counted_as_accepted() {
-        let fixture = Fixture::start(|_| Reply::Close(Response::sse("data: [DONE]\n\n"))).await;
-        let deadline = Bounded::new();
-        let _probe = TcpStream::connect(fixture.addr())
-            .await
-            .expect("late probe connect");
-        // 连接已建立但未发送请求：accepted=1、complete=0。
-        let stats = fixture.finish(&deadline).await;
-        assert_eq!(stats.accepted, 1, "late connection must be accepted");
-        assert_eq!(stats.complete, 0, "late connection has no complete request");
-    }
-}
+#[path = "tests.rs"]
+mod tests;

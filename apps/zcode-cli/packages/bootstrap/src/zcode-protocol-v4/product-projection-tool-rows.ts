@@ -2,7 +2,11 @@
 //
 // 只接收 `Pick<ProjectionState, ...>` 窄端口，原地写 snapshot 与派生索引；
 // 不新增第二份状态，事件次序仍由 ProductProjection.applyEventInternal 仲裁。
-import type { SessionEvent } from "@zcode/contracts";
+import {
+  DEFERRED_TOOL_CALL_NAME,
+  type SessionEvent,
+  type StreamingToolLedgerPayload,
+} from "@zcode/contracts";
 import {
   ZCODE_FILE_STREAMING_TOOL_INPUT_PREVIEW_MIN_INTERVAL_MS,
   isZCodeFileStreamingToolInputPreviewTool,
@@ -13,11 +17,13 @@ import type { CanonicalModelStream } from "./event-normalizer.js";
 import {
   appendProjectionRowBase,
   findProjectionRow,
+  isProjectionRunning,
   projectionMs,
   projectionTurnIdOf,
   type ProjectionState,
 } from "./product-projection-state.js";
 import { shouldHideInvalidToolCallFromProduct } from "../tool-call-product-visibility.js";
+import { isMirroredSubagentToolEvent } from "./product-projection-primitives.js";
 
 type ToolRowWritePort = Pick<
   ProjectionState,
@@ -148,6 +154,8 @@ export function finalizeStreamingToolInput(
   if (shouldHideInvalidToolCallFromProduct(payload.toolName)) return [];
   const inputText = stringifyToolInput(payload.input);
   const existing = findToolRow(projection, toolCallId);
+  // scheduled 或完整 tool_call 已定稿输入；迟到原始流不能覆盖执行身份。
+  if (existing?.input !== undefined) return [];
   if (existing) {
     return [
       {
@@ -182,6 +190,48 @@ export function finalizeStreamingToolInput(
   };
   projection.toolRowIdByCallId.set(toolCallId, row.rowId);
   return [{ op: "row.appended", row }];
+}
+
+export function onStreamingToolIdentity(
+  projection: ToolRowWritePort,
+  event: SessionEvent,
+): ConversationDelta[] {
+  if (isMirroredSubagentToolEvent(event) || !acceptsActiveModelEvent(projection, event)) return [];
+  const payload = event.payload as StreamingToolLedgerPayload;
+  if (
+    payload.status !== "tool_call_closed" ||
+    payload.input === undefined ||
+    payload.toolName === DEFERRED_TOOL_CALL_NAME ||
+    shouldHideInvalidToolCallFromProduct(payload.toolName)
+  )
+    return [];
+  const row = findToolRow(projection, String(payload.toolCallId));
+  if (row?.toolName !== DEFERRED_TOOL_CALL_NAME) return [];
+  // 断流恢复可能直接提交工具错误而不经过 scheduled；目标身份取 Core 已闭合的调用，
+  // 只补齐包装行，不触发 scheduled 的 Todo 等业务更新，也不重置已有状态和错误。
+  return [
+    {
+      op: "row.upserted",
+      row: {
+        ...row,
+        toolName: payload.toolName,
+        input: payload.input,
+        inputText: stringifyToolInput(payload.input),
+      },
+    },
+  ];
+}
+
+function acceptsActiveModelEvent(
+  projection: Pick<ProjectionState, "currentTurnId" | "snapshot">,
+  event: SessionEvent,
+): boolean {
+  if (!isProjectionRunning(projection)) return false;
+  return (
+    projection.currentTurnId === null ||
+    event.turnId === undefined ||
+    String(event.turnId) === projection.currentTurnId
+  );
 }
 
 // turn 终态收口所有 foreground 未终态 tool row（迟到终态不复活由 isRunning 闸保证）；

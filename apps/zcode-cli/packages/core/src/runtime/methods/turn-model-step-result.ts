@@ -271,7 +271,10 @@ export async function applyModelStepResult(
     toolCallCount: toolCalls.length,
   });
 
-  const executableToolCalls = toolCalls.filter((toolCall) => !toolCall.providerExecuted);
+  // 准入只解包一次：包装调用在调度/持久化前变成目标身份，原始 model 流仍保留包装参数。
+  const executableToolCalls = toolCalls
+    .filter((toolCall) => !toolCall.providerExecuted)
+    .map((toolCall) => streamingToolCoordinator.admit(toolCall));
   const streamedToolResults = await streamingToolCoordinator.drain(executableToolCalls);
   if (outputTokenContinuation !== "none") {
     // 首次命中 output-limit 时，当前 request 可能带有一次性的 project-memory attachment；
@@ -357,6 +360,7 @@ export async function applyModelStepResult(
     result,
     toolCalls: executableToolCalls,
     streamedToolResults,
+    toolSearch: options.toolSearch,
   });
   return toolStepResult;
 }

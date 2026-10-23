@@ -9,7 +9,7 @@ fn migrated_media_and_foreign_reasoning_use_protocol_projection() {
     ];
     for api in [ApiType::Chat, ApiType::Responses, ApiType::Anthropic] {
         config.api_type = api;
-        let body = body(&config, history.clone(), &[], None).unwrap();
+        let body = body(&config, history.clone(), &[], None, false).unwrap();
         assert!(!body.to_string().contains("private"));
         assert!(body.to_string().contains("preserved"));
         assert!(body.to_string().contains("call"));
@@ -32,7 +32,7 @@ fn anthropic_does_not_replay_reasoning_only_assistants() {
         json!({"role":"assistant","content":"", "reasoning_content":"thought", "_zcode_anthropic_thinking":[{"type":"thinking","thinking":"thought","signature":"signature"}]}),
         json!({"role":"user","content":"continue"}),
     ];
-    let body = body(&config, messages.clone(), &[], None).unwrap();
+    let body = body(&config, messages.clone(), &[], None, false).unwrap();
     assert_eq!(body["messages"].as_array().unwrap().len(), 1);
     assert_eq!(body["messages"][0]["content"].as_array().unwrap().len(), 2);
     assert_eq!(
@@ -76,18 +76,18 @@ fn serializers_preserve_tool_associations_and_private_reasoning() {
         json!({"role":"tool","tool_call_id":"call","content":"failed","_zcode_tool_failed":true}),
         json!({"role":"user","content":"follow up"}),
     ];
-    let chat = body(&config, messages.clone(), &[], None).unwrap();
+    let chat = body(&config, messages.clone(), &[], None, false).unwrap();
     assert_eq!(chat["messages"][1]["reasoning_content"], "thought");
     assert!(!chat.to_string().contains("_zcode_"));
     assert!(!chat.to_string().contains("opaque"));
     config.api_type = ApiType::Responses;
-    let response = body(&config, messages.clone(), &[], None).unwrap();
+    let response = body(&config, messages.clone(), &[], None, false).unwrap();
     assert_eq!(response["input"][1]["encrypted_content"], "opaque");
     assert_eq!(response["input"][3]["call_id"], "call");
     assert_eq!(response["input"][4]["call_id"], "call");
     assert!(!response.to_string().contains("signature"));
     config.api_type = ApiType::Anthropic;
-    let anthropic = body(&config, messages.clone(), &[], None).unwrap();
+    let anthropic = body(&config, messages.clone(), &[], None, false).unwrap();
     assert_eq!(anthropic["messages"].as_array().unwrap().len(), 2);
     assert_eq!(
         anthropic["messages"][0]["content"][0]["signature"],

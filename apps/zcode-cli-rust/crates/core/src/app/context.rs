@@ -20,6 +20,8 @@ pub(super) struct RunContext {
     pub plugin_references: Vec<String>,
     /// Tools registered for the session (legacy `toolAllowlist` / `toolDenylist`).
     pub tool_filter: crate::domain::session_runtime::ToolFilter,
+    /// 启动偏好固定的 ToolSearch 模式（本次 run 的请求投影使用）。
+    pub tool_search_mode: crate::domain::tool_search::Mode,
     /// Engine-published permission inputs; `None` in tests that bypass the engine.
     pub permissions:
         Option<tokio::sync::watch::Receiver<std::sync::Arc<super::permissions::Snapshot>>>,
@@ -75,6 +77,7 @@ impl RunContext {
             tool_disallowlist: vec![],
             plugin_references: vec![],
             tool_filter: Default::default(),
+            tool_search_mode: Default::default(),
             permissions: None,
             state,
             messages,
@@ -206,6 +209,7 @@ fn hidden_origin(
 pub(super) async fn hidden_request(
     model: &dyn ModelPort,
     (messages, tools): (Vec<Value>, &[Value]),
+    options: &crate::contract::ModelRequestOptions,
     sink: &EventSink,
     query_source: &'static str,
     cancel: &CancellationToken,
@@ -219,7 +223,7 @@ pub(super) async fn hidden_request(
         origin: hidden_origin(&sink.origin, query_source),
         request_auth: sink.request_auth.clone(),
     };
-    let request = model.complete(messages, tools, &hidden, cancel);
+    let request = model.complete_with_options(messages, tools, options, &hidden, cancel);
     tokio::pin!(request);
     let result = loop {
         tokio::select! {biased;

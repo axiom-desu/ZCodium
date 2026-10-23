@@ -1,4 +1,5 @@
 import type { ModelId, ModelProviderId } from "./request-contracts.js";
+import type { ModelToolReferenceContentBlock } from "../../tools/tool-search.js";
 
 export type ModelMessageRole = "system" | "user" | "assistant" | "tool";
 
@@ -67,6 +68,7 @@ export interface ModelResourceLinkContentBlock {
 }
 
 export type ModelMessageContentBlock =
+  | ModelToolReferenceContentBlock
   | ModelTextContentBlock
   | ModelReasoningContentBlock
   | ModelImageContentBlock
@@ -106,6 +108,9 @@ export function modelMessageContentBlockToText(block: ModelMessageContentBlock):
       return block.text;
     case "reasoning":
       return "";
+    // 引用块的展示文本就是目标工具名；模型侧只接受真实 tool_reference 结构。
+    case "tool_reference":
+      return block.toolName;
     case "image":
       return attachmentPlaceholder("Attached", block.mediaType, block.source?.placeholder);
     case "video":

@@ -11,6 +11,8 @@ import { hasOpenAiStoredReasoningItemId, projectToolNameForProvider } from "./tr
 import { providerOptionsForReasoningBlock } from "./anthropic-reasoning-metadata.js";
 import { toStructuredToolResultText } from "./tool-result-media-projection.js";
 import { dataUrlToDataContent, unsupportedInputMediaText } from "./media-transform-policy.js";
+import { AiSdkModelAdapterError } from "./errors.js";
+import { ModelErrorCode } from "@zcode/contracts";
 
 type AiSdkToolResultOutput = ToolResultPart["output"];
 type AiSdkProviderOptions = NonNullable<
@@ -35,15 +37,25 @@ export function toAiSdkToolResultOutput(
 
   if (typeof content === "string") return { type: "text", value: content };
 
-  if (textifyStructuredContent) {
+  const hasToolReferences = content.some((block) => block.type === "tool_reference");
+  if (textifyStructuredContent && !hasToolReferences) {
     return { type: "text", value: toStructuredToolResultText(content, options) };
   }
 
-  if (options.stripMedia) {
+  if (options.stripMedia && !hasToolReferences) {
     return { type: "text", value: modelMessageContentToText(content) };
   }
 
-  const value = content.flatMap((block) => contentBlockToAiSdkToolResultParts(block, options));
+  // 工具引用不是媒体：媒体降级不能把引用变成名字文本，否则服务端无法展开定义。
+  const value = content.flatMap((block) => {
+    if (block.type !== "tool_reference" && (textifyStructuredContent || options.stripMedia)) {
+      const text = textifyStructuredContent
+        ? toStructuredToolResultText([block], options)
+        : modelMessageContentToText([block]);
+      return text ? [{ type: "text" as const, text }] : [];
+    }
+    return contentBlockToAiSdkToolResultParts(block, options);
+  });
   return value.length > 0
     ? { type: "content", value }
     : { type: "text", value: modelMessageContentToText(content) };
@@ -56,6 +68,22 @@ function contentBlockToAiSdkToolResultParts(
   switch (block.type) {
     case "text":
       return block.text.length > 0 ? [{ type: "text", text: block.text }] : [];
+
+    case "tool_reference":
+      // AI SDK 的 custom block 只是客户端载体；真实 HTTP wire 由 Anthropic SDK 编码成
+      // tool_reference，不能把 providerOptions 对象当成线上字段。
+      if (options.providerKind !== "anthropic" || !options.toolSearchEnabled) {
+        throw new AiSdkModelAdapterError(
+          ModelErrorCode.InvalidModelRequest,
+          "Tool references require active Anthropic ToolSearch",
+        );
+      }
+      return [
+        {
+          type: "custom",
+          providerOptions: { anthropic: { type: "tool-reference", toolName: block.toolName } },
+        },
+      ];
 
     case "reasoning":
       return [];
@@ -189,6 +217,12 @@ function contentBlockToAiSdkAssistantParts(
       ];
     }
 
+    case "tool_reference":
+      throw new AiSdkModelAdapterError(
+        ModelErrorCode.InvalidModelRequest,
+        "Tool references must appear inside tool results",
+      );
+
     case "image":
     case "video":
     case "file":
@@ -305,6 +339,12 @@ function contentBlockToAiSdkUserParts(
       }
       return [{ type: "text", text: modelMessageContentToText([block]) }];
     }
+
+    case "tool_reference":
+      throw new AiSdkModelAdapterError(
+        ModelErrorCode.InvalidModelRequest,
+        "Tool references must appear inside tool results",
+      );
 
     case "resource_link":
       return [{ type: "text", text: modelMessageContentToText([block]) }];

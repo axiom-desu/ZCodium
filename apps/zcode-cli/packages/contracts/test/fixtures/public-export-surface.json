@@ -1,1476 +1,380 @@
 {
   "events/event-reducer": [
-    [
-      "apply",
-      "value"
-    ],
-    [
-      "EventReducer",
-      "both"
-    ],
-    [
-      "reduce",
-      "value"
-    ]
+    ["apply", "value"],
+    ["EventReducer", "both"],
+    ["reduce", "value"]
   ],
   "interfaces/browser-control.port": [
-    [
-      "BROWSER_VIEWPORT_LIMITS",
-      "value"
-    ],
-    [
-      "BrowserBackendDescriptor",
-      "type"
-    ],
-    [
-      "BrowserBackendListResult",
-      "type"
-    ],
-    [
-      "BrowserBackendType",
-      "type"
-    ],
-    [
-      "BrowserCapabilityDescriptor",
-      "type"
-    ],
-    [
-      "BrowserChildSessionTabOwner",
-      "type"
-    ],
-    [
-      "BrowserClientMode",
-      "type"
-    ],
-    [
-      "BrowserCommand",
-      "type"
-    ],
-    [
-      "BrowserCommandMethod",
-      "type"
-    ],
-    [
-      "BrowserCommandResult",
-      "type"
-    ],
-    [
-      "BrowserControlExecuteInput",
-      "type"
-    ],
-    [
-      "BrowserControlListInput",
-      "type"
-    ],
-    [
-      "BrowserControlPort",
-      "type"
-    ],
-    [
-      "BrowserDialog",
-      "type"
-    ],
-    [
-      "BrowserDiscoveryContext",
-      "type"
-    ],
-    [
-      "BrowserErrorCode",
-      "type"
-    ],
-    [
-      "BrowserKeyModifier",
-      "type"
-    ],
-    [
-      "BrowserMouseButton",
-      "type"
-    ],
-    [
-      "BrowserPageState",
-      "type"
-    ],
-    [
-      "BrowserPlaywrightAction",
-      "type"
-    ],
-    [
-      "BrowserPlaywrightLocatorOperation",
-      "type"
-    ],
-    [
-      "BrowserPlaywrightModifier",
-      "type"
-    ],
-    [
-      "BrowserPoint",
-      "type"
-    ],
-    [
-      "BrowserRecordingAction",
-      "type"
-    ],
-    [
-      "BrowserRecordingArtifact",
-      "type"
-    ],
-    [
-      "BrowserRecordingJob",
-      "type"
-    ],
-    [
-      "BrowserRecordingOptions",
-      "type"
-    ],
-    [
-      "BrowserResponseMeta",
-      "type"
-    ],
-    [
-      "BrowserSessionContext",
-      "type"
-    ],
-    [
-      "BrowserSessionContextKind",
-      "type"
-    ],
-    [
-      "BrowserSnapshot",
-      "type"
-    ],
-    [
-      "BrowserSnapshotDomNode",
-      "type"
-    ],
-    [
-      "BrowserSnapshotElement",
-      "type"
-    ],
-    [
-      "BrowserTabSummary",
-      "type"
-    ],
-    [
-      "BrowserUserTabInfo",
-      "type"
-    ],
-    [
-      "BrowserViewportSize",
-      "type"
-    ]
+    ["BROWSER_VIEWPORT_LIMITS", "value"],
+    ["BrowserBackendDescriptor", "type"],
+    ["BrowserBackendListResult", "type"],
+    ["BrowserBackendType", "type"],
+    ["BrowserCapabilityDescriptor", "type"],
+    ["BrowserChildSessionTabOwner", "type"],
+    ["BrowserClientMode", "type"],
+    ["BrowserCommand", "type"],
+    ["BrowserCommandMethod", "type"],
+    ["BrowserCommandResult", "type"],
+    ["BrowserControlExecuteInput", "type"],
+    ["BrowserControlListInput", "type"],
+    ["BrowserControlPort", "type"],
+    ["BrowserDialog", "type"],
+    ["BrowserDiscoveryContext", "type"],
+    ["BrowserErrorCode", "type"],
+    ["BrowserKeyModifier", "type"],
+    ["BrowserMouseButton", "type"],
+    ["BrowserPageState", "type"],
+    ["BrowserPlaywrightAction", "type"],
+    ["BrowserPlaywrightLocatorOperation", "type"],
+    ["BrowserPlaywrightModifier", "type"],
+    ["BrowserPoint", "type"],
+    ["BrowserRecordingAction", "type"],
+    ["BrowserRecordingArtifact", "type"],
+    ["BrowserRecordingJob", "type"],
+    ["BrowserRecordingOptions", "type"],
+    ["BrowserResponseMeta", "type"],
+    ["BrowserSessionContext", "type"],
+    ["BrowserSessionContextKind", "type"],
+    ["BrowserSnapshot", "type"],
+    ["BrowserSnapshotDomNode", "type"],
+    ["BrowserSnapshotElement", "type"],
+    ["BrowserTabSummary", "type"],
+    ["BrowserUserTabInfo", "type"],
+    ["BrowserViewportSize", "type"]
   ],
   "interfaces/session-store.port": [
-    [
-      "AgentPart",
-      "type"
-    ],
-    [
-      "AppUsageDayModelRow",
-      "type"
-    ],
-    [
-      "AppUsageDayRow",
-      "type"
-    ],
-    [
-      "AppUsageModelRow",
-      "type"
-    ],
-    [
-      "AppUsageQueryInput",
-      "type"
-    ],
-    [
-      "AppUsageQueryResult",
-      "type"
-    ],
-    [
-      "AppUsageToolRow",
-      "type"
-    ],
-    [
-      "AppUsageToolTotalsRow",
-      "type"
-    ],
-    [
-      "AppUsageTotalsRow",
-      "type"
-    ],
-    [
-      "AppUsageTurnTotalsRow",
-      "type"
-    ],
-    [
-      "AssistantErrorInfo",
-      "type"
-    ],
-    [
-      "AssistantMessageInfo",
-      "type"
-    ],
-    [
-      "AttachmentStorageMetadata",
-      "type"
-    ],
-    [
-      "ClaimLegacySessionWorkspaceInput",
-      "type"
-    ],
-    [
-      "CompactionPart",
-      "type"
-    ],
-    [
-      "ContextCompactionTimelinePart",
-      "type"
-    ],
-    [
-      "CreateSessionInput",
-      "type"
-    ],
-    [
-      "FileDiff",
-      "type"
-    ],
-    [
-      "FilePart",
-      "type"
-    ],
-    [
-      "FilePartSource",
-      "type"
-    ],
-    [
-      "ForkChildSessionMetadata",
-      "type"
-    ],
-    [
-      "ForkCommandResult",
-      "type"
-    ],
-    [
-      "ForkCommitBundle",
-      "type"
-    ],
-    [
-      "GoalVerificationTimelinePart",
-      "type"
-    ],
-    [
-      "ListSessionsInput",
-      "type"
-    ],
-    [
-      "LocalSettingStorePort",
-      "type"
-    ],
-    [
-      "MESSAGE_ANCHOR_ORIGINS",
-      "value"
-    ],
-    [
-      "MESSAGE_VISIBILITIES",
-      "value"
-    ],
-    [
-      "MessageAnchorOrigin",
-      "type"
-    ],
-    [
-      "MessageContextSnapshot",
-      "type"
-    ],
-    [
-      "MessageInfo",
-      "type"
-    ],
-    [
-      "MessagePart",
-      "type"
-    ],
-    [
-      "MessageProjectionAnchor",
-      "type"
-    ],
-    [
-      "MessageSemantics",
-      "type"
-    ],
-    [
-      "MessageSemanticsKind",
-      "type"
-    ],
-    [
-      "MessageSemanticsOrigin",
-      "type"
-    ],
-    [
-      "MessageSummary",
-      "type"
-    ],
-    [
-      "MessageVisibility",
-      "type"
-    ],
-    [
-      "MessageWithParts",
-      "type"
-    ],
-    [
-      "ModelChangeTimelinePart",
-      "type"
-    ],
-    [
-      "ModelUsageRecord",
-      "type"
-    ],
-    [
-      "OutputFormat",
-      "type"
-    ],
-    [
-      "PatchPart",
-      "type"
-    ],
-    [
-      "ReasoningPart",
-      "type"
-    ],
-    [
-      "RepairLegacyRemoteSessionWorkspaceInput",
-      "type"
-    ],
-    [
-      "RepairRemoteSessionPathsInput",
-      "type"
-    ],
-    [
-      "RetryPart",
-      "type"
-    ],
-    [
-      "SESSION_ENTRY_BASH_SHELL_SELECTION",
-      "value"
-    ],
-    [
-      "SESSION_ENTRY_EXECUTION_STATE",
-      "value"
-    ],
-    [
-      "SESSION_ENTRY_MODEL_SELECTION",
-      "value"
-    ],
-    [
-      "SESSION_ENTRY_TARGET_COMPLETION_VERIFICATION",
-      "value"
-    ],
-    [
-      "SESSION_ENTRY_TYPES",
-      "value"
-    ],
-    [
-      "SESSION_ENTRY_USER_INPUT_AUTO_RESOLUTION",
-      "value"
-    ],
-    [
-      "SESSION_ENTRY_WORKSPACE_CHECKPOINT",
-      "value"
-    ],
-    [
-      "SESSION_ENTRY_WORKSPACE_FILE_REWIND",
-      "value"
-    ],
-    [
-      "SESSION_TASK_TYPES",
-      "value"
-    ],
-    [
-      "SESSION_TITLE_SOURCES",
-      "value"
-    ],
-    [
-      "SessionEntryInfo",
-      "type"
-    ],
-    [
-      "SessionEntryType",
-      "type"
-    ],
-    [
-      "SessionForkTimelinePart",
-      "type"
-    ],
-    [
-      "SessionInfo",
-      "type"
-    ],
-    [
-      "SessionInputDelivery",
-      "type"
-    ],
-    [
-      "SessionInputRecord",
-      "type"
-    ],
-    [
-      "SessionInputStatus",
-      "type"
-    ],
-    [
-      "SessionRevert",
-      "type"
-    ],
-    [
-      "SessionStorePort",
-      "type"
-    ],
-    [
-      "SessionTaskType",
-      "type"
-    ],
-    [
-      "SessionTitleSource",
-      "type"
-    ],
-    [
-      "SharedContextImportCommitBundle",
-      "type"
-    ],
-    [
-      "SharedContextImportStatus",
-      "type"
-    ],
-    [
-      "SharedContextImportTransition",
-      "type"
-    ],
-    [
-      "SnapshotPart",
-      "type"
-    ],
-    [
-      "StableForkGoalBoundaryMetadata",
-      "type"
-    ],
-    [
-      "StableForkTargetMetadata",
-      "type"
-    ],
-    [
-      "StepFinishPart",
-      "type"
-    ],
-    [
-      "StepStartPart",
-      "type"
-    ],
-    [
-      "SubtaskPart",
-      "type"
-    ],
-    [
-      "SYNTHETIC_USER_MESSAGE_SOURCES",
-      "value"
-    ],
-    [
-      "SyntheticUserMessageSource",
-      "type"
-    ],
-    [
-      "TaskUsageQueryInput",
-      "type"
-    ],
-    [
-      "TaskUsageQueryResult",
-      "type"
-    ],
-    [
-      "TextPart",
-      "type"
-    ],
-    [
-      "TimelineModelSelection",
-      "type"
-    ],
-    [
-      "TimelinePart",
-      "type"
-    ],
-    [
-      "TimelinePartBase",
-      "type"
-    ],
-    [
-      "TimelinePartDisplay",
-      "type"
-    ],
-    [
-      "TimelinePartDraft",
-      "type"
-    ],
-    [
-      "TimelinePartStatus",
-      "type"
-    ],
-    [
-      "TokenUsageInfo",
-      "type"
-    ],
-    [
-      "ToolPart",
-      "type"
-    ],
-    [
-      "ToolState",
-      "type"
-    ],
-    [
-      "ToolStateCompleted",
-      "type"
-    ],
-    [
-      "ToolStateError",
-      "type"
-    ],
-    [
-      "ToolStatePending",
-      "type"
-    ],
-    [
-      "ToolStateRunning",
-      "type"
-    ],
-    [
-      "ToolUsageRecord",
-      "type"
-    ],
-    [
-      "TurnUsageRecord",
-      "type"
-    ],
-    [
-      "UpdateSessionInput",
-      "type"
-    ],
-    [
-      "UsageQuerySource",
-      "type"
-    ],
-    [
-      "UsageStatus",
-      "type"
-    ],
-    [
-      "UsageStorePort",
-      "type"
-    ],
-    [
-      "UserMessageInfo",
-      "type"
-    ]
+    ["AgentPart", "type"],
+    ["AppUsageDayModelRow", "type"],
+    ["AppUsageDayRow", "type"],
+    ["AppUsageModelRow", "type"],
+    ["AppUsageQueryInput", "type"],
+    ["AppUsageQueryResult", "type"],
+    ["AppUsageToolRow", "type"],
+    ["AppUsageToolTotalsRow", "type"],
+    ["AppUsageTotalsRow", "type"],
+    ["AppUsageTurnTotalsRow", "type"],
+    ["AssistantErrorInfo", "type"],
+    ["AssistantMessageInfo", "type"],
+    ["AttachmentStorageMetadata", "type"],
+    ["ClaimLegacySessionWorkspaceInput", "type"],
+    ["CompactionPart", "type"],
+    ["ContextCompactionTimelinePart", "type"],
+    ["CreateSessionInput", "type"],
+    ["FileDiff", "type"],
+    ["FilePart", "type"],
+    ["FilePartSource", "type"],
+    ["ForkChildSessionMetadata", "type"],
+    ["ForkCommandResult", "type"],
+    ["ForkCommitBundle", "type"],
+    ["GoalVerificationTimelinePart", "type"],
+    ["ListSessionsInput", "type"],
+    ["LocalSettingStorePort", "type"],
+    ["MESSAGE_ANCHOR_ORIGINS", "value"],
+    ["MESSAGE_VISIBILITIES", "value"],
+    ["MessageAnchorOrigin", "type"],
+    ["MessageContextSnapshot", "type"],
+    ["MessageInfo", "type"],
+    ["MessagePart", "type"],
+    ["MessageProjectionAnchor", "type"],
+    ["MessageSemantics", "type"],
+    ["MessageSemanticsKind", "type"],
+    ["MessageSemanticsOrigin", "type"],
+    ["MessageSummary", "type"],
+    ["MessageVisibility", "type"],
+    ["MessageWithParts", "type"],
+    ["ModelChangeTimelinePart", "type"],
+    ["ModelUsageRecord", "type"],
+    ["OutputFormat", "type"],
+    ["PatchPart", "type"],
+    ["ReasoningPart", "type"],
+    ["RepairLegacyRemoteSessionWorkspaceInput", "type"],
+    ["RepairRemoteSessionPathsInput", "type"],
+    ["RetryPart", "type"],
+    ["SESSION_ENTRY_BASH_SHELL_SELECTION", "value"],
+    ["SESSION_ENTRY_EXECUTION_STATE", "value"],
+    ["SESSION_ENTRY_MODEL_SELECTION", "value"],
+    ["SESSION_ENTRY_TARGET_COMPLETION_VERIFICATION", "value"],
+    ["SESSION_ENTRY_TYPES", "value"],
+    ["SESSION_ENTRY_USER_INPUT_AUTO_RESOLUTION", "value"],
+    ["SESSION_ENTRY_WORKSPACE_CHECKPOINT", "value"],
+    ["SESSION_ENTRY_WORKSPACE_FILE_REWIND", "value"],
+    ["SESSION_LAST_OUTCOMES", "value"],
+    ["SESSION_TASK_TYPES", "value"],
+    ["SESSION_TITLE_SOURCES", "value"],
+    ["SessionEntryInfo", "type"],
+    ["SessionEntryType", "type"],
+    ["SessionForkTimelinePart", "type"],
+    ["SessionInfo", "type"],
+    ["SessionInputDelivery", "type"],
+    ["SessionInputRecord", "type"],
+    ["SessionInputStatus", "type"],
+    ["SessionLastOutcome", "type"],
+    ["SessionRevert", "type"],
+    ["SessionStorePort", "type"],
+    ["SessionTaskType", "type"],
+    ["SessionTitleSource", "type"],
+    ["SharedContextImportCommitBundle", "type"],
+    ["SharedContextImportStatus", "type"],
+    ["SharedContextImportTransition", "type"],
+    ["SnapshotPart", "type"],
+    ["StableForkGoalBoundaryMetadata", "type"],
+    ["StableForkTargetMetadata", "type"],
+    ["StepFinishPart", "type"],
+    ["StepStartPart", "type"],
+    ["SubtaskPart", "type"],
+    ["SYNTHETIC_USER_MESSAGE_SOURCES", "value"],
+    ["SyntheticUserMessageSource", "type"],
+    ["TaskUsageQueryInput", "type"],
+    ["TaskUsageQueryResult", "type"],
+    ["TextPart", "type"],
+    ["TimelineModelSelection", "type"],
+    ["TimelinePart", "type"],
+    ["TimelinePartBase", "type"],
+    ["TimelinePartDisplay", "type"],
+    ["TimelinePartDraft", "type"],
+    ["TimelinePartStatus", "type"],
+    ["TokenUsageInfo", "type"],
+    ["ToolPart", "type"],
+    ["ToolState", "type"],
+    ["ToolStateCompleted", "type"],
+    ["ToolStateError", "type"],
+    ["ToolStatePending", "type"],
+    ["ToolStateRunning", "type"],
+    ["ToolUsageRecord", "type"],
+    ["TurnUsageRecord", "type"],
+    ["UpdateSessionInput", "type"],
+    ["UsageQuerySource", "type"],
+    ["UsageStatus", "type"],
+    ["UsageStorePort", "type"],
+    ["UserMessageInfo", "type"]
   ],
   "model/index": [
-    [
-      "AttachmentKind",
-      "type"
-    ],
-    [
-      "AttachmentRef",
-      "type"
-    ],
-    [
-      "createModelId",
-      "value"
-    ],
-    [
-      "createModelProviderId",
-      "value"
-    ],
-    [
-      "createModelUsageSummary",
-      "value"
-    ],
-    [
-      "DetectedImageMediaType",
-      "type"
-    ],
-    [
-      "detectImageMediaType",
-      "value"
-    ],
-    [
-      "EnumOptionSpec",
-      "type"
-    ],
-    [
-      "getCurrentModelInvocationContext",
-      "value"
-    ],
-    [
-      "getModelUsageContextTokens",
-      "value"
-    ],
-    [
-      "getModelUsageInputWindowTokens",
-      "value"
-    ],
-    [
-      "getModelUsageTotalTokens",
-      "value"
-    ],
-    [
-      "hasModelUsage",
-      "value"
-    ],
-    [
-      "JsonSchema",
-      "type"
-    ],
-    [
-      "LimitOptionSpec",
-      "type"
-    ],
-    [
-      "Model",
-      "type"
-    ],
-    [
-      "ModelApiActorKind",
-      "type"
-    ],
-    [
-      "ModelApiCallCause",
-      "type"
-    ],
-    [
-      "ModelApiCallObservation",
-      "type"
-    ],
-    [
-      "ModelApiCustomAttributes",
-      "type"
-    ],
-    [
-      "ModelApiErrorPhase",
-      "type"
-    ],
-    [
-      "ModelApiOperation",
-      "type"
-    ],
-    [
-      "ModelCacheControl",
-      "type"
-    ],
-    [
-      "ModelContentProtection",
-      "type"
-    ],
-    [
-      "ModelErrorCode",
-      "type"
-    ],
-    [
-      "ModelEvent",
-      "type"
-    ],
-    [
-      "ModelFailureExceptionKind",
-      "type"
-    ],
-    [
-      "ModelFailureReason",
-      "type"
-    ],
-    [
-      "ModelFileContentBlock",
-      "type"
-    ],
-    [
-      "ModelId",
-      "type"
-    ],
-    [
-      "ModelImageContentBlock",
-      "type"
-    ],
-    [
-      "ModelInputFormat",
-      "type"
-    ],
-    [
-      "ModelInputMessage",
-      "type"
-    ],
-    [
-      "modelInputMessageJsonSchema",
-      "value"
-    ],
-    [
-      "ModelInvocationContext",
-      "type"
-    ],
-    [
-      "ModelMessageContent",
-      "type"
-    ],
-    [
-      "ModelMessageContentBlock",
-      "type"
-    ],
-    [
-      "modelMessageContentBlockToText",
-      "value"
-    ],
-    [
-      "modelMessageContentToText",
-      "value"
-    ],
-    [
-      "ModelMessageRole",
-      "type"
-    ],
-    [
-      "ModelNetworkStatusEvent",
-      "type"
-    ],
-    [
-      "modelNetworkStatusEventJsonSchema",
-      "value"
-    ],
-    [
-      "ModelOptions",
-      "type"
-    ],
-    [
-      "ModelOptionSpecs",
-      "type"
-    ],
-    [
-      "ModelOutputFormat",
-      "type"
-    ],
-    [
-      "ModelProperties",
-      "type"
-    ],
-    [
-      "ModelPropertiesInput",
-      "type"
-    ],
-    [
-      "ModelProtocolError",
-      "both"
-    ],
-    [
-      "ModelProviderId",
-      "type"
-    ],
-    [
-      "ModelReasoningCallHint",
-      "type"
-    ],
-    [
-      "ModelReasoningCapabilityStatus",
-      "type"
-    ],
-    [
-      "ModelReasoningContentBlock",
-      "type"
-    ],
-    [
-      "ModelReasoningControlType",
-      "type"
-    ],
-    [
-      "ModelReasoningObservation",
-      "type"
-    ],
-    [
-      "ModelReasoningState",
-      "type"
-    ],
-    [
-      "ModelRequest",
-      "type"
-    ],
-    [
-      "ModelRequestAdmission",
-      "type"
-    ],
-    [
-      "ModelRequestAdmissionTicket",
-      "type"
-    ],
-    [
-      "ModelRequestAdmittedStatusEvent",
-      "type"
-    ],
-    [
-      "ModelRequestCompletedStatusEvent",
-      "type"
-    ],
-    [
-      "ModelRequestFailedStatusEvent",
-      "type"
-    ],
-    [
-      "ModelRequestQueuedStatusEvent",
-      "type"
-    ],
-    [
-      "ModelRequestSessionType",
-      "type"
-    ],
-    [
-      "ModelRequestSettings",
-      "type"
-    ],
-    [
-      "ModelRequestStartedStatusEvent",
-      "type"
-    ],
-    [
-      "ModelRequestTarget",
-      "type"
-    ],
-    [
-      "ModelResourceLinkContentBlock",
-      "type"
-    ],
-    [
-      "ModelResult",
-      "type"
-    ],
-    [
-      "ModelRetryBudget",
-      "type"
-    ],
-    [
-      "ModelRetryReason",
-      "type"
-    ],
-    [
-      "ModelRetryScheduledStatusEvent",
-      "type"
-    ],
-    [
-      "ModelSelection",
-      "type"
-    ],
-    [
-      "modelSelectionJsonSchema",
-      "value"
-    ],
-    [
-      "ModelServerToolUsage",
-      "type"
-    ],
-    [
-      "ModelSource",
-      "type"
-    ],
-    [
-      "ModelStatusSink",
-      "type"
-    ],
-    [
-      "ModelStreamEvent",
-      "type"
-    ],
-    [
-      "ModelStreamRecoveryStatus",
-      "type"
-    ],
-    [
-      "ModelStreamStalledStatusEvent",
-      "type"
-    ],
-    [
-      "ModelTextContentBlock",
-      "type"
-    ],
-    [
-      "ModelTextRequest",
-      "type"
-    ],
-    [
-      "modelTextRequestJsonSchema",
-      "value"
-    ],
-    [
-      "ModelTextResult",
-      "type"
-    ],
-    [
-      "ModelToolCall",
-      "type"
-    ],
-    [
-      "ModelToolChoice",
-      "type"
-    ],
-    [
-      "ModelToolContract",
-      "type"
-    ],
-    [
-      "ModelToolExecutionContext",
-      "type"
-    ],
-    [
-      "ModelToolResult",
-      "type"
-    ],
-    [
-      "ModelToolSideEffectScope",
-      "type"
-    ],
-    [
-      "ModelTransportKind",
-      "type"
-    ],
-    [
-      "ModelUsage",
-      "type"
-    ],
-    [
-      "ModelUsageSummary",
-      "type"
-    ],
-    [
-      "ModelVideoContentBlock",
-      "type"
-    ],
-    [
-      "normalizeImageMediaType",
-      "value"
-    ],
-    [
-      "ParsedImageDataUrl",
-      "type"
-    ],
-    [
-      "parseImageDataUrl",
-      "value"
-    ],
-    [
-      "ParseImageDataUrlOptions",
-      "type"
-    ],
-    [
-      "parseModelSelectionValue",
-      "value"
-    ],
-    [
-      "ResolvedModelApiCallObservation",
-      "type"
-    ],
-    [
-      "resolveModelApiCallObservation",
-      "value"
-    ],
-    [
-      "runWithModelInvocationContext",
-      "value"
-    ],
-    [
-      "ToolCall",
-      "type"
-    ]
+    ["AttachmentKind", "type"],
+    ["AttachmentRef", "type"],
+    ["createModelId", "value"],
+    ["createModelProviderId", "value"],
+    ["createModelUsageSummary", "value"],
+    ["DetectedImageMediaType", "type"],
+    ["detectImageMediaType", "value"],
+    ["EnumOptionSpec", "type"],
+    ["getCurrentModelInvocationContext", "value"],
+    ["getModelUsageContextTokens", "value"],
+    ["getModelUsageInputWindowTokens", "value"],
+    ["getModelUsageTotalTokens", "value"],
+    ["hasModelUsage", "value"],
+    ["JsonSchema", "type"],
+    ["LimitOptionSpec", "type"],
+    ["Model", "type"],
+    ["ModelApiActorKind", "type"],
+    ["ModelApiCallCause", "type"],
+    ["ModelApiCallObservation", "type"],
+    ["ModelApiCustomAttributes", "type"],
+    ["ModelApiErrorPhase", "type"],
+    ["ModelApiOperation", "type"],
+    ["ModelCacheControl", "type"],
+    ["ModelContentProtection", "type"],
+    ["ModelErrorCode", "type"],
+    ["ModelEvent", "type"],
+    ["ModelFailureExceptionKind", "type"],
+    ["ModelFailureReason", "type"],
+    ["ModelFileContentBlock", "type"],
+    ["ModelId", "type"],
+    ["ModelImageContentBlock", "type"],
+    ["ModelInputFormat", "type"],
+    ["ModelInputMessage", "type"],
+    ["modelInputMessageJsonSchema", "value"],
+    ["ModelInvocationContext", "type"],
+    ["ModelMessageContent", "type"],
+    ["ModelMessageContentBlock", "type"],
+    ["modelMessageContentBlockToText", "value"],
+    ["modelMessageContentToText", "value"],
+    ["ModelMessageRole", "type"],
+    ["ModelNetworkStatusEvent", "type"],
+    ["modelNetworkStatusEventJsonSchema", "value"],
+    ["ModelOptions", "type"],
+    ["ModelOptionSpecs", "type"],
+    ["ModelOutputFormat", "type"],
+    ["ModelProperties", "type"],
+    ["ModelPropertiesInput", "type"],
+    ["ModelProtocolError", "both"],
+    ["ModelProviderId", "type"],
+    ["ModelReasoningCallHint", "type"],
+    ["ModelReasoningCapabilityStatus", "type"],
+    ["ModelReasoningContentBlock", "type"],
+    ["ModelReasoningControlType", "type"],
+    ["ModelReasoningObservation", "type"],
+    ["ModelReasoningState", "type"],
+    ["ModelRequest", "type"],
+    ["ModelRequestAdmission", "type"],
+    ["ModelRequestAdmissionTicket", "type"],
+    ["ModelRequestAdmittedStatusEvent", "type"],
+    ["ModelRequestCompletedStatusEvent", "type"],
+    ["ModelRequestFailedStatusEvent", "type"],
+    ["ModelRequestQueuedStatusEvent", "type"],
+    ["ModelRequestSessionType", "type"],
+    ["ModelRequestSettings", "type"],
+    ["ModelRequestStartedStatusEvent", "type"],
+    ["ModelRequestTarget", "type"],
+    ["ModelResourceLinkContentBlock", "type"],
+    ["ModelResult", "type"],
+    ["ModelRetryBudget", "type"],
+    ["ModelRetryReason", "type"],
+    ["ModelRetryScheduledStatusEvent", "type"],
+    ["ModelSelection", "type"],
+    ["modelSelectionJsonSchema", "value"],
+    ["ModelServerToolUsage", "type"],
+    ["ModelSource", "type"],
+    ["ModelStatusSink", "type"],
+    ["ModelStreamEvent", "type"],
+    ["ModelStreamRecoveryStatus", "type"],
+    ["ModelStreamStalledStatusEvent", "type"],
+    ["ModelTextContentBlock", "type"],
+    ["ModelTextRequest", "type"],
+    ["modelTextRequestJsonSchema", "value"],
+    ["ModelTextResult", "type"],
+    ["ModelToolCall", "type"],
+    ["ModelToolChoice", "type"],
+    ["ModelToolContract", "type"],
+    ["ModelToolExecutionContext", "type"],
+    ["ModelToolResult", "type"],
+    ["ModelToolSideEffectScope", "type"],
+    ["ModelTransportKind", "type"],
+    ["ModelUsage", "type"],
+    ["ModelUsageSummary", "type"],
+    ["ModelVideoContentBlock", "type"],
+    ["normalizeImageMediaType", "value"],
+    ["ParsedImageDataUrl", "type"],
+    ["parseImageDataUrl", "value"],
+    ["ParseImageDataUrlOptions", "type"],
+    ["parseModelSelectionValue", "value"],
+    ["ResolvedModelApiCallObservation", "type"],
+    ["resolveModelApiCallObservation", "value"],
+    ["runWithModelInvocationContext", "value"],
+    ["ToolCall", "type"]
   ],
   "workflow/index": [
-    [
-      "CreateScriptWorkflowActivityInput",
-      "type"
-    ],
-    [
-      "CreateScriptWorkflowRunInput",
-      "type"
-    ],
-    [
-      "CreateSessionTaskLinkInput",
-      "type"
-    ],
-    [
-      "deriveWorkflowRunSchedulerState",
-      "value"
-    ],
-    [
-      "deriveWorkflowSchedulerState",
-      "value"
-    ],
-    [
-      "deriveWorkflowSessionLinks",
-      "value"
-    ],
-    [
-      "ExpertWorkflowPhase",
-      "type"
-    ],
-    [
-      "ExpertWorkflowPhaseSchema",
-      "value"
-    ],
-    [
-      "ExpertWorkflowRunSnapshot",
-      "type"
-    ],
-    [
-      "ExpertWorkflowRunSnapshotSchema",
-      "value"
-    ],
-    [
-      "ExpertWorkflowStrategy",
-      "type"
-    ],
-    [
-      "ExpertWorkflowStrategySchema",
-      "value"
-    ],
-    [
-      "SCRIPT_WORKFLOW_ACTIVITY_STATUSES",
-      "value"
-    ],
-    [
-      "SCRIPT_WORKFLOW_DEFINITION_SCOPES",
-      "value"
-    ],
-    [
-      "SCRIPT_WORKFLOW_RUN_STATUSES",
-      "value"
-    ],
-    [
-      "ScriptWorkflowActivityRecord",
-      "type"
-    ],
-    [
-      "ScriptWorkflowActivityStatus",
-      "type"
-    ],
-    [
-      "ScriptWorkflowDefinitionRecord",
-      "type"
-    ],
-    [
-      "ScriptWorkflowDefinitionScope",
-      "type"
-    ],
-    [
-      "ScriptWorkflowEventRecord",
-      "type"
-    ],
-    [
-      "ScriptWorkflowRunRecord",
-      "type"
-    ],
-    [
-      "ScriptWorkflowRunStats",
-      "type"
-    ],
-    [
-      "ScriptWorkflowRunStatsSchema",
-      "value"
-    ],
-    [
-      "ScriptWorkflowRunStatus",
-      "type"
-    ],
-    [
-      "ScriptWorkflowSource",
-      "type"
-    ],
-    [
-      "ScriptWorkflowStorePort",
-      "type"
-    ],
-    [
-      "SessionTaskLinkRecord",
-      "type"
-    ],
-    [
-      "UpdateScriptWorkflowActivityInput",
-      "type"
-    ],
-    [
-      "UpdateScriptWorkflowRunInput",
-      "type"
-    ],
-    [
-      "UpsertScriptWorkflowDefinitionInput",
-      "type"
-    ],
-    [
-      "WorkflowActivityKind",
-      "type"
-    ],
-    [
-      "WorkflowActivityKindSchema",
-      "value"
-    ],
-    [
-      "WorkflowActivitySnapshot",
-      "type"
-    ],
-    [
-      "WorkflowActivitySnapshotSchema",
-      "value"
-    ],
-    [
-      "WorkflowAgentCallInput",
-      "type"
-    ],
-    [
-      "WorkflowAgentCallInputSchema",
-      "value"
-    ],
-    [
-      "WorkflowAgentIsolation",
-      "type"
-    ],
-    [
-      "WorkflowAgentIsolationSchema",
-      "value"
-    ],
-    [
-      "WorkflowAgentOptions",
-      "type"
-    ],
-    [
-      "WorkflowAgentOptionsSchema",
-      "value"
-    ],
-    [
-      "WorkflowArtifact",
-      "type"
-    ],
-    [
-      "WorkflowArtifactSchema",
-      "value"
-    ],
-    [
-      "WorkflowCriticReopenProposal",
-      "type"
-    ],
-    [
-      "WorkflowCriticReopenProposalSchema",
-      "value"
-    ],
-    [
-      "WorkflowCriticResult",
-      "type"
-    ],
-    [
-      "WorkflowCriticResultSchema",
-      "value"
-    ],
-    [
-      "WorkflowCriticSeverity",
-      "type"
-    ],
-    [
-      "WorkflowCriticSeveritySchema",
-      "value"
-    ],
-    [
-      "WorkflowDefinition",
-      "type"
-    ],
-    [
-      "WorkflowDefinitionSchema",
-      "value"
-    ],
-    [
-      "WorkflowDefinitionStorePort",
-      "type"
-    ],
-    [
-      "WorkflowEvent",
-      "type"
-    ],
-    [
-      "WorkflowEventSchema",
-      "value"
-    ],
-    [
-      "WorkflowEventType",
-      "type"
-    ],
-    [
-      "WorkflowEventTypeSchema",
-      "value"
-    ],
-    [
-      "WorkflowFailure",
-      "type"
-    ],
-    [
-      "WorkflowFailureKind",
-      "type"
-    ],
-    [
-      "WorkflowFailureKindSchema",
-      "value"
-    ],
-    [
-      "WorkflowFailureSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraph",
-      "type"
-    ],
-    [
-      "WorkflowGraphCollection",
-      "type"
-    ],
-    [
-      "WorkflowGraphCollectionSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphCollectionStatus",
-      "type"
-    ],
-    [
-      "WorkflowGraphCollectionStatusSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphEdge",
-      "type"
-    ],
-    [
-      "WorkflowGraphEdgeSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphNode",
-      "type"
-    ],
-    [
-      "WorkflowGraphNodeSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphPlannerNode",
-      "type"
-    ],
-    [
-      "WorkflowGraphPlannerNodeSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphPlannerResult",
-      "type"
-    ],
-    [
-      "WorkflowGraphPlannerResultSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphRecord",
-      "type"
-    ],
-    [
-      "WorkflowGraphRecordSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphSeed",
-      "type"
-    ],
-    [
-      "WorkflowGraphSeedCollection",
-      "type"
-    ],
-    [
-      "WorkflowGraphSeedCollectionSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphSeedSchema",
-      "value"
-    ],
-    [
-      "WorkflowGraphSeedSource",
-      "type"
-    ],
-    [
-      "WorkflowGraphSeedSourceSchema",
-      "value"
-    ],
-    [
-      "WorkflowKind",
-      "type"
-    ],
-    [
-      "WorkflowKindSchema",
-      "value"
-    ],
-    [
-      "WorkflowNodePromptUpdate",
-      "type"
-    ],
-    [
-      "WorkflowNodePromptUpdateSchema",
-      "value"
-    ],
-    [
-      "WorkflowNodePromptUpdateSet",
-      "type"
-    ],
-    [
-      "WorkflowNodePromptUpdateSetSchema",
-      "value"
-    ],
-    [
-      "WorkflowNodeStatus",
-      "type"
-    ],
-    [
-      "WorkflowNodeStatusSchema",
-      "value"
-    ],
-    [
-      "WorkflowPhaseBehavior",
-      "type"
-    ],
-    [
-      "WorkflowPhaseBehaviorSchema",
-      "value"
-    ],
-    [
-      "WorkflowPhaseDefinition",
-      "type"
-    ],
-    [
-      "WorkflowPhaseDefinitionSchema",
-      "value"
-    ],
-    [
-      "WorkflowPhaseId",
-      "type"
-    ],
-    [
-      "WorkflowPhaseIdSchema",
-      "value"
-    ],
-    [
-      "WorkflowPhaseSnapshot",
-      "type"
-    ],
-    [
-      "WorkflowPhaseSnapshotSchema",
-      "value"
-    ],
-    [
-      "WorkflowRecoveryAction",
-      "type"
-    ],
-    [
-      "WorkflowRecoveryActionSchema",
-      "value"
-    ],
-    [
-      "WorkflowRunListItem",
-      "type"
-    ],
-    [
-      "WorkflowRunSnapshot",
-      "type"
-    ],
-    [
-      "WorkflowRunSnapshotSchema",
-      "value"
-    ],
-    [
-      "WorkflowRunStatus",
-      "type"
-    ],
-    [
-      "WorkflowRunStatusSchema",
-      "value"
-    ],
-    [
-      "WorkflowSchedulerActiveActivity",
-      "type"
-    ],
-    [
-      "WorkflowSchedulerActiveActivitySchema",
-      "value"
-    ],
-    [
-      "WorkflowSchedulerCollectionState",
-      "type"
-    ],
-    [
-      "WorkflowSchedulerCollectionStateSchema",
-      "value"
-    ],
-    [
-      "WorkflowSchedulerDerivedNode",
-      "type"
-    ],
-    [
-      "WorkflowSchedulerDerivedNodeSchema",
-      "value"
-    ],
-    [
-      "WorkflowSchedulerState",
-      "type"
-    ],
-    [
-      "WorkflowSchedulerStateSchema",
-      "value"
-    ],
-    [
-      "WorkflowScriptMeta",
-      "type"
-    ],
-    [
-      "WorkflowScriptMetaSchema",
-      "value"
-    ],
-    [
-      "WorkflowScriptPhaseMeta",
-      "type"
-    ],
-    [
-      "WorkflowScriptPhaseMetaSchema",
-      "value"
-    ],
-    [
-      "WorkflowSessionLink",
-      "type"
-    ],
-    [
-      "WorkflowSessionLinkSchema",
-      "value"
-    ],
-    [
-      "WorkflowSessionLinkStatus",
-      "type"
-    ],
-    [
-      "WorkflowSessionLinkStatusSchema",
-      "value"
-    ],
-    [
-      "WorkflowStorePort",
-      "type"
-    ],
-    [
-      "WorkflowStrategy",
-      "type"
-    ],
-    [
-      "WorkflowStrategySchema",
-      "value"
-    ]
+    ["CreateScriptWorkflowActivityInput", "type"],
+    ["CreateScriptWorkflowRunInput", "type"],
+    ["CreateSessionTaskLinkInput", "type"],
+    ["deriveWorkflowRunSchedulerState", "value"],
+    ["deriveWorkflowSchedulerState", "value"],
+    ["deriveWorkflowSessionLinks", "value"],
+    ["ExpertWorkflowPhase", "type"],
+    ["ExpertWorkflowPhaseSchema", "value"],
+    ["ExpertWorkflowRunSnapshot", "type"],
+    ["ExpertWorkflowRunSnapshotSchema", "value"],
+    ["ExpertWorkflowStrategy", "type"],
+    ["ExpertWorkflowStrategySchema", "value"],
+    ["SCRIPT_WORKFLOW_ACTIVITY_STATUSES", "value"],
+    ["SCRIPT_WORKFLOW_DEFINITION_SCOPES", "value"],
+    ["SCRIPT_WORKFLOW_RUN_STATUSES", "value"],
+    ["ScriptWorkflowActivityRecord", "type"],
+    ["ScriptWorkflowActivityStatus", "type"],
+    ["ScriptWorkflowDefinitionRecord", "type"],
+    ["ScriptWorkflowDefinitionScope", "type"],
+    ["ScriptWorkflowEventRecord", "type"],
+    ["ScriptWorkflowRunRecord", "type"],
+    ["ScriptWorkflowRunStats", "type"],
+    ["ScriptWorkflowRunStatsSchema", "value"],
+    ["ScriptWorkflowRunStatus", "type"],
+    ["ScriptWorkflowSource", "type"],
+    ["ScriptWorkflowStorePort", "type"],
+    ["SessionTaskLinkRecord", "type"],
+    ["UpdateScriptWorkflowActivityInput", "type"],
+    ["UpdateScriptWorkflowRunInput", "type"],
+    ["UpsertScriptWorkflowDefinitionInput", "type"],
+    ["WorkflowActivityKind", "type"],
+    ["WorkflowActivityKindSchema", "value"],
+    ["WorkflowActivitySnapshot", "type"],
+    ["WorkflowActivitySnapshotSchema", "value"],
+    ["WorkflowAgentCallInput", "type"],
+    ["WorkflowAgentCallInputSchema", "value"],
+    ["WorkflowAgentIsolation", "type"],
+    ["WorkflowAgentIsolationSchema", "value"],
+    ["WorkflowAgentOptions", "type"],
+    ["WorkflowAgentOptionsSchema", "value"],
+    ["WorkflowArtifact", "type"],
+    ["WorkflowArtifactSchema", "value"],
+    ["WorkflowCriticReopenProposal", "type"],
+    ["WorkflowCriticReopenProposalSchema", "value"],
+    ["WorkflowCriticResult", "type"],
+    ["WorkflowCriticResultSchema", "value"],
+    ["WorkflowCriticSeverity", "type"],
+    ["WorkflowCriticSeveritySchema", "value"],
+    ["WorkflowDefinition", "type"],
+    ["WorkflowDefinitionSchema", "value"],
+    ["WorkflowDefinitionStorePort", "type"],
+    ["WorkflowEvent", "type"],
+    ["WorkflowEventSchema", "value"],
+    ["WorkflowEventType", "type"],
+    ["WorkflowEventTypeSchema", "value"],
+    ["WorkflowFailure", "type"],
+    ["WorkflowFailureKind", "type"],
+    ["WorkflowFailureKindSchema", "value"],
+    ["WorkflowFailureSchema", "value"],
+    ["WorkflowGraph", "type"],
+    ["WorkflowGraphCollection", "type"],
+    ["WorkflowGraphCollectionSchema", "value"],
+    ["WorkflowGraphCollectionStatus", "type"],
+    ["WorkflowGraphCollectionStatusSchema", "value"],
+    ["WorkflowGraphEdge", "type"],
+    ["WorkflowGraphEdgeSchema", "value"],
+    ["WorkflowGraphNode", "type"],
+    ["WorkflowGraphNodeSchema", "value"],
+    ["WorkflowGraphPlannerNode", "type"],
+    ["WorkflowGraphPlannerNodeSchema", "value"],
+    ["WorkflowGraphPlannerResult", "type"],
+    ["WorkflowGraphPlannerResultSchema", "value"],
+    ["WorkflowGraphRecord", "type"],
+    ["WorkflowGraphRecordSchema", "value"],
+    ["WorkflowGraphSchema", "value"],
+    ["WorkflowGraphSeed", "type"],
+    ["WorkflowGraphSeedCollection", "type"],
+    ["WorkflowGraphSeedCollectionSchema", "value"],
+    ["WorkflowGraphSeedSchema", "value"],
+    ["WorkflowGraphSeedSource", "type"],
+    ["WorkflowGraphSeedSourceSchema", "value"],
+    ["WorkflowKind", "type"],
+    ["WorkflowKindSchema", "value"],
+    ["WorkflowNodePromptUpdate", "type"],
+    ["WorkflowNodePromptUpdateSchema", "value"],
+    ["WorkflowNodePromptUpdateSet", "type"],
+    ["WorkflowNodePromptUpdateSetSchema", "value"],
+    ["WorkflowNodeStatus", "type"],
+    ["WorkflowNodeStatusSchema", "value"],
+    ["WorkflowPhaseBehavior", "type"],
+    ["WorkflowPhaseBehaviorSchema", "value"],
+    ["WorkflowPhaseDefinition", "type"],
+    ["WorkflowPhaseDefinitionSchema", "value"],
+    ["WorkflowPhaseId", "type"],
+    ["WorkflowPhaseIdSchema", "value"],
+    ["WorkflowPhaseSnapshot", "type"],
+    ["WorkflowPhaseSnapshotSchema", "value"],
+    ["WorkflowRecoveryAction", "type"],
+    ["WorkflowRecoveryActionSchema", "value"],
+    ["WorkflowRunListItem", "type"],
+    ["WorkflowRunSnapshot", "type"],
+    ["WorkflowRunSnapshotSchema", "value"],
+    ["WorkflowRunStatus", "type"],
+    ["WorkflowRunStatusSchema", "value"],
+    ["WorkflowSchedulerActiveActivity", "type"],
+    ["WorkflowSchedulerActiveActivitySchema", "value"],
+    ["WorkflowSchedulerCollectionState", "type"],
+    ["WorkflowSchedulerCollectionStateSchema", "value"],
+    ["WorkflowSchedulerDerivedNode", "type"],
+    ["WorkflowSchedulerDerivedNodeSchema", "value"],
+    ["WorkflowSchedulerState", "type"],
+    ["WorkflowSchedulerStateSchema", "value"],
+    ["WorkflowScriptMeta", "type"],
+    ["WorkflowScriptMetaSchema", "value"],
+    ["WorkflowScriptPhaseMeta", "type"],
+    ["WorkflowScriptPhaseMetaSchema", "value"],
+    ["WorkflowSessionLink", "type"],
+    ["WorkflowSessionLinkSchema", "value"],
+    ["WorkflowSessionLinkStatus", "type"],
+    ["WorkflowSessionLinkStatusSchema", "value"],
+    ["WorkflowStorePort", "type"],
+    ["WorkflowStrategy", "type"],
+    ["WorkflowStrategySchema", "value"]
   ]
 }

@@ -8,6 +8,7 @@ import {
   formatWorkflowStallNotification,
 } from "../../runtime-task/notification.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { noteWorkflowReminderRunEvent } from "./dynamic-workflow-blocked-reminder.js";
 import { notifyHoleReached } from "./dynamic-workflow-run-hole-notification.js";
 
 /**
@@ -36,6 +37,9 @@ export async function recordDynamicWorkflowRunProgress(
     ),
     traceContext,
   );
+  // 开集变了（提问 / 作答 / 到达留白 / 补全）：这个 run 的「欠着决定」提醒重新计数。先于下面的通知，
+  // 这样会话正闲着时空闲钟先归零，再被通知唤起的那一轮停掉。
+  noteWorkflowReminderRunEvent(this, payload);
   notifyEscalationRaised.call(this, payload, traceContext);
   notifyRunStalled.call(this, payload, traceContext);
   await notifyHoleReached.call(this, payload, traceContext);

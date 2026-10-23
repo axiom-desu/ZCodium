@@ -25,9 +25,22 @@ pub struct Assembly {
     /// The provider's finish reason before mapping (`_zcode_raw_finish` of a
     /// translated protocol, else the Chat `finish_reason`).
     raw_finish: Option<String>,
+    /// 出现只带签名/加密载荷的推理帧：与 Node `hasReasoningContent` 一致，
+    /// 空文本不等于空输出，不能当成空输出的上下文超窗。
+    pub(super) reasoning_frames: bool,
     bytes: usize,
     pub done: bool,
 }
+
+/// Node `isZeroOutputModelCompletion` 的上下文超窗原因集合（原始 finish reason）。
+const CONTEXT_LIMIT_FINISH: [&str; 6] = [
+    "context_exceeded",
+    "context_length_exceeded",
+    "context_window_exceeded",
+    "model_context_exceeded",
+    "model_context_window_exceeded",
+    "prompt_too_long",
+];
 impl Assembly {
     pub async fn consume(
         &mut self,
@@ -59,10 +72,8 @@ impl Assembly {
         let choice = &value["choices"][0];
         if let Some(reason) = choice["finish_reason"].as_str() {
             self.finish = Some(reason.into());
-            self.raw_finish = choice
-                .get("_zcode_raw_finish")
-                .map_or(Some(reason), Value::as_str)
-                .map(str::to_owned);
+            // Node：`rawFinishReason` 优先取翻译协议的原始原因，其次 provider metadata。
+            self.raw_finish = raw_finish(value, choice).map(str::to_owned);
         }
         let delta = &choice["delta"];
         for (key, reasoning) in [("reasoning_content", true), ("content", false)] {
@@ -119,7 +130,23 @@ impl Assembly {
             Ok(())
         }
     }
-    pub fn finish(self) -> Result<ModelOutput, ModelFailure> {
+    /// 空输出且原始结束原因是上下文超窗；任何 partial（文本/推理/工具）都保持原语义。
+    fn context_limit_exceeded(&self) -> bool {
+        if !self.text.is_empty() || !self.reasoning.is_empty() || self.reasoning_frames {
+            return false;
+        }
+        if !self.calls.is_empty() {
+            return false;
+        }
+        [self.raw_finish.as_deref(), self.finish.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|reason| {
+                let reason = reason.trim().to_ascii_lowercase();
+                CONTEXT_LIMIT_FINISH.contains(&reason.as_str())
+            })
+    }
+    pub(super) fn finish(self) -> Result<ModelOutput, ModelFailure> {
         if !self.done {
             return Err(ModelFailure::new("network_error", true));
         }
@@ -132,6 +159,17 @@ impl Assembly {
         }
         if output_limit && !self.calls.is_empty() {
             return Err(ModelFailure::invalid());
+        }
+        // 空输出 + 上下文超窗是真实请求失败（Node `createEmptyContextExceededError`）：
+        // 带 usage 进入既有失败链，不能压成 `length` 再做无效续写。
+        if self.context_limit_exceeded() {
+            let mut failure = ModelFailure::new("context_exceeded", false);
+            failure.usage = self
+                .usage
+                .as_object()
+                .filter(|u| !u.is_empty())
+                .map(|_| Box::new(self.usage.clone()));
+            return Err(failure);
         }
         if self.finish.as_deref() == Some("tool_calls") && self.calls.is_empty() {
             return Err(ModelFailure::invalid());
@@ -176,6 +214,28 @@ fn string(value: &Value) -> Result<Option<&str>, ModelFailure> {
     } else {
         value.as_str().map(Some).ok_or_else(ModelFailure::invalid)
     }
+}
+
+/// Node `rawFinishReason` 回退链：翻译协议的 `_zcode_raw_finish`，其次 provider metadata，
+/// 最后才是归一化 finish reason。
+fn raw_finish<'a>(value: &'a Value, choice: &'a Value) -> Option<&'a str> {
+    // 翻译帧一旦带 `_zcode_raw_finish`（包括显式 null）就是该帧的完整事实：
+    // Responses `completed` 的 null 表示 provider 没有原始原因，不能伪造成归一化 `stop`。
+    if let Some(raw) = choice.get("_zcode_raw_finish") {
+        return raw.as_str();
+    }
+    [
+        &choice["providerMetadata"],
+        &value["providerMetadata"],
+        &value["provider_metadata"],
+    ]
+    .into_iter()
+    .find_map(|metadata| {
+        metadata["rawFinishReason"]
+            .as_str()
+            .or_else(|| metadata["raw_finish_reason"].as_str())
+    })
+    .or_else(|| choice["finish_reason"].as_str())
 }
 
 pub struct TextBuffer<'a> {

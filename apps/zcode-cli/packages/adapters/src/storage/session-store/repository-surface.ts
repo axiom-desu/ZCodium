@@ -45,6 +45,11 @@ export class RepositorySurface extends SessionStoreSurface {
     return sessionRepository.getSession(this.db, sessionID);
   }
 
+  async softDeleteSession(sessionID: SessionId, timeDeleted?: number): Promise<void> {
+    this.throwBeforeWrite();
+    sessionRepository.softDeleteSession(this.db, sessionID, timeDeleted ?? Date.now());
+  }
+
   async listSessions(input: ListSessionsInput = {}): Promise<SessionInfo[]> {
     return sessionRepository.listSessions(this.db, input);
   }

@@ -68,7 +68,10 @@ import {
   zcodeUsageStatsParamsSchema,
   zcodeWorkspaceGenerateTextParamsSchema,
   getConversationMessageProjectionPolicy,
+  isAuxiliarySessionKind,
+  isReadonlyAgentSessionKind,
   parseRemoteWorkspaceIdentity,
+  type AppToolSearchMode,
   type ZCodeAutomationBotDeliveryTarget,
   type ZCodeSessionCreateParams,
   type ZCodeDeliveryKind,
@@ -82,6 +85,7 @@ import {
   type ZCodeSessionResumeParams,
   type ZCodeSessionPersistence,
   type ZCodeStateUpdatedNotification,
+  type ZCodeWorkspaceRef,
 } from "@zcode/shared";
 import {
   buildSessionSnapshot,
@@ -141,6 +145,7 @@ type ZCodeSessionRecordParams = (
 ) & { taskType?: SessionTaskType };
 
 interface SessionStartupPreferences {
+  toolSearchMode: AppToolSearchMode;
   memoryEnabled: boolean;
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;
   nativeSearchEnhancementsEnabled: boolean;
@@ -1619,30 +1624,67 @@ function resolveLegacyRemoteWorkspace(
   };
 }
 
+/**
+ * 一条持久 session 是否属于本次 `session/list` 的作用域。
+ * 修复根因：原先只比较 current 行的 `workspaceID?.trim() || path || directory`，于是同路径下
+ * 由子 runtime 写入、只带 cwd 的 workflow/nested 子会话永远无法被 Host 索引进侧栏，
+ * 而把旧的「多识别几层」硬编码成路径前缀匹配又会跨 identity 拼错项目。
+ * 这里只在显式 ID 查询时凭持久 parentID 证明辅助会话归属：每层路径/显式身份严格校验，
+ * 已删除、缺父、跨工作区与环一律拒绝；全程只读，不激活 runtime、不回写身份。
+ */
+async function storedSessionOwnedBy(
+  context: ZCodeProtocolAgentServerContext,
+  params: { sessionIds?: string[]; workspace?: ZCodeWorkspaceRef },
+  session: SessionInfo | null,
+): Promise<SessionInfo | null> {
+  if (!session) return null;
+  const workspace = params.workspace;
+  if (!workspace) return session.time.deleted === undefined ? session : null;
+  const store = context.deps.sessionStore;
+  const workspacePath = workspace.workspacePath;
+  const expectedKey = workspace.workspaceIdentity?.trim() || workspacePath;
+  const pathOf = (current: SessionInfo) => current.path || current.directory;
+  const visited = new Set<string>();
+  let current: SessionInfo | null = session;
+  while (current && current.time.deleted === undefined && !visited.has(String(current.id))) {
+    visited.add(String(current.id));
+    const path = pathOf(current);
+    const identity = current.workspaceID?.trim() ?? "";
+    const key = identity || path;
+    if (key === expectedKey) return session;
+    // fork / workflow_parent 是独立任务：即使带 parentID 也不能沿父链改写项目归属。
+    if (
+      !params.sessionIds ||
+      !isAuxiliarySessionKind(current.taskType) ||
+      !current.parentID ||
+      path !== workspacePath ||
+      (identity.length > 0 && key !== path)
+    )
+      return null;
+    current = (await store?.getSession(current.parentID)) ?? null;
+    if (current && pathOf(current) !== workspacePath) return null;
+  }
+  return null;
+}
+
 export async function listSessions(context: ZCodeProtocolAgentServerContext, rawParams: unknown) {
   const params = parseParams(zcodeSessionListParamsSchema, rawParams ?? {});
   const store = context.deps.sessionStore;
   // 显式 ID 查询只读持久化身份，供 Host 修复旧索引；不能为了识别 child 激活 runtime。
-  const stored = (
-    params.sessionIds
-      ? await Promise.all(params.sessionIds.map((id) => store?.getSession(id as SessionId) ?? null))
-      : store
-        ? await store.listSessions({
-            directory: params.workspace?.workspacePath,
-            includeArchived: params.includeArchived,
-            limit: params.limit ?? 50,
-            taskTypes: [...TASK_LIST_SESSION_TYPES],
-          })
-        : []
-  ).filter((session): session is SessionInfo => {
-    if (!session) return false;
-    return (
-      (params.includeArchived || session.time.archived === undefined) &&
-      (!params.workspace ||
-        (session.workspaceID?.trim() || session.path || session.directory) ===
-          (params.workspace.workspaceIdentity?.trim() || params.workspace.workspacePath))
-    );
-  });
+  // `includeArchived` 已退役（接收即忽略）：排除条件只看 time_deleted。
+  const candidates = params.sessionIds
+    ? await Promise.all(params.sessionIds.map((id) => store?.getSession(id as SessionId) ?? null))
+    : store
+      ? await store.listSessions({
+          directory: params.workspace?.workspacePath,
+          limit: params.limit ?? 50,
+          taskTypes: [...TASK_LIST_SESSION_TYPES],
+        })
+      : [];
+  const scoped = await Promise.all(
+    candidates.map((session) => storedSessionOwnedBy(context, params, session)),
+  );
+  const stored = scoped.filter((session): session is SessionInfo => session !== null);
   const storedIds = new Set(stored.map((session) => String(session.id)));
   const sessions = stored.map((session) =>
     mapSessionInfo({
@@ -1918,8 +1960,9 @@ export async function subscribeSession(
 export async function sendPrompt(context: ZCodeProtocolAgentServerContext, rawParams: unknown) {
   const params = parseParams(zcodeSessionSendParamsSchema, rawParams);
   const record = requireSession(context, params.sessionId);
-  // legacy 输入入口同样必须保持子代理只读，不能绕过 V4 用户输入准入。
-  if (record.taskType === "subagent_child") {
+  // legacy 输入入口同样必须保持子 agent/工作流子会话只读，不能绕过 V4 用户输入准入。
+  // selection_side_chat 不在只读集合内：辅助对话仍可继续输入。
+  if (isReadonlyAgentSessionKind(record.taskType)) {
     throw new ProtocolRequestError(-32010, "Subagent sessions are read-only", {
       reasonCode: "guard.subagentReadOnly",
     });
@@ -3180,6 +3223,8 @@ async function requestSessionRuntimePreferences(
       // 增强搜索维持原有默认开启，其他协议/传输错误仍阻止 runtime 创建。
       return {
         askUserQuestionAutoResolutionEnabled: true,
+        // 旧 Host 没有工具搜索设置时按 Off，不伪造 auto。
+        toolSearchMode: "off",
         memoryEnabled: false,
         modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
         nativeSearchEnhancementsEnabled: true,
@@ -3198,6 +3243,7 @@ async function resolveSessionStartupPreferences(
   if (source.kind === "inherit") {
     const inheritedShellSelection = source.parent.app.runtime.getSessionShellSelection();
     return {
+      toolSearchMode: source.parent.toolSearchMode,
       memoryEnabled: source.parent.memoryEnabled,
       modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
       nativeSearchEnhancementsEnabled: source.parent.nativeSearchEnhancementsEnabled,
@@ -3216,6 +3262,7 @@ async function resolveSessionStartupPreferences(
     runtimePreferences.askUserQuestionAutoResolutionEnabled,
   );
   return {
+    toolSearchMode: runtimePreferences.toolSearchMode,
     memoryEnabled: runtimePreferences.memoryEnabled,
     modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
     nativeSearchEnhancementsEnabled: runtimePreferences.nativeSearchEnhancementsEnabled,
@@ -3307,6 +3354,8 @@ async function createRecord(
       toolAllowlist: "toolAllowlist" in params ? params.toolAllowlist : undefined,
       toolDisallowlist: "toolDenylist" in params ? params.toolDenylist : undefined,
       nativeSearchEnhancementsEnabled: startupPreferences.nativeSearchEnhancementsEnabled,
+      // 设置只写 App 配置；模式在这里一次性固定进 runtimeConfig，运行期不广播变更。
+      toolSearch: { mode: startupPreferences.toolSearchMode },
       modelContextBudgetStrategy: startupPreferences.modelContextBudgetStrategy,
       // Memory Settings 是现有 CLI features.memory/use 之外的总开关。只在关闭时
       // 写入 override，避免开启值反向覆盖用户已有的 CLI 禁用配置。
@@ -3359,6 +3408,7 @@ async function createRecord(
     app,
     createdAt: now,
     eventStore,
+    toolSearchMode: startupPreferences.toolSearchMode,
     memoryEnabled: startupPreferences.memoryEnabled,
     modelContextBudgetStrategy: startupPreferences.modelContextBudgetStrategy,
     nativeSearchEnhancementsEnabled: startupPreferences.nativeSearchEnhancementsEnabled,

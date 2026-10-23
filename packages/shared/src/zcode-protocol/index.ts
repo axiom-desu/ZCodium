@@ -1,3 +1,4 @@
+import { appToolSearchModeSchema } from "../app-runtime-preferences.js";
 import { sharedContextImportProvenanceSchema } from "../zcode-protocol-v4/shared-context-import.js";
 import {
   databaseMigrationFactsSchema,
@@ -640,6 +641,8 @@ export const zcodeProtocolMcpServerSchema = z.union([
       env: z.array(zcodeProtocolMcpEntrySchema),
       isolation: z.enum(["session", "workspace"]).optional(),
       protocolVersion: z.enum(["legacy", "auto", "2026-07-28"]).optional(),
+      // 只透传布尔值；缺省不输出该字段，不用字符串真值转换。
+      alwaysLoad: z.boolean().optional(),
       timeoutMs: z.number().int().positive().optional(),
     })
     .strict(),
@@ -652,6 +655,8 @@ export const zcodeProtocolMcpServerSchema = z.union([
       oauth: zcodeProtocolMcpOAuthSchema.optional(),
       isolation: z.enum(["session", "workspace"]).optional(),
       protocolVersion: z.enum(["legacy", "auto", "2026-07-28"]).optional(),
+      // 只透传布尔值；缺省不输出该字段，不用字符串真值转换。
+      alwaysLoad: z.boolean().optional(),
       timeoutMs: z.number().int().positive().optional(),
     })
     .strict(),
@@ -1808,6 +1813,7 @@ export const zcodeSessionListParamsSchema = z
     workspace: zcodeWorkspaceRefSchema.optional(),
     // 显式身份查询包含隐藏会话；普通列表仍只返回主任务，避免索引修复激活 runtime。
     sessionIds: z.array(nonEmptyString).min(1).max(64).optional(),
+    /** @deprecated 旧发送端兼容：仍接收但忽略。列表排除条件只看 `time_deleted`。 */
     includeArchived: z.boolean().default(false),
     limit: z.number().int().positive().optional(),
   })
@@ -1908,6 +1914,8 @@ export type ZCodeModelContextBudgetStrategy = z.infer<typeof zcodeModelContextBu
 export const zcodeSessionRuntimePreferencesResultSchema = z
   .object({
     nativeSearchEnhancementsEnabled: z.boolean(),
+    // 旧 Host 缺少该字段时按 Off；不在协议边界伪造成 auto。
+    toolSearchMode: appToolSearchModeSchema.default("off"),
     memoryEnabled: z.boolean().default(false),
     askUserQuestionAutoResolutionEnabled: z.boolean().default(true),
     integratedTerminalShell: integratedTerminalShellSelectionSchema.optional(),

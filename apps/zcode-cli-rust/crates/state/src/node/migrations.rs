@@ -19,7 +19,7 @@ macro_rules! migration {
 }
 
 /// `SQLITE_MIGRATIONS` in execution order.
-pub const MIGRATIONS: [Migration; 22] = [
+pub const MIGRATIONS: [Migration; 23] = [
     migration!("0001_base_session_store", "0.2.0"),
     migration!("0002_local_setting", "0.2.0"),
     migration!("0003_backfill_permission_local_setting", "0.2.0"),
@@ -42,7 +42,32 @@ pub const MIGRATIONS: [Migration; 22] = [
     migration!("0020_provider_model_selection", "0.16.5"),
     migration!("0021_official_glm_selection", "0.16.5"),
     migration!("0022_backfilled_session_reasoning", "0.16.5"),
+    migration!("0023_session_soft_delete_outcome", "0.16.9"),
 ];
+
+/// 0023 在「列已存在但账本缺失」的历史库上必须幂等（另一实现/上游可能已加过列）。
+pub const SOFT_DELETE_OUTCOME_MIGRATION: &str = "0023_session_soft_delete_outcome";
+
+/// Node `0023-…ts` `apply` 的同一逐列守卫：只为缺失列保留 ALTER 语句。
+/// `present` 是 `pragma table_info(session)` 的列名；账本 checksum 仍取整段 `sql`。
+/// 不能用「两列全存在才跳过整段 SQL」——只加过一列的历史库会以 duplicate column 启动失败。
+pub fn missing_soft_delete_ddl(sql: &str, present: &[String]) -> String {
+    const ADD_COLUMN: &str = "alter table session add column ";
+    sql.split(';')
+        .map(str::trim)
+        .filter(|statement| !statement.is_empty())
+        .filter(|statement| {
+            // 语句形如 `alter table session add column <name> <type>`；列已存在则跳过。
+            statement
+                .to_ascii_lowercase()
+                .strip_prefix(ADD_COLUMN)
+                .and_then(|rest| rest.split_whitespace().next().map(str::to_owned))
+                .is_none_or(|column| !present.iter().any(|name| name == &column))
+        })
+        .map(|statement| format!("{statement};"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 /// ECMAScript `WhiteSpace` and `LineTerminator` (what `String.prototype.trim` strips).
 pub(super) fn js_whitespace(c: char) -> bool {
@@ -72,7 +97,7 @@ mod tests {
     use super::*;
 
     /// The ledger values recorded by Node (and in existing user databases).
-    const EXPECTED: [&str; 22] = [
+    const EXPECTED: [&str; 23] = [
         "60e2d6a38ab36f31417c4f92c02690c96c7dcaaa0b6abe1741117d62a55c6462",
         "22a6ada9325c9ad55a00a1f0ecf72332c63c1e89fc3d91fec8d155bb0058b465",
         "bd880375ba7b948c8bcda847e7eb52bc568d065bcba48190f6c3bfb14d11b7dc",
@@ -95,6 +120,7 @@ mod tests {
         "681180b4fcb497e13289b6970021678f24c975efdf3538777541105c5b2b444e",
         "433a8da454682406e962b043f2e0f412e9801bf7e4641ff25760aa16625ebafe",
         "aee472fe499e9c25d2e71df0fbc68d92e462b30d1d02919ca35d540bf133c99a",
+        "999cc9840e30c94f8a6628440f3e729c24e7ee839720f3e76099b3c3127a8bd8",
     ];
 
     #[test]

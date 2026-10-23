@@ -43,12 +43,18 @@ impl ApiType {
 }
 /// `metadata_user_id` is Anthropic's `metadata.user_id` (Node
 /// `anthropic-request-metadata.ts`); option patches still apply after it.
+/// `tool_search` 是 Native ToolSearch 请求（Node `ModelRequest.toolSearchEnabled`）。
 pub(super) fn body(
     config: &ModelConfig,
     mut messages: Vec<Value>,
     tools: &[Value],
     metadata_user_id: Option<&str>,
+    tool_search: bool,
 ) -> Result<Value, ModelFailure> {
+    // 非 Anthropic 协议在编码前就拒绝 native 请求，不能默默发成全目录请求。
+    if tool_search {
+        super::tool_search::ensure_native(config)?;
+    }
     // 签名/加密推理绑定请求模型；跨模型续聊保留正文与工具，不能回放另一个模型的私有块。
     let foreign = |m: &Value| {
         m.get("_zcode_origin")
@@ -128,7 +134,7 @@ pub(super) fn body(
             body
         }
         ApiType::Anthropic => {
-            let mut body = anthropic_body(config, &messages, tools)?;
+            let mut body = anthropic_body(config, &messages, tools, tool_search)?;
             if let Some(user) = metadata_user_id {
                 body["metadata"] = json!({"user_id": user});
             }
@@ -154,6 +160,7 @@ fn anthropic_body(
     config: &ModelConfig,
     messages: &[Value],
     tools: &[Value],
+    tool_search: bool,
 ) -> Result<Value, ModelFailure> {
     let names = super::tool_media::tool_names(messages);
     let mut system = vec![];
@@ -179,7 +186,7 @@ fn anthropic_body(
             content.extend_from_slice(blocks);
         }
         if role == "tool" {
-            let (blocks, deferred) = anthropic_tool_content(message, &names)?;
+            let (blocks, deferred) = anthropic_tool_content(message, &names, tool_search)?;
             let mut result = json!({"type":"tool_result","tool_use_id":message["tool_call_id"],"content":blocks});
             // AI SDK 只在失败时写 is_error。
             if message["_zcode_tool_failed"] == true {
@@ -187,10 +194,11 @@ fn anthropic_body(
             }
             content.push(result);
             if let Some(deferred) = deferred {
-                content.extend(super::model_media::anthropic(&deferred["content"])?);
+                content.extend(super::model_media::anthropic(&deferred["content"], false)?);
             }
         } else if message["content"].is_array() {
-            content.extend(super::model_media::anthropic(&message["content"])?);
+            // 引用只能出现在工具结果里；assistant/user 内容出现引用即本地契约错误。
+            content.extend(super::model_media::anthropic(&message["content"], false)?);
         } else if message["content"].as_str().is_some_and(|s| !s.is_empty()) {
             content.push(json!({"type":"text","text":message["content"]}));
         }
@@ -226,14 +234,7 @@ fn anthropic_body(
             output.push(message);
         }
     }
-    let tools = tools
-        .iter()
-        .map(|t| match t["type"].as_str() {
-            Some("function") => json!({"name":t["function"]["name"],"description":t["function"]["description"],"input_schema":t["function"]["parameters"]}),
-            // provider 原生工具（web_search_20260209）原样发送。
-            _ => t.clone(),
-        })
-        .collect::<Vec<_>>();
+    let tools = super::tool_search::anthropic_tools(tools, tool_search);
     let mut body =
         json!({"model":config.model_id,"stream":true,"max_tokens":config.max_output_tokens});
     body["system"] = if cache_system {
@@ -273,10 +274,11 @@ fn split_tool_media(
 fn anthropic_tool_content(
     message: &Value,
     names: &std::collections::HashMap<String, String>,
+    tool_search: bool,
 ) -> Result<(Value, Option<Value>), ModelFailure> {
     match split_tool_media(message, names) {
         Some((kept, deferred)) => {
-            let blocks = super::model_media::anthropic(&Value::Array(kept))?;
+            let blocks = super::model_media::anthropic(&Value::Array(kept), tool_search)?;
             Ok((blocks.into(), deferred))
         }
         None => Ok((message["content"].clone(), None)),

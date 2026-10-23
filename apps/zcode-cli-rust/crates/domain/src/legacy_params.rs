@@ -165,11 +165,23 @@ fn imported_history() -> Schema {
     )
 }
 
+/// Host 启动偏好的既有传输路径；Rust 只消费 `toolSearch.mode`，其余字段由 TS Host 解释。
+fn runtime_config() -> Schema {
+    Schema::Object(vec![optional(
+        "toolSearch",
+        Schema::Object(vec![optional(
+            "mode",
+            Schema::Enum(&["auto", "native", "local", "off"]),
+        )]),
+    )])
+}
+
 fn tail() -> Vec<(&'static str, Schema, bool)> {
     vec![
         optional("mcpServers", Schema::Array(Box::new(mcp_server()), None)),
         optional("toolAllowlist", strings()),
         optional("toolDenylist", strings()),
+        optional("runtimeConfig", runtime_config()),
     ]
 }
 

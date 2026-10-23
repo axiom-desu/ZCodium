@@ -6,6 +6,14 @@ mod engine_builders;
 mod event_projection;
 mod model_config;
 mod queries;
+#[cfg(test)]
+#[path = "session_close_tests.rs"]
+mod session_close_tests;
+mod tool_rows;
+mod tool_search;
+#[cfg(test)]
+#[path = "tool_search_tests.rs"]
+mod tool_search_tests;
 mod topics;
 mod waiters;
 pub use crate::contract::{Event, RunEvent};
@@ -13,6 +21,7 @@ pub use engine::Engine;
 mod input_validation;
 
 mod agent_loop;
+mod durable;
 mod hook_events;
 mod hook_runner;
 mod plan_events;
@@ -24,6 +33,7 @@ mod workspace_grant;
 mod workspace_review;
 mod workspace_trust;
 
+mod compact_request;
 mod compaction;
 mod context;
 mod context_projection;
@@ -82,6 +92,7 @@ mod legacy_stream;
 mod legacy_tools;
 mod legacy_turn_end;
 mod local_ttft;
+mod manual_compact;
 mod mcp;
 mod plugin_events;
 mod plugin_reference;

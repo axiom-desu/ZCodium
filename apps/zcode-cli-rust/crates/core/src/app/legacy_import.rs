@@ -75,6 +75,7 @@ impl Engine {
             state_revision: u64::from(model_given) + u64::from(thought_applied) + 1,
             workspace: Some(workspace),
             fresh: false,
+            tool_search_mode: self.session_tool_search_mode(p),
             ..Default::default()
         };
         if let Some(servers) = p.get("mcpServers") {

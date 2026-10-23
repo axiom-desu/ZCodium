@@ -76,6 +76,8 @@ export async function runModelTextRequest(
   const modelRequest = {
     messages: projectedOptions.messages,
     tools: projectedOptions.tools,
+    // 只有 Native 才发送协议标记；Local 开启不发送 beta/defer_loading/tool_reference。
+    toolSearchEnabled: projectedOptions.toolSearch?.mode === "native",
     abortSignal: projectedOptions.abortSignal,
     ...(projectedOptions.maxOutputTokens !== undefined
       ? { options: { maxOutputTokens: projectedOptions.maxOutputTokens } }

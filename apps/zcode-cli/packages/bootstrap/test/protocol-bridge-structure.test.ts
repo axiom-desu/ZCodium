@@ -150,7 +150,14 @@ describe("protocol bridge 结构边界", () => {
     } as unknown as ZCodeProtocolSessionRecord;
     const sessions = new Map([[sessionId, record]]);
     const context = {
-      deps: {},
+      // deleteSession 先落持久软删除事实，再释放 runtime；顺序由下面的 calls 断言。
+      deps: {
+        sessionStore: {
+          softDeleteSession: async () => {
+            calls.push("softDelete");
+          },
+        },
+      },
       sessions,
       v4Gateway: {
         disposeSession: (id: string) => {
@@ -169,12 +176,12 @@ describe("protocol bridge 结构边界", () => {
 
     await ops.closeSession?.(sessionId);
 
-    assert.deepEqual(calls, ["unsubscribe", "app.close", "dispose:present"]);
+    assert.deepEqual(calls, ["softDelete", "unsubscribe", "app.close", "dispose:present"]);
     assert.equal(sessions.has(sessionId), false);
 
-    // 并发竞态下重复关闭（stale run）：不抛、不重复 dispose。
+    // 并发竞态下重复关闭（stale run）：不抛、不重复 dispose、不重复写持久事实。
     await ops.closeSession?.(sessionId);
-    assert.deepEqual(calls, ["unsubscribe", "app.close", "dispose:present"]);
+    assert.deepEqual(calls, ["softDelete", "unsubscribe", "app.close", "dispose:present"]);
   });
 
   it("一次交互应答只有一个 owner：重复应答与 stale 注销都不生效", () => {

@@ -61,6 +61,7 @@
       "version": "0.1.7",
       "defaultEnabled": true,
       "hostMcpServerNames": [],
+      "componentTypes": ["ui"],
       "listing": {
         "displayName": "Documents",
         "displayNameI18n": {
@@ -80,6 +81,7 @@
       "version": "0.1.7",
       "defaultEnabled": true,
       "hostMcpServerNames": [],
+      "componentTypes": ["ui"],
       "listing": {
         "displayName": "PDF",
         "displayNameI18n": {
@@ -99,6 +101,7 @@
       "version": "0.1.7",
       "defaultEnabled": true,
       "hostMcpServerNames": [],
+      "componentTypes": ["ui"],
       "listing": {
         "displayName": "Presentations",
         "displayNameI18n": {
@@ -118,6 +121,7 @@
       "version": "0.1.7",
       "defaultEnabled": true,
       "hostMcpServerNames": [],
+      "componentTypes": ["ui"],
       "listing": {
         "displayName": "Spreadsheets",
         "displayNameI18n": {

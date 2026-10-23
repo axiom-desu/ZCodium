@@ -36,6 +36,7 @@ import {
   compactDirectToolCallCommitEvent,
   handleStreamChunk,
 } from "./runner-stream-chunks.js";
+import { createEmptyContextExceededError } from "./runner-diagnostics.js";
 import {
   handleStreamEndedWithoutError,
   publishVisibleMilestone,
@@ -222,6 +223,17 @@ export async function* runStreamText(input: StreamRunInput): AsyncGenerator<Mode
             yield directToolCommit;
           }
           throw error;
+        }
+        if (event.visibleEvents.some((visibleEvent) => visibleEvent.type === "finish")) {
+          const contextError = createEmptyContextExceededError({
+            finishReason: diagnostics.finishReason,
+            rawFinishReason: diagnostics.rawFinishReason,
+            hasAssistantContent: diagnostics.textDeltaChars > 0 || diagnostics.hasReasoningContent,
+            toolCallCount: toolCallAssembler.snapshotNormalizedToolCalls().length,
+            usage: diagnostics.usage,
+          });
+          // 先于 yield finish 进入既有 catch：每个请求只发布一个失败终态，且不再按空响应重试。
+          if (contextError) throw contextError;
         }
         const shouldHoldEmptyCompletionEvents = shouldHoldEmptyStreamCompletion({
           attempt,

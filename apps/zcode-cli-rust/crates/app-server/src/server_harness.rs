@@ -6,7 +6,7 @@
 //! without a DTO stand-in. Every synchronization step waits on those channels
 //! (or `serve`'s own flush window); no test-side sleep masks the event order.
 use crate::contract::{ClientMsg, Input, Method, RuntimeEvent, ServerMsg};
-use crate::{Sink, serve};
+use crate::{ServeOptions, Sink, serve_with_options};
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -27,11 +27,15 @@ pub struct Harness {
 
 impl Harness {
     pub async fn start() -> Self {
+        Self::start_with(ServeOptions::default()).await
+    }
+
+    pub async fn start_with(options: ServeOptions) -> Self {
         let (input, input_rx) = mpsc::channel(64);
         let (output_tx, output) = mpsc::channel(32);
         let (ready_tx, ready_rx) = oneshot::channel();
         let (stop, stopped) = oneshot::channel();
-        let running = tokio::spawn(serve(
+        let running = tokio::spawn(serve_with_options(
             move |requests, responses| async move {
                 ready_tx.send((requests, responses)).ok().unwrap();
                 stopped.await.unwrap();
@@ -39,6 +43,7 @@ impl Harness {
             },
             input_rx,
             Sink::Values(output_tx),
+            options,
         ));
         let (requests, responses) = ready_rx.await.unwrap();
         Self {
@@ -66,6 +71,17 @@ impl Harness {
     pub async fn rpc(&self, id: &str, method: &str, params: Value) {
         self.request(Some(RequestId::Text(id.into())), method, params)
             .await;
+    }
+
+    /// Host response to a request the App Server sent to the client.
+    pub async fn respond(&self, id: &str, result: Value) {
+        self.input
+            .send(Input::Response {
+                id: id.into(),
+                result,
+            })
+            .await
+            .unwrap();
     }
 
     /// The next request `serve` routed to the runtime.

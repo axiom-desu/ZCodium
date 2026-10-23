@@ -1,5 +1,5 @@
 import { getDefaultConfigPath, updateUiLocaleInFileConfig } from "@zcode/adapters/config";
-import type { SessionEvent } from "@zcode/contracts";
+import type { SessionEvent, ToolSearchMode } from "@zcode/contracts";
 import type { ZCodeAppOptions } from "@zcode/bootstrap";
 import { DEFAULT_LOCALE, type SupportedLocale } from "@zcode/i18n";
 import type { TuiRequestPermission } from "@zcode/tui";
@@ -52,6 +52,7 @@ export function createTuiSubmitPrompt(
   startupLocale: SupportedLocale = DEFAULT_LOCALE,
   toolDisallowlist?: readonly string[],
   forceMcs = false,
+  toolSearchMode: ToolSearchMode = "off",
   browserUse?: GlobalOptions["browserUse"],
   browserExecutable?: GlobalOptions["browserExecutable"],
 ): TuiPromptHandler {
@@ -151,6 +152,8 @@ export function createTuiSubmitPrompt(
           ...(modeState.override ? { mode: modeState.override } : {}),
           ...(toolDisallowlist ? { toolDisallowlist } : {}),
           ...(forceMcs ? { midConversationSystem: { mode: "force" as const } } : {}),
+          // 启动覆盖：TUI 不读取 App Settings，子 Agent 沿同一 runtime 继承。
+          ...(toolSearchMode !== "off" ? { toolSearch: { mode: toolSearchMode } } : {}),
           modelStreaming: "on",
           titleGeneration: TUI_TITLE_GENERATION_CONFIG,
           workingDirectory,

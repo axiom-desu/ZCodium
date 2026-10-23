@@ -1,5 +1,31 @@
 {
   "tools": {
+    "ToolSearch": {
+      "readOnly": true,
+      "destructive": false,
+      "sideEffectScope": "none",
+      "riskLevel": "low",
+      "needsApproval": false,
+      "permission": {
+        "permission": "tool.search",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "needsApproval": false
+      }
+    },
+    "DeferredToolCall": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "system",
+      "riskLevel": "high",
+      "needsApproval": true,
+      "permission": {
+        "permission": "tool.deferred_call",
+        "riskLevel": "high",
+        "sideEffectScope": "system",
+        "needsApproval": true
+      }
+    },
     "Read": {
       "readOnly": true,
       "destructive": false,
@@ -180,32 +206,6 @@
         "riskLevel": "medium",
         "sideEffectScope": "workspace",
         "needsApproval": true
-      }
-    },
-    "OffPeakCreate": {
-      "readOnly": false,
-      "destructive": false,
-      "sideEffectScope": "workspace",
-      "riskLevel": "medium",
-      "needsApproval": true,
-      "permission": {
-        "permission": "offpeak.create",
-        "riskLevel": "medium",
-        "sideEffectScope": "workspace",
-        "needsApproval": true
-      }
-    },
-    "OffPeakList": {
-      "readOnly": true,
-      "destructive": false,
-      "sideEffectScope": "none",
-      "riskLevel": "low",
-      "needsApproval": false,
-      "permission": {
-        "permission": "offpeak.read",
-        "riskLevel": "low",
-        "sideEffectScope": "none",
-        "needsApproval": false
       }
     },
     "EnterPlanMode": {
@@ -425,6 +425,23 @@
         "alwaysAsk": true,
         "askOptions": {
           "allowAlways": "session"
+        }
+      }
+    },
+    "FillWorkflowHole": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "none",
+      "riskLevel": "low",
+      "needsApproval": true,
+      "permission": {
+        "permission": "createWorkflow",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "needsApproval": true,
+        "alwaysAsk": true,
+        "askOptions": {
+          "allowAlways": false
         }
       }
     },

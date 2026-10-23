@@ -16,6 +16,14 @@
       "midConversation": true,
       "trailingNewline": false
     },
+    "tool_search_announcement": {
+      "channel": "current_turn",
+      "lifecycle": "resume_history",
+      "isMeta": true,
+      "providerVisibility": "provider_visible",
+      "midConversation": true,
+      "trailingNewline": false
+    },
     "todo_reminder": {
       "channel": "current_turn",
       "lifecycle": "per_current_turn",

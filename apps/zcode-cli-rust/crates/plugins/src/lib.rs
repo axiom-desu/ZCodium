@@ -30,6 +30,7 @@ pub mod loaded;
 pub mod manifest;
 pub mod market;
 pub mod market_admin;
+pub mod market_defaults;
 pub mod marketplace_ops;
 pub mod marketplace_source;
 pub mod mcp;

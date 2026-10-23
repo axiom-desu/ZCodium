@@ -10,11 +10,13 @@ import type {
   TraceId,
   TurnId,
 } from "@zcode/contracts";
-import type { ModelToolCall as ToolCall } from "@zcode/contracts";
+import type { ModelCallWrapper, ModelToolCall } from "@zcode/contracts";
 import type { ToolScheduleItem } from "../tool/scheduler.js";
 
-// Re-export ToolCall for consumers of this module
-export type { ModelToolCall as ToolCall } from "@zcode/contracts";
+// 内部调用保存目标身份；包装标记只在模型协议出口还原，执行/调度不读取包装参数。
+export interface ToolCall extends ModelToolCall {
+  modelCallWrapper?: ModelCallWrapper;
+}
 
 // Note: ModelMessage is defined locally to avoid conflicts with contracts' ModelMessage
 // which uses ToolCallPayload[] instead of ModelToolCall[]

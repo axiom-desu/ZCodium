@@ -39,6 +39,11 @@ const OFFICIAL_CUA_PLUGIN_NAME = "computer-use";
 export const OFFICIAL_CUA_PLUGIN_ID = `${OFFICIAL_CUA_PLUGIN_NAME}@${ZCODE_OFFICIAL_PLUGIN_MARKETPLACE}`;
 
 export interface OfficialPluginDefinition {
+  /**
+   * 卸载（抑制）后的可恢复条目没有运行时信息，商店只能靠这里判断是否归入「UI 插件」。
+   * 插件包 manifest 声明 ui.surfaces 时必须同时声明 "ui"，由 CI 测试校验一致。
+   */
+  componentTypes?: readonly string[];
   // 内容型 plugin (无 MCP server / 无系统依赖) 可以设为 true,
   // 这样用户首次 `/skill <name>` 就能用,不必先 `zcode plugins enable`。
   // 默认 false 保持 ios-simulator / android-emulator 这类重负载 plugin 原来行为。
@@ -197,6 +202,9 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     ] as const
   ).map(
     ([name, skill, displayName, chineseName, version]): OfficialPluginDefinition => ({
+      // 四个文档插件带查看面板（office viewer）；面板资源随 office-runtime 接入，
+      // 但商店分类必须稳定：卸载后的可恢复条目没有 manifest，只能靠 definition 声明。
+      componentTypes: ["ui"],
       defaultEnabled: true,
       listing: {
         author: ZCODIUM_AUTHOR,

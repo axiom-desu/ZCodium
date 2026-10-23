@@ -1,4 +1,5 @@
 import {
+  SESSION_LAST_OUTCOMES,
   SESSION_TASK_TYPES,
   SESSION_ENTRY_MODEL_SELECTION,
   SESSION_TITLE_SOURCES,
@@ -14,6 +15,7 @@ import {
   type SessionEntryInfo,
   type SessionId,
   type SessionInfo,
+  type SessionLastOutcome,
   type SessionRevert,
   type SessionTitleSource,
   type SessionEntryType,
@@ -24,7 +26,6 @@ import {
 } from "@zcode/contracts";
 import { decodeJson } from "./json.js";
 import type { MessageRow, PartRow, SessionEntryRow, SessionRow, TodoRow } from "./rows.js";
-
 export function isCollaborationMode(value: unknown): value is CollaborationMode {
   return (
     value === "plan" ||
@@ -45,6 +46,13 @@ function decodeSessionTitleSource(value: string | null | undefined): SessionTitl
   return SESSION_TITLE_SOURCES.includes(value as SessionTitleSource)
     ? (value as SessionTitleSource)
     : "first_input";
+}
+
+/** 历史未知取值按缺失读取：不把排版/旧版本写入的值伪造成成功。 */
+function decodeLastOutcome(value: string | null | undefined): SessionLastOutcome | undefined {
+  return SESSION_LAST_OUTCOMES.includes(value as SessionLastOutcome)
+    ? (value as SessionLastOutcome)
+    : undefined;
 }
 
 export function decodeSessionRow(row: SessionRow): SessionInfo {
@@ -69,12 +77,14 @@ export function decodeSessionRow(row: SessionRow): SessionInfo {
     summaryDiffs: decodeJson<FileDiff[]>(row.summary_diffs),
     revert: decodeJson<SessionRevert>(row.revert),
     permission: decodeJson<PermissionRuleset>(row.permission),
+    lastOutcome: decodeLastOutcome(row.last_outcome),
     time: {
       created: row.time_created,
       updated: row.time_updated,
       titleUpdated: row.time_title_updated ?? undefined,
       compacting: row.time_compacting ?? undefined,
       archived: row.time_archived ?? undefined,
+      deleted: row.time_deleted ?? undefined,
     },
   };
 }

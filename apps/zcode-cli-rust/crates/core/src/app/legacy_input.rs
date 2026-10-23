@@ -131,7 +131,10 @@ impl Engine {
     pub(super) async fn legacy_send(&mut self, raw: &Value) -> Result<Value> {
         let p = legacy_input_params::send(raw).map_err(params_error)?;
         let id = self.legacy_resident(&p)?;
-        if self.sessions[&id].task_type == "subagent_child" {
+        // 只读集合含 workflow_child / nested_workflow_child；selection_side_chat 仍可输入。
+        if zcode_cli_domain::session_kind::is_readonly_agent_session_kind(
+            &self.sessions[&id].task_type,
+        ) {
             return Err(RuntimeError::Rejected {
                 code: -32010,
                 message: "Subagent sessions are read-only".into(),

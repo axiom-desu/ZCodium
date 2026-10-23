@@ -273,30 +273,13 @@ impl Engine {
                 receipt = Some(committed);
                 let content = model_content.unwrap_or_else(|| result.clone().into());
                 s.append_message(json!({"role":"tool","tool_call_id":call_id,"content":content,"_zcode_tool_failed":failed}));
-                if let Some(row) = s
-                    .rows
-                    .iter_mut()
-                    .find(|r| r["turnId"] == turn && r["toolCallId"] == call_id)
-                {
-                    // 与 Node permission_denied 一致：被拒绝的调用不产生工具错误，行收口为 cancelled。
-                    row["status"] = if denied {
-                        "cancelled"
-                    } else if failed {
-                        "error"
-                    } else {
-                        "success"
-                    }
-                    .into();
-                    row["endedAt"] = now.into();
-                    row["output"] = json!({"text":result});
-                    if let Some(display) = display {
-                        row["output"]["display"] = display;
-                    }
-                    row.as_object_mut().unwrap().remove("approvalInteractionId");
-                    if failed && !denied {
-                        row["error"] =
-                            json!({"code":"fault.tool.failed","message":"Tool execution failed"});
-                    }
+                let done = super::tool_rows::Done {
+                    result: &result,
+                    display: display.as_ref(),
+                    failed,
+                    denied,
+                };
+                if let Some(row) = super::tool_rows::finish_call(s, (&turn, &call_id), now, done) {
                     deltas.push(json!({"op":"row.upserted","row":row}));
                 }
             }
@@ -364,6 +347,14 @@ impl Engine {
                     }
                 }
                 s.finish_rows(outcome, now);
+                // Node `persistDurableSessionEvent`(TurnComplete/TurnError)：终态结果先落库再发布，
+                // 否则冷启动只能把全部历史任务推导成成功。outcome 与 Node 同值域。
+                let last_outcome = match outcome {
+                    "interrupted" => "interrupted",
+                    "failed" => "error",
+                    _ => "completed",
+                };
+                s.node_last_outcome(now, last_outcome);
                 deltas.extend(
                     s.rows
                         .iter()
@@ -380,10 +371,14 @@ impl Engine {
         }
         if finished {
             deltas.extend(self.turn_file_changes(&id, &turn).await?);
+            // 持久事实（含 last_outcome）必须早于终态事件发布；现有 persist 收口复用，不开第二套事务。
+            self.persist(&id, None).await?;
         }
         self.publish(&id, deltas)?;
         self.legacy_fact(&id, &turn, legacy)?;
-        if checkpoint {
+        // 终态已在发布前提交过：同一 durable 事实不能写两次，否则接受该提交的调用方
+        // （如 Node `persistDurableSessionEvent` 的单一收口）会看到多余的 barrier。
+        if checkpoint && !finished {
             self.persist(&id, None).await?;
         }
         if let Some(receipt) = receipt {

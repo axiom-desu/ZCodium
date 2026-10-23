@@ -320,11 +320,15 @@ pub fn completed_tool(
     input: &Value,
     output: &Value,
     display: Option<&Value>,
+    model_content: Option<&Value>,
     (start, end): (u64, u64),
 ) -> Value {
     let mut metadata = json!({"schemaVersion": 1});
     if let Some(display) = display {
         metadata["display"] = display.clone();
+    }
+    if let Some(content) = model_content {
+        metadata["modelContent"] = content.clone();
     }
     json!({"status": "completed", "input": input, "output": output, "title": tool,
         "metadata": metadata, "time": {"start": start, "end": end}})
@@ -337,7 +341,10 @@ pub fn error_tool(
     (start, end): (u64, u64),
 ) -> Value {
     let mut metadata = json!({});
-    if let Some(content) = model_content.filter(|c| c.is_string()) {
+    // 兼容旧字符串与严格 text/reference 数组；坏 metadata 不丢 display/媒体布局。
+    if let Some(content) =
+        model_content.filter(|c| c.is_string() || crate::tool_search::model_content(c).is_some())
+    {
         metadata["modelContent"] = content.clone();
     }
     json!({"status": "error", "input": input, "error": error, "metadata": metadata,

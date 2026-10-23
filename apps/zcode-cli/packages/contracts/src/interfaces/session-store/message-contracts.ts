@@ -166,6 +166,11 @@ export interface AttachmentStorageMetadata {
   storageKind?: "inline" | "artifact" | "local_ref" | "remote_ref" | "metadata_only";
   artifactUri?: string;
   originalUrl?: string;
+  /**
+   * 路径引用附件的首发完整说明文本（与首发的 `contentBlock.text` 逐字节相同）。
+   * 冷恢复优先原样使用；不是 preview，也不是文件内容降级。
+   */
+  pathReferenceText?: string;
   recoverability?: "provider_ready" | "rebuildable" | "preview_only" | "metadata_only" | "missing";
   preview?: {
     text?: string;

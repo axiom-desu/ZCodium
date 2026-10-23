@@ -192,6 +192,8 @@ function contentBlockToUserMediaParts(
 
     case "text":
     case "reasoning":
+    // 引用块不是媒体：后置媒体 user part 不承载它。
+    case "tool_reference":
     case "resource_link":
       return [];
   }

@@ -1,6 +1,53 @@
 use serde::Serialize;
 use std::fmt;
 
+/// Node `Model.requestCapabilities.toolSearch`：实际非凭据能力事实。
+/// `protocol_supported` 只看协议（Anthropic Messages），`default_enabled` 额外要求
+/// 真实 coding-plan 访问方式；不恢复已移除的 requestAuth/highspeed/offpeak 分支。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSearchCapability {
+    pub protocol_supported: bool,
+    pub default_enabled: bool,
+}
+
+impl ToolSearchCapability {
+    pub fn new(protocol_supported: bool, default_enabled: bool) -> Self {
+        Self {
+            protocol_supported,
+            default_enabled,
+        }
+    }
+
+    /// Anthropic Messages 加真实 coding-plan 访问方式（Node
+    /// `resolveToolSearchCapability`：`zhipu-coding-plan-api-key` 或 `zhipu-account` 的
+    /// individual/team coding plan）。`access_type`/`access_mode` 均为非秘密配置。
+    pub fn for_access(anthropic: bool, access_type: &str, access_mode: Option<&str>) -> Self {
+        let coding_plan = access_type == "zhipu-coding-plan-api-key"
+            || (access_type == "zhipu-account"
+                && matches!(
+                    access_mode,
+                    Some("individual-coding-plan" | "team-coding-plan")
+                ));
+        Self::new(anthropic, anthropic && coding_plan)
+    }
+}
+
+/// 模型端口可选的新增请求选项；缺省（全部 false）与既有 `complete` 完全等价。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ModelRequestOptions {
+    /// 仅代表 Native ToolSearch 协议（不发 Local 展开或 off 全目录）。
+    pub tool_search_enabled: bool,
+}
+
+impl ModelRequestOptions {
+    pub fn native_tool_search() -> Self {
+        Self {
+            tool_search_enabled: true,
+        }
+    }
+}
+
 /// 分类字段可跨 adapter/app 边界；诊断文案仅使用受控常量，避免泄漏供应商响应。
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +64,11 @@ pub struct ModelFailure {
     /// Provider response facts for network status only (never logged or shown).
     #[serde(skip)]
     pub detail: Option<Box<FailureDetail>>,
+    /// 失败响应里 provider 真实报告的 usage（Node `AiSdkModelAdapterError.usage`）。
+    /// 只随终止失败事件结算一次；缺 usage 保持 None，不猜 0。
+    /// 装箱只为不放大 `Result<_, ModelFailure>`（clippy `result_large_err`）。
+    #[serde(skip)]
+    pub usage: Option<Box<serde_json::Value>>,
 }
 
 /// What the failing provider response said (Node `inspectProviderFailure`).
@@ -75,6 +127,11 @@ pub fn describe(reason: &str) -> (&'static str, &'static str) {
             "invalid_model_response",
             "Provider response was invalid or incomplete.",
         ),
+        // 未实现 ToolSearch 协议的端口拒绝 native 请求（Node 在发送前报 invalid_model_request）。
+        "tool_search_unsupported" => (
+            "invalid_model_request",
+            "Selected model does not support native ToolSearch.",
+        ),
         "tls_error" => ("model_request_failed", "Provider TLS validation failed."),
         "network_error" => (
             "model_request_failed",
@@ -99,6 +156,7 @@ impl ModelFailure {
             output_committed: false,
             empty_completion: false,
             detail: None,
+            usage: None,
         }
     }
     pub fn invalid() -> Self {

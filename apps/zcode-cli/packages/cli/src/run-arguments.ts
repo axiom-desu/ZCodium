@@ -7,6 +7,7 @@ import type { RunContext, GlobalOptions, GlobalOutputFormat } from "@zcode/share
 import { formatCliHelp } from "./help.js";
 import { CLI_COMMAND_NAME, CLI_PROCESS_NAME } from "./process-name.js";
 import { PluginsCommandFlags } from "./plugins-command.js";
+import { ToolSearchModeSchema, type ToolSearchMode } from "@zcode/contracts";
 import type { CliPermissionMode, CliTargetRequest } from "./cli-types.js";
 
 declare const __CLI_VERSION__: string | undefined;
@@ -15,8 +16,34 @@ export const version = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "
 
 const EMPTY_TARGET_ERROR = "--target requires non-empty text.";
 export const DEFAULT_HEADLESS_PROMPT_MODE: CliPermissionMode = "yolo";
-export const FORCE_MCS_SCOPE_ERROR =
-  "--force-mcs can only be used with --prompt, --target, or tui.";
+const FORCE_MCS_SCOPE_ERROR = "--force-mcs can only be used with --prompt, --target, or tui.";
+const TOOL_SEARCH_MODE_INVALID_ERROR = "--toolsearch-mode must be one of auto, native, local, off.";
+
+// 启动覆盖：缺省 off，非法值直接拒绝，不静默回退成 auto。
+export const parseToolSearchMode = (
+  values: ReturnType<typeof parseGlobalArgs>["values"],
+): { toolSearchMode?: ToolSearchMode } | { error: string } => {
+  const parsed = ToolSearchModeSchema.safeParse(values["toolsearch-mode"] ?? "off");
+  return parsed.success
+    ? parsed.data === "off"
+      ? {}
+      : { toolSearchMode: parsed.data }
+    : { error: TOOL_SEARCH_MODE_INVALID_ERROR };
+};
+
+// --force-mcs 与 --toolsearch-mode 共用同一可支持调用面（prompt/target/tui）。
+export const resolveRuntimeOverrideScopeError = (input: {
+  forceMcs: boolean;
+  toolSearchRequested: boolean;
+  invocation: { positionals: string[]; prompt?: string; targetRequest?: CliTargetRequest };
+}): string | undefined =>
+  (!input.forceMcs && !input.toolSearchRequested) || isForceMcsSupportedInvocation(input.invocation)
+    ? undefined
+    : input.toolSearchRequested
+      ? TOOL_SEARCH_MODE_SCOPE_ERROR
+      : FORCE_MCS_SCOPE_ERROR;
+const TOOL_SEARCH_MODE_SCOPE_ERROR =
+  "--toolsearch-mode can only be used with --prompt, --target, or tui.";
 const TARGET_REPLACE_REQUIRES_TARGET_ERROR = "--target-replace requires --target.";
 export const TARGET_CONFLICTS_WITH_PROMPT_ERROR =
   '--target cannot be used with --prompt. Use either --target <objective> or --prompt "/goal <objective>".';
@@ -84,6 +111,7 @@ export const globalOptions = (
     ...(values["memory-bench"] === true ? { memoryBench: true } : {}),
     noColor: values["no-color"] === true,
     ...(outputFormat ? { outputFormat } : {}),
+    ...parseToolSearchMode(values),
     verbose: values.verbose === true,
   };
 };

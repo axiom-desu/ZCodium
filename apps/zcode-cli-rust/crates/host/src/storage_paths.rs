@@ -7,6 +7,14 @@ pub struct StoragePaths {
     pub database: PathBuf,
     pub artifacts: PathBuf,
 }
+
+/// Bash 输出首选的 tmp 父目录。唯一的注入点是 `ShellTasks::new` 的构造参数
+/// （Node 端 `bashOutputTempDir` 同样是 adapter 构造选项，由 app 装配传 `os.tmpdir()`）。
+/// `StoragePaths` 曾重复保存一份该值，但没有任何消费者读它，只会与工具实际使用的目录
+/// 悄悄分叉；因此由 tools 侧按平台取默认值，不硬编码 `/tmp`（尊重 TMPDIR/Windows 语义）。
+pub fn default_bash_temp_parent() -> Option<PathBuf> {
+    Some(std::env::temp_dir())
+}
 pub fn home() -> Result<PathBuf> {
     Ok(std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))

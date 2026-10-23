@@ -337,6 +337,8 @@ export async function validatePlugin(
 ): Promise<ZCodePluginsValidateResult> {
   const params = parseParams(zcodePluginsValidateParamsSchema, rawParams);
   const pluginStorageRoot = resolvePluginStorageRoot(params.workspace.workspacePath);
+  // validate 不是纯读取：未知市场会懒加载 manifest 并写 known/缓存，source 解析也可能 clone。
+  // 因此保留整个写锁，不把它伪装成读路径；只有 describe 的已缓存/已装读取才免锁。
   const diagnostics = await withPluginStorageLock(pluginStorageRoot, async () =>
     validateZCodePlugin({
       logger: context.logger,
@@ -363,14 +365,15 @@ export async function describePlugin(
 ): Promise<ZCodePluginsDescribeResult> {
   const params = parseParams(zcodePluginsDescribeParamsSchema, rawParams);
   const pluginStorageRoot = resolvePluginStorageRoot(params.workspace.workspacePath);
-  const result = await withPluginStorageLock(pluginStorageRoot, async () =>
-    describeZCodePlugin({
-      logger: context.logger,
-      marketplace: params.marketplace,
-      pluginName: params.pluginName,
-      workingDirectory: params.workspace.workspacePath,
-    }),
-  );
+  // 已装目录、已缓存 manifest 与临时 source 解析都不持锁；只有懒加载 manifest 写入进锁。
+  // 安装 A 下载期间打开 B 的详情不再排在 storage lock 队列里。
+  const result = await describeZCodePlugin({
+    logger: context.logger,
+    marketplace: params.marketplace,
+    pluginName: params.pluginName,
+    withWriteLock: (write) => withPluginStorageLock(pluginStorageRoot, write),
+    workingDirectory: params.workspace.workspacePath,
+  });
   const components: ZCodePluginComponentGroup[] = result.components.map((group) => ({
     kind: group.kind,
     items: group.items.map((item) => ({

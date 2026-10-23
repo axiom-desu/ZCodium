@@ -20,6 +20,14 @@ type ZCodeProtocolMessageHandler = (
 ) => Promise<ZCodeProtocolOutgoingMessage | undefined>;
 
 const PROTOCOL_EOF_DRAIN_MS = 100;
+// 插件读请求收到即处理，不排在安装/更新之后。describe 写 manifest 的分支自带 storage lock；
+// list/overview 是同步 handler，执行中不让出事件循环，seed 只在内容变化时写盘，
+// 不会与安装跨 await 的读改写交错。
+const PLUGIN_READ_IMMEDIATE_METHODS = new Set<string>([
+  zcodeProtocolMethods.pluginsDescribe,
+  zcodeProtocolMethods.pluginsList,
+  zcodeProtocolMethods.pluginsOverview,
+]);
 // MCP App 的请求由实例凭证和 callId 隔离；若与普通命令一起等待完成，
 // uiCallTool 会挡住自己的 cancel/close，真实 stdio 链路将死锁。
 const MCP_APP_CONCURRENT_METHODS = new Set<string>([
@@ -66,6 +74,12 @@ export class ZCodeProtocolNdjsonConnection {
   private readonly closedPromise: Promise<void>;
   private resolveClosed!: () => void;
   private rejectClosed!: (error: Error) => void;
+  /**
+   * 插件只读请求的 in-flight 完成跟踪。它们按 S5 语义不进串行队列，但仍属于本 transport
+   * 的生命周期：EOF 半关闭必须把已受理的回复写完，不能因为串行链为空就立即关闭。
+   * 集合由 transport 自己持有（不是第二个 admission owner），每个 promise settle 后立即移除。
+   */
+  private readonly inFlightImmediate = new Set<Promise<void>>();
   private terminal = false;
   private transportCloseNotified = false;
   private draining = false;
@@ -127,7 +141,11 @@ export class ZCodeProtocolNdjsonConnection {
     // EOF 保留短请求半关闭响应，但挂起 handler 不能让进程永久保活。
     this.drainTimer = setTimeout(() => this.finish(), PROTOCOL_EOF_DRAIN_MS);
     void this.processing.then(
-      () => this.finish(),
+      async () => {
+        // 等已受理的只读请求 settle 再 finish；PROTOCOL_EOF_DRAIN_MS 仍是硬上限。
+        await Promise.allSettled(this.inFlightImmediate);
+        this.finish();
+      },
       (error: Error) => this.fail(error),
     );
   };
@@ -187,6 +205,22 @@ export class ZCodeProtocolNdjsonConnection {
       void this.handleMessage(message).catch((error: unknown) => {
         this.fail(error instanceof Error ? error : new Error(String(error)));
       });
+      return;
+    }
+    if (
+      "id" in message &&
+      "method" in message &&
+      PLUGIN_READ_IMMEDIATE_METHODS.has(message.method)
+    ) {
+      // Bugfix：插件详情与列表曾排在串行队列里，安装 A 下载期间打开详情卡在组件 loading，
+      // 新建右侧标签页（新 store 首次加载 list/overview）卡在骨架屏。读请求不依赖前序请求的
+      // 执行结果，因此也不等 lastQueuedMessageStarted：否则 B 排在 A 后面时仍要等到 A 完成。
+      // 旁路串行队列不等于脱离生命周期：在飞请求登记给 EOF 排空，避免半关闭丢已受理回复。
+      const handling = this.handleMessage(message).catch((error: unknown) => {
+        this.fail(error instanceof Error ? error : new Error(String(error)));
+      });
+      this.inFlightImmediate.add(handling);
+      void handling.finally(() => this.inFlightImmediate.delete(handling));
       return;
     }
     if (this.shouldBypassProcessingQueue(message)) {

@@ -67,6 +67,13 @@ export function createCommandEntrySessionOps(
         // handler 已校验存在性；此处只兜并发竞态（重复删除幂等成功）。
         return;
       }
+      // 顺序不可交换：先把「已删除」持久事实落库（coalesce 首时间，重复调用幂等），
+      // 再释放 runtime 与摘除注册表。反过来一旦进程在两者之间重启，持久行仍是未删除，
+      // 已宣告的 session.removed 会在冷启动后被重新 list 出来（会话复活）。
+      // 能力缺失直接失败（ACK failed）：静默降级成「只关闭」会让用户以为已删除，而列表项下次冷启动又回来。
+      const store = context.deps.sessionStore;
+      if (!store?.softDeleteSession) throw new Error("Session soft deletion is unavailable");
+      await store.softDeleteSession(record.app.sessionId as SessionId);
       record.unsubscribe?.();
       await record.app.close?.();
       // v4 通道：会话关闭同时清 publisher / 订阅调度；重开会话走 snapshot 冷启动。
@@ -74,7 +81,9 @@ export function createCommandEntrySessionOps(
       // gateway 靠 getSessionWorkspaceId（读 context.sessions）定位 workspace 才能把
       // session.removed 推给 sessions-index 订阅者；先 delete 再 dispose 时 workspaceId
       // 恒为 null，删除会话后侧栏列表项永不消失（e2e conversation-session-v4-sidebar 抓出）。
-      context.v4Gateway?.disposeSession(sessionId);
+      // 这里是完成持久软删除的唯一执行面：只有它显式传 `deleted: true`，
+      // 普通 session/close、create 失败 cleanup 都不能发布 session.removed。
+      context.v4Gateway?.disposeSession(sessionId, { deleted: true });
       context.sessions.delete(sessionId);
     },
     // createSession 的执行面：record 建立/事件接线/catalog 同步/失败自清理全在旧

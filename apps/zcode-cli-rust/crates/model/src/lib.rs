@@ -19,4 +19,5 @@ mod request_attachments;
 mod responses_stream;
 mod sse;
 mod tool_media;
+mod tool_search;
 use zcode_cli_host::id;

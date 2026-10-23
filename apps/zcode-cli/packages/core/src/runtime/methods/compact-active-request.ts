@@ -40,6 +40,7 @@ import { resolveModelRequestSessionTypeFromTaskType } from "./model-request-sess
 import { recordModelUsageFact } from "./usage-observability.js";
 import { filterOutputTokenContinuationEntries } from "./turn-output-token-continuation.js";
 import type { RuntimeMessageEntry } from "../../agent/message-history.js";
+import { prepareRuntimeProviderRequest } from "../helpers/runtime-provider-request-messages.js";
 
 interface CompactSummaryRequestParams {
   abortSignal?: AbortSignal;
@@ -99,16 +100,24 @@ export async function runCompactSummaryAttempts(
     });
 
   while (true) {
-    const requestMessages = buildCompactSummaryRequestMessages(
-      selection.entriesForSummary,
-      compactPrompt,
-      { useMidConversationSystem: params.useMidConversationSystem },
-    );
-    const recordableEntries = filterOutputTokenContinuationEntries(selection.entriesForSummary);
+    // manual/auto/reactive compact 与主 turn 共用同一请求准备：先按完整候选目录做一次
+    // ToolSearch 决策，再拿配套的 messages/tools/toolSearchEnabled，不能各自猜测。
+    const prepared = prepareRuntimeProviderRequest(this, {
+      applyCacheControl: true,
+      entries: selection.entriesForSummary,
+      model: compactModel,
+      prompt: compactPrompt,
+      registry: this.getToolRegistry(),
+      skipCacheWrite: true,
+      tools: compactTools,
+    });
+    const requestMessages = prepared.request.messages;
+    const recordableEntries = filterOutputTokenContinuationEntries(prepared.entries);
     const recordableRequestMessages =
-      recordableEntries === selection.entriesForSummary
+      recordableEntries === prepared.entries
         ? requestMessages
         : buildCompactSummaryRequestMessages(recordableEntries, compactPrompt, {
+            loadedToolCallIds: prepared.loadedToolCallIds,
             useMidConversationSystem: params.useMidConversationSystem,
           });
     // Compact 曾只执行 capability projection，漏掉普通 turn 共用的聚合
@@ -164,7 +173,7 @@ export async function runCompactSummaryAttempts(
         providerId: String(compactModel.providerId),
         modelId: String(compactModel.modelId),
         querySource: "compact",
-        toolCount: compactTools.length,
+        toolCount: prepared.request.tools.length,
         compactPromptTooLongRetry: selection.compactPromptTooLongAttempts,
       },
       modelTraceContext,
@@ -193,7 +202,8 @@ export async function runCompactSummaryAttempts(
       // content block 提交前仍可丢弃并 HTTP fallback，block end 后则禁止任何重放。
       preserveProviderStreamBoundaries: true,
       traceContext: modelTraceContext,
-      tools: compactTools,
+      tools: prepared.request.tools,
+      toolSearchEnabled: prepared.request.toolSearchEnabled,
     };
 
     let result: RuntimeModelTextResult;

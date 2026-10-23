@@ -77,7 +77,7 @@ impl TurnHooks {
         if result.prevent_continuation {
             let (committed, receipt) = oneshot::channel();
             sink.send(Event::PromptBlocked { committed }).await?;
-            super::agent_loop::durable(receipt, cancel).await?;
+            super::durable::durable(receipt, cancel).await?;
             return Ok(false);
         }
         let contexts = &result.additional_contexts;

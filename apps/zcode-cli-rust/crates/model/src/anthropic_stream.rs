@@ -88,6 +88,8 @@ impl Anthropic {
                         .await?
                     }
                     "thinking" => {
+                        // 即使文本为空，签名帧也算有推理内容（Node hasReasoningContent）。
+                        self.inner.reasoning_frames = true;
                         self.inner
                             .count(block["signature"].as_str().map_or(0, str::len))?;
                         delta(
@@ -97,7 +99,10 @@ impl Anthropic {
                         )
                         .await?
                     }
-                    "redacted_thinking" => self.inner.count(required(&block["data"])?.len())?,
+                    "redacted_thinking" => {
+                        self.inner.reasoning_frames = true;
+                        self.inner.count(required(&block["data"])?.len())?;
+                    }
                     kind if self.server_tools && SERVER_BLOCKS.contains(&kind) => {}
                     _ => return Err(ModelFailure::invalid()),
                 }

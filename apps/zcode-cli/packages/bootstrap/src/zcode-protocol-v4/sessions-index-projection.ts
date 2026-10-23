@@ -20,6 +20,19 @@ export interface SessionSummaryDeriveExtra {
 
 const MAX_PREVIEW_CHARS = 120;
 
+/** 会话 phase 是否已 settled（终态）：只有 live 从非终态翻到这里才算新的「上次结果」。 */
+function isTerminalPhase(phase: SessionSummary["phase"]): boolean {
+  return phase === "completedSuccess" || phase === "completedInterrupted" || phase === "error";
+}
+
+/** 与 runtime 终态事件同一映射（TurnComplete/TurnError）；非终态不给结果。 */
+function lastOutcomeFromPhase(phase: SessionSummary["phase"]): SessionSummary["lastOutcome"] {
+  if (phase === "completedSuccess") return "completed";
+  if (phase === "completedInterrupted") return "interrupted";
+  if (phase === "error") return "error";
+  return undefined;
+}
+
 /** 从 ConversationSnapshot + 会话元信息派生 SessionSummary（纯函数，golden 可测）。 */
 function deriveSessionSummary(
   snapshot: ConversationSnapshot,
@@ -118,6 +131,7 @@ function summariesEqual(a: SessionSummary, b: SessionSummary): boolean {
     a.pendingInteractionSummary?.permissionCount === b.pendingInteractionSummary?.permissionCount &&
     a.pendingInteractionSummary?.userInputCount === b.pendingInteractionSummary?.userInputCount &&
     a.goalStatus === b.goalStatus &&
+    a.lastOutcome === b.lastOutcome &&
     a.lastActivityAt === b.lastActivityAt &&
     a.lastAssistantPreview === b.lastAssistantPreview &&
     a.createdAt === b.createdAt
@@ -146,6 +160,19 @@ export class SessionsIndexProjection {
       ...extra,
     });
     const prev = this.summaries.get(summary.sessionId);
+    // lastOutcome 是持久「上次结果」，不是实时 phase。冷种子里的持久值优先；
+    // 只有 live 观察到「非终态 → 终态」翻转时才按同一终态映射更新；旧行缺字段就不凭空补。
+    const liveOutcome = lastOutcomeFromPhase(snapshot.control.phase);
+    if (!prev) {
+      if (liveOutcome) summary.lastOutcome = liveOutcome;
+    } else if (isTerminalPhase(prev.phase)) {
+      if (prev.lastOutcome === undefined) delete summary.lastOutcome;
+      else summary.lastOutcome = prev.lastOutcome;
+    } else if (liveOutcome) {
+      summary.lastOutcome = liveOutcome;
+    } else if (prev.lastOutcome !== undefined) {
+      summary.lastOutcome = prev.lastOutcome;
+    }
     // 降级防御（stored→live 切换窗口）：冷恢复的 live 投影在 hydration 补齐
     // meta 之前 title 为空、record 时间可能被 resume 重置——store 种子里的
     // 稳定字段不得被降级值覆盖（否则侧栏表现为"原会话消失、冒出新任务"）。

@@ -26,6 +26,7 @@ import {
 } from "./runner-retry.js";
 import { createStatusContext, publishModelStatus } from "./runner-status.js";
 import {
+  failureUsageFields,
   modelFailureStatusFields,
   providerRequestIdFromHeaders,
   readModelFailureErrorPhase,
@@ -204,6 +205,8 @@ export async function handleStreamAttemptFailure(args: {
       statusCode: failure.statusCode,
       streamOutputCommitted: args.streamOutputCommitted,
       ...modelFailureStatusFields(args.error, failure, errorPhase),
+      // 只有终止的失败（空输出上下文超窗）携带 usage；重试不会重复入账。
+      ...failureUsageFields(args.error),
       timestamp: new Date(completedAt).toISOString(),
       type: "model_request_failed",
     },

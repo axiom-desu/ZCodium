@@ -20,6 +20,7 @@ import { MAX_TURN_STEER_INPUT_BYTES, measureUtf8Bytes, previewInput } from "../h
 import { cloneModelSelection } from "../model-selection.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { createRuntimeModel } from "./runtime-model.js";
+import { acceptSubmissionModelSelection, recordPublishedModelSelection } from "./turn-model.js";
 import { hasSteerInput } from "./steering-turn-lifecycle.js";
 
 export async function steerTurn(
@@ -112,7 +113,11 @@ export async function steerTurn(
     ...(toolDisallowlist ? { toolDisallowlist } : {}),
     turnId: activeTurn.turnId,
   };
+  const selectionAccepted = acceptSubmissionModelSelection(this, intent, activeTurn.traceContext);
   activeTurn.pendingInputs.push(pendingInput);
+  // 用户亲手 steer 进来的话（协调者 / 信箱 / 工具跟进也走这里，它们不算）：与 prompt 一样，给每个
+  // 欠着决定的 run 一对新的提醒。
+  if (request.inputPresentation === "user_steer") this.workflowBlockedReminder?.userSpoke();
   const queueLength = activeTurn.pendingInputs.length;
   const event = createSessionEvent(
     SessionEventType.TurnSteerQueued,
@@ -139,6 +144,7 @@ export async function steerTurn(
     },
   );
   await this.appendEvent(event, activeTurn.traceContext);
+  await selectionAccepted;
   this.logger?.debug("Turn steer queued", {
     ...traceContextToLogContext(activeTurn.traceContext),
     activeTurnKind: activeTurn.kind,
@@ -239,6 +245,8 @@ export async function enqueueDeferredInput(
     },
   );
   await this.appendEvent(event, traceContext);
+  // 延后排队的输入也在接纳时固定选型：它可能排在比它新的切换之前，不能到 drain 时再倒写。
+  await acceptSubmissionModelSelection(this, intent, traceContext);
   this.logger?.debug("Deferred input queued", {
     ...traceContextToLogContext(traceContext),
     delivery,
@@ -362,6 +370,8 @@ export async function emitModelSelected(
     { traceId: options.traceContext.traceId },
   );
   await this.appendEvent(event, options.traceContext);
+  // 展示边界：下次 ModelSelected 的 previous 取「上一次已发布」，不复读可能已被新输入改写的会话值。
+  recordPublishedModelSelection(this, options.modelSelection);
 }
 
 /**

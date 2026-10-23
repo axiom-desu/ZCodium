@@ -331,7 +331,7 @@ impl Engine {
                 failed,
                 ..
             } if !cancelled => {
-                // Node 的 output 是模型内容的文本形态（媒体为 [Attached …] 占位）。
+                let persisted = model_content.clone();
                 let content = match model_content {
                     Some(content) => nj::tool_media::output_text(content),
                     None => result.clone(),
@@ -341,7 +341,7 @@ impl Engine {
                     s.node_tool_checkpoint(now, (ids(), trace, ids()), uri, call);
                 }
                 let result = (&content.into(), display.as_ref(), *failed);
-                s.node_tool_done(now, call, result, media, &mut ids);
+                s.node_tool_done(now, call, result, persisted.as_ref(), media, &mut ids);
             }
             Event::Finished {
                 error,

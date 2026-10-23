@@ -12,6 +12,7 @@ import {
   buildRuntimeOutputStyleReminderBody,
   buildTodoReminderBody,
   buildRuntimeProviderRequestMessages,
+  prepareRuntimeProviderRequest,
   createCompactRapidRefillError,
   throwIfTurnAborted,
   shouldBuildTodoReminder,
@@ -21,17 +22,17 @@ import {
   todoReminderRuntimeMetadata,
 } from "../../agent/message-history.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { buildToolSearchAnnouncement } from "../../tool/search/exposure.js";
 import { runModelBackedTurnStep } from "./turn-model-step.js";
 import {
-  AUTOMATION_MUTATION_TOOL_NAMES,
   evaluateRapidRefill,
-  isAutomationMutationRestrictedTurn,
   MAX_CONSECUTIVE_RAPID_REFILLS,
   RAPID_REFILL_TOOL_TURN_THRESHOLD,
   recordCompactHistoryRound,
   recordCompactSuccess,
 } from "./turn-loop-state.js";
 import type { RegularTurnLoopState } from "./turn-loop-state.js";
+import { buildTurnDisallowedTools, getTurnTools } from "./turn-tool-visibility.js";
 import {
   appendTurnRequestEntries,
   commitTurnRequestEntries,
@@ -84,6 +85,7 @@ export async function runRegularTurnLoop(
         rapidRefill,
         model: state.model,
         turnRequestState: state.turnRequestState,
+        getContinuationTools: () => getTurnTools(this, state),
       },
     );
     if (autoCompactOutcome === "rapid_refill_blocked") {
@@ -165,24 +167,64 @@ export async function runRegularTurnLoop(
         systemReminderAttachmentEntry("output_style", outputStyleReminderBody),
       ]);
     }
+    // 公告只由正常提醒收集和 compact 重建产生；纯 Continue 沿用快照，不重复追加。
+    if (!outputTokenRecoveryActive) {
+      const announcement = buildToolSearchAnnouncement({
+        model: state.model,
+        mode: this.config.toolSearch?.mode,
+        tools,
+        registry: this.getToolRegistry(),
+        entries: state.turnRequestState.entries,
+      });
+      if (announcement?.kind === "attachment") {
+        // 公告正文与增量事实必须在同一处落盘：否则 fork/resume 会把已公告工具当成首次出现。
+        await this.persistSyntheticUserNoticeForSession({
+          messageID: createMessageId(),
+          metadata: {
+            runtimeMessage: {
+              source: "tool_search_announcement",
+              toolSearchAnnouncement: announcement.metadata.toolSearchAnnouncement,
+            },
+          },
+          sessionId: this.sessionId,
+          source: "tool_search_announcement",
+          text: announcement.content,
+          traceContext: state.turnTraceContext,
+        });
+        commitTurnRequestEntries(this, state.turnRequestState, [announcement]);
+      }
+    }
     // （2026-09-12）：原"回合开始注入 plugin_ui_state reminder"已删除，插件给模型的信息
     // 一律走 ui/update-model-context。
     const providerEntries = [...state.turnRequestState.entries];
     const requestEntries = providerEntries;
-    // provider-visible user ordering projection 会改变最终 latest user 落点，
+    // 唯一一次 ToolSearch 请求准备：先用完整作用域目录决定启用/发现集合，再向投影与发送方
+    // 提供配套的 tools/引用；provider-visible user ordering 会改变 latest user 落点，
     // cache-control 必须在 projection 后统一设置，避免 raw synthetic entry 抢占缓存锚点。
-    const providerProjection = buildRuntimeProviderRequestMessages(this, {
+    const prepared = prepareRuntimeProviderRequest(this, {
+      model: state.model,
+      tools,
+      registry: this.getToolRegistry(),
       entries: requestEntries,
       applyCacheControl: true,
-      model: state.model,
     });
-    const { messages } = providerProjection;
-    const recordableEntries = filterOutputTokenContinuationEntries(requestEntries);
+    this.logger?.debug("ToolSearch request exposure", {
+      event: "tool.search.exposure",
+      enabled: prepared.toolSearch.enabled,
+      mode: prepared.toolSearch.mode,
+      reason: prepared.reason,
+      catalogSize: prepared.toolSearch.catalog.length,
+      schemaCount: prepared.request.tools.length,
+    });
+    const providerProjection = prepared.projection;
+    const { messages } = prepared.request;
+    const recordableEntries = filterOutputTokenContinuationEntries(prepared.entries);
     const recordableProjection =
-      recordableEntries === requestEntries
+      recordableEntries === prepared.entries
         ? providerProjection
         : buildRuntimeProviderRequestMessages(this, {
             entries: recordableEntries,
+            loadedToolCallIds: prepared.loadedToolCallIds,
             applyCacheControl: true,
             model: state.model,
           });
@@ -211,23 +253,12 @@ export async function runRegularTurnLoop(
       sourceEntries: providerProjection.sourceEntries,
       requestEntries,
       recordedMessages: recordableProjection.messages,
-      tools,
+      tools: prepared.request.tools,
+      toolSearch: prepared.toolSearch,
     });
 
     if (result === "break") {
       break;
     }
   }
-}
-
-function buildTurnDisallowedTools(state: RegularTurnLoopState): Set<string> | null {
-  const tools = new Set(state.toolDisallowlist ?? []);
-  if (isAutomationMutationRestrictedTurn(state)) {
-    // 定时任务执行轮只应运行任务 prompt，不能反过来管理自己的定义。
-    // 保留 CronList 供只读查询；所有 mutation 在 provider 请求边界统一隐藏。
-    for (const toolName of AUTOMATION_MUTATION_TOOL_NAMES) {
-      tools.add(toolName);
-    }
-  }
-  return tools.size > 0 ? tools : null;
 }

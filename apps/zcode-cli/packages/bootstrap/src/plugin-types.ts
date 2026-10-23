@@ -167,6 +167,11 @@ export interface ValidateZCodePluginOptions extends ResolveZCodePluginsOptions {
 export interface DescribeZCodePluginOptions extends ResolveZCodePluginsOptions {
   marketplace: string;
   pluginName: string;
+  /**
+   * 懒加载 manifest 写入外层既有 storage lock；不传时保持原有同步串行语义。
+   * 详见 `describeMarketplacePlugin` 的只读/写分界。
+   */
+  withWriteLock?: <T>(write: () => Promise<T>) => Promise<T>;
 }
 
 export interface ZCodePluginInstallData {

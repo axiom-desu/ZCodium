@@ -1,3 +1,4 @@
+import type { ModelCallWrapper, ToolSearchExecutionContext } from "@zcode/contracts";
 import type { McpToolUiDescriptor } from "@zcode/shared/mcp-apps";
 // ============================================================
 // Tool Types - Core tool types for registry and executor
@@ -62,6 +63,12 @@ import type {
 // -----------------------------------------------
 
 export interface ToolMetadata {
+  /** 模型请求中延迟加载的定义：首轮只公告名称，搜索发现后才展开 schema。 */
+  shouldDefer?: boolean;
+  /** 常驻声明：该工具永不进入延迟目录；MCP 来自 server 配置或 `anthropic/alwaysLoad`。 */
+  alwaysLoad?: boolean;
+  /** ToolSearch 的检索材料；不改 provider description，也不进入常驻工具。 */
+  searchHint?: string;
   name: string;
   description?: string;
   modelInstructions?: readonly string[];
@@ -129,6 +136,8 @@ export interface BackgroundTaskControlPort {
 }
 
 export interface ToolExecutionContext {
+  /** 本次请求的搜索上下文；缺席即搜索未启用（ToolSearch 失败且不产生引用）。 */
+  toolSearch?: ToolSearchExecutionContext;
   toolCallId: string;
   /** 当前工具调用是否属于 automation 派发轮；写工具 handler 用它做最终权限校验。 */
   automationTurn?: boolean;
@@ -462,6 +471,8 @@ export interface ToolBatchResult {
 // -----------------------------------------------
 
 export interface ExecutableToolCall {
+  /** 内部历史保存目标身份；该标记只用于请求渲染时还原 DeferredToolCall 包装。 */
+  modelCallWrapper?: ModelCallWrapper;
   id: string;
   name: string;
   input: unknown;

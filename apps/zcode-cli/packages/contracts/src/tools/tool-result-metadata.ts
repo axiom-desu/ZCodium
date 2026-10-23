@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PersistedToolSearchContentSchema } from "./tool-search.js";
 import { OFFICIAL_MCP_TOOL_ERROR_CODES } from "@zcode/shared";
 import {
   MCP_APPS_RESOURCE_URI_MAX_CHARS,
@@ -347,6 +348,8 @@ export type ToolResultSerializationMetadata = z.infer<typeof toolResultSerializa
 
 export const completedToolPartMetadataSchema = z
   .object({
+    // 错误结果沿用字符串内容；仅接受数组会使 V4 冷恢复丢弃整份 metadata，包括 display。
+    modelContent: z.union([z.string(), PersistedToolSearchContentSchema]).optional(),
     schemaVersion: z.literal(COMPLETED_TOOL_PART_METADATA_SCHEMA_VERSION),
     display: toolResultDisplayPayloadSchema.optional(),
     serialization: toolResultSerializationMetadataSchema.optional(),
@@ -362,8 +365,21 @@ export function parseCompletedToolPartMetadata(
     isPlainRecord(input) && "display" in input
       ? { ...input, display: scrubPersistedDisplay(input.display) }
       : input;
-  const result = completedToolPartMetadataSchema.safeParse(scrubbed);
-  return result.success ? result.data : undefined;
+  if (!isPlainRecord(scrubbed)) {
+    const result = completedToolPartMetadataSchema.safeParse(scrubbed);
+    return result.success ? result.data : undefined;
+  }
+  // Bug 根因：把 modelContent 与 display 放进同一个 strict object 后，一条损坏的
+  // modelContent 会让整份 metadata（含 display/media 布局）被丢弃。这里只丢弃损坏的
+  // modelContent 字段；其余字段仍按同一 strict 契约校验。
+  const { modelContent, ...rest } = scrubbed;
+  const base = completedToolPartMetadataSchema.safeParse(rest);
+  if (!base.success) return undefined;
+  if (modelContent === undefined) return base.data;
+  const parsedContent = z
+    .union([z.string(), PersistedToolSearchContentSchema])
+    .safeParse(modelContent);
+  return parsedContent.success ? { ...base.data, modelContent: parsedContent.data } : base.data;
 }
 
 export function parseToolResultDisplayPayload(

@@ -1,12 +1,15 @@
 //! Rebuilding the model context of a Node transcript after a restart (Node
 //! `session-history-hydrator.ts` and its helpers). Pure: artifact reads come
 //! in through a callback. Spec rust-m11-node-storage §6.
+mod announcement;
 mod attachment;
 pub mod branch;
+mod compact_boundary;
 mod entries;
 mod hydrate;
 pub mod incoming;
 pub mod reminders;
+mod tool_parts;
 
 pub(crate) use attachment::prompt_attachment;
 pub use branch::{Branch, active_messages, select_branch};

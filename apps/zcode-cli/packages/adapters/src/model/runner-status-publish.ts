@@ -2,7 +2,10 @@ import type { Logger, ModelStatusSink } from "@zcode/contracts";
 import type { AttemptAdmission } from "./request-admission.js";
 import type { AiSdkModelTextRequest } from "./runner-runtime.js";
 import { createStatusContext, publishModelStatus } from "./runner-status.js";
-import type { classifyModelFailure } from "./failure-classifier.js";
+import { classifyModelFailure } from "./failure-classifier.js";
+import { getResponseHeaders, unwrapRetryError } from "./failure-inspection.js";
+import { modelFailureStatusFields } from "./runner-failure-status.js";
+import { sanitizeModelNetworkHeaders } from "./runner-network-headers.js";
 import type { ResolvedAiSdkModelRetryOptions } from "./retry-policy.js";
 
 // 重试状态发布在 stream 与 generate 两条链路共用：唯一 owner 是 runner-status，
@@ -59,4 +62,45 @@ export async function publishRetryScheduledStatus(
     },
     statusPublishOptions(input, admission),
   );
+}
+
+/**
+ * 退避期间被取消：票据已归还，这次取消不属于任何一次尝试。
+ *
+ * generate 与 stream 两条重试链路共用同一投影，避免取消阶段状态分叉。
+ */
+export async function publishRetryBackoffCancellation(args: {
+  attempt: number;
+  error: unknown;
+  input: {
+    logger?: Logger;
+    request: AiSdkModelTextRequest;
+    statusSink?: ModelStatusSink;
+  };
+  requestHeaders: Record<string, string>;
+  statusContext: ReturnType<typeof createStatusContext>;
+}): Promise<ReturnType<typeof classifyModelFailure>> {
+  const failure = classifyModelFailure(args.error, args.input.request.abortSignal);
+  const responseHeaders = sanitizeModelNetworkHeaders(
+    getResponseHeaders(unwrapRetryError(args.error)),
+  );
+  await publishModelStatus(
+    {
+      ...args.statusContext,
+      attempt: args.attempt,
+      message: failure.message,
+      reason: failure.reason,
+      requestHeaderCount: Object.keys(args.requestHeaders).length,
+      requestHeaders: args.requestHeaders,
+      responseHeaderCount: Object.keys(responseHeaders).length,
+      responseHeaders,
+      retryable: false,
+      statusCode: failure.statusCode,
+      ...modelFailureStatusFields(args.error, failure, "connect"),
+      timestamp: new Date().toISOString(),
+      type: "model_request_failed",
+    },
+    statusPublishOptions(args.input),
+  );
+  return failure;
 }

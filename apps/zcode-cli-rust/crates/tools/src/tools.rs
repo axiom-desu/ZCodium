@@ -21,7 +21,7 @@ pub struct WorkspaceTools {
     reads: Mutex<HashMap<String, Arc<Mutex<FileState>>>>,
     // File writes from different sessions share one commit gate; reads remain concurrent.
     writes: Arc<Mutex<()>>,
-    shell: ShellTasks,
+    pub(super) shell: ShellTasks,
     mcp: super::mcp_hub::Hub,
     /// Complete child environment shared by shell tools and hooks.
     pub(super) env: Arc<[(String, String)]>,
@@ -53,7 +53,10 @@ impl WorkspaceTools {
             super::mcp_resources::start(mcp.telemetry.clone(), mcp.stopped());
         }
         Self {
-            shell: ShellTasks::new(env.clone()),
+            shell: ShellTasks::new(
+                env.clone(),
+                zcode_cli_host::storage_paths::default_bash_temp_parent(),
+            ),
             env,
             web: super::web_fetch::WebFetcher::new(egress.clone()),
             mcp,
@@ -83,7 +86,10 @@ impl WorkspaceTools {
         sink: Option<&EventSink>,
         cancel: &CancellationToken,
     ) -> Result<ToolOutput> {
-        check_cancel(cancel)?;
+        // Bash 的取消由 shell 层分类为 Node `createStoppedResult` 的 cancelled 结果。
+        if name != "Bash" {
+            check_cancel(cancel)?;
+        }
         if !args.is_object() {
             bail!("Tool arguments must be an object");
         }
@@ -269,6 +275,17 @@ impl ToolPort for WorkspaceTools {
     fn mcp_annotations(&self, session: &str, name: &str) -> Option<Value> {
         self.mcp.hints(session, name)
     }
+    fn tool_search_metadata(
+        &self,
+        session: &str,
+        name: &str,
+    ) -> crate::domain::tool_search::Metadata {
+        if name.starts_with("mcp__") {
+            self.mcp.tool_search_metadata(session, name)
+        } else {
+            super::tool_search_meta::metadata(name)
+        }
+    }
     async fn evict_session(&self, session: &str) -> Result<()> {
         self.shell.close_session(session).await?;
         self.reads.lock().await.remove(session);
@@ -328,20 +345,7 @@ impl ToolPort for WorkspaceTools {
         super::bash_permission::resolve(&self.cwd, name, args, capability).await
     }
     fn concurrent_safe(&self, name: &str) -> bool {
-        matches!(
-            name,
-            "Read"
-                | "List"
-                | "Glob"
-                | "Grep"
-                | "AskUserQuestion"
-                | "TodoRead"
-                | "Skill"
-                | "Agent"
-                | "Task"
-                | "WebFetch"
-                | "WebSearch"
-        )
+        super::tool_search_meta::concurrent_safe(name)
     }
     async fn execute(
         &self,

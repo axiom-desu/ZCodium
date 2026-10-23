@@ -72,6 +72,7 @@ test("Rust driver prerequisite does not replace current TS build or contract che
     "pnpm check:zcode-cli-rust-protocol-schema",
     "pnpm check:zcode-cli-rust-contract-assets",
     "pnpm check:zcode-cli-rust-domain-fixtures",
+    "pnpm check:zcode-cli-rust-state-fixtures",
   ])
     assert.ok(driverJob.includes(`run: ${command}`));
 });

@@ -14,6 +14,8 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub(super) struct Scope<'a> {
+    /// 本次请求的 ToolSearch 搜索 context（关闭时为 None）。
+    pub search: Option<&'a super::tool_search::SearchContext>,
     pub skills: &'a crate::domain::skills::SkillCatalog,
     pub profile: Option<&'a crate::domain::subagent::Profile>,
     pub profiles: &'a [crate::domain::subagent::Profile],
@@ -33,6 +35,7 @@ async fn execute(
     cancel: &CancellationToken,
 ) -> Result<(String, crate::contract::ToolOutput, bool)> {
     let Scope {
+        search,
         skills,
         profile,
         profiles,
@@ -42,12 +45,13 @@ async fn execute(
         hooks,
         model,
     } = context;
-    let (skills, profile, profiles, permissions, hooks) =
-        (*skills, *profile, *profiles, *permissions, *hooks);
+    let (search, skills, profile, profiles, permissions, hooks) =
+        (*search, *skills, *profile, *profiles, *permissions, *hooks);
     let selection = selection.clone();
     if cancel.is_cancelled() {
         bail!("Cancelled");
     }
+    // 已解包调用以目标名与完整 input 定稿：live 行与持久 part 同一身份。
     sink.send(Event::ToolStart { call: call.clone() }).await?;
     // Node totalMs：查找、校验、Hook、权限等待、执行与 PostToolUse 的整个生命周期。
     let started = std::time::Instant::now();
@@ -72,6 +76,19 @@ async fn execute(
     };
     if let Some(message) = rejected {
         // Node：未注册的工具与输入校验失败都不带前缀。
+        let mut output = ToolOutput::text(message);
+        output.failed = true;
+        return Ok((id, output, true));
+    }
+    // DeferredToolCall 准入失败只保存包装失败记录，不执行目标 Hook/审批/handler。
+    if name == crate::domain::tool_search::DEFERRED_TOOL_CALL_NAME {
+        let args = parsed.clone().unwrap_or(Value::Null);
+        let message = search
+            .and_then(|search| search.unwrap_call(&args).err())
+            .map_or_else(
+                || "DeferredToolCall is not available for this request.".to_owned(),
+                |error| error.to_string(),
+            );
         let mut output = ToolOutput::text(message);
         output.failed = true;
         return Ok((id, output, true));
@@ -147,6 +164,12 @@ async fn execute(
             Some(args) if matches!(name, "TodoRead" | "TodoWrite") => {
                 super::todos::execute(name, &id, args, sink, cancel).await
             }
+            Some(args) if name == crate::domain::tool_search::TOOL_SEARCH_NAME => match search {
+                Some(search) => search.execute(&args),
+                None => Err(anyhow::anyhow!(
+                    "ToolSearch is not enabled for this request."
+                )),
+            },
             Some(args) if name == "Skill" => {
                 super::skills::execute(tools, skills, &args, cancel).await
             }
@@ -284,6 +307,7 @@ pub(super) async fn run_calls(
         }
         if stop {
             for call in group {
+                // 已解包调用以目标名与完整 input 定稿：live 行与持久 part 同一身份。
                 sink.send(Event::ToolStart { call: call.clone() }).await?;
                 let mut output = ToolOutput::text(plan_mode::TURN_STOP_CANCELLED.into());
                 (output.failed, output.denied) = (true, true);
@@ -359,5 +383,5 @@ async fn commit(
         committed,
     })
     .await?;
-    super::agent_loop::durable(receipt, cancel).await
+    super::durable::durable(receipt, cancel).await
 }

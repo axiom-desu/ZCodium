@@ -10,9 +10,13 @@ pub(super) fn responses(content: &Value, role: &str) -> Result<Vec<Value>> {
         _=>return Err(ModelFailure::invalid()),
     })).collect()
 }
-pub(super) fn anthropic(content: &Value) -> Result<Vec<Value>> {
+/// `tool_references`: 工具结果内的引用块只能在本开关下编码；其它位置出现即本地契约错误。
+pub(super) fn anthropic(content: &Value, tool_references: bool) -> Result<Vec<Value>> {
     content.as_array().ok_or_else(ModelFailure::invalid)?.iter().map(|p|Ok(match p["type"].as_str(){
         Some("text")=>p.clone(),
+        // Node transform：内部 `toolName` → HTTP `tool_name`，不降级为工具名字符串。
+        Some("tool_reference") if tool_references => super::tool_search::tool_reference(p).ok_or_else(ModelFailure::invalid)?,
+        Some("tool_reference") => return Err(ModelFailure::invalid()),
         Some("image_url")=>json!({"type":"image","source":source(p["image_url"]["url"].as_str().ok_or_else(ModelFailure::invalid)?)?}),
         Some("video_url")=>json!({"type":"video","source":source(p["video_url"]["url"].as_str().ok_or_else(ModelFailure::invalid)?)?}),
         Some("file")=>json!({"type":"document","source":source(p["file"]["file_data"].as_str().ok_or_else(ModelFailure::invalid)?)?}),

@@ -23,6 +23,10 @@ struct Binding {
     /// Node MCP permission metadata: `readOnlyHint === true` / `destructiveHint === true`.
     read_only: bool,
     destructive: bool,
+    /// 模型 schema 曝光：server `alwaysLoad` 与工具 `_meta["anthropic/alwaysLoad"]`。
+    always_load: bool,
+    /// `_meta["anthropic/searchHint"]`，只参与 ToolSearch 检索。
+    search_hint: Option<String>,
     definition: Value,
     connection: Arc<Connection>,
 }
