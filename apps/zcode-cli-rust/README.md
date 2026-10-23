@@ -58,7 +58,7 @@ workbench acceptance, `node scripts/zcode-cli-rust-workbench-smoke.mjs`, passed 
 PTY checks (attachments 9, queue 13, usage 10, shutdown 3); the existing 20-request
 baseline and its provider-discovery mode also pass. Final local verification reports
 714 Rust workspace tests passed (1 ignored), including 222 TUI tests; Node drivers
-59 passed and CI scripts 429 passed. These are local results pending exact PR HEAD CI;
+59 passed and CI scripts 430 passed. These are local results pending exact PR HEAD CI;
 no merge or CI pass is claimed. This is not full
 TS TUI parity: the visible transcript is a bounded snapshot window, and advanced terminal
 plugin/marketplace, memory/CUA and rich terminal widgets are not claimed. Native

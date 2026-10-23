@@ -13,6 +13,7 @@ import re
 import signal
 import sys
 import time
+import urllib.parse
 import urllib.request
 
 
@@ -45,6 +46,41 @@ def wait_idle(session, label, timeout=90):
     wait_ready(session, timeout)
 
 STATE_FILE = None
+CONFIG = {}
+
+
+def state_url(config):
+    """controlUrl 是 POST /release；/state 是同一 loopback server 的只读请求计数。"""
+    parts = urllib.parse.urlsplit(config["controlUrl"])
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, "/state", "", ""))
+
+
+def request_count(config):
+    with urllib.request.urlopen(state_url(config), timeout=10) as response:
+        return json.loads(response.read())["requests"]
+
+
+def submit_draft(session, response, label=None, timeout=40):
+    """Enter 前取真实 request 计数，之后只等 `WB_REPLY_<before+1>`。
+
+    旧 response/旧 Ready 都可能在 Enter 后立刻出现在 screen 上（尤其重启后同一份
+    gamma 草稿），没有新 nonce 无法区分；marker 序号由 fixture 的 requests.push
+    真实计数生成（TITLE 不计），所以只有本轮新请求才能满足。
+    """
+    before = request_count(CONFIG)
+    marker = f"WB_REPLY_{before + 1}"
+    session.send("\r")
+    session.wait_until(
+        lambda s: marker in s and response in s and composer_line(s, "Type a prompt"),
+        label or f"new model reply {marker}",
+        timeout,
+    )
+    wait_ready(session)
+
+
+def prompt(session, text, response, timeout=30):
+    session.send(text)
+    submit_draft(session, response, repr(response), timeout)
 
 
 def check(result, name, detail=""):
@@ -88,11 +124,18 @@ def open_workspace(session, result, label):
     check(result, f"{label}: TUI reached a real actor Ready state")
 
 
-def mention_panel(session, query, entry):
-    """Type an `@token` and wait for the suggestion line the panel really renders."""
+def mention_panel(session, query, entry, draft):
+    """Type an `@token` and wait for the current editor token + the suggestion it renders.
+
+    只等 `› entry` 不够：`docs/beta.txt` 对前缀 `b` 也匹配，等待可能在最后一个字符
+    还没处理完时命中，Tab 落到刚清空/在飞的候选上。必须同时看到完整 token 在
+    composer 里，才说明当前 query 就是这条建议。
+    """
     session.send(query)
-    session.wait_for("Files · Tab inserts")
-    session.wait_until(lambda s: f"› {entry}" in s, f"mention suggestion {entry}")
+    session.wait_until(
+        lambda s: composer_line(s, draft) and f"› {entry}" in s,
+        f"mention suggestion {entry} for {draft}",
+    )
 
 
 def scenario_attachments_history(session, result, config):
@@ -101,26 +144,25 @@ def scenario_attachments_history(session, result, config):
     prompt(session, "history two", "answer: history two")
 
     # 目录：Tab 只补 `@docs/`，不提交、不附件；随后在目录里继续选文件。
-    mention_panel(session, "@do", "docs/")
+    mention_panel(session, "@do", "docs/", "@do")
     session.send("\t")
     session.wait_until(lambda s: composer_line(s, "@docs/"), "Tab kept the directory token")
     check(result, "@file Tab continues into a directory without attaching a file")
 
     # 文件：Tab 写入 `@docs/alpha.txt ` 并成为草稿附件。
-    mention_panel(session, "al", "docs/alpha.txt")
+    mention_panel(session, "al", "docs/alpha.txt", "@docs/al")
     session.send("\t")
     session.wait_until(lambda s: composer_line(s, "@docs/alpha.txt"), "alpha file token inserted")
     check(result, "@file Tab inserts the workspace-relative file token")
-    session.send("keep alpha attachment\r")
-    session.wait_for("answer: @docs/alpha.txt keep alpha attachment", 40)
-    wait_ready(session)
+    session.send("keep alpha attachment")
+    submit_draft(session, "answer: @docs/alpha.txt keep alpha attachment")
     check(result, "accepted sendText carrying @file reached the model")
 
     # 删掉 inline placeholder：同一份草稿附件不得再发送。
     clear_draft(session)
     session.send("@docs/")
     session.wait_for("Files · Tab inserts")
-    mention_panel(session, "be", "docs/beta.txt")
+    mention_panel(session, "be", "docs/beta.txt", "@docs/be")
     session.send("\t")
     session.wait_until(lambda s: composer_line(s, "@docs/beta.txt"), "beta file token inserted")
     session.send("\x15")
@@ -128,16 +170,15 @@ def scenario_attachments_history(session, result, config):
         lambda s: composer_line(s, "Type a prompt") and not composer_line(s, "@docs/beta.txt"),
         "beta placeholder removed",
     )
-    session.send("placeholder removed\r")
-    session.wait_for("answer: placeholder removed", 40)
-    wait_ready(session)
+    session.send("placeholder removed")
+    submit_draft(session, "answer: placeholder removed")
     check(result, "deleting the inline placeholder kept the attachment out of the send")
 
     # 草稿正文 + 附件 → ↑ 召回 → ↓ 必须恢复两者，再真实提交。
     session.send("draft gamma notes ")
     session.send("@docs/")
     session.wait_for("Files · Tab inserts")
-    mention_panel(session, "ga", "docs/gamma.txt")
+    mention_panel(session, "ga", "docs/gamma.txt", "@docs/ga")
     session.send("\t")
     session.wait_until(lambda s: composer_line(s, "@docs/gamma.txt"), "gamma file token inserted")
     dismiss_panels(session)
@@ -153,9 +194,7 @@ def scenario_attachments_history(session, result, config):
     )
     check(result, "Up/Down recalls history and restores the original draft attachments")
     dismiss_panels(session)
-    session.send("\r")
-    session.wait_for("answer: draft gamma notes @docs/gamma.txt", 40)
-    wait_ready(session)
+    submit_draft(session, "answer: draft gamma notes @docs/gamma.txt")
     dismiss_panels(session)
     clear_draft(session)
 
@@ -175,9 +214,8 @@ def scenario_attachments_history(session, result, config):
     )
     check(result, "restart history recall restores the persisted draft (not a render buffer)")
     dismiss_panels(session)
-    session.send("\r")
-    session.wait_for("answer: draft gamma notes @docs/gamma.txt", 40)
-    wait_ready(session)
+    # 重启后 transcript 里已有同一份 gamma 回复；必须靠新 request nonce 放行。
+    submit_draft(session, "answer: draft gamma notes @docs/gamma.txt")
     dismiss_panels(session)
     clear_draft(session)
     session.send("/quit\r")
@@ -495,9 +533,10 @@ SCENARIOS = {
 
 
 def main():
-    global STATE_FILE
+    global STATE_FILE, CONFIG
     config = json.load(sys.stdin)
     STATE_FILE = config.get("mcpStateFile")
+    CONFIG = config
     scenario = config["scenario"]
     session = PtySession(
         config["binary"],
