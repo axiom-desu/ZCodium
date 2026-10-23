@@ -9,7 +9,9 @@
         ".release-it.mjs",
         ".vscode/*.mjs",
         "scripts/check-workspace-freshness.mjs",
-        "scripts/mise-run.mjs"
+        "scripts/mise-run.mjs",
+        "scripts/zcode-cli-rust-workbench-smoke.mjs",
+        "scripts/ci/fixtures/mcp-workbench.mjs"
       ]
     },
     "packages/desktop": {

@@ -6,6 +6,7 @@ const workflow = await readFile(
   new URL("../../.github/workflows/cli-rust.yml", import.meta.url),
   "utf8",
 );
+const knipConfig = JSON.parse(await readFile(new URL("../../knip.json", import.meta.url), "utf8"));
 const driverJob = workflow.split("  protocol-schema:")[1]?.split("  linux-node-interop:")[0];
 const interopJob = workflow.split("  linux-node-interop:")[1]?.split("  native-platform-check:")[0];
 const nativeJob = workflow.split("  native-platform-check:")[1];
@@ -20,6 +21,21 @@ test("Rust TUI PTY acceptance follows a fresh Rust build in the same Linux job",
     interopJob.indexOf("node scripts/ci/tui-quit-pty-smoke.mjs") >
       interopJob.indexOf("Build Node CLI"),
   );
+});
+
+test("Rust TUI workbench PTY acceptance runs after the baseline smoke in the same Linux job", () => {
+  assert.ok(interopJob);
+  const baseline = interopJob.indexOf("node scripts/zcode-cli-rust-tui-smoke.mjs");
+  const workbench = interopJob.indexOf("node scripts/zcode-cli-rust-workbench-smoke.mjs");
+  assert.ok(baseline >= 0 && workbench > baseline);
+});
+
+// fixture 是被 spawn 的真实 stdio 进程，没有 import 边；不能用 ignore pattern 掩盖，
+// 只能在 root entry 精确登记它（以及唯一的 driver 入口）。
+test("workbench driver and its spawned MCP fixture are precise knip root entries", () => {
+  const entries = knipConfig.workspaces["."].entry;
+  assert.ok(entries.includes("scripts/zcode-cli-rust-workbench-smoke.mjs"));
+  assert.ok(entries.includes("scripts/ci/fixtures/mcp-workbench.mjs"));
 });
 
 // M4/M5 在该 job 中用 cargo --offline 构建 examples；别的 job 的缓存不属于本 runner。
