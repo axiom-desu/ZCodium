@@ -6,7 +6,7 @@ use crate::{
     client::Client,
     commands,
     projection::View,
-    session,
+    session, telemetry,
     transport::{Request, Resume},
 };
 use anyhow::{Result, anyhow, bail};
@@ -33,6 +33,11 @@ pub(crate) async fn dispatch(
     request: &Request,
     text: &str,
 ) -> Result<bool> {
+    // `/queue` 前缀由 queue 模块精确拥有：命中后不再进入通用白名单，也不改其他分支。
+    if crate::queue::handles(text) {
+        crate::queue::dispatch(client, view, text).await?;
+        return Ok(false);
+    }
     // compact 的附注是正文，必须先按完整首 token 精确识别，再进入普通白名单分流。
     if let Some(instructions) = commands::compact_instructions(text) {
         compact(client, view, instructions).await?;
@@ -134,6 +139,11 @@ pub(crate) async fn dispatch(
         ["/effort" | "/variant", _, _, ..] => {
             return Err(usage_error(view, "/effort [list|<level>]"));
         }
+        // 只读遥测：统一走 Client 的读票据，不另起请求通道，也不阻塞 stop/quit。
+        ["/mcp"] => telemetry::request_mcp(client, view, request),
+        ["/mcp", ..] => return Err(usage_error(view, "/mcp")),
+        ["/usage"] => telemetry::request_usage(client, view)?,
+        ["/usage", ..] => return Err(usage_error(view, "/usage")),
         _ => {
             let token = words.first().copied().unwrap_or("?");
             return Err(local_error(

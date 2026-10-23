@@ -10,19 +10,23 @@
 
 ## 当前差异与交付批次
 
-| 能力                             | TS 依据                                                | Rust 基线                                                  | 本批决策                                                                         |
-| -------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `/compact` / `/compress`         | `app-compact-timeline.ts`、`app-submit.ts`             | core 已支持 compact，TUI 白名单拦截                        | 接通本地精确命令与别名，保留附加指令；只走原 actor admission                     |
-| 压缩时间线                       | `app-compact-timeline.ts`                              | actor 已发 timelineMarker，renderer 未展示                 | 显示真实 manual/auto、running/success/noop/failed 与已有 token 字段              |
-| `/effort` / `/variant`           | `app-effort-command.ts`、CLI command-center            | snapshot 有 thought/thoughtLevels，已有 setter，TUI 无入口 | 列表、详情、按值设置；复用 setter + snapshot 刷新，不手改 config                 |
-| slash 帮助/补全                  | `app-input.ts`、`app-keyboard-suggestions.ts`          | 一行 help，无补全                                          | 建 Rust 前端单一命令目录，help/别名/补全共用；只广告已实现命令                   |
-| 模型/模式/会话选择过滤           | `app-selection-keyboard.ts`、`app-selection-panel.tsx` | 只有上下选中，打印键被忽略                                 | 有界本地 filter、Backspace、Ctrl-U、Paste、空结果；确认仍走原 owner/typed choice |
-| composer 模型状态                | `app-input-status.tsx`                                 | 底栏 session/mode/model，缺 provider/thought               | 输入框下显示 model / provider / thought，按显示宽度裁剪；不造 usage              |
-| 输入历史                         | `app-input-history.ts`                                 | state 库有 history，但 actor 没有对应读写接口              | 后续独立切片：接入真实持久化 owner，不能把渲染窗口伪称 workspace history         |
-| `@file` 与附件草稿               | `app-file-mentions.ts`                                 | 仅启动附件，缺路径建议与草稿附件模块                       | 后续独立切片：原生路径建议与草稿生命周期，不能只插字符串冒充附件                 |
-| MCP / context usage              | `app-mcp-status.ts`、`app-input-status.tsx`            | 有 query Method，终端无对应查询投影                        | 后续接真实查询并明确失败/刷新/会话归属，不渲染假数字或永绿状态                   |
-| busy queue 交互                  | `app-queued-inputs.tsx`                                | actor 已有队列，TUI busy 拒绝草稿提交                      | 本批不改此前确认的 busy 语义；队列展示/编辑/admission 须整体另批实现             |
-| 主题、插件、workflow、子代理详情 | 当前 TS 对应组件                                       | 部分运行时/终端模块尚缺                                    | 按真实 API 逐项补模块，不在本批宣称已对等                                        |
+本节记录首批（基线 `f1eb1969`）的差异与决策。输入历史、`@file`、真实 MCP/usage 与 busy queue
+已在后续 workbench 批落地，命令交互和验收见 [workbench spec](cli-rust-tui-workbench.md)；
+本 spec 的首批计数不随那次实现改写。
+
+| 能力                             | TS 依据                                                | Rust 基线                                                  | 首批决策与后续状态                                                                 |
+| -------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `/compact` / `/compress`         | `app-compact-timeline.ts`、`app-submit.ts`             | core 已支持 compact，TUI 白名单拦截                        | 接通本地精确命令与别名，保留附加指令；只走原 actor admission                       |
+| 压缩时间线                       | `app-compact-timeline.ts`                              | actor 已发 timelineMarker，renderer 未展示                 | 显示真实 manual/auto、running/success/noop/failed 与已有 token 字段                |
+| `/effort` / `/variant`           | `app-effort-command.ts`、CLI command-center            | snapshot 有 thought/thoughtLevels，已有 setter，TUI 无入口 | 列表、详情、按值设置；复用 setter + snapshot 刷新，不手改 config                   |
+| slash 帮助/补全                  | `app-input.ts`、`app-keyboard-suggestions.ts`          | 一行 help，无补全                                          | 建 Rust 前端单一命令目录，help/别名/补全共用；只广告已实现命令                     |
+| 模型/模式/会话选择过滤           | `app-selection-keyboard.ts`、`app-selection-panel.tsx` | 只有上下选中，打印键被忽略                                 | 有界本地 filter、Backspace、Ctrl-U、Paste、空结果；确认仍走原 owner/typed choice   |
+| composer 模型状态                | `app-input-status.tsx`                                 | 底栏 session/mode/model，缺 provider/thought               | 输入框下显示 model / provider / thought，按显示宽度裁剪；不造 usage                |
+| 输入历史                         | `app-input-history.ts`                                 | state 库有 history，actor 无读写接口                       | 首批未做；workbench 批已接入真实持久化 owner，不能把渲染窗口伪称 workspace history |
+| `@file` 与附件草稿               | `app-file-mentions.ts`                                 | 仅启动附件，缺路径建议与草稿附件模块                       | 首批未做；workbench 批已实现原生路径建议与草稿附件生命周期                         |
+| MCP / context usage              | `app-mcp-status.ts`、`app-input-status.tsx`            | 有 query Method，终端无对应查询投影                        | 首批未做；workbench 批已接真实只读查询并区分失败/刷新/会话归属                     |
+| busy queue 交互                  | `app-queued-inputs.tsx`                                | actor 已有队列，TUI busy 拒绝草稿提交                      | 首批保留旧 busy 语义；workbench 批已接入 actor 队列展示/操作与 busy admission      |
+| 主题、插件、workflow、子代理详情 | 当前 TS 对应组件                                       | 部分运行时/终端模块尚缺                                    | 按真实 API 逐项补模块，不在本批宣称已对等                                          |
 
 `auto` 不在两套 TUI 的可切换菜单内（TS `app-mode.ts` 也是 plan/build/edit/yolo），不当作漏项加入。
 未知 slash 不回落普通 prompt；拼错命令不能偷偷发给模型。大子系统不以空实现/假成功补齐。
@@ -150,12 +154,12 @@ OpenAI chat 线上会剥离 `\_zcode_tool_failed`，因此「同一 tool_call_id
   `tool_schemas.json` 双向校验 fixture 产出的参数，再用真实 loopback modelServer 断言成功答案 →
   `question answered:`、参数错误/普通 prompt/异 id → 不完成、Read 结果仍是 `tool done`，避免自证。
 
-## 取证与未完成边界
+## 取证与边界
 
 架构门禁基线 0 violations，Rust 16 crate boundaries 通过。仓库的 feature graph 暂无 Rust TUI seed：
 这是 graph-drift-candidate，不把 TS bootstrap 图节点伪装成 Rust owner；本批不增加新的跨进程协议或业务 owner。
-输入历史、@file、真实 MCP/usage、busy queue 与高级插件/workflow 都要独立跟进，本批落地不能把它们标为完成。
-本 spec 的验收在实现后回填真实结果，不引用旧截图/旧 deb 证明新源码。
+输入历史、@file、真实 MCP/usage、busy queue 已在后续 workbench 批实现（待最终验收，见该 spec）；
+高级插件/workflow 仍不在首批范围。本 spec 的验收在实现后回填真实结果，不引用旧截图/旧 deb 证明新源码。
 
 ## 展示层实现与验收
 
@@ -186,10 +190,30 @@ OpenAI chat 线上会剥离 `\_zcode_tool_failed`，因此「同一 tool_call_id
   selector 中文 paste/空结果/Ctrl-U/Esc/下箭头 typed 模型、effort list/variant set/invalid、
   compact alias running/cancelled、Tab+Enter 真实 compact success、post-compact 上下文、`/quit`+`--continue`
   退出、SIGTERM 143 与 termios 恢复。
-- 未做/不宣称：真实人工 runtime 验收、deb 打包、输入历史/@file/MCP·usage/busy queue 仍未实现；
-  本次不改动本机 `.395` 包，不创建 tag/Release。
+- 首批未做/不宣称：真实人工 runtime 验收、deb 打包；输入历史/@file/MCP·usage/busy queue
+  已转由后续 workbench 批实现，首批验收不把它们记作完成。本次不改动本机 `.395` 包，不创建 tag/Release。
 
-## 本批总体验收（提交前本地证据）
+## 后续 workbench 批（交叉引用）
+
+首批未做的输入历史、`@file`、真实 MCP/usage 与 busy queue 已由
+[workbench spec](cli-rust-tui-workbench.md) 实现，当前处于最终验证阶段。本 spec 的 95/580 等计数
+保持首批历史证据，不把 workbench 结果并成首批全量复验。
+
+Rust 命令目录统一广告新增交互：`/queue [list|pause|resume|edit|delete|send|up|down <id>]`、
+`/mcp`（只读状态刷新）、`/usage`（真实累计与独立 context）、`↑`/`↓`（持久历史草稿召回）、
+`@` 路径建议（Tab/Enter：目录继续、文件加草稿附件）。paused 队列遇到新 prompt 需显式
+`/queue resume`；sendNow 只提升一项，不等同运行整条暂停队列。历史只读新 Rust scope，不混旧 TS
+`proj_*` 行；artifact/inline content 不能安全恢复时保留原草稿并明确报错，再按 `↑` 跳过该项；
+启动 pinned 附件保留到第一次接受。`/usage` 的累计是 `queryTaskUsage` 的 source baseline 增量，
+不是机械相加各轮输入；context badge 独立读 `contextWindow`。
+
+本地 workbench PTY 35 checks 全绿（attachments 9 / queue 13 / usage 10 / shutdown 3），
+既有 20-request baseline 与 provider-discovery 模式通过。最终源码本地复验为 Rust 714 passed / 1 ignored，
+其中 TUI 222 passed；Node drivers 59、CI scripts 429 通过。精确 PR HEAD CI 仍待完成。
+
+## 首批总体验收（提交前本地证据）
+
+以下为首批历史证据（`f1eb1969` 基线），不随 workbench 批重跑改写：
 
 - Rust `cargo test --locked --workspace`：**580 passed / 1 ignored / 0 failed**；其中 TUI **95 passed**。
 - `pnpm check:zcode-cli-rust`：16-crate boundaries、workspace fmt、all-targets clippy `-D warnings` 全部通过。

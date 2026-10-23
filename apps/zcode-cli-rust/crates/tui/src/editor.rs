@@ -57,6 +57,59 @@ impl Editor {
         self.text.push_str(text);
         self.cursor = self.text.len();
     }
+    /// UTF-8 字节游标偏移；`@file` token 解析需要与编辑器同一份偏移量。
+    pub fn cursor_offset(&self) -> usize {
+        self.cursor
+    }
+    /// 光标的垂直列（按字符数），跨行移动时尽量保持列。
+    fn cursor_column(&self) -> usize {
+        let start = self.text[..self.cursor]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        self.text[start..self.cursor].chars().count()
+    }
+    /// 上一行同列；已在首行返回 false，交给历史召回。
+    pub fn up(&mut self) -> bool {
+        let start = self.text[..self.cursor]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        if start == 0 {
+            return false;
+        }
+        let previous = self.text[..start - 1]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        let column = self.cursor_column();
+        self.cursor = line_offset(&self.text, previous, start - 1, column);
+        true
+    }
+    /// 下一行同列；已在末行返回 false，交给历史翻页。
+    pub fn down(&mut self) -> bool {
+        let Some(newline) = self.text[self.cursor..].find('\n') else {
+            return false;
+        };
+        let column = self.cursor_column();
+        let next = self.cursor + newline + 1;
+        let end = self.text[next..]
+            .find('\n')
+            .map_or(self.text.len(), |index| next + index);
+        self.cursor = line_offset(&self.text, next, end, column);
+        true
+    }
+    /// 覆盖 `[start,end)` 字节范围（必须都在字符边界内）；游标落到替换文本末尾。
+    /// 非法范围返回 false 且不改编辑器，避免把半字节写进草稿。
+    pub fn replace_range(&mut self, start: usize, end: usize, text: &str) -> bool {
+        if start > end
+            || end > self.text.len()
+            || !self.text.is_char_boundary(start)
+            || !self.text.is_char_boundary(end)
+        {
+            return false;
+        }
+        self.text.replace_range(start..end, text);
+        self.cursor = start + text.len();
+        true
+    }
     pub fn cursor_line_col(&self) -> (usize, usize) {
         let before = &self.text[..self.cursor];
         (
@@ -71,6 +124,14 @@ impl Editor {
             .width(),
         )
     }
+}
+
+/// 在 `[start,end)` 内找到第 `column` 个字符的字节位置；列超出时停在行尾。
+fn line_offset(text: &str, start: usize, end: usize, column: usize) -> usize {
+    text[start..end]
+        .char_indices()
+        .nth(column)
+        .map_or(end, |(index, _)| start + index)
 }
 
 pub fn sanitize(input: &str) -> String {

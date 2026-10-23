@@ -12,6 +12,8 @@ Original copyright, license and NOTICE text is retained below. Identical text is
 
 - @ai-sdk/gateway@3.0.96 — Apache-2.0
 
+- @ai-sdk/google@3.0.135 — Apache-2.0
+
 - @ai-sdk/openai-compatible@2.0.60 — Apache-2.0
 
 - @ai-sdk/openai@3.0.65 — Apache-2.0
@@ -22,9 +24,13 @@ Original copyright, license and NOTICE text is retained below. Identical text is
 
 - @ai-sdk/provider-utils@4.0.39 — Apache-2.0
 
+- @ai-sdk/provider-utils@4.0.61 — Apache-2.0
+
 - @ai-sdk/provider@3.0.10 — Apache-2.0
 
 - @ai-sdk/provider@3.0.14 — Apache-2.0
+
+- @ai-sdk/provider@3.0.19 — Apache-2.0
 
 - @ai-sdk/provider@3.0.8 — Apache-2.0
 
@@ -2088,6 +2094,8 @@ Original copyright, license and NOTICE text is retained below. Identical text is
 
 - undici@6.24.1 — MIT
 
+- undici@6.29.1 — MIT
+
 - undici@7.25.0 — MIT
 
 - unicorn-magic@0.3.0 — MIT
@@ -2322,6 +2330,8 @@ Electron/Chromium target-specific notices are shipped separately under Resources
 
 - @ai-sdk/gateway@3.0.96: LICENSE
 
+- @ai-sdk/google@3.0.135: LICENSE
+
 - @ai-sdk/openai-compatible@2.0.60: LICENSE
 
 - @ai-sdk/openai@3.0.65: LICENSE
@@ -2335,6 +2345,8 @@ Electron/Chromium target-specific notices are shipped separately under Resources
 - @ai-sdk/provider@3.0.10: LICENSE
 
 - @ai-sdk/provider@3.0.14: LICENSE
+
+- @ai-sdk/provider@3.0.19: LICENSE
 
 - @ai-sdk/provider@3.0.8: LICENSE
 
@@ -2381,6 +2393,8 @@ limitations under the License.
 - @ai-sdk/provider-utils@4.0.27: src/to-json-schema/zod3-to-json-schema/LICENSE
 
 - @ai-sdk/provider-utils@4.0.39: src/to-json-schema/zod3-to-json-schema/LICENSE
+
+- @ai-sdk/provider-utils@4.0.61: src/to-json-schema/zod3-to-json-schema/LICENSE
 
 
 
@@ -3588,6 +3602,8 @@ SOFTWARE.
 - ts-dedent@2.2.0: README.md (license section)
 
 - undici@6.24.1: README.md (license section)
+
+- undici@6.29.1: README.md (license section)
 
 - undici@7.25.0: README.md (license section)
 
@@ -34337,6 +34353,8 @@ ISC
 
 - undici@6.24.1: LICENSE
 
+- undici@6.29.1: LICENSE
+
 - undici@7.25.0: LICENSE
 
 
@@ -34369,6 +34387,8 @@ SOFTWARE.
 ### Notice a21d6c8d3fc631198b97e57584697f7f9c37805c71c6cf9a12e4442b40394b88
 
 - undici@6.24.1: lib/web/fetch/LICENSE
+
+- undici@6.29.1: lib/web/fetch/LICENSE
 
 - undici@7.25.0: lib/web/fetch/LICENSE
 

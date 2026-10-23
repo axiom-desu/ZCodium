@@ -1,7 +1,11 @@
 use crate::{
     completion::Completion,
+    draft_attachments::DraftAttachments,
     editor::{Editor, sanitize},
+    file_mentions::FileMentions,
+    input_history::History,
     selector::Selector,
+    telemetry::Telemetry,
 };
 use serde_json::Value;
 
@@ -29,6 +33,11 @@ fn bounded(value: &str, limit: usize) -> String {
         .find(|i| value.is_char_boundary(*i))
         .unwrap_or(0);
     format!("{}{marker}", &value[..end])
+}
+
+/// actor 的“正在运行”事实：phase 与 canStop 任一为真即为运行中。
+fn running(control: &Value) -> bool {
+    control["phase"] == "running" || control["canStop"] == true
 }
 
 fn append_bounded(current: &str, append: &str, limit: usize) -> String {
@@ -85,6 +94,10 @@ pub(crate) struct View {
     pub notices: Vec<String>,
     pub editor: Editor,
     pub completion: Completion,
+    pub file_mentions: FileMentions,
+    pub draft_attachments: DraftAttachments,
+    /// 输入历史游标：只保存本地草稿/条目位置，历史事实仍由 store 持有。
+    pub history: History,
     pub scroll: usize,
     pub follow: bool,
     pub pending_submit: bool,
@@ -92,8 +105,16 @@ pub(crate) struct View {
     pub zh: bool,
     pub models: Vec<Value>,
     pub selector: Option<Selector>,
+    /// 队列编辑草稿：独立于 main editor，权限/问答期间不得当答案。
+    pub queue_edit: Option<crate::queue::QueueEdit>,
     pub sidebar: bool,
     pub sidebar_overlay: bool,
+    /// 读票据归属：切 session / TopicClosed 时递增，旧 generation 的 reply 必须丢弃。
+    pub generation: u64,
+    /// UI 镜像事实：TopicClosed 后为 true，本地拒绝普通提交，成功 snapshot/open 解除。
+    pub topic_closed: bool,
+    /// MCP/usage 的可丢弃展示投影；事实仍由 MCP Hub 与 core actor 持有。
+    pub telemetry: Telemetry,
     pub no_color: bool,
     pub directory: String,
     pub display_revision: u64,
@@ -138,12 +159,23 @@ impl View {
     }
     pub fn snapshot(&mut self, snapshot: &Value) {
         self.display_revision = self.display_revision.wrapping_add(1);
-        if self.session != snapshot["sessionId"].as_str().unwrap_or_default() {
+        let session = snapshot["sessionId"].as_str().unwrap_or_default();
+        // 成功快照/打开就是新的 owner 事实，解除 TopicClosed 的本地提交门禁。
+        self.topic_closed = false;
+        if self.session != session {
             self.selector = None;
+            // 旧 queue edit 不在这里静默删除：它属于旧会话/世代，保留为失效缓冲由用户
+            // Esc 取消，避免编辑文本无声消失或落到新会话主 editor。
             // 补全是会话内的本地展示状态；切会话必须失效，不把旧草稿候选带到新会话。
             self.completion = Completion::default();
+            // 同 id 重新进入也是一次新的票据世代：generation 推进并清掉旧遥测，
+            // 同会话的普通 snapshot 则保留已取到的真实 MCP/usage。
+            self.generation = self.generation.wrapping_add(1);
+            self.telemetry.reset();
+            // 历史游标/在飞票据同样按 generation 失效；旧 reply 不能写进新会话草稿。
+            self.history.reset(session, self.generation);
         }
-        self.session = snapshot["sessionId"].as_str().unwrap_or_default().into();
+        self.session = session.into();
         self.rows = snapshot["rows"]["window"]
             .as_array()
             .cloned()
@@ -209,8 +241,14 @@ impl View {
             "row.removed" => self.rows.retain(|r| r["rowId"] != delta["rowId"]),
             "state.updated" => {
                 if let Some(patch) = delta["patch"].as_object() {
+                    let was_running = running(&self.state["control"]);
                     for (key, value) in patch {
                         self.state[key] = value.clone();
+                    }
+                    // 一轮真实结束必须在这里就置位：`Client::call` 可能在同一批里消费
+                    // running 和 completed，主循环只看到末态，pump 自己比较 phase 会漏刷新。
+                    if was_running && !running(&self.state["control"]) {
+                        self.telemetry.mcp_dirty = true;
                     }
                     if patch.contains_key("control") {
                         self.pending_submit = false;

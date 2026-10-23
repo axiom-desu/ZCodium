@@ -19,7 +19,8 @@ fn prefix_and_alias_matches_stay_unique() {
     // 别名命中同一条命令时只出现一次。
     assert_eq!(names("/compress"), ["compact"]);
     assert_eq!(names("/variant"), ["effort"]);
-    assert!(names("/mcp").is_empty());
+    assert_eq!(names("/mcp"), ["mcp"]);
+    assert_eq!(names("/usa"), ["usage"]);
     assert!(names("/compact now").is_empty());
     assert!(names("hello").is_empty());
     assert!(!names("/").is_empty());

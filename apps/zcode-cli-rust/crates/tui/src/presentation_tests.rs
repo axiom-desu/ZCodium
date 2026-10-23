@@ -358,7 +358,11 @@ fn sidebar_matches_ts_sections_from_real_state() {
         "todo rows"
     );
     assert!(text.contains("/work/dir"), "workspace footer");
-    assert!(!text.contains("MCP"), "no fabricated MCP section");
+    assert!(text.contains("MCP"), "real MCP section");
+    assert!(
+        text.contains("No MCP servers configured."),
+        "unloaded MCP is an explicit empty state, not connected: {text}"
+    );
 }
 
 #[test]
@@ -373,6 +377,10 @@ fn sidebar_empty_states_are_explicit_and_bounded() {
     );
     assert!(text.contains("No file changes yet."), "empty files");
     assert!(text.contains("No todos yet."), "empty todos");
+    assert!(
+        text.contains("No MCP servers configured."),
+        "empty MCP is explicit: {text}"
+    );
 
     // 超长内容必须截断，不能把侧栏撑开或换行挤进对话区。
     let mut long = sidebar_view();

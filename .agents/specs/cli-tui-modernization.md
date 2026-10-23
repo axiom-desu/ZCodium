@@ -4,7 +4,7 @@
 
 用户要求 Rust CLI 以当前 TS TUI 为参照现代化，并为 TS TUI 增加 `/quit`。本轮改造实际终端界面与交互，不把 Node/TS 前端包装成 Rust 原生 TUI，也不声称凭一个视觉更新就完整实现 TS 的所有扩展能力。参考当前 `apps/zcode-cli/packages/tui/src/` 的 sidebar、theme、Logo、Markdown、工具、选择与审批面板；保留上轮 provider discovery 和已开 PR 的改动，不覆盖 `logs/`。
 
-欢迎页标识居中、扫光效果以及输入框标题/占位提示的对外契约单独记录在 `.agents/specs/cli-rust-welcome-brand-parity.md`；侧栏分区对齐记录在 `.agents/specs/cli-rust-sidebar-parity.md`。两个 spec 同样只调整展示层，不引入新的业务状态。后续 `/compact`、`/effort`、slash 补全、选择过滤与 composer/时间线对齐见 `.agents/specs/cli-rust-tui-parity.md`；该增量不代表完整 TS TUI 功能对等。
+欢迎页标识居中、扫光效果以及输入框标题/占位提示的对外契约单独记录在 `.agents/specs/cli-rust-welcome-brand-parity.md`；侧栏分区对齐记录在 `.agents/specs/cli-rust-sidebar-parity.md`。两个 spec 同样只调整展示层，不引入新的业务状态。后续 `/compact`、`/effort`、slash 补全、选择过滤与 composer/时间线对齐见 `.agents/specs/cli-rust-tui-parity.md`；该增量不代表完整 TS TUI 功能对等。输入历史、`@file`、真实 MCP/usage 与 busy queue 的后续实现见 `.agents/specs/cli-rust-tui-workbench.md`（本批之后落地，处于最终验证阶段）。
 
 ## 产品规则与界面
 
@@ -63,5 +63,5 @@ No new business owner, persistence schema, workspace identity, owner/lease, stal
 - TS `/quit` 的键盘、补全确认、审批手势统一到 TuiApp 幂等 requestExit；在 admission 前判定原文/补全与附件/多行边界。等待审批的独立退出手势不携带主草稿附件。原始主草稿附件、Other 路径和普通正文不被吞。
 - 真实 CLI 同批输入发现 textarea 延迟回写会复活已提交 prompt，导致后续 `/quit` 被拼接后排队；复用同步 editor port 清空后，构建 CLI 的 idle/真实 streaming /quit 均 exit 0、恢复终端。该 PTY 场景进入 Linux interop CI，不依赖截图或全局用户配置。
 - 独立审查发现审批对象 clone 后按对象引用清理/读旧 state 的阻断；以稳定 resolve 句柄与同步 UI owner 修正。同批文本+连续 Enter 完成、连续 Escape 拒绝回归先红后绿；审批/问答/Other/附件/取消与退出均有 renderer 键盘测试。
-- 本地全库：Rust 510 项、Node CI 脚本 359 项通过；typecheck、Lint（0 errors、50 条既有 warnings）、Clippy/fmt、16-crate 边界、architecture、actionlint 通过；格式检查排除既有 logs。新 HEAD 仍必须经远端 CI，不以旧 PR 绿灯代替。
-- 本轮是原生基础体验对齐：未宣称完整 TS 插件、MCP 管理、文件导航、图形/富 HTML 或完整语法高亮/主题能力对等；未重打/安装或公开新的安装包。
+- 本地全库：本批 Rust 510 项、Node CI 脚本 359 项通过（本批历史证据）；typecheck、Lint（0 errors、50 条既有 warnings）、Clippy/fmt、16-crate 边界、architecture、actionlint 通过；格式检查排除既有 logs。新 HEAD 仍必须经远端 CI，不以旧 PR 绿灯代替。
+- 本轮（现代化批）是原生基础体验对齐：未宣称完整 TS 插件、完整 MCP 管理/OAuth、文件导航、图形/富 HTML 或完整语法高亮/主题能力对等。MCP 只读状态与 usage 展示已由后续 workbench 批实现（见该 spec），不等于 MCP 管理/OAuth 完成；未重打/安装或公开新的安装包。

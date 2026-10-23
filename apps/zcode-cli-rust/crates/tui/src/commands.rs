@@ -95,6 +95,27 @@ const COMMANDS: &[Command] = &[
         summary_zh: "查看或设置当前模型提供的推理档位",
     },
     Command {
+        name: "queue",
+        aliases: &[],
+        usage: "/queue [list|pause|resume|edit|delete|send|up|down <id>]",
+        summary_en: "Inspect or change the actor-owned queued inputs",
+        summary_zh: "查看或修改由 actor 持有的排队输入",
+    },
+    Command {
+        name: "mcp",
+        aliases: &[],
+        usage: "/mcp",
+        summary_en: "Refresh the real MCP server status shown in the sidebar",
+        summary_zh: "刷新侧栏显示的真实 MCP 服务器状态",
+    },
+    Command {
+        name: "usage",
+        aliases: &[],
+        usage: "/usage",
+        summary_en: "Query this session's real token usage",
+        summary_zh: "查询当前会话的真实 token 用量",
+    },
+    Command {
         name: "quit",
         aliases: &["exit"],
         usage: "/quit",
@@ -162,9 +183,10 @@ mod tests {
         let listing = help(None, false).unwrap();
         assert!(listing.contains("/compact [instructions]"));
         assert!(listing.contains("/effort [list|<level>]"));
-        assert!(!listing.contains("/mcp"));
+        assert!(listing.contains("/mcp"));
+        assert!(listing.contains("/usage"));
         assert!(help(Some("/compress"), true).unwrap().contains("别名"));
-        assert!(help(Some("mcp"), false).is_err());
+        assert!(help(Some("mcp"), false).unwrap().contains("/mcp"));
     }
 
     #[test]
