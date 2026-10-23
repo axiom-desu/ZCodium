@@ -26,7 +26,7 @@
 | 收紧棘轮基线     | `pnpm gate:baseline`（依次刷新三个基线）                 |
 | 导出引用查询     | `pnpm dep:refs --list-exports <file>`                    |
 
-`pnpm lint` / `pnpm fmt:check` 是「原始真值」：存量债务会报错，用于查看当前全量问题；`pnpm gate:lint` / `pnpm gate:format` / `pnpm gate:knip` 是棘轮门禁：存量收在 `.gate-baseline/`，只拦新增，CI 跑的是后者。
+`pnpm lint` / `pnpm fmt:check` 是「原始真值」：用于查看当前全量问题（lint 诊断已清零；若有存量仍如实报错）；`pnpm gate:lint` / `pnpm gate:format` / `pnpm gate:knip` 是棘轮门禁：存量收在 `.gate-baseline/`，只拦新增，CI 跑的是后者。
 
 测试入口以目标包当前的 `package.json` 和实际测试文件为准，不假定存在统一的单测或 E2E 命令。
 
