@@ -26,10 +26,15 @@ def _load_baseline_renderer():
     spec = importlib.util.spec_from_file_location("zcode_tui_baseline_pty", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.rendered
+    return module
 
 
-rendered = _load_baseline_renderer()
+# 基线模块既是渲染器也是「在飞摘要」的唯一权威（scripts/ci/tui-pty-composer.test.mjs
+# 已把它与 projection.rs 的 Pending 文案对齐），这里只复用，不另造第二份文案表。
+baseline = _load_baseline_renderer()
+rendered = baseline.rendered
+pending_visible = baseline.pending_visible
+PENDING_LABELS = baseline.PENDING_LABELS
 
 
 class PtySession:
@@ -143,6 +148,9 @@ COMPOSER_TOP = re.compile(
     r"^┌ (?:Build|Plan|Edit|Yolo|构建|计划|编辑|全权)(?:\b| ·)", re.IGNORECASE
 )
 
+# presentation.rs：editor 为空时按 busy 渲染的 placeholder（忙轮 `Type to queue input`）。
+COMPOSER_PLACEHOLDERS = ("Type a prompt", "Type to queue input")
+
 
 def composer_line(screen, needle):
     """The composer box content holding `needle`.
@@ -175,6 +183,52 @@ def composer_line(screen, needle):
         if needle in content:
             return True
     return False
+
+
+def composer_idle(screen):
+    """bottom composer 真的空了（只有 placeholder 行）。
+
+    presentation.rs 按 `view.busy()` 换 placeholder：空闲 `Type a prompt`，忙轮
+    `Type to queue input`。只认 `Type a prompt` 会把整个 busy 队列场景当成永不清空，
+    只认行首 `│` 又会被 transcript 的旧草稿骗；因此固定为这两条文案 + 最末 box。
+    """
+    return any(composer_line(screen, placeholder) for placeholder in COMPOSER_PLACEHOLDERS)
+
+
+def settled(screen):
+    """命令真的被消费且 actor 已结算：composer 清空 + 该操作的在飞提示消失。
+
+    只看到旧 queue 行/paused 标志不够：草稿被拒时正文仍留在 editor，mutation 在飞时
+    下一条 Enter 会被 busy 闸门拒绝并保留草稿（PR88 CI 里三条命令拼成一行）。
+    """
+    return composer_idle(screen) and not pending_visible(screen)
+
+
+def run_actor_command(session, text, label, timeout=25):
+    """发送一行依赖 actor 的输入，并按因果等到它真的结算。
+
+    先把回显等到：Enter 前的空闲帧也能满足 `settled`，不等回显就直接 Enter 会在
+    真 PTY 里把“提交前”当成“已提交”。然后等上一条在飞提示消失再 Enter：busy 闸门
+    只放行一个 mutation，前一条尚未 ACK 时 Enter 会被拒并保留草稿。Enter 后必须同时
+    看到 composer 清空与在飞提示消失，才能发下一条依赖命令。
+    """
+    session.send(text)
+    session.wait_until(
+        lambda screen: composer_line(screen, text),
+        f"{label}: draft visible in the bottom composer",
+        timeout,
+    )
+    session.wait_until(
+        lambda screen: not pending_visible(screen),
+        f"{label}: previous operation settled before Enter",
+        timeout,
+    )
+    session.send("\r")
+    session.wait_until(
+        settled,
+        f"{label}: composer cleared and its in-flight label gone",
+        timeout,
+    )
 
 
 def activity(screen):

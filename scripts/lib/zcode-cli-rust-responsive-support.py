@@ -31,6 +31,10 @@ latest_queue_block = _workbench.latest_queue_block
 live_queue_header = _workbench.live_queue_header
 live_queue_rows = _workbench.live_queue_rows
 wait_ready = _workbench.wait_ready
+# 依赖 actor 的命令（queue mutation / queue list）必须等上一条真的结算：PR88 CI 里
+# `/queue pause` 尚未 ACK 时下一条 Enter 被 busy 闸门拒掉，草稿被保留并拼成一行。
+run_actor_command = _workbench.run_actor_command
+settled = _workbench.settled
 
 # A held lock must keep the actor's 5s SQLite wait open; fail before the lock can
 # time out and masquerade as a responsive ACK.

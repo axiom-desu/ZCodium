@@ -182,6 +182,9 @@ E2E 探针约束（防止旧 transcript / 旧 Ready 假阳性）：
   PTY 在 Enter 前读取 loopback `/state` 的 `{requests}`，Enter 后必须等到 `WB_REPLY_<before+1>`、
   预期正文和 main composer 清空/Ready；不允许用旧 response 或旧 Ready 放行。
 - 慢流与 MCP 专用回复保留原协议，不附加 nonce；队列/工具时序断言不变。
+- 依赖 actor 的 slash 命令必须按因果结算：发送后先确认当前 composer 已清空且对应在飞提示消失，
+  再发送后续命令。仅看到旧 queue 行/paused 标志不足以证明 mutation 的 ACK + snapshot 已结算；
+  不能在前一操作尚在飞时拼入下一条命令，也不能通过 sleep、加超时或清空被拒草稿掩盖驱动竞态。
 
 必须执行 Rust locked workspace tests、fmt、clippy -D warnings、16-crate boundaries、Node driver/CI scripts、
 根 typecheck、原始 lint（存量如实报告）、三 gate、architecture、格式与协议/contract资产 check。
