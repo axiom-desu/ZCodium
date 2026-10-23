@@ -33,6 +33,7 @@ composer_line = support.composer_line
 latest_queue_block = support.latest_queue_block
 live_queue_header = support.live_queue_header
 live_queue_rows = support.live_queue_rows
+run_actor_command = support.run_actor_command
 wait_ready = support.wait_ready
 
 
@@ -240,8 +241,15 @@ def scenario_queue(session, result, config):
 
     texts = ["queue one marker", "queue two marker", "queue three marker"]
     for index, text in enumerate(texts):
-        session.send(text + "\r")
-        session.send("/queue list\r")
+        # 入队正文也是 actor 事实：先等它真的被接受（composer 清空 + 在飞提示消失），
+        # 否则紧随其后的 `/queue list` 会被 busy 闸门拒掉并拼进同一份草稿。
+        run_actor_command(session, text, f"queued input {text!r}", 30)
+        run_actor_command(
+            session,
+            "/queue list",
+            f"queue list after queued input {text!r}",
+            30,
+        )
         session.wait_until(
             lambda s: len(latest_queue_block(s)[1]) >= index + 1 or "Turn is busy" in s,
             f"{index + 1} accepted queued inputs",
@@ -260,15 +268,19 @@ def scenario_queue(session, result, config):
     if len(ids) < 3:
         raise RuntimeError(f"queue rows incomplete: {rows}")
 
-    session.send("/queue pause\r")
-    session.send("/queue list\r")
+    run_actor_command(session, "/queue pause", "/queue pause")
+    run_actor_command(session, "/queue list", "/queue list after pause")
     session.wait_until(
         lambda s: (latest_queue_block(s)[0] or "").find("Queue paused") >= 0, "paused queue"
     )
     check(result, "/queue pause reached the actor (paused header)")
 
-    session.send(f"/queue delete {ids['queue two marker']}\r")
-    session.send("/queue list\r")
+    run_actor_command(
+        session,
+        f"/queue delete {ids['queue two marker']}",
+        "/queue delete",
+    )
+    run_actor_command(session, "/queue list", "/queue list after delete")
     session.wait_until(
         lambda s: "Queue paused 2" in (latest_queue_block(s)[0] or ""),
         "deleted row disappeared from the actor queue",
@@ -282,8 +294,12 @@ def scenario_queue(session, result, config):
         f"header={header!r} rows={rows}",
     )
 
-    session.send(f"/queue up {ids['queue three marker']}\r")
-    session.send("/queue list\r")
+    run_actor_command(
+        session,
+        f"/queue up {ids['queue three marker']}",
+        "/queue up",
+    )
+    run_actor_command(session, "/queue list", "/queue list after up")
     session.wait_until(
         lambda s: [row["text"] for row in latest_queue_block(s)[1]] == [texts[2], texts[0]],
         "reorder moved the item before its predecessor",
@@ -300,9 +316,11 @@ def scenario_queue(session, result, config):
     session.wait_for("Edit queued input")
     session.wait_for("Enter save · Esc cancel")
     session.send(" edited")
+    # CAS 前先看到续写正文真的进了弹层：Enter 早于回显会保存旧正文（驱动侧乱序）。
+    session.wait_for("queue three marker edited")
     session.send("\r")
     session.wait_until(lambda s: "Edit queued input" not in s, "edit popup closed after CAS", 30)
-    session.send("/queue list\r")
+    run_actor_command(session, "/queue list", "/queue list after queue edit")
     session.wait_until(
         lambda s: any(row["text"] == "queue three marker edited" for row in latest_queue_block(s)[1]),
         "edited queue body became an actor fact",
@@ -318,23 +336,29 @@ def scenario_queue(session, result, config):
     session.send("\r")
     session.wait_for("Edit queued input")
     session.send("discarded text")
+    # 同上：Esc 前确认本地正文已渲染，否则只取消了一个空编辑。
+    session.wait_for("discarded text")
     session.send("\x1b")
     session.wait_for("Queue edit cancelled.")
-    session.send("/queue list\r")
+    run_actor_command(session, "/queue list", "/queue list after cancelled edit")
     session.wait_until(
         lambda s: any(row["text"] == "queue three marker edited" for row in latest_queue_block(s)[1]),
         "cancelled edit left the actor queue unchanged",
     )
     check(result, "/queue edit Esc cancelled locally without touching the actor queue")
 
-    session.send(f"/queue send {ids['queue one marker']}\r")
+    run_actor_command(
+        session,
+        f"/queue send {ids['queue one marker']}",
+        "/queue send",
+    )
     # sendNow 的 promote 是异步的：transcript 里上一次 `/queue list` 只是旧快照，
     # wait 必须读 composer 上方的 live actor 队列条。
     session.wait_until(
         lambda s: [row["id"] for row in live_queue_rows(s)[1]] == [ids["queue three marker"]],
         "sendQueuedNow dispatched the promoted item",
     )
-    session.send("/queue list\r")
+    run_actor_command(session, "/queue list", "/queue list after send")
     session.wait_until(
         lambda s: [row["id"] for row in latest_queue_block(s)[1]] == [ids["queue three marker"]],
         "queue list reflects the promoted item",
@@ -347,11 +371,11 @@ def scenario_queue(session, result, config):
     )
 
     # sendNow 取消 slow run 后把慢流真正收尾，再 resume 剩余的 paused 项。
-    session.send("/queue resume\r")
+    run_actor_command(session, "/queue resume", "/queue resume")
     release(config, "wb-slow first")
     for _ in range(6):
         wait_ready(session)
-        session.send("/queue list\r")
+        run_actor_command(session, "/queue list", "/queue list while draining")
         session.wait_until(
             lambda s: latest_queue_block(s)[0] is not None or "The queue is empty." in s,
             "fresh queue list",
@@ -370,19 +394,19 @@ def scenario_queue(session, result, config):
     session.send("wb-slow second\r")
     session.wait_until(lambda s: activity(s) == "Running", "slow turn running", 40)
     for index, text in enumerate(["cancel one marker", "cancel two marker"], start=1):
-        session.send(text + "\r")
-        session.send("/queue list\r")
+        run_actor_command(session, text, f"cancel input {text!r}", 30)
+        run_actor_command(session, "/queue list", f"queue list after {text!r}", 30)
         session.wait_until(
             lambda s: len(latest_queue_block(s)[1]) >= index, "cancel queue rows", 30
         )
-    session.send("/queue pause\r")
-    session.send("/queue list\r")
+    run_actor_command(session, "/queue pause", "/queue pause for cancel queue")
+    run_actor_command(session, "/queue list", "/queue list after pause")
     session.wait_until(
         lambda s: "Queue paused 2" in (latest_queue_block(s)[0] or ""), "paused cancel queue"
     )
     session.send("\x03")
     wait_ready(session)
-    session.send("/queue list\r")
+    run_actor_command(session, "/queue list", "/queue list after stop")
     session.wait_until(
         lambda s: len(latest_queue_block(s)[1]) == 2, "queue survived stop", 30
     )
@@ -390,7 +414,7 @@ def scenario_queue(session, result, config):
     # wrapper 需要在 stop 那一刻的 actor 队列快照，而不是退出后可能已滚出屏幕的旧 list。
     result["queue_at_stop"] = latest_queue_block(session.screen())[1]
     release(config, "wb-slow second")
-    session.send("/queue resume\r")
+    run_actor_command(session, "/queue resume", "/queue resume after stop")
     wait_idle(session, "held queue drained after resume")
     check(result, "explicit /queue resume dispatched the held queue after a stop")
     session.send("/quit\r")

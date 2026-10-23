@@ -73,7 +73,7 @@ def build(support, db):
             json.dumps(db_row),
         )
 
-        session.send("/queue pause\r")
+        support.run_actor_command(session, "/queue pause", "queue edit: /queue pause")
         session.wait_until(
             lambda screen: "Queue paused" in (support.live_queue_header(screen) or ""),
             "queue edit: /queue pause reached the actor",
@@ -164,7 +164,7 @@ def build(support, db):
             not support.queue_edit_open(session.screen()),
             session.screen()[-1600:],
         )
-        session.send("/queue list\r")
+        support.run_actor_command(session, "/queue list", "queue edit: /queue list after save")
         session.wait_until(
             lambda screen: any(
                 candidate["text"] == edited
@@ -187,7 +187,7 @@ def build(support, db):
         support.wait_ready(session)
         before_drain = support.request_count(config)
         marker = f"WB_REPLY_{before_drain + 1}"
-        session.send("/queue resume\r")
+        support.run_actor_command(session, "/queue resume", "queue edit: /queue resume")
         session.wait_until(
             lambda screen: marker in screen and f"answer: {edited}" in screen,
             "queue edit: resumed queue executed the edited body as a new request",
