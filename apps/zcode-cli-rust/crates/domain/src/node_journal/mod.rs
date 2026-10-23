@@ -8,6 +8,7 @@ mod compact;
 pub mod files;
 mod finish;
 pub mod goal;
+mod history;
 mod import;
 pub mod intent;
 mod model_change;
@@ -62,6 +63,23 @@ pub struct NodeJournal {
     pub unsnapshotted: Vec<Value>,
     #[serde(skip)]
     pub pending: Vec<Write>,
+}
+
+/// One `input_history` row to record (Node `recordInputHistory`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct InputHistory {
+    pub id: String,
+    /// The workspace identity key; the store scopes it for the row's
+    /// `project_id` (`state::node::input_history::scope`), never a path or slug.
+    pub project: String,
+    pub session: Option<String>,
+    /// The user's own text, before any prompt decoration.
+    pub text: String,
+    /// The submitted attachments projected to `{type, path?|content?}` before
+    /// `prepare_attachments` replaced the refs; `None` when there were none.
+    pub attachments: Option<Value>,
+    /// `prompt` for an idle input, `steered_input` for a busy one.
+    pub kind: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -185,6 +203,10 @@ pub enum Op {
     /// The session's `session_target` row as a Node `SessionGoal`; `None`
     /// deletes it (Node `clearSessionTarget`).
     Target(Option<Value>),
+    /// Node `recordInputHistory` of an accepted root prompt: written in the
+    /// same transaction as its input row and ACK (spec cli-rust-tui-workbench
+    /// §1), so a failed commit leaves no history-only row.
+    InputHistory(InputHistory),
     /// Node `persistStableForkCompletionBoundary` (reads the stored transcript).
     StableBoundary {
         boundary: String,

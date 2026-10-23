@@ -42,6 +42,9 @@ impl Engine {
         if s.running() && s.queue.len() >= MAX_QUEUE {
             return Ok(c.ack("rejected", s.revision, Some("guard.queueFull")));
         }
+        // 历史保存用户原始提交：附件必须在 prepare_attachments 改写引用之前投影。
+        let raw = super::input_history::Raw::of(&c.payload);
+        let compact = super::input_admission::compact_args(&c).is_some();
         let selected = self.select(&c.payload, Some(self.session_selection(&id)?))?;
         let assets = self
             .prepare_attachments(&id, &mut c.payload, &selected)
@@ -53,6 +56,9 @@ impl Engine {
         let s = self.sessions.get_mut(&id).unwrap();
         s.attachments.extend(assets);
         let mut ack = c.ack("accepted", s.revision, None);
+        // 只有普通 sendText 进入历史；/goal 等控制命令不是输入历史。
+        let plain = c.kind == "sendText";
+        let mut history = plain.then_some("steered_input");
         let turn = if s.running() {
             if c.payload.get("requestedDelivery").is_none() {
                 c.payload["requestedDelivery"] = s.followup_mode.clone().into();
@@ -88,6 +94,7 @@ impl Engine {
             self.publish(&id, vec![])?;
             None
         } else {
+            history = (plain && !compact).then_some("prompt");
             let intent = self.node_admit_now(&id, &c, "sendText");
             let (turn, _) = self.admit_input(&id, &c, shared)?;
             self.node_prompt(&id, &turn, &c, (intent, None));
@@ -97,6 +104,10 @@ impl Engine {
             Some(turn)
         };
         ack["revisionAtDecision"] = self.sessions[&id].revision.into();
+        // 历史与 accepted input/ACK 同一事务提交；重放由 ACK 幂等提前阻断。
+        if let Some(kind) = history {
+            self.record_input_history(&id, &c.payload, kind, raw);
+        }
         self.persist(&id, Some((c.key(), ack.clone()))).await?;
         self.acks.insert(c.key(), ack.clone());
         if start_now {

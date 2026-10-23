@@ -12,6 +12,8 @@ mod goal;
 mod grants;
 #[path = "node_storage/harness.rs"]
 mod harness;
+#[path = "node_storage/input_history.rs"]
+mod input_history;
 #[path = "node_storage/model.rs"]
 mod model;
 #[path = "node_storage/shared.rs"]

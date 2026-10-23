@@ -39,8 +39,11 @@ impl Engine {
             session.followup_mode = mode.into();
         }
         let id = session.id.clone();
+        let mut raw = None;
         if let Some(input) = &mut first {
             let selected = self.select(input, Some(config.clone()))?;
+            // 历史保存用户原始提交：附件在 prepare_attachments 改写引用之前投影。
+            raw = Some(super::input_history::Raw::of(input));
             session.attachments = self.prepare_attachments(&id, input, &selected).await?;
         }
         if let Some(servers) = c.payload.get("mcpServers") {
@@ -59,6 +62,9 @@ impl Engine {
             let (t, _) = self.admit_input(&id, &input_command, None)?;
             self.node_prompt(&id, &t, &input_command, (intent, None));
             turn = Some(t);
+            if let Some(raw) = raw {
+                self.record_input_history(&id, &input_command.payload, "prompt", raw);
+            }
             // 与 Node 一致：inputId 即提交该输入的 commandId（也是模型请求的 query id）。
             ack["result"]["input"] = json!({"delivery":"startNow","inputId":c.command_id});
         }

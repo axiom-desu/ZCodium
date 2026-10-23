@@ -4,6 +4,17 @@ use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use zcode_cli_protocol::Command;
 
+/// The `/compact [args]` normalization every `sendText` shares; a compact is
+/// maintenance and never an accepted prompt of the input history.
+pub(super) fn compact_args(c: &Command) -> Option<&str> {
+    if c.kind != "sendText" {
+        return None;
+    }
+    let text = c.payload["text"].as_str()?.trim();
+    let args = text.strip_prefix("/compact")?;
+    (args.is_empty() || args.starts_with(' ')).then(|| args.trim())
+}
+
 impl Engine {
     pub(super) fn admit_input(
         &mut self,
@@ -11,15 +22,10 @@ impl Engine {
         c: &Command,
         shared: Option<String>,
     ) -> Result<(String, String)> {
-        if c.kind == "sendText"
-            && let Some(text) = c.payload["text"].as_str()
-        {
-            let text = text.trim();
-            if text == "/compact" || text.starts_with("/compact ") {
-                let mut compact = c.clone();
-                compact.payload = json!({"text":text.strip_prefix("/compact").unwrap().trim()});
-                return self.admit_compact(id, &compact);
-            }
+        if let Some(args) = compact_args(c) {
+            let mut compact = c.clone();
+            compact.payload = json!({"text":args});
+            return self.admit_compact(id, &compact);
         }
         let selected = self.select(&c.payload, Some(self.session_selection(id)?))?;
         let (mut content, reminders) = self.input_content(id, &c.payload)?;

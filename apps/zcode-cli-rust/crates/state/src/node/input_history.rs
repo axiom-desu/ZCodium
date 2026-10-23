@@ -19,6 +19,37 @@ pub struct Entry {
     pub time_created: i64,
 }
 
+/// The history scope of a workspace: the full identity key
+/// (`workspaceIdentity?.trim() || workspacePath`) stored as `project_id` text.
+///
+/// The root already canonicalized the key, so the store keeps it byte-for-byte:
+/// trimming again would merge `/repo` with the valid local path `/repo `.
+/// The column has no project FK, and a path or slug would merge different
+/// remote identities of the same path (spec cli-rust-tui-workbench §1).
+pub fn scope(workspace: &str) -> String {
+    workspace.to_owned()
+}
+
+/// One entry as the recall port's `InputHistoryEntry` JSON.
+pub fn value(entry: &Entry) -> Value {
+    let mut out = json!({
+        "id": entry.id,
+        "text": entry.text,
+        "kind": entry.kind,
+        "timeCreated": entry.time_created,
+    });
+    if let Some(session) = &entry.session_id {
+        out["sessionId"] = session.as_str().into();
+    }
+    if let Some(attachments) = &entry.attachments {
+        out["attachments"] = attachments.clone();
+    }
+    out
+}
+
+/// Node `normalizedInputHistoryAttachments` 的字段规则，沿用仓储既有归一化并与
+/// TS 行逐字节一致；来源字节在写入前的 `core::app::input_history::project` 投影
+/// 里保留（那里只用 trim 判空），这一层按 Node 规则归一化。
 fn trimmed(value: &Value) -> Option<String> {
     value
         .as_str()
@@ -143,4 +174,34 @@ pub fn recall(conn: &Connection, project: &str, skip: i64) -> Result<Option<Entr
     };
     entry.attachments = normalize(stored.as_ref());
     Ok(Some(entry))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scope_keeps_the_root_canonical_key_byte_for_byte() {
+        // root 已按 `identity.trim() || workspacePath` 规范化；这里不再二次 trim，
+        // 否则 `/repo` 与合法的 `/repo ` 会共用同一 scope。
+        assert_eq!(scope("/repo "), "/repo ");
+        assert_eq!(scope("/repo"), "/repo");
+        assert_ne!(scope("/repo"), scope("/repo "));
+        assert_eq!(scope(" remote-1 "), " remote-1 ");
+    }
+
+    #[test]
+    fn attachment_normalization_follows_the_node_repository_rule() {
+        // 仓储沿用 Node 归一化（与 TS 行逐字节一致），来源字节在 core 投影处保留。
+        let normalized = normalize(Some(&serde_json::json!([
+            {"type": "file", "path": " /a "},
+            {"type": "file", "path": "  "},
+            {"type": "file", "content": "data:image/png;base64,AAAA"},
+        ])))
+        .unwrap();
+        assert_eq!(
+            normalized,
+            serde_json::json!([{"type": "file", "path": "/a"}])
+        );
+    }
 }

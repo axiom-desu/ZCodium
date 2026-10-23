@@ -306,5 +306,8 @@ impl Worker {
 }
 
 #[cfg(test)]
+#[path = "node_store_history_tests.rs"]
+mod history_tests;
+#[cfg(test)]
 #[path = "node_store_tests.rs"]
 mod tests;
