@@ -86,6 +86,12 @@ export interface ModelRequestCompletedStatusEvent extends ModelNetworkStatusBase
 
 export interface ModelRequestFailedStatusEvent extends ModelNetworkStatusBase {
   type: "model_request_failed";
+  /**
+   * Provider 在失败响应里真实报告的 usage。只随终止失败事件出现一次：
+   * 失败用量由 `createModelUsageSummaryFromEvents` 计入，重试与随后的成功不重复计。
+   * 缺 usage 表示 provider 未报告，不补 0。
+   */
+  usage?: ModelUsage;
   durationMs?: number;
   reason: ModelFailureReason;
   retryable: boolean;

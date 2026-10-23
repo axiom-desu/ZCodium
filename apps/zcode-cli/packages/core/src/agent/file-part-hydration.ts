@@ -41,6 +41,15 @@ export async function filePartToContentBlock(
     };
   }
 
+  // 路径引用附件：首发说明已随 metadata 持久化，冷恢复原样复用，保证模型历史前缀
+  // 与首发逐字节相同。旧行没有该字段时继续走下面兼容分支（占位文本）。
+  if (
+    part.metadata?.storageKind === "local_ref" &&
+    typeof part.metadata.pathReferenceText === "string"
+  ) {
+    return { type: "text", text: part.metadata.pathReferenceText };
+  }
+
   const previewText = part.metadata?.preview?.text;
   if (part.mime.startsWith("text/") && typeof previewText === "string") {
     return { type: "text", text: previewText };

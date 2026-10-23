@@ -1,5 +1,5 @@
 //! Node system reminder sources (`system-reminder/source.ts`), generated into
-//! `schema/system-reminders.json` by `scripts/zcode-cli-rust-node-cold-fixtures.mjs`.
+//! `schema/system-reminders.json` by `scripts/generate-zcode-cli-rust-system-reminders.mjs`.
 use serde_json::Value;
 use std::sync::LazyLock;
 

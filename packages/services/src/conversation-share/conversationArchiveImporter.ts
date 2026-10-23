@@ -99,7 +99,6 @@ export class ConversationArchiveImporter {
     const sessions = await this.options.sessionService.listSessions({
       workspacePath,
       sessionIds: [sessionId],
-      includeArchived: true,
     });
     return sessions.find((session) => session.sessionId === sessionId);
   }

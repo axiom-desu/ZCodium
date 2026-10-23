@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { BashFileOutput } from "./bash-file-output.js";
 import { readCapturedCwd } from "./cwd-capture.js";
 import { defaultCwdDialect } from "./execution-command.js";
-import { NodeExecutionAdapterProcess } from "./node-execution-adapter-process.js";
+import { NodeExecutionAdapterBashOutput } from "./node-execution-adapter-bash-output.js";
 import { resolveLegacyExecutionOutputEncoding } from "./outputEncoding.js";
 import {
   DEFAULT_TIMEOUT_MS,
@@ -14,6 +14,7 @@ import {
 import type {
   ExitState,
   InternalExecutionRunOptions,
+  PreparedBashOutput,
   StopReason,
 } from "./execution-adapter-types.js";
 import type {
@@ -23,7 +24,7 @@ import type {
   ExecutionShellDialect,
 } from "@zcode/contracts";
 
-export class NodeExecutionAdapterRun extends NodeExecutionAdapterProcess {
+export class NodeExecutionAdapterRun extends NodeExecutionAdapterBashOutput {
   async run(
     request: ExecutionRequest,
     options: ExecutionRunOptions = {},
@@ -33,6 +34,16 @@ export class NodeExecutionAdapterRun extends NodeExecutionAdapterProcess {
     let requestStop: (reason: StopReason) => void = () => undefined;
     let outputLimitExceeded = false;
     const internalOptions = options as InternalExecutionRunOptions;
+    // 路径与句柄必须在 spawn 前冻结；已经准备好的调用（后台记录/移交）只复用这一份。
+    let preparedOutput: PreparedBashOutput | undefined = internalOptions.preparedBashOutput;
+    if (!preparedOutput && this.usesBashTempOutput(request)) {
+      const preparation = await this.prepareBashOutput(request, options);
+      if ("result" in preparation) {
+        this.emitResult(options, preparation.result);
+        return preparation.result;
+      }
+      preparedOutput = preparation.prepared;
+    }
     const aggregatePersistedBudget = internalOptions.sharePersistedOutputLimitAcrossStreams
       ? {
           bytes: 0,
@@ -41,10 +52,12 @@ export class NodeExecutionAdapterRun extends NodeExecutionAdapterProcess {
       : undefined;
 
     if (this.closePromise) {
+      await this.releasePreparedBashOutput(preparedOutput);
       return this.createStoppedResult(startedAt, "cancelled", "Execution adapter is shutting down");
     }
 
     if (options.signal?.aborted) {
+      await this.releasePreparedBashOutput(preparedOutput);
       return this.createStoppedResult(startedAt, "cancelled", "Execution cancelled before spawn");
     }
 
@@ -65,19 +78,24 @@ export class NodeExecutionAdapterRun extends NodeExecutionAdapterProcess {
             }
           }
         : undefined;
-    const legacyOutputEncoding = resolveLegacyExecutionOutputEncoding({
-      platform: this.platform,
-      processEnv: this.processEnv,
-    });
+    const legacyOutputEncoding = preparedOutput
+      ? preparedOutput.legacyOutputEncoding
+      : resolveLegacyExecutionOutputEncoding({
+          platform: this.platform,
+          processEnv: this.processEnv,
+        });
     // 任务记录单独解析会重复同步执行 Windows chcp；复用执行时的编码值。
     internalOptions.onOutputEncodingResolved?.(legacyOutputEncoding);
-    const file = useBashMergedOutput
-      ? new BashFileOutput(
-          this.outputPathForRequest(request, "stdout")!,
-          this.platform,
-          legacyOutputEncoding,
-        )
-      : undefined;
+    // 已准备的 Bash 只使用冻结句柄：capture 阶段不得重新选路径或降级。
+    const file =
+      preparedOutput?.file ??
+      (useBashMergedOutput
+        ? new BashFileOutput(
+            this.outputPathForRequest(request, "stdout")!,
+            this.platform,
+            legacyOutputEncoding,
+          )
+        : undefined);
     const stdout = file
       ? undefined
       : this.createOutputCollector(
@@ -167,6 +185,7 @@ export class NodeExecutionAdapterRun extends NodeExecutionAdapterProcess {
     };
 
     const executionId = this.registerActiveExecution(requestStop);
+    preparedOutput?.releasePreparation();
     const abortHandler = () => {
       const reason = abortSignalReason(options.signal);
       requestStop(reason === "output_limit" ? "output_limit" : "cancelled");
@@ -184,11 +203,12 @@ export class NodeExecutionAdapterRun extends NodeExecutionAdapterProcess {
 
       const stoppedAfterCommandPreparation = stoppedBeforeSpawn();
       if (stoppedAfterCommandPreparation) {
+        if (preparedOutput) await file?.discard();
         return stoppedAfterCommandPreparation;
       }
 
       if (file) {
-        await file.prepare();
+        if (!preparedOutput) await file.prepare();
         const stoppedAfterOutputPreparation = stoppedBeforeSpawn();
         if (stoppedAfterOutputPreparation) {
           await file.discard();

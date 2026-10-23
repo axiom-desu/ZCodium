@@ -67,6 +67,7 @@ fn entries_render_as_rust_canonical_messages() {
     let reminder = Entry::Attachment {
         source: "todo_reminder".into(),
         content: "Todos".into(),
+        metadata: None,
     };
     assert_eq!(
         reminder.canonical(),
@@ -146,4 +147,70 @@ fn cache_hits_rebuild_at_each_assistant_message() {
     assert_eq!(rebuilt["hitRateRequestCount"], 2);
     assert_eq!(rebuilt["totalInputTokens"], 110);
     assert_eq!(rebuilt["totalCacheReadTokens"], 60);
+}
+
+#[test]
+fn local_reference_cold_restore_is_byte_identical_to_first_send() {
+    use crate::node_journal::files::{TextRead, local_reference, local_text};
+    let reference = local_reference(
+        ("a.bin", "/w/a.bin"),
+        "application/octet-stream",
+        3,
+        "binary_file",
+    );
+    let text = reference.block["text"].as_str().unwrap().to_owned();
+    // S3：首发说明原文存入 metadata.pathReferenceText。
+    assert_eq!(
+        reference.part["metadata"]["pathReferenceText"],
+        serde_json::json!(text)
+    );
+    let block = attachment::file_block(&reference.part, &|_| None);
+    assert_eq!(block, reference.block);
+    // 旧行没有该字段：继续走既有占位逻辑，不再推测降级原因。
+    let mut legacy = reference.part.clone();
+    legacy["metadata"]
+        .as_object_mut()
+        .unwrap()
+        .remove("pathReferenceText");
+    assert_eq!(
+        attachment::file_block(&legacy, &|_| None)["text"],
+        "[Attached application/octet-stream: a.bin]"
+    );
+    let read = TextRead {
+        content: "body",
+        truncated: false,
+        size: 4,
+        total_lines: 1,
+    };
+    let inline = local_text(("a.txt", "/w/a.txt"), read);
+    assert_eq!(
+        attachment::file_block(&inline.part, &|_| None)["text"],
+        "body"
+    );
+}
+
+#[test]
+fn announcement_attachment_keeps_delta_in_both_shapes() {
+    let delta = json!({"addedNames":["TodoWrite"],"removedNames":[],"readdedNames":[]});
+    let entry = Entry::Attachment {
+        source: crate::tool_search::ANNOUNCEMENT_SOURCE.into(),
+        content: "announcement".into(),
+        metadata: Some(json!({
+            "source": crate::tool_search::ANNOUNCEMENT_SOURCE,
+            crate::tool_search::ANNOUNCEMENT_KEY: delta,
+        })),
+    };
+    // 内部 canonical 用 `_zcode_*` 键：Off 投影和增量合并据此识别公告。
+    assert_eq!(
+        entry.canonical()[crate::tool_search::ANNOUNCEMENT_KEY],
+        delta
+    );
+    // Node entry 形状用 toolSearchAnnouncement，不把内部键带出去。
+    let node = entry.to_node();
+    assert_eq!(node["metadata"]["toolSearchAnnouncement"], delta);
+    assert!(
+        node["metadata"]
+            .get(crate::tool_search::ANNOUNCEMENT_KEY)
+            .is_none()
+    );
 }

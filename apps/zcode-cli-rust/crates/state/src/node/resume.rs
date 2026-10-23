@@ -192,15 +192,16 @@ fn permission_grant(data: Option<Value>, session: &str) -> Option<String> {
     (owner == session).then(|| interaction.to_owned())
 }
 
-/// The cold-loaded session, or `None` when it is missing or archived
-/// (Node `SessionNotFound`). `context_window` is the selected model's window.
+/// The cold-loaded session, or `None` when it is missing or soft-deleted
+/// (Node `SessionNotFound`; the historical `time_archived` no longer blocks resume).
+/// `context_window` is the selected model's window.
 pub fn resume(
     conn: &Connection,
     id: &str,
     artifacts: &dyn Fn(&str) -> Option<String>,
     context_window: Option<f64>,
 ) -> Result<Option<Resume>> {
-    let Some(session) = sessions::get(conn, id)?.filter(|s| s.time_archived.is_none()) else {
+    let Some(session) = sessions::get(conn, id)?.filter(|s| s.time_deleted.is_none()) else {
         return Ok(None);
     };
     let execution = saved_execution(last_entry(conn, id, EXECUTION_STATE_ENTRY)?).or_else(|| {

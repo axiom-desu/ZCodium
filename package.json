@@ -56,10 +56,12 @@
     "architecture:context": "node scripts/architecture/architecture-check.mjs context",
     "check:zcode-cli-rust-protocol-schema": "node --import tsx scripts/generate-zcode-cli-rust-protocol-schema.mjs --check",
     "generate:zcode-cli-rust-protocol-schema": "node --import tsx scripts/generate-zcode-cli-rust-protocol-schema.mjs",
-    "check:zcode-cli-rust-contract-assets": "node --import tsx scripts/sync-zcode-cli-rust-node-migrations.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-path-constants.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-config-schema.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-tool-schemas.mjs --check && node --import tsx scripts/zcode-cli-rust-node-projection-schemas.mjs --check",
-    "generate:zcode-cli-rust-contract-assets": "node --import tsx scripts/sync-zcode-cli-rust-node-migrations.mjs && node --import tsx scripts/generate-zcode-cli-rust-path-constants.mjs && node --import tsx scripts/generate-zcode-cli-rust-config-schema.mjs && node --import tsx scripts/generate-zcode-cli-rust-tool-schemas.mjs && node --import tsx scripts/zcode-cli-rust-node-projection-schemas.mjs",
+    "check:zcode-cli-rust-contract-assets": "node --import tsx scripts/sync-zcode-cli-rust-node-migrations.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-path-constants.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-config-schema.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-tool-schemas.mjs --check && node --import tsx scripts/generate-zcode-cli-rust-system-reminders.mjs --check && node --import tsx scripts/zcode-cli-rust-node-projection-schemas.mjs --check",
+    "generate:zcode-cli-rust-contract-assets": "node --import tsx scripts/sync-zcode-cli-rust-node-migrations.mjs && node --import tsx scripts/generate-zcode-cli-rust-path-constants.mjs && node --import tsx scripts/generate-zcode-cli-rust-config-schema.mjs && node --import tsx scripts/generate-zcode-cli-rust-tool-schemas.mjs && node --import tsx scripts/generate-zcode-cli-rust-system-reminders.mjs && node --import tsx scripts/zcode-cli-rust-node-projection-schemas.mjs",
     "check:zcode-cli-rust-domain-fixtures": "node --import tsx scripts/generate-zcode-cli-rust-domain-fixtures.mjs --check",
-    "generate:zcode-cli-rust-domain-fixtures": "node --import tsx scripts/generate-zcode-cli-rust-domain-fixtures.mjs"
+    "generate:zcode-cli-rust-domain-fixtures": "node --import tsx scripts/generate-zcode-cli-rust-domain-fixtures.mjs",
+    "check:zcode-cli-rust-state-fixtures": "node --import tsx scripts/generate-zcode-cli-rust-state-fixtures.mjs --check",
+    "generate:zcode-cli-rust-state-fixtures": "node --import tsx scripts/generate-zcode-cli-rust-state-fixtures.mjs"
   },
   "dependencies": {
     "border-beam": "^1.0.1",

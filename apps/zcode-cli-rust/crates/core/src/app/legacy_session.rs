@@ -201,6 +201,7 @@ impl Engine {
             state_revision: u64::from(model_given),
             workspace: Some(workspace),
             fresh: true,
+            tool_search_mode: self.session_tool_search_mode(p),
             ..Default::default()
         };
         if let Some(servers) = p.get("mcpServers") {
@@ -237,11 +238,13 @@ impl Engine {
             self.tools.configure_mcp(&id, servers).await?;
         }
         let rebuilt = self.rebuilt_workspace(&id);
+        let tool_search_mode = self.session_tool_search_mode(&p);
         let s = self.sessions.get_mut(&id).unwrap();
         s.runtime = RuntimeOptions {
             persistence: Some(Persistence::Immediate),
             tools: tool_filter(&p),
             workspace: Some(p.get("workspace").cloned().unwrap_or(rebuilt)),
+            tool_search_mode,
             ..Default::default()
         };
         // Node 以最后一条 assistant 消息记录的模式恢复，并跳过已保存的执行状态。

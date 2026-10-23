@@ -43,12 +43,18 @@ export function releaseDetachedChild(ctx: LifecycleDomainState, childId: string)
   cleanupSessionRuntime(ctx, childId, { clearCommandInbox: false, notifyIndexRemoved: false });
 }
 
-/** 会话关闭：清 publisher 与其全部订阅调度；hydration 标记同清（重开走冷启动重建）；
- *  并从其 workspace index 移除该会话（session.removed 推给列表订阅者）。 */
-export function disposeSession(ctx: LifecycleDomainState, sessionId: string): void {
+/** 会话关闭：清 publisher 与其全部订阅调度；hydration 标记同清（重开走冷启动重建）。
+ *  只有 `deleted === true`（持久软删除已完成）时才从 workspace index 移除并推 session.removed。
+ *  原因：Host 把 session.removed 当作删除事实，普通 tab 关闭/失败 cleanup 只释放运行态，
+ *  不能连带把仍然存在的持久会话从列表里抹掉（回到列表即「被删了」）。 */
+export function disposeSession(
+  ctx: LifecycleDomainState,
+  sessionId: string,
+  options: { deleted?: boolean } = {},
+): void {
   cleanupSessionRuntime(ctx, sessionId, {
     clearCommandInbox: false,
-    notifyIndexRemoved: true,
+    notifyIndexRemoved: options.deleted === true,
   });
 }
 

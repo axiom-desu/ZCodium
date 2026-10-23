@@ -4,6 +4,8 @@ use super::json::encode;
 use rusqlite::{Connection, OptionalExtension, Row, params, types::Value as Sql};
 use serde_json::Value;
 
+pub use super::sessions_write::{soft_delete, update, visible};
+
 /// Node `SessionInfo` as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SessionRow {
@@ -29,6 +31,10 @@ pub struct SessionRow {
     pub time_title_updated: Option<i64>,
     pub time_compacting: Option<i64>,
     pub time_archived: Option<i64>,
+    /// Node `time_deleted`: soft deletion; a deleted row never resurfaces.
+    pub time_deleted: Option<i64>,
+    /// Node `lastOutcome`: the previous turn's terminal result.
+    pub last_outcome: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -71,14 +77,7 @@ pub enum Patch<T> {
 }
 
 impl<T: Clone> Patch<T> {
-    fn or(&self, current: Option<T>) -> Option<T> {
-        match self {
-            Self::Keep => current,
-            Self::Clear => None,
-            Self::Set(value) => Some(value.clone()),
-        }
-    }
-    fn given(&self) -> bool {
+    pub(super) fn given(&self) -> bool {
         !matches!(self, Self::Keep)
     }
 }
@@ -98,8 +97,15 @@ pub struct Update {
     pub revert: Patch<Value>,
     pub permission: Patch<Value>,
     pub time_compacting: Patch<i64>,
-    pub time_archived: Patch<i64>,
     pub time_updated: Option<i64>,
+    pub last_outcome: Option<String>,
+}
+
+/// Node `SessionLastOutcome`: unknown persisted values read as absent.
+pub const LAST_OUTCOMES: [&str; 3] = ["completed", "error", "interrupted"];
+
+fn last_outcome(value: Option<String>) -> Option<String> {
+    value.filter(|v| LAST_OUTCOMES.contains(&v.as_str()))
 }
 
 fn json_column(row: &Row, name: &str) -> rusqlite::Result<Option<Value>> {
@@ -149,6 +155,8 @@ fn decode(row: &Row) -> rusqlite::Result<SessionRow> {
         time_title_updated: row.get("time_title_updated")?,
         time_compacting: row.get("time_compacting")?,
         time_archived: row.get("time_archived")?,
+        time_deleted: row.get("time_deleted")?,
+        last_outcome: last_outcome(row.get("last_outcome")?),
     })
 }
 
@@ -158,7 +166,7 @@ pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<SessionRow>> 
         .optional()
 }
 
-fn must_get(conn: &Connection, id: &str) -> anyhow::Result<SessionRow> {
+pub(super) fn must_get(conn: &Connection, id: &str) -> anyhow::Result<SessionRow> {
     get(conn, id)?.ok_or_else(|| anyhow::anyhow!("Session not found after write: {id}"))
 }
 
@@ -220,68 +228,6 @@ pub fn create(conn: &Connection, input: &Create, now: i64) -> anyhow::Result<Ses
     must_get(conn, &input.id)
 }
 
-/// Node `updateSession`: a read-modify-write of the whole row; the title
-/// CAS (`expected_title_sources`) skips the write.
-pub fn update(conn: &Connection, input: &Update, now: i64) -> anyhow::Result<SessionRow> {
-    let current =
-        get(conn, &input.id)?.ok_or_else(|| anyhow::anyhow!("Session not found: {}", input.id))?;
-    if input.title.is_some()
-        && !input.expected_title_sources.is_empty()
-        && !input.expected_title_sources.contains(&current.title_source)
-    {
-        return Ok(current);
-    }
-    let summary = input.summary.or(Some(current.summary.clone()));
-    let title_changed = input.title.as_ref().is_some_and(|t| *t != current.title);
-    let title_updated =
-        if title_changed || input.title_source.is_some() || input.title_message_id.given() {
-            Some(now)
-        } else {
-            current.time_title_updated
-        };
-    let json = |value: Option<Value>| value.as_ref().and_then(encode);
-    conn.prepare_cached(
-        "update session set
-        directory = ?,
-        path = ?,
-        title = ?,
-        title_source = ?,
-        title_message_id = ?,
-        share_url = ?,
-        summary_additions = ?,
-        summary_deletions = ?,
-        summary_files = ?,
-        summary_diffs = ?,
-        revert = ?,
-        permission = ?,
-        time_title_updated = ?,
-        time_compacting = ?,
-        time_archived = ?,
-        time_updated = max(time_updated, ?)
-      where id = ?",
-    )?
-    .execute(params![
-        input.directory.as_ref().unwrap_or(&current.directory),
-        input.path.or(current.path.clone()),
-        input.title.as_ref().unwrap_or(&current.title),
-        input.title_source.as_ref().unwrap_or(&current.title_source),
-        input.title_message_id.or(current.title_message_id.clone()),
-        input.share_url.or(current.share_url.clone()),
-        summary.as_ref().and_then(|s| s.additions),
-        summary.as_ref().and_then(|s| s.deletions),
-        summary.as_ref().and_then(|s| s.files),
-        json(summary.and_then(|s| s.diffs)),
-        json(input.revert.or(current.revert.clone())),
-        json(input.permission.or(current.permission.clone())),
-        title_updated,
-        input.time_compacting.or(current.time_compacting),
-        input.time_archived.or(current.time_archived),
-        input.time_updated.unwrap_or(now),
-        input.id,
-    ])?;
-    must_get(conn, &input.id)
-}
-
 /// Node `ListSessionsInput`.
 #[derive(Clone, Debug, Default)]
 pub struct List {
@@ -292,13 +238,14 @@ pub struct List {
     pub path: Option<String>,
     pub roots: bool,
     pub task_types: Vec<String>,
-    pub include_archived: bool,
     pub limit: Option<i64>,
 }
 
 /// Node `listSessions` (`order by time_updated desc, id desc`).
 pub fn list(conn: &Connection, input: &List) -> rusqlite::Result<Vec<SessionRow>> {
-    let mut clauses: Vec<String> = vec![];
+    // Node `listSessions`: a soft-deleted row is never returned. `includeArchived` is a
+    // deprecated no-op; the historical `time_archived` column no longer filters anything.
+    let mut clauses: Vec<String> = vec!["time_deleted is null".into()];
     let mut values: Vec<Sql> = vec![];
     let text = |v: &str| Sql::Text(v.to_owned());
     if let Some(project) = input.project_id.as_deref().filter(|p| !p.is_empty()) {
@@ -341,9 +288,6 @@ pub fn list(conn: &Connection, input: &List) -> rusqlite::Result<Vec<SessionRow>
             vec!["?"; task_types.len()].join(", ")
         ));
         values.extend(task_types.into_iter().map(text));
-    }
-    if !input.include_archived {
-        clauses.push("time_archived is null".into());
     }
     let filter = if clauses.is_empty() {
         String::new()

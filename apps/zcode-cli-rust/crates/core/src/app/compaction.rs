@@ -2,7 +2,7 @@
 //! Spec rust-m7-compact. The engine commits every step through receipts.
 use super::context::{RunContext, hidden_request};
 use crate::contract::{Event, EventSink, ModelFailure, ModelPort, ToolPort};
-use crate::domain::compact::{self, MAX_SUMMARY_OUTPUT, MAX_SUMMARY_TOOLS, Plan};
+use crate::domain::compact::{self, MAX_SUMMARY_OUTPUT, Plan};
 use crate::domain::compact_ptl;
 use crate::domain::context::{ContextState, estimate, with_summary};
 use anyhow::Result;
@@ -28,7 +28,15 @@ pub(super) enum Outcome {
 /// What the summary request shares with the agent step, and what follows the summary.
 pub(super) struct Request<'a> {
     pub prefix: &'a [Value],
+    /// 完整当前作用域目录：只用于 compact 成功后的公告重建。
     pub tools: &'a [Value],
+    /// Node compact 候选目录（Env 已按 ToolSearch 策略裁剪/保留阈值），
+    /// 实际发送的工具由 `tool_search` 的暴露结果决定。
+    pub summary_tools: &'a [Value],
+    /// 与本次请求一致的 ToolSearch 投影；compact 也必须复用，不能把引用原样发出去。
+    pub tool_search: Option<&'a super::tool_search::Plan>,
+    /// Native ToolSearch 协议标记（只有 Native 为 true）。
+    pub options: &'a crate::contract::ModelRequestOptions,
     /// The approved plan file reference.
     pub reminder: Option<Value>,
     /// Where the session's read state lives (re-attached files).
@@ -84,7 +92,7 @@ pub(super) fn compaction_failed(error: &anyhow::Error) -> bool {
 }
 
 async fn committed(receipt: oneshot::Receiver<()>, cancel: &CancellationToken) -> Result<()> {
-    super::agent_loop::durable(receipt, cancel).await
+    super::durable::durable(receipt, cancel).await
 }
 
 impl RunContext {
@@ -191,6 +199,8 @@ impl RunContext {
             }
         };
         let split = plan.split;
+        // 发现检查点：原始有效历史中的真实引用 + 上一检查点，成功 compact 才提交。
+        let discovered = super::tool_search::compact_discovery(self);
         let preserved = compact_ptl::read_paths(&self.messages[split..]);
         let views = request.port.take_reads(&sink.session_id).await;
         // 与 Node 一致：压缩后的提醒带来源（计划文件引用、已读文件上下文），落库与冷读取据此还原。
@@ -200,6 +210,7 @@ impl RunContext {
         };
         let mut reminders: Vec<Value> = request
             .reminder
+            .clone()
             .into_iter()
             .map(|m| tagged(m, "plan_file_reference"))
             .collect();
@@ -209,9 +220,24 @@ impl RunContext {
                 .map(|body| crate::domain::plan_mode::reminder_message(body))
                 .map(|m| tagged(m, "resume_referenced_session_context")),
         );
+        // 成功 compact 用保留尾部重建公告；失败/取消/跳过不提交。
+        if let Some((body, delta)) = super::tool_search::compact_announcement(
+            model,
+            sink,
+            &request,
+            self.tool_search_mode,
+            &self.messages[split..],
+            &discovered,
+        ) {
+            reminders.push(super::tool_search::reminder_message(
+                &body,
+                &delta.to_value(),
+            ));
+        }
         let next = ContextState {
             offset: self.state.offset + split,
             summary: Some(compact::summary_message(&summary)),
+            pre_compact_discovered_tools: discovered,
         };
         let kept = estimate(&with_summary(
             next.summary.as_deref(),
@@ -313,15 +339,27 @@ impl RunContext {
         let cap = model.context_policy().max_output.min(MAX_SUMMARY_OUTPUT);
         let bound = model.with_max_output_tokens(cap)?;
         let model = bound.as_deref().unwrap_or(model);
+        let list = match request.tool_search {
+            Some(plan) => plan.project(&list),
+            None => list,
+        };
         let mut messages = request.prefix.to_vec();
         messages.extend(list);
         messages.push(json!({"role": "user", "content": compact::prompt(instructions)}));
-        let tools = if request.tools.len() > MAX_SUMMARY_TOOLS {
-            &[][..]
-        } else {
-            request.tools
-        };
-        let output = match hidden_request(model, (messages, tools), sink, "compact", cancel).await {
+        // 与主步骤共用暴露结果（Native 常驻+已发现、Local 常驻+控制入口、Off 候选全量）。
+        let tools = request
+            .tool_search
+            .map_or(request.summary_tools, |plan| plan.tools.as_slice());
+        let output = match hidden_request(
+            model,
+            (messages, tools),
+            request.options,
+            sink,
+            "compact",
+            cancel,
+        )
+        .await
+        {
             Ok(output) => output,
             Err(error) => {
                 if let Some(failure) = error.downcast_ref::<ModelFailure>()

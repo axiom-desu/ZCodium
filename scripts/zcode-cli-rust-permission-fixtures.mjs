@@ -1,5 +1,6 @@
 // Permission parity cases for the Rust domain PolicyEngine, computed by the TS
-// implementations. Imported by generate-zcode-cli-rust-fixtures.mjs.
+// implementations. Imported by generate-zcode-cli-rust-domain-fixtures.mjs; its
+// `permissionData()` also generates `crates/domain/schema/tool-permissions.json`.
 import { readFileSync } from "node:fs";
 import { builtInTools } from "../apps/zcode-cli/packages/core/src/tool/handlers/index.ts";
 import { isWebFetchPreapprovedUrl } from "../apps/zcode-cli/packages/core/src/tool/webfetch-preapproved.ts";
@@ -20,6 +21,8 @@ const PERMISSION_KEYS = [
   "alwaysAsk",
   "askOptions",
 ];
+// `concurrentSafe` 不属于 Rust 的 PermissionToolCapability：它由
+// generate-zcode-cli-rust-tool-schemas.mjs 投影到 domain/src/tool_search_metadata.json。
 const CAPABILITY_KEYS = [
   "allowedInPlanMode",
   "alwaysAsk",

@@ -6,7 +6,9 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-pub use zcode_cli_domain::model::{ModelFailure, RetryState};
+pub use zcode_cli_domain::model::{
+    ModelFailure, ModelRequestOptions, RetryState, ToolSearchCapability,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelIdentity {
@@ -71,7 +73,14 @@ pub trait ModelPort: Send + Sync {
         None
     }
     fn format_properties(&self) -> Value {
-        serde_json::json!({"inputFormat":{"supportsText":true,"supportsImage":false,"supportsVideo":false,"supportsAudio":false,"supportsPdf":false},"outputFormat":{"supportsText":true}})
+        serde_json::json!({"inputFormat":{"supportsText":true,"supportsImage":false,"supportsVideo":false,"supportsAudio":false,"supportsPdf":false},"outputFormat":{"supportsText":true},"supportsToolCall":true})
+    }
+    /// Model property `supportsToolCall`（Node `model.properties.supportsToolCall`）。
+    /// 注册配置缺字段的旧端口按支持处理，与既有内置默认一致。
+    fn supports_tool_call(&self) -> bool {
+        self.format_properties()["supportsToolCall"]
+            .as_bool()
+            .unwrap_or(true)
     }
     fn with_max_output_tokens(&self, _max: usize) -> Result<Option<Arc<dyn ModelPort>>> {
         Ok(None)
@@ -96,6 +105,10 @@ pub trait ModelPort: Send + Sync {
     fn context_policy(&self) -> zcode_cli_domain::context::ContextPolicy {
         Default::default()
     }
+    /// Node `Model.requestCapabilities.toolSearch`；`None` 表示端口未上报能力。
+    fn tool_search_capability(&self) -> Option<ToolSearchCapability> {
+        None
+    }
     async fn complete(
         &self,
         messages: Vec<Value>,
@@ -103,6 +116,21 @@ pub trait ModelPort: Send + Sync {
         sink: &EventSink,
         cancel: &CancellationToken,
     ) -> std::result::Result<ModelOutput, ModelFailure>;
+    /// 向后兼容的可选请求：默认 `false` 与 [`ModelPort::complete`] 完全等价；
+    /// 请求 native ToolSearch 而端口未实现时在发送前拒绝，不退化成普通请求。
+    async fn complete_with_options(
+        &self,
+        messages: Vec<Value>,
+        tools: &[Value],
+        options: &ModelRequestOptions,
+        sink: &EventSink,
+        cancel: &CancellationToken,
+    ) -> std::result::Result<ModelOutput, ModelFailure> {
+        if !options.tool_search_enabled {
+            return self.complete(messages, tools, sink, cancel).await;
+        }
+        Err(ModelFailure::new("tool_search_unsupported", false))
+    }
 }
 /// Runtime configuration is resolved outside the actor; credentials are never session facts.
 #[async_trait]

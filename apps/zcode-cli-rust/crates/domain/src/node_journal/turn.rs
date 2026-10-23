@@ -298,13 +298,16 @@ impl Session {
                 name,
                 started: None,
                 done: false,
+                wrapper: call[crate::tool_search::WRAPPER_KEY]
+                    .as_str()
+                    .map(str::to_owned),
             };
             let part = r::tool_part(
                 &tool.part,
                 &self.id,
                 &assistant,
                 (&tool.call, index, &tool.name),
-                Some(json!({})),
+                Some(super::tool_metadata(&tool).unwrap_or_else(|| json!({}))),
                 r::pending_tool(&tool.name, &tool.input),
             );
             self.node.push(now, Op::Part(part));
@@ -332,7 +335,7 @@ impl Session {
             &self.id,
             &step.assistant,
             (&tool.call, tool.index, &tool.name),
-            None,
+            super::tool_metadata(tool),
             state,
         );
         self.node.push(now, Op::Part(part));
@@ -346,6 +349,7 @@ impl Session {
         now: u64,
         call: &str,
         (content, display, failed): (&Value, Option<&Value>, bool),
+        model_content: Option<&Value>,
         media: Option<&super::tool_media::ToolMedia>,
         ids: &mut dyn FnMut() -> String,
     ) {
@@ -355,9 +359,16 @@ impl Session {
         let tool = &mut step.tools[index];
         let window = (tool.started.unwrap_or(now), now);
         let state = if failed {
-            r::error_tool(&tool.input, content, Some(content), window)
+            r::error_tool(&tool.input, content, model_content, window)
         } else {
-            let mut state = r::completed_tool(&tool.name, &tool.input, content, display, window);
+            let mut state = r::completed_tool(
+                &tool.name,
+                &tool.input,
+                content,
+                display,
+                model_content,
+                window,
+            );
             if let Some(media) = media {
                 state["metadata"]["modelContentLayout"] = Value::Array(media.layout.clone());
                 let parts = media
@@ -374,7 +385,7 @@ impl Session {
             &self.id,
             &step.assistant,
             (&tool.call, tool.index, &tool.name),
-            None,
+            super::tool_metadata(tool),
             state,
         );
         self.node.push(now, Op::Part(part));

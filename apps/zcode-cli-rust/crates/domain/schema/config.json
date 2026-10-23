@@ -120,6 +120,9 @@
                 {
                   "type": "object",
                   "properties": {
+                    "alwaysLoad": {
+                      "type": "boolean"
+                    },
                     "protocolVersion": {
                       "type": "string",
                       "enum": ["auto", "legacy", "2026-07-28"]
@@ -165,6 +168,9 @@
                 {
                   "type": "object",
                   "properties": {
+                    "alwaysLoad": {
+                      "type": "boolean"
+                    },
                     "protocolVersion": {
                       "type": "string",
                       "enum": ["auto", "legacy", "2026-07-28"]
@@ -260,6 +266,9 @@
                 {
                   "type": "object",
                   "properties": {
+                    "alwaysLoad": {
+                      "type": "boolean"
+                    },
                     "protocolVersion": {
                       "type": "string",
                       "enum": ["auto", "legacy", "2026-07-28"]
@@ -1389,6 +1398,9 @@
       {
         "type": "object",
         "properties": {
+          "alwaysLoad": {
+            "type": "boolean"
+          },
           "protocolVersion": {
             "type": "string",
             "enum": ["auto", "legacy", "2026-07-28"]
@@ -1434,6 +1446,9 @@
       {
         "type": "object",
         "properties": {
+          "alwaysLoad": {
+            "type": "boolean"
+          },
           "protocolVersion": {
             "type": "string",
             "enum": ["auto", "legacy", "2026-07-28"]
@@ -1529,6 +1544,9 @@
       {
         "type": "object",
         "properties": {
+          "alwaysLoad": {
+            "type": "boolean"
+          },
           "protocolVersion": {
             "type": "string",
             "enum": ["auto", "legacy", "2026-07-28"]

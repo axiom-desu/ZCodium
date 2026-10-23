@@ -7,7 +7,13 @@ import {
   createMessageId,
   getUsageTotalTokens,
 } from "../deps.js";
-import type { CompactTrigger, Model, SessionEvent, TraceContext } from "../deps.js";
+import type {
+  CompactTrigger,
+  Model,
+  ModelToolContract,
+  SessionEvent,
+  TraceContext,
+} from "../deps.js";
 import {
   buildPostCompactReadStateReminderEntries,
   buildPostCompactRuntimeEntries,
@@ -22,6 +28,8 @@ import {
   legacySyntheticRuntimeMetadata,
   type RuntimeMessageEntry,
 } from "../../agent/message-history.js";
+import { buildToolSearchAnnouncement } from "../../tool/search/exposure.js";
+import { collectDiscoveredTools, compactDiscoveryMetadata } from "../../tool/search/history.js";
 import {
   formatCompactSummaryOrThrow,
   persistCompactTimelineEvent,
@@ -52,6 +60,7 @@ export async function commitActiveCompact(
     trigger: CompactTrigger;
     turnTraceContext: TraceContext;
     useMidConversationSystem: boolean;
+    getContinuationTools?: () => readonly ModelToolContract[];
   },
 ): Promise<{
   displayText: string;
@@ -72,12 +81,30 @@ export async function commitActiveCompact(
         workspaceRoot: this.workspaceRoot,
       })
     : undefined;
+  // 成功 compact 才写发现检查点；名字来自已提交引用与上一条有效边界，失败/取消不产生发现。
+  const preCompactDiscoveredTools = collectDiscoveredTools(params.activeEntries);
+  const discovery = compactDiscoveryMetadata({
+    boundaryId: createCompactBoundaryId(),
+    preCompactDiscoveredTools: [...preCompactDiscoveredTools],
+  });
+  // 新检查点尚未提交；公告使用同一候选分类，避免把即将提升的工具重新公告为待加载。
+  const toolAnnouncement = buildToolSearchAnnouncement(
+    {
+      model: compactModel,
+      mode: this.config.toolSearch?.mode,
+      tools: params.getContinuationTools?.() ?? this.getTools(compactModel),
+      registry: this.getToolRegistry(),
+      entries: selection.preservedEntries,
+    },
+    preCompactDiscoveredTools,
+  );
   const postCompactReminderEntries = [
     ...(planFileReferenceEntry ? [planFileReferenceEntry] : []),
     ...buildPostCompactReadStateReminderEntries({
       preservedEntries: selection.preservedEntries,
       readFileState: this.readFileState,
     }),
+    ...(toolAnnouncement ? [toolAnnouncement] : []),
   ];
 
   const modelCompleteEvent = this.createEvent(
@@ -117,7 +144,7 @@ export async function commitActiveCompact(
         role: "user",
         content: summaryMessageContent,
       },
-      metadata: legacySyntheticRuntimeMetadata(),
+      metadata: { ...legacySyntheticRuntimeMetadata(), compactBoundary: discovery },
     },
     {
       postCompactReminderEntries,
@@ -129,7 +156,8 @@ export async function commitActiveCompact(
   });
   const providerPostCompactTokenCount = getUsageTotalTokens(result.usage);
   const compactBoundary = buildManualCompactBoundary({
-    boundaryId: createCompactBoundaryId(),
+    boundaryId: discovery.boundaryId,
+    preCompactDiscoveredTools: discovery.preCompactDiscoveredTools,
     autoCompactThreshold: params.autoCompactThreshold,
     compactReason: compactTimeline.compactReason,
     customInstructions: params.customInstructions,

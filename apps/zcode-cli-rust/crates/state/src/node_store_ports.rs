@@ -94,6 +94,12 @@ impl crate::contract::SessionStore for NodeStore {
         })
         .await
     }
+    async fn soft_delete_session(&self, workspace: &str, id: &str, at: u64) -> Result<()> {
+        // 持久事实先落库；重复删除幂等（coalesce 保留首时间），正文行不受影响。
+        let at = at.min(i64::MAX as u64) as i64;
+        self.request(|reply| Request::SoftDelete(id.into(), workspace.into(), at, reply))
+            .await
+    }
     async fn subagent_facts(
         &self,
         parent: &str,

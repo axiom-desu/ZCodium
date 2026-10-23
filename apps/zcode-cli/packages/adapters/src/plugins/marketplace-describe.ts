@@ -26,6 +26,11 @@ export async function describeMarketplacePlugin(input: {
   marketplace: string;
   name: string;
   storageRoot: string;
+  /**
+   * 只包住会写 known/manifest 的懒加载分支；其余只读路径不进锁。
+   * 由调用方注入既有 storage lock（`withPluginStorageLock`），不在这里新建锁权威。
+   */
+  withWriteLock?: <T>(write: () => Promise<T>) => Promise<T>;
 }): Promise<DescribeMarketplacePluginResult> {
   const diagnostics: PluginValidationDiagnostic[] = [];
   const pluginId = `${input.name}@${input.marketplace}`;
@@ -53,11 +58,22 @@ export async function describeMarketplacePlugin(input: {
 
   let manifest: PluginMarketplaceManifest | null = null;
   try {
-    await ensureMarketplaceManifestAvailable({
-      marketplace: input.marketplace,
-      storageRoot: input.storageRoot,
-    });
+    // Bugfix：describe 曾整体持 storage lock，安装/刷新下载期间所有详情都排在锁后。
+    // 已装缓存与已缓存 manifest 是纯读；只有 manifest 缺失时才写 known/manifest，
+    // 那段必须与安装、市场刷新串行，因此只把懒加载分支交给既有写锁。
     manifest = loadMarketplaceManifestSync(input.storageRoot, input.marketplace);
+    if (!manifest) {
+      const withWriteLock = input.withWriteLock ?? ((write) => write());
+      await withWriteLock(async () => {
+        // 二次检查：并发读者进入锁后若已被前一个填充，就不再重复抓取/覆盖。
+        if (loadMarketplaceManifestSync(input.storageRoot, input.marketplace)) return;
+        await ensureMarketplaceManifestAvailable({
+          marketplace: input.marketplace,
+          storageRoot: input.storageRoot,
+        });
+      });
+      manifest = loadMarketplaceManifestSync(input.storageRoot, input.marketplace);
+    }
   } catch (error) {
     diagnostics.push(toValidationDiagnostic(error, pluginId));
     return { components: [], diagnostics };

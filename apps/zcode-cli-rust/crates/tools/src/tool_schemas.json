@@ -483,5 +483,38 @@
     "required": ["query"],
     "additionalProperties": false,
     "$schema": "https://json-schema.org/draft/2020-12/schema"
+  },
+  "ToolSearch": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Query to find deferred tools. Use \"select:<tool_name>\" for direct selection, or keywords to search."
+      },
+      "max_results": {
+        "type": "number",
+        "default": 5,
+        "description": "Maximum number of results to return (default: 5)"
+      }
+    },
+    "required": ["query", "max_results"],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "DeferredToolCall": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "input": {
+        "type": "object",
+        "additionalProperties": {}
+      }
+    },
+    "required": ["name", "input"],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
   }
 }

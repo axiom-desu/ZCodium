@@ -29,6 +29,8 @@ export interface ModelRequestSettings {
 export interface ModelTextRequest extends ModelRequestSettings {
   messages: ModelInputMessage[];
   tools?: ModelToolContract[];
+  /** 仅代表 Native 协议；Local 开启时不发送 beta/defer_loading/tool_reference。 */
+  toolSearchEnabled?: boolean;
   toolChoice?: ModelToolChoice;
   responseJsonSchema?: JsonSchema;
   providerOptions?: Record<string, unknown>;

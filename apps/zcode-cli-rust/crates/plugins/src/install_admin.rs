@@ -237,9 +237,10 @@ pub async fn validate(context: &Context<'_>, params: &Value) -> Result<Value> {
 }
 
 /// `plugins/describe` (Node `describeZCodePlugin`).
+/// 不在此处登记默认市场：默认记录的写入已随 manifest 懒加载落到 `describe::describe`
+/// 内部那把 storage lock 上（对齐上游 3.16.2：读路径不再无锁写 known 列表）。
 pub async fn describe(context: &Context<'_>, params: &Value) -> Result<Value> {
     let ports = &context.ports;
-    crate::market::ensure_defaults(ports.storage).await?;
     let marketplace = params["marketplace"].as_str().unwrap_or_default();
     let name = params["pluginName"].as_str().unwrap_or_default();
     let described = crate::describe::describe(ports, marketplace, name).await;

@@ -995,14 +995,6 @@
         "scope": "conversation",
         "targetMessageID": "msg_a1"
       }
-    },
-    {
-      "op": "updateSession",
-      "now": 4530,
-      "input": {
-        "id": "sess_b",
-        "timeArchived": 4530
-      }
     }
   ],
   "tables": {
@@ -1025,14 +1017,16 @@
         "{\"keptMessageIDs\":[\"msg_u1\"],\"branchCutAfterMessageID\":\"msg_u1\",\"branchGeneration\":1,\"messageID\":\"msg_u1\",\"kind\":\"conversation_rewind\",\"scope\":\"conversation\",\"targetMessageID\":\"msg_a1\"}",
         "{\"mode\":\"build\"}",
         1000,
-        4520,
+        4200,
         null,
         null,
         "interactive",
         "custom",
         null,
         4500,
-        "trace-1"
+        "trace-1",
+        null,
+        null
       ],
       [
         "sess_b",
@@ -1052,11 +1046,13 @@
         null,
         null,
         1001,
-        4530,
+        1330,
         null,
-        4530,
+        null,
         "subagent_child",
         "first_input",
+        null,
+        null,
         null,
         null,
         null
@@ -1678,6 +1674,6 @@
         }
       }
     ],
-    "list": ["sess_a"]
+    "list": ["sess_a", "sess_b"]
   }
 }

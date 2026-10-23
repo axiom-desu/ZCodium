@@ -49,6 +49,7 @@ import type {
 } from "./types.js";
 import type { RuntimeCommandQueue } from "./command-queue.js";
 import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
+import type { WorkflowBlockedReminderClock } from "../runtime-task/workflow-blocked-reminder.js";
 import type { AgentRuntimeCoreMethods } from "./internal-methods.js";
 import type { AgentRuntimeTurnMethods } from "./internal-turn-methods.js";
 import type { AgentRuntimeHookMethods } from "./internal-hook-methods.js";
@@ -104,6 +105,11 @@ export interface AgentRuntimeInternal
   dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   modelCatalogPort?: ModelCatalogPort;
   runtimeTaskRegistry: RuntimeTaskRegistry;
+  /**
+   * 「run 还欠着决定、主代理闲着」的提醒钟：父会话的进程内事实（不进 journal、不跨重启）。
+   * 唯一状态是每个 run 已提醒过几次；接线点在 runtime-command-queue / steering / run 进度广播。
+   */
+  workflowBlockedReminder?: WorkflowBlockedReminderClock;
   branchGeneration: number;
   artifactStore?: ToolArtifactStorePort;
   executionPort?: ExecutionPort;

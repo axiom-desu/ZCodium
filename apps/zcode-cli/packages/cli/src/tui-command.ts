@@ -12,7 +12,12 @@ import { resolveTuiStartupLocale } from "./tui-startup-locale.js";
 import { createWorkspacePathSuggestionProvider } from "./tui-workspace-paths.js";
 import { resolveWorkspaceGitBranch } from "./tui-workspace-git.js";
 import { createCliModeState, currentCliMode } from "./tui-command-state.js";
-import type { CliPermissionMode, CliResumeRequest, RunDependencies } from "./cli-types.js";
+import type {
+  CliPermissionMode,
+  CliResumeRequest,
+  RunDependencies,
+  ToolSearchMode,
+} from "./cli-types.js";
 
 export const runTuiCommand = async (
   ctx: RunContext,
@@ -23,6 +28,7 @@ export const runTuiCommand = async (
   resumeRequest?: CliResumeRequest,
   toolDisallowlist?: readonly string[],
   forceMcs = false,
+  toolSearchMode: ToolSearchMode = "off",
 ): Promise<number> => {
   try {
     const modeState = createCliModeState(mode);
@@ -45,6 +51,7 @@ export const runTuiCommand = async (
       startupLocale,
       toolDisallowlist,
       forceMcs,
+      toolSearchMode,
       options.browserUse,
       options.browserExecutable,
     );

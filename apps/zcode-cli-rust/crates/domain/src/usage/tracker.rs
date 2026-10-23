@@ -204,6 +204,7 @@ impl RunUsage {
                     }
                     let cancelled = reason == "cancelled";
                     let status_text = if cancelled { "cancelled" } else { "error" };
+                    let counted = in_turn(&probe.source);
                     let mut fact = self.model_fact(probe, status_text, ids, now);
                     // Node `errorInfo.retryable ?? retryCount > 0`：终态失败事件带 retryable=false。
                     fact.retryable = false;
@@ -214,6 +215,19 @@ impl RunUsage {
                         code: None,
                         message: Some(crate::model::describe(reason).1.into()),
                     };
+                    // provider 在失败响应里真实报告的 usage 一次入账（Node `model_request_failed.usage`）；
+                    // 终态分支才到这里，重试与随后的成功不会重复记同一笔。缺 usage 保持 0，不猜。
+                    let usage = &status["usage"];
+                    if usage.as_object().is_some_and(|u| !u.is_empty()) {
+                        fact.tokens = Tokens::from_usage(usage);
+                        fact.provider_total_tokens = usage["totalTokens"].as_u64();
+                        fact.raw_usage = Some(usage.clone());
+                        if counted {
+                            self.tokens.add(&fact.tokens);
+                            self.computed_total += usage_total(usage);
+                            self.usage_seen = true;
+                        }
+                    }
                     facts.push(Fact::Model(Box::new(fact)));
                 }
             }

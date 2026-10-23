@@ -88,7 +88,9 @@ fn prepared_images_record_node_image_metadata() {
             "originalUrl",
             "recoverability",
             "sizeBytes",
-            "storageKind"
+            "storageKind",
+            // S3：未发送的本地文件同样保存首发说明原文。
+            "pathReferenceText"
         ]
     );
 }

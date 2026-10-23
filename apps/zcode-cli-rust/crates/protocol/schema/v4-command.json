@@ -378,6 +378,9 @@
                     "type": "string",
                     "enum": ["legacy", "auto", "2026-07-28"]
                   },
+                  "alwaysLoad": {
+                    "type": "boolean"
+                  },
                   "timeoutMs": {
                     "type": "integer",
                     "exclusiveMinimum": 0,
@@ -496,6 +499,9 @@
                   "protocolVersion": {
                     "type": "string",
                     "enum": ["legacy", "auto", "2026-07-28"]
+                  },
+                  "alwaysLoad": {
+                    "type": "boolean"
                   },
                   "timeoutMs": {
                     "type": "integer",

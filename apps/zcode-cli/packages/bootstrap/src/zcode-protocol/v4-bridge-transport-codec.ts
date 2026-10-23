@@ -4,6 +4,7 @@ import { V4CapabilityUnsupportedError } from "../zcode-protocol-v4/commands/hand
 import { lookupGlobalCreateSessionCommand } from "../zcode-protocol-v4/create-session-command-fact.js";
 import { V4CommandNotImplementedError } from "../zcode-protocol-v4/v4-gateway.js";
 import type { SessionId } from "@zcode/contracts";
+import { isReadonlyAgentSessionKind } from "@zcode/shared";
 import type { V4BridgeRuntimePorts, V4GatewayOptions } from "./v4-bridge-shared.js";
 import {
   previewConversationFileRewind,
@@ -63,7 +64,8 @@ export function createGatewayTransportCodec(
         const taskType =
           context.sessions.get(envelope.sessionId)?.taskType ??
           (await context.deps.sessionStore?.getSession(envelope.sessionId as SessionId))?.taskType;
-        if (taskType === "subagent_child") {
+        // 只读集合含 workflow_child / nested_workflow_child；selection_side_chat 保持可输入。
+        if (isReadonlyAgentSessionKind(taskType)) {
           throw Object.assign(new Error("Subagent sessions are read-only"), {
             reasonCode: "guard.subagentReadOnly",
           });

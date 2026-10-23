@@ -15,6 +15,8 @@ export interface McpServerRuntimeSource {
 }
 
 export interface McpServerConfigBase {
+  /** server 级常驻声明：该 server 的工具不进入延迟目录，始终带完整 schema 发送。 */
+  alwaysLoad?: boolean;
   enabled?: boolean;
   isolation?: McpServerIsolation;
   protocolVersion?: McpProtocolVersion;
@@ -113,6 +115,8 @@ export const ZCODE_MCP_BROWSER_SCREENSHOT_CONTENT_INDICES_META_KEY =
  */
 export const ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY = "zcode/nodeReplCuaApp";
 export interface McpToolDescriptor {
+  alwaysLoad?: boolean;
+  searchHint?: string;
   serverName: string;
   toolName: string;
   name?: string;
@@ -332,6 +336,10 @@ export interface McpPort {
   /** 可信配置派生的稳定来源与现有连接代际。断线时不签发新页面凭证。 */
   onAppConnectionInvalidated?(serverName: string, listener: () => void): () => void;
   appConnectionSnapshot?(serverName: string): { identity: string; generation: number } | null;
+  /** 等待目标 server 已有连接任务；不重连、不等待其它 server，owner 失效后返回 null。 */
+  waitForAppConnection?(
+    serverName: string,
+  ): Promise<{ identity: string; generation: number } | null>;
 
   connectConfiguredServers(
     servers: Record<string, McpServerConfig>,

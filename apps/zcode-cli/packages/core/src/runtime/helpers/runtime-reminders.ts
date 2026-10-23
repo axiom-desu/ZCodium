@@ -111,6 +111,9 @@ export function runtimeMetadataForSyntheticUserMessageSource(
   if (source === "goal_state_change") {
     return systemReminderRuntimeMetadata("goal_state_change");
   }
+  if (source === "tool_search_announcement") {
+    return systemReminderRuntimeMetadata("tool_search_announcement");
+  }
   if (source === "plugin_reference") {
     return systemReminderRuntimeMetadata("plugin_reference");
   }

@@ -39,7 +39,6 @@ export type { RunDependencies } from "./cli-types.js";
 import {
   version,
   DEFAULT_HEADLESS_PROMPT_MODE,
-  FORCE_MCS_SCOPE_ERROR,
   TARGET_CONFLICTS_WITH_PROMPT_ERROR,
   BROWSER_EXECUTABLE_REQUIRES_HEADLESS_ERROR,
   BROWSER_USE_SCOPE_ERROR,
@@ -49,6 +48,8 @@ import {
   pluginsCommandFlags,
   commandName,
   isForceMcsSupportedInvocation,
+  parseToolSearchMode,
+  resolveRuntimeOverrideScopeError,
   isPresentationSurfaceSupportedInvocation,
   globalOptions,
   normalizeOutputFormat,
@@ -225,6 +226,10 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
     browserExecutable,
     outputFormat,
   );
+  const parsedToolSearchMode = parseToolSearchMode(parsed.values);
+  if ("error" in parsedToolSearchMode)
+    return (ctx.stderr.write(`${parsedToolSearchMode.error}\n`), 1);
+  const toolSearchMode = parsedToolSearchMode.toolSearchMode ?? "off";
   const forceMcs = parsed.values["force-mcs"] === true;
   let targetRequest: CliTargetRequest | undefined;
   try {
@@ -291,15 +296,17 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
     return 1;
   }
 
-  if (
-    forceMcs &&
-    !isForceMcsSupportedInvocation({
+  const overrideScopeError = resolveRuntimeOverrideScopeError({
+    forceMcs,
+    invocation: {
       positionals: parsed.positionals,
       prompt: parsed.values.prompt as string | undefined,
       targetRequest,
-    })
-  ) {
-    ctx.stderr.write(`${FORCE_MCS_SCOPE_ERROR}\n`);
+    },
+    toolSearchRequested: parsed.values["toolsearch-mode"] !== undefined,
+  });
+  if (overrideScopeError) {
+    ctx.stderr.write(`${overrideScopeError}\n`);
     return 1;
   }
 
@@ -409,6 +416,7 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
           resumeRequest,
           toolDisallowlist,
           forceMcs,
+          toolSearchMode,
         );
       default:
         ctx.stderr.write(`Unknown command: ${commandName(parsed.positionals)}\n\n`);

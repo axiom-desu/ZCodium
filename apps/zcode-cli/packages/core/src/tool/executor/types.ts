@@ -25,6 +25,7 @@ import type {
   SubagentPort,
   SubagentRunOptions,
   ToolArtifactStorePort,
+  ToolSearchExecutionContext,
   TraceContext,
   TurnId,
   WorkflowEscalatePort,
@@ -167,6 +168,8 @@ export interface ToolExecutor {
 }
 
 export interface ToolExecuteOptions {
+  /** 本次请求的搜索上下文；包装调用的准入与未加载 schema 纠错提示共用它。 */
+  toolSearch?: ToolSearchExecutionContext;
   automationTurn?: boolean;
   signal?: AbortSignal;
   traceContext?: TraceContext;

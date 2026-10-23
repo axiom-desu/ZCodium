@@ -110,6 +110,16 @@ impl Session {
         self.node.push(now, Op::UpdateSession(update));
     }
 
+    /// Node `TurnComplete`/`TurnError` → durable `lastOutcome` on the session row.
+    /// 原因：结果只存在内存事件里时，Host 冷启动无法区分「上次中断/失败」和「成功」。
+    pub fn node_last_outcome(&mut self, now: u64, outcome: &str) {
+        if !self.node.created {
+            return;
+        }
+        let update = json!({"id": self.id, "lastOutcome": outcome, "timeUpdated": now});
+        self.node.push(now, Op::UpdateSession(update));
+    }
+
     /// Node `updateSession({title, titleSource})`.
     pub fn node_title(&mut self, now: u64) {
         if !self.node.created {

@@ -25,12 +25,18 @@ export type SessionTaskType = (typeof SESSION_TASK_TYPES)[number];
 export const SESSION_TITLE_SOURCES = ["default", "first_input", "generated", "custom"] as const;
 export type SessionTitleSource = (typeof SESSION_TITLE_SOURCES)[number];
 
+/** 上次轮次结果；只表示历史终态，不替代当前 running phase。 */
+export const SESSION_LAST_OUTCOMES = ["completed", "error", "interrupted"] as const;
+export type SessionLastOutcome = (typeof SESSION_LAST_OUTCOMES)[number];
+
 export const MESSAGE_VISIBILITIES = ["user-visible", "model-only"] as const;
 export type MessageVisibility = (typeof MESSAGE_VISIBILITIES)[number];
 
 export const SYNTHETIC_USER_MESSAGE_SOURCES = [
   "background_task",
   "fork",
+  // ToolSearch 首次发现公告：运行时注入的模型可读通知（S6 落点）。
+  "tool_search_announcement",
   "goal_state_change",
   "goal-continuation",
   "plugin_reference",
@@ -142,12 +148,17 @@ export interface SessionInfo {
   summaryDiffs?: FileDiff[];
   revert?: SessionRevert;
   permission?: PermissionRuleset;
+  /** 上次终态结果；不认识的持久值按缺失读取，历史未知值不伪成功。 */
+  lastOutcome?: SessionLastOutcome;
   time: {
     created: number;
     updated: number;
     titleUpdated?: number;
     compacting?: number;
+    /** 历史 `time_archived` 事实：只读兼容，不再参与列表排除，也不推导 `deleted`。 */
     archived?: number;
+    /** 软删除时间（`time_deleted`）；首时间保持，重复删除不改写。 */
+    deleted?: number;
   };
 }
 
@@ -243,7 +254,8 @@ export interface UpdateSessionInput {
   revert?: SessionRevert | null;
   permission?: PermissionRuleset | null;
   timeCompacting?: number | null;
-  timeArchived?: number | null;
+  /** 只写本次输入拥有的列；`timeArchived` 已退役，历史列保留但不回填。 */
+  lastOutcome?: SessionLastOutcome;
 }
 
 export interface FileDiff {
@@ -281,6 +293,7 @@ export interface ListSessionsInput {
   path?: string;
   roots?: boolean;
   taskTypes?: SessionTaskType[];
+  /** @deprecated 旧发送端兼容字段：仍接收但忽略；普通列表永不返回软删除行。 */
   includeArchived?: boolean;
   limit?: number;
 }

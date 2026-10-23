@@ -24,6 +24,8 @@ export interface ModelExecutor {
 }
 
 export interface CreateModelOptions {
+  /** 接口能力声明（含 toolSearch）；缺省即不支持原生引用协议。 */
+  requestCapabilities?: Model["requestCapabilities"];
   providerId: ModelProviderId;
   modelId: ModelId;
   displayName?: string;
@@ -38,6 +40,7 @@ export function createModel(input: CreateModelOptions): Model {
 }
 
 class ExecutableModel implements Model {
+  readonly requestCapabilities?: Model["requestCapabilities"];
   readonly providerId: ModelProviderId;
   readonly modelId: ModelId;
   readonly displayName?: string;
@@ -47,6 +50,7 @@ class ExecutableModel implements Model {
   private readonly executor: ModelExecutor;
 
   constructor(input: CreateModelOptions) {
+    this.requestCapabilities = input.requestCapabilities;
     this.providerId = input.providerId;
     this.modelId = input.modelId;
     this.displayName = input.displayName;
@@ -59,6 +63,7 @@ class ExecutableModel implements Model {
   bind(options?: ModelOptions): Model {
     if (!options || Object.keys(options).length === 0) return this;
     return new ExecutableModel({
+      requestCapabilities: this.requestCapabilities,
       providerId: this.providerId,
       modelId: this.modelId,
       displayName: this.displayName,
@@ -82,6 +87,7 @@ class ExecutableModel implements Model {
     validateRequestProperties(this.properties, request);
     const requestOptions = request.options ?? {};
     return {
+      toolSearchEnabled: request.toolSearchEnabled,
       messages: request.messages,
       tools: request.tools,
       responseJsonSchema: request.responseJsonSchema,

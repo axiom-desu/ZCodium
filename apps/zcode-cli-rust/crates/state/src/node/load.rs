@@ -120,6 +120,7 @@ pub fn session(workspace: &str, r: Resume, epoch: String) -> Session {
         .unwrap_or(0);
     s.rows = r.conversation.rows;
     s.context.summary = r.history.summary;
+    s.context.pre_compact_discovered_tools = r.history.pre_compact_discovered_tools;
     s.messages = r.history.messages;
     s.restore_boundaries(ColdAnchors {
         row_messages: &r.conversation.messages,

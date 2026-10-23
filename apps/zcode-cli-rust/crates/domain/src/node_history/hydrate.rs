@@ -46,6 +46,9 @@ fn runtime_metadata(part_metadata: &Value) -> Option<Value> {
         return Some(presented);
     }
     let source = runtime["source"].as_str()?;
+    if let Some(out) = super::announcement::runtime_metadata(runtime) {
+        return Some(out);
+    }
     (matches!(source, "real_user" | "legacy_synthetic" | "todo_reminder")
         || reminders::known(source))
     .then(|| metadata(source, None))
@@ -65,6 +68,7 @@ fn synthetic_metadata(part: &Value) -> Value {
         Some("todo_reminder") => "todo_reminder",
         Some("goal-continuation") => "target_continuation",
         Some("rewind" | "fork") => "rewind_notice",
+        Some("tool_search_announcement") => "tool_search_announcement",
         Some(other) if reminders::known(other) => other,
         _ => "legacy_synthetic",
     };
@@ -81,10 +85,12 @@ fn synthetic_attachment(part: &Value) -> Option<Entry> {
     if part["synthetic"] != true || text.trim().is_empty() || wrapped(text) {
         return None;
     }
-    let source = synthetic_metadata(part)["source"].as_str()?.to_owned();
+    let metadata = synthetic_metadata(part);
+    let source = metadata["source"].as_str()?.to_owned();
     reminders::restorable(&source).then(|| Entry::Attachment {
         source,
         content: text.to_owned(),
+        metadata: Some(metadata),
     })
 }
 
@@ -157,6 +163,7 @@ fn user_entries(parts: &[Value], artifacts: ArtifactReader) -> Vec<Entry> {
                     reminders_.push(Entry::Attachment {
                         source: "prompt_attachment".into(),
                         content: body,
+                        metadata: None,
                     });
                     continue;
                 }
@@ -229,35 +236,6 @@ fn usage_baseline(tokens: &Value) -> bool {
     cache("read") + cache("write") > 0.0
 }
 
-/// Node `selectToolPartsForHistory`: the last part per call id, in declaration
-/// order when every part has one.
-fn tool_parts(parts: &[Value]) -> Vec<&Value> {
-    let tools: Vec<&Value> = parts.iter().filter(|p| p["type"] == "tool").collect();
-    let mut latest: Vec<&Value> = tools
-        .iter()
-        .enumerate()
-        .filter(|(i, part)| {
-            !tools[i + 1..]
-                .iter()
-                .any(|later| later["callID"] == part["callID"])
-        })
-        .map(|(_, part)| *part)
-        .collect();
-    // 任一 part 缺声明序号（旧记录或混合版本）时整组保留原序。
-    if latest.iter().all(|p| p.get("declarationIndex").is_some()) {
-        latest.sort_by_key(|p| p["declarationIndex"].as_i64().unwrap_or(0));
-    }
-    latest
-}
-
-/// Node `providerToolNameFromPart`.
-fn tool_name(part: &Value) -> Value {
-    match part["metadata"].get("providerToolName") {
-        Some(Value::String(name)) => name.as_str().into(),
-        _ => part["tool"].clone(),
-    }
-}
-
 /// Node `dedupeParts`: one part per id at its first position, last write wins.
 fn dedupe(parts: &[Value]) -> Vec<Value> {
     let mut map: Map<String, Value> = Map::new();
@@ -285,7 +263,7 @@ fn assistant(record: &Record, parts: &[Value], artifacts: ArtifactReader, out: &
             block
         })
         .collect();
-    let tools = tool_parts(parts);
+    let tools = super::tool_parts::tool_parts(parts);
     let tokens = &record.info["tokens"];
     if text.trim().is_empty() && reasoning.is_empty() && tools.is_empty() && !usage_baseline(tokens)
     {
@@ -302,7 +280,15 @@ fn assistant(record: &Record, parts: &[Value], artifacts: ArtifactReader, out: &
     };
     let calls: Vec<Value> = tools
         .iter()
-        .map(|p| json!({"id": p["callID"], "name": tool_name(p), "input": p["state"]["input"]}))
+        .map(|p| {
+            let mut call = json!({"id": p["callID"], "name": super::tool_parts::tool_name(p),
+                "input": p["state"]["input"]});
+            if let Some(wrapper) = p["metadata"]["modelCallWrapper"].as_str() {
+                // 内部历史保存目标身份 + 包装标记；请求渲染时还原包装调用。
+                call["modelCallWrapper"] = wrapper.into();
+            }
+            call
+        })
         .collect();
     let mut message = json!({"role": "assistant", "content": content, "toolCalls": calls});
     let info = &record.info;
@@ -319,14 +305,17 @@ fn assistant(record: &Record, parts: &[Value], artifacts: ArtifactReader, out: &
         let state = &part["state"];
         let (content, failed) = match state["status"].as_str() {
             Some("completed") => (
-                super::attachment::tool_content(state, artifacts)
+                crate::tool_search::model_content(&state["metadata"]["modelContent"])
+                    .or_else(|| super::attachment::tool_content(state, artifacts))
                     .unwrap_or_else(|| state["output"].clone()),
                 false,
             ),
-            Some("error") => match state["metadata"]["modelContent"].as_str() {
-                Some(model) => (model.into(), true),
-                None => (state["error"].clone(), true),
-            },
+            Some("error") => (
+                crate::tool_search::model_content(&state["metadata"]["modelContent"])
+                    .or_else(|| state["metadata"]["modelContent"].as_str().map(Value::from))
+                    .unwrap_or_else(|| state["error"].clone()),
+                true,
+            ),
             _ => {
                 out.interrupted_tools += 1;
                 (INTERRUPTED.into(), true)
@@ -334,7 +323,7 @@ fn assistant(record: &Record, parts: &[Value], artifacts: ArtifactReader, out: &
         };
         out.entries.push(Entry::Message {
             message: json!({"role": "tool", "content": content, "toolCallId": part["callID"],
-                "toolName": tool_name(part), "isError": failed}),
+                "toolName": super::tool_parts::tool_name(part), "isError": failed}),
             metadata: None,
             tokens: None,
         });
@@ -378,6 +367,20 @@ fn hydrate_record(record: &Record, artifacts: ArtifactReader, out: &mut Hydrated
             return;
         }
         let mut entries = user_entries(&parts, artifacts);
+        if let Some(boundary) = super::compact_boundary::compact_boundary(&parts)
+            && let Some(Entry::Message {
+                metadata: entry_metadata,
+                ..
+            }) = entries.first_mut()
+        {
+            let mut merged = metadata("legacy_synthetic", None);
+            let object = merged.as_object_mut().unwrap();
+            if let Some(existing) = entry_metadata.take().and_then(|m| m.as_object().cloned()) {
+                object.extend(existing);
+            }
+            object.insert("compactBoundary".into(), boundary);
+            *entry_metadata = Some(merged);
+        }
         if let Some(presented) = presentation_metadata(&info["metadata"]["inputPresentation"]) {
             for entry in &mut entries {
                 if let Entry::Message { metadata, .. } = entry {

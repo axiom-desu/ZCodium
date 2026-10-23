@@ -61,6 +61,10 @@ export const parseGlobalArgs = (argv: string[]) =>
         short: "f",
         type: "boolean",
       },
+      // 四值启动覆盖；缺省 off。独立 CLI 不读取 App Settings。
+      "toolsearch-mode": {
+        type: "string",
+      },
       "force-mcs": {
         type: "boolean",
       },

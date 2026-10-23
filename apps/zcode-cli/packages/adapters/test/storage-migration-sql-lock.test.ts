@@ -117,6 +117,13 @@ const EXPECTED = [
     "0.16.5",
     "ea8aeebb6611bdd90dc70069b4002053dc63fd44b834bd4c961bcb17f38850a3",
   ],
+  // 仅 0023 尚未在本分支发布，其 sql 尾部规范化（trimEnd 后补单个换行）后原字节改变，
+  // 故此处锁的是新字节；账本 checksum 走 trim 计算，仍为 999cc984… 不变，兼容已写库。
+  [
+    "0023_session_soft_delete_outcome",
+    "0.16.9",
+    "8d7bd83cd3f3c7359af4d3261d878f76fdb1de80f8b99a060729082a13f601cd",
+  ],
 ] as const;
 
 it("migration ledger keeps id order, appVersion and exact SQL bytes", () => {

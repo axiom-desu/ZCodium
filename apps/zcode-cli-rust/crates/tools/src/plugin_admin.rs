@@ -1,6 +1,7 @@
 //! Marketplace and install methods over the plugins crate (spec
-//! rust-m10-4-plugin-sources). They run under the storage root's lock, like
-//! Node's `withPluginStorageLock`.
+//! rust-m10-4-plugin-sources). Mutations run under the storage root's lock,
+//! like Node's `withPluginStorageLock`; `plugins/describe` only takes that lock
+//! for the lazy manifest write (Node 3.16.2 plugin read lane).
 use super::tools::WorkspaceTools;
 use anyhow::Result;
 use serde_json::Value;
@@ -89,6 +90,11 @@ pub(super) async fn handle(
         home: &home,
     };
     // 与 Node 一致：市场与安装方法在同一 storage root 的进程内锁里串行化。
+    // `plugins/describe` 例外：它只在缺 manifest 的懒写分支内部取锁（已装/已缓存读取／
+    // 临时 source 解析都不持锁），安装 A 下载期间读 B 的详情不会排队。
+    if method == "plugins/describe" {
+        return install_admin::describe(&context, params).await;
+    }
     let _guard = plugins::atomic_write::lock(&storage).await;
     let text = |key: &str| params[key].as_str().unwrap_or_default();
     match method {

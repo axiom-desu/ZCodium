@@ -5,6 +5,7 @@ import type {
   Model,
   ModelNetworkStatusEvent,
   ModelToolContract,
+  ToolSearchExecutionContext,
   TraceContext,
 } from "../deps.js";
 import type { RuntimeMessageEntry } from "../../agent/message-history.js";
@@ -28,6 +29,8 @@ export interface ModelStepOptions {
   recordedMessages: RunModelTextRequestOptions["messages"];
   requestEntries: readonly RuntimeMessageEntry[];
   tools: ModelToolContract[];
+  /** 本次请求的搜索上下文；handler、准入与未加载纠错共用同一份。 */
+  toolSearch?: ToolSearchExecutionContext;
 }
 
 /**
@@ -131,6 +134,7 @@ export async function prepareModelStepRequest(
   const streamingToolCoordinator = createStreamingToolCoordinator(this, state, {
     assistantMessageId,
     model,
+    toolSearch: options.toolSearch,
     traceContext: modelTraceContext,
   });
   const networkEventStartIndex = state.events.length;

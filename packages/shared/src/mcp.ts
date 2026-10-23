@@ -171,6 +171,7 @@ export type ZCodeAgentMcpServer =
       env: Array<{ name: string; value: string }>;
       isolation?: "session" | "workspace";
       protocolVersion?: "legacy" | "auto" | "2026-07-28";
+      alwaysLoad?: boolean;
       timeoutMs?: number;
     }
   | {
@@ -181,6 +182,7 @@ export type ZCodeAgentMcpServer =
       protocolVersion?: "legacy" | "auto" | "2026-07-28";
       headers: Array<{ name: string; value: string }>;
       oauth?: McpOAuthConfig;
+      alwaysLoad?: boolean;
       timeoutMs?: number;
     };
 
@@ -305,6 +307,8 @@ export function convertToZCodeAgentMcpServer(
       ...(isMcpProtocolVersion(config.protocolVersion)
         ? { protocolVersion: config.protocolVersion }
         : {}),
+      // 修复原因：DTO 逐字段重建曾丢失 alwaysLoad；仅透传布尔值，保留显式 false。
+      ...(typeof config.alwaysLoad === "boolean" ? { alwaysLoad: config.alwaysLoad } : {}),
     };
   } else if (config.url && inferredType) {
     const normalizedType: "http" | "sse" = inferredType === "sse" ? "sse" : "http";
@@ -326,6 +330,7 @@ export function convertToZCodeAgentMcpServer(
       ...(isMcpProtocolVersion(config.protocolVersion)
         ? { protocolVersion: config.protocolVersion }
         : {}),
+      ...(typeof config.alwaysLoad === "boolean" ? { alwaysLoad: config.alwaysLoad } : {}),
     };
   }
   return null;

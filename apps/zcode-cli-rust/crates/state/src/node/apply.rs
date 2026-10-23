@@ -57,6 +57,8 @@ fn update(v: &Value) -> Update {
         title_message_id: text(v, "titleMessageID")
             .map(super::sessions::Patch::Set)
             .unwrap_or_default(),
+        last_outcome: text(v, "lastOutcome"),
+        time_updated: v["timeUpdated"].as_i64(),
         ..Update::default()
     }
 }

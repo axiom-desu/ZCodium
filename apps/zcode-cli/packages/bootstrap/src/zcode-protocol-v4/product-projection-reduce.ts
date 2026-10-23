@@ -52,6 +52,7 @@ import {
   onToolCallResult,
   onToolCallScheduled,
 } from "./product-projection-tools.js";
+import { onStreamingToolIdentity } from "./product-projection-tool-rows.js";
 import { onModelComplete, onModelSelected, onModelStreaming } from "./product-projection-model.js";
 import {
   acceptsActiveModelEvent,
@@ -121,6 +122,8 @@ export function reduce(
       return onModelComplete(state, event);
     case SessionEventType.ToolCallScheduled:
       return onToolCallScheduled(state, event);
+    case SessionEventType.StreamingToolLedgerUpdated:
+      return onStreamingToolIdentity(state, event);
     case SessionEventType.ToolCallStarted:
       return onToolCallActivity(state, event);
     case SessionEventType.ToolCallProgress:

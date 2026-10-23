@@ -154,6 +154,8 @@ function cloneContentBlock(block: ModelMessageContentBlock): ModelMessageContent
       return { ...block, source: block.source ? { ...block.source } : undefined };
     case "text":
     case "reasoning":
+    // 引用块是纯数据，直接复制；不能被当成媒体参与预算或能力降级。
+    case "tool_reference":
     case "resource_link":
       return { ...block };
   }

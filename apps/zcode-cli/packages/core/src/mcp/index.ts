@@ -184,6 +184,11 @@ export function createMcpToolEntry(
     inputSchema: createModelFacingMcpInputSchema(descriptor, isCuaAppObservation),
     outputSchema: McpToolOutputJsonSchema,
     metadata: {
+      // MCP 工具默认延迟；server 级 alwaysLoad 或 tool 级 `_meta["anthropic/alwaysLoad"]`
+      // 把它变成常驻。这些元数据不构成授权，也不改变 MCP 初始化与权限。
+      shouldDefer: true,
+      alwaysLoad: descriptor.alwaysLoad,
+      searchHint: descriptor.searchHint,
       concurrentSafe: readOnly || descriptor.annotations?.idempotentHint === true,
       destructive,
       // 必须把 MCP tool 的 description 透传到 metadata，让 registry 把它带进模型输入，

@@ -23,7 +23,7 @@ pub fn cua_enabled(env: &(dyn Fn(&str) -> Option<String> + Sync)) -> bool {
 
 /// Node `inferComponentTypes` over a catalog entry.
 fn entry_types(raw: &Value) -> Vec<&'static str> {
-    [
+    let mut types: Vec<&'static str> = [
         ("agents", "agent"),
         ("commands", "command"),
         ("skills", "skill"),
@@ -34,7 +34,15 @@ fn entry_types(raw: &Value) -> Vec<&'static str> {
     .into_iter()
     .filter(|(key, _)| raw.get(*key).is_some())
     .map(|(_, kind)| kind)
-    .collect()
+    .collect();
+    // 目录条目自己声明的分类（官方 seed 的 "ui"）：条目 raw 是唯一事实源。
+    if raw["componentTypes"]
+        .as_array()
+        .is_some_and(|types| types.iter().any(|kind| kind == "ui"))
+    {
+        types.push("ui");
+    }
+    types
 }
 
 /// Node `inferComponentTypesFromMetadata`.
@@ -58,6 +66,16 @@ pub fn plugin_types(plugin: &Plugin) -> Vec<&'static str> {
     }
     if !plugin.hook_details.is_empty() {
         types.push("hook");
+    }
+    // 已安装插件的 UI 分类来自插件清单 `ui.surfaces[]`：发现阶段已读入 manifest
+    // （`loaded.manifest`），这里只用现有事实，不另建缓存。Node 用的是校验后的 `uiSurfaces`；
+    // Rust 尚未移植 surface 校验，因此以「清单声明了非空 surfaces 数组」为分类依据
+    // （官方四文档插件走这条路径，启停前后清单不变，分类也不变）。
+    if plugin.loaded.manifest["ui"]["surfaces"]
+        .as_array()
+        .is_some_and(|surfaces| !surfaces.is_empty())
+    {
+        types.push("ui");
     }
     types
 }
@@ -101,7 +119,9 @@ fn marketplace_summary(record: &Value, featured: &[String], count: Option<usize>
 
 /// Node `getZCodePluginsOverview` projected to `ZCodePluginsOverviewResult`.
 pub async fn overview(input: &Input<'_>, outcome: &Outcome) -> std::io::Result<Value> {
-    let known = crate::market::ensure_defaults(input.storage).await?;
+    // 读路径不写 known_marketplaces.json：缺失的默认记录只在内存里补齐，
+    // 否则 overview 会撞进安装持有的 storage lock（Node `loadKnownMarketplacesSync`）。
+    let known = crate::market::known_with_defaults(input.storage).await?;
     let effective = crate::market::effective(input.config, input.user_path, &known);
     let installed = crate::records::installed(input.storage).await?;
     let mut marketplaces = vec![];
@@ -165,6 +185,8 @@ pub async fn overview(input: &Input<'_>, outcome: &Outcome) -> std::io::Result<V
             let mut item = json!({"id":format!("{}@{}", d["name"].as_str().unwrap_or_default(), crate::official::MARKETPLACE),
                 "name":d["name"],"marketplace":crate::official::MARKETPLACE,"installed":false});
             put(&mut item, "version", non_empty(d["version"].as_str()));
+            // 可恢复条目没有运行时信息，商店只能靠 definition 的 componentTypes 归入「UI 插件」。
+            put(&mut item, "componentTypes", d["componentTypes"].as_array().cloned().map(Value::Array));
             put(&mut item, "listing", d.get("listing").cloned());
             item
         })
@@ -231,3 +253,7 @@ pub async fn overview(input: &Input<'_>, outcome: &Outcome) -> std::io::Result<V
         "restorableBuiltins":restorable,"diagnostics":diagnostics,"capability":{"supported":true}}),
     )
 }
+
+#[cfg(test)]
+#[path = "overview_tests.rs"]
+mod tests;

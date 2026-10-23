@@ -1,0 +1,289 @@
+{
+  "ToolSearch": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "DeferredToolCall": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "Read": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "Write": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "Edit": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "Bash": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "Glob": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "Grep": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "WebFetch": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "fetch and extract content from a URL",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "WebSearch": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "search the web for current information",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "TodoRead": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "TodoWrite": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "manage the session task checklist",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "CronCreate": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "schedule a recurring or one-shot prompt",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "CronList": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "list active cron jobs",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "CronUpdate": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "CronDelete": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "cancel a scheduled cron job",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "EnterPlanMode": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "switch to plan mode to design an approach before coding",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "ExitPlanMode": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "present plan for approval and start coding (plan mode only)",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "AskUserQuestion": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "SendMessage": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "send messages to agent teammates",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "RespondToCoordinator": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "submit_result": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "escalate": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "TaskOutput": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "read output/logs from a background task",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "TaskStop": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "kill a running background task",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "ReadSessionContext": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "Agent": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "Task": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": false
+  },
+  "Skill": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "js": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "CreateWorkflow": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "AmendWorkflow": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "FillWorkflowHole": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "SaveWorkflow": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "EvalWorkflowSnippet": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "ListWorkflowRuns": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "GetWorkflowRun": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "ResumeWorkflowRun": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "ResolveWorkflowQuestion": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "ListSavedWorkflows": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "ListModels": {
+    "shouldDefer": false,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  }
+}

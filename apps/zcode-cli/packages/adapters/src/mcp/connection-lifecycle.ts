@@ -250,7 +250,7 @@ export async function refreshAndListTools(
     try {
       const listed = await record.client.listTools();
       record.tools = listed.tools.map((tool) =>
-        normalizeMcpToolDescriptor(name, tool, record.config.timeoutMs),
+        normalizeMcpToolDescriptor(name, tool, record.config.timeoutMs, record.config.alwaysLoad),
       );
       record.status = { ...record.status, toolCount: record.tools.length };
       record.toolsStale = false;

@@ -26,6 +26,9 @@ export const pendingInteractionSummarySchema = z.object({
 });
 export type PendingInteractionSummary = z.infer<typeof pendingInteractionSummarySchema>;
 
+export const sessionLastOutcomeSchema = z.enum(["completed", "error", "interrupted"]);
+export type SessionLastOutcome = z.infer<typeof sessionLastOutcomeSchema>;
+
 export const sessionSummarySchema = z.object({
   sessionId: z.string(),
   workspaceId: z.string(),
@@ -47,6 +50,9 @@ export const sessionSummarySchema = z.object({
   // optional 兼容旧 sessions-index frame / stored summary。
   pendingInteractionSummary: pendingInteractionSummarySchema.optional(),
   goalStatus: goalStateSchema.shape.status.optional(),
+  // 上次终态结果（持久 session.last_outcome），不是实时 phase：运行中缺席或保留上一轮结果。
+  // optional 兼容旧 sessions-index frame / 旧持久化摘要与未知历史值。
+  lastOutcome: sessionLastOutcomeSchema.optional(),
   // 未读推导：客户端本地记 lastSeenActivityAt 比较（不用 seq，epoch 会重置）。
   lastActivityAt: timestampSchema,
   // ≤120 字符。

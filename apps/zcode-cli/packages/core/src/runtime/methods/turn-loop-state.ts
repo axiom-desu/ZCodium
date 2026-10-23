@@ -4,6 +4,7 @@ import type {
   MessageId,
   ModelStreamRecoveryStatus,
   Model,
+  ModelToolContract,
   OutputStylePromptConfig,
   SessionEvent,
   TraceContext,
@@ -40,6 +41,8 @@ export type AutoCompactOutcome = CompactAttemptOutcome | "rapid_refill_blocked";
 
 export interface AutoCompactLoopContext {
   compactReason: CompactReason;
+  /** compact 成功后公告/续写读取同一份当前 turn 工具目录。 */
+  getContinuationTools?: () => readonly ModelToolContract[];
   modelStepIndex: number;
   phase: CompactPhase;
   rapidRefill: RapidRefillDecision;
@@ -49,6 +52,7 @@ export interface AutoCompactLoopContext {
 
 export interface ReactiveCompactLoopContext {
   activeEntries?: readonly RuntimeMessageEntry[];
+  getContinuationTools?: () => readonly ModelToolContract[];
   modelStepIndex: number;
   model: Model;
   rapidRefillCount: number;

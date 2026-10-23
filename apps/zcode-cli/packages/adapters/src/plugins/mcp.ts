@@ -214,6 +214,9 @@ function resolveMcpServerConfig(server: unknown, context: VariableContext): McpS
           ? resolveTemplate(server.cwd, context, { allowSensitive: false })
           : undefined,
       enabled: typeof server.enabled === "boolean" ? server.enabled : undefined,
+      // 修复原因：各 transport 分别重建配置曾漏传 alwaysLoad，导致插件常驻工具被延迟。
+      // 只接受布尔值并保留显式 false；未配置或非布尔值保持 undefined，不做真值转换。
+      alwaysLoad: typeof server.alwaysLoad === "boolean" ? server.alwaysLoad : undefined,
       env,
       source,
       timeoutMs: typeof server.timeoutMs === "number" ? server.timeoutMs : undefined,
@@ -233,6 +236,7 @@ function resolveMcpServerConfig(server: unknown, context: VariableContext): McpS
     type,
     url: resolveTemplate(url, context, { allowSensitive: false }),
     enabled: typeof server.enabled === "boolean" ? server.enabled : undefined,
+    alwaysLoad: typeof server.alwaysLoad === "boolean" ? server.alwaysLoad : undefined,
     headers,
     oauth,
     source,

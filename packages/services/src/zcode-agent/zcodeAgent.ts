@@ -229,6 +229,7 @@ export interface ZCodeAgentCreateSessionParams extends ZCodeAgentWorkspaceTarget
 export interface ZCodeAgentListSessionsParams extends ZCodeAgentWorkspaceTarget {
   sessionIds?: string[];
   runtimePolicy?: ZCodeAgentRuntimePolicy;
+  /** @deprecated 协议侧已接收即忽略；仓库调用端停发，仅保留旧调用签名兼容。 */
   includeArchived?: boolean;
   limit?: number;
 }

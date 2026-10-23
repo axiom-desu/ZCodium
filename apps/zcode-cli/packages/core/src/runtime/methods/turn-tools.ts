@@ -1,38 +1,31 @@
 import { TurnMachineImpl } from "../deps.js";
 import type {
   MessageId,
-  ModelToolCall,
   ToolCallId,
   TraceContext,
   ToolCall,
   ToolExecutionResult,
+  ToolSearchExecutionContext,
 } from "../deps.js";
 import {
-  createStreamRecoveryAnchorId,
-  emitStreamRecoveryAnchor,
   emitStreamingToolLedgerUpdate,
-  isErrorForToolResult,
-  isTurnCancellationError,
   modelContentForToolResult,
   stringifyToolResultOutput,
 } from "../helpers/index.js";
-import { persistToolResultMediaAttachments } from "../helpers/tool-result-media-persistence.js";
 import type { RuntimeModelTextResult, StreamedToolExecutionResult } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { projectToolNameForNonEmptyBoundary } from "./tool-part-persistence.js";
 import { persistToolModelStepFinish } from "./turn-step-finish.js";
-import { completedToolPartMetadata, mcpToolPartMetadata } from "./tool-part-metadata.js";
+import { mcpToolPartMetadata } from "./tool-part-metadata.js";
 import { drainInlineGuideForNextRequest } from "./turn-guide-drain.js";
 import { handleToolCallAnomalyWarnings } from "./turn-tool-warnings.js";
 import { emitNestedModelUsageEvents } from "./turn-nested-model-usage.js";
 import type { RegularTurnLoopState } from "./turn-loop-state.js";
 import { isAutomationMutationRestrictedTurn, recordCompletedToolBatch } from "./turn-loop-state.js";
-import { recordToolUsageFromResult } from "./turn-tool-usage.js";
 import { recordBrowserTurnToolResult } from "../../repl/browser-turn-state.js";
-import { createRuntimeToolResultEntry } from "../../agent/message-history.js";
-import { commitTurnRequestEntries } from "./turn-output-token-continuation.js";
+import type { ToolCallInput } from "../../agent/message-history.js";
 import { persistDeclaredToolParts, type ToolPartHandle } from "./turn-tools-declaration.js";
-import { enqueueFollowUpUserInputFromToolResult } from "./turn-tools-follow-up-input.js";
+import { settleToolResults } from "./turn-tools-settlement.js";
 export async function executeToolCallsForModelStep(
   this: AgentRuntimeInternal,
   state: RegularTurnLoopState,
@@ -42,7 +35,8 @@ export async function executeToolCallsForModelStep(
     modelTraceContext: TraceContext;
     result: RuntimeModelTextResult;
     streamedToolResults?: StreamedToolExecutionResult[];
-    toolCalls: ModelToolCall[];
+    toolCalls: ToolCallInput[];
+    toolSearch?: ToolSearchExecutionContext;
   },
 ): Promise<"continue" | "break"> {
   const model = state.model;
@@ -55,6 +49,7 @@ export async function executeToolCallsForModelStep(
     // 让 executor 强制走 registry miss，而不是把 storage 占位值当成真实工具。
     name: tc.name,
     input: tc.input,
+    ...(tc.modelCallWrapper ? { modelCallWrapper: tc.modelCallWrapper } : {}),
   }));
   const streamedResultsById = new Map(
     (options.streamedToolResults ?? []).map((entry) => [entry.toolCallId, entry]),
@@ -112,6 +107,7 @@ export async function executeToolCallsForModelStep(
       traceContext: options.modelTraceContext,
       subagentModelOverride: state.subagentModelOverride,
       model: state.model,
+      toolSearch: options.toolSearch,
       onBatchStart: async (toolCallIds) => {
         // 已取消的 batch 仍由 executor 返回 cancelled results，但不能把从未进入
         // handler 的 tool parts 误标记为 running。
@@ -132,7 +128,12 @@ export async function executeToolCallsForModelStep(
               callID: toolCall.id,
               declarationIndex: persisted.declarationIndex,
               tool: projectedToolName.toolName,
-              metadata: projectedToolName.metadata,
+              metadata: {
+                ...projectedToolName.metadata,
+                ...(toolCall.modelCallWrapper
+                  ? { modelCallWrapper: toolCall.modelCallWrapper }
+                  : {}),
+              },
               state: {
                 status: "running",
                 input: persisted.input,
@@ -205,145 +206,14 @@ export async function executeToolCallsForModelStep(
   });
 
   this.logger?.debug("Injecting tool results", { resultCount: results.length });
-  let deferredCheckpointCancellation: unknown;
-  for (const result of results) {
-    await recordToolUsageFromResult(this, result, options.modelTraceContext);
-    const content = stringifyToolResultOutput(result);
-    const isError = isErrorForToolResult(result);
-    const projectedResultToolName = projectToolNameForNonEmptyBoundary(result.toolName);
-    const persisted = toolParts.get(result.toolCallId);
-    if (persisted) {
-      const mediaPersistence = result.success
-        ? await persistToolResultMediaAttachments({
-            artifactStore: this.artifactStore,
-            assistantMessageId: options.assistantMessageId,
-            content: modelContentForToolResult(result),
-            sessionId: this.sessionId,
-            sessionStore: this.sessionStore,
-            signal: state.turnAbortSignal,
-            toolCallId: result.toolCallId,
-            toolName: result.toolName,
-            traceContext: options.modelTraceContext,
-            turnId: state.turnId,
-          })
-        : undefined;
-      await this.persistPart(
-        {
-          id: persisted.partID,
-          sessionID: this.sessionId,
-          messageID: options.assistantMessageId,
-          type: "tool",
-          callID: result.toolCallId,
-          declarationIndex: persisted.declarationIndex,
-          tool: projectedResultToolName.toolName,
-          metadata: projectedResultToolName.metadata,
-          state: result.success
-            ? {
-                status: "completed",
-                input: persisted.input,
-                output: content,
-                title: projectedResultToolName.toolName,
-                metadata: {
-                  ...completedToolPartMetadata(result),
-                  ...(mediaPersistence
-                    ? { modelContentLayout: mediaPersistence.modelContentLayout }
-                    : {}),
-                },
-                time: {
-                  start: result.startedAt.getTime(),
-                  end: result.completedAt.getTime(),
-                },
-                ...(mediaPersistence ? { attachments: mediaPersistence.attachments } : {}),
-              }
-            : {
-                status: "error",
-                input: persisted.input,
-                error: result.error?.message ?? content,
-                // state.error 面向 UI / 日志，可能比模型实际收到的
-                // modelContent 更笼统；仅附加保存 string 内容供冷恢复精确重放。
-                metadata: {
-                  ...mcpToolPartMetadata(
-                    this.registry.getMetadata(result.toolName)?.mcpPresentation,
-                  ),
-                  ...(typeof result.modelContent === "string"
-                    ? { modelContent: result.modelContent }
-                    : {}),
-                },
-                time: {
-                  start: result.startedAt.getTime(),
-                  end: result.completedAt.getTime(),
-                },
-              },
-        },
-        options.modelTraceContext,
-      );
-    }
-    this.logger?.debug("addToolResult", {
-      toolCallId: result.toolCallId,
-      toolName: result.toolName,
-      success: result.success,
-      contentLength: content.length,
-    });
-    commitTurnRequestEntries(this, state.turnRequestState, [
-      createRuntimeToolResultEntry(
-        result.toolCallId,
-        result.toolName,
-        modelContentForToolResult(result),
-        isError,
-      ),
-    ]);
-    try {
-      // checkpoint 是 tool result 闭合后的附加操作。Stop 若在这里
-      // 触发，必须先继续提交所有 sibling tool results，不能提前进入 reminder flush。
-      await this.emitFileMutationCheckpoint({
-        abortSignal: state.turnAbortSignal,
-        events: state.events,
-        messageId: state.userMessageId,
-        result,
-        toolMessageId: options.assistantMessageId,
-        traceContext: options.modelTraceContext,
-      });
-    } catch (error) {
-      if (!isTurnCancellationError(error, state.turnAbortSignal)) throw error;
-      deferredCheckpointCancellation ??= error;
-      continue;
-    }
-    const toolCall = toolCallById.get(result.toolCallId as ToolCallId);
-    if (toolCall) {
-      const resultPartId = persisted?.partID;
-      const recoveryAnchorId = createStreamRecoveryAnchorId(
-        options.assistantMessageId,
-        result.toolCallId as ToolCallId,
-      );
-      await emitStreamRecoveryAnchor(this, state.events, options.modelTraceContext, {
-        assistantMessageId: options.assistantMessageId,
-        toolCallId: result.toolCallId as ToolCallId,
-        toolName: projectedResultToolName.toolName,
-        success: result.success,
-        resultPartId,
-        committedAt: result.completedAt,
-      });
-      await emitStreamingToolLedgerUpdate(this, state.events, options.modelTraceContext, {
-        assistantMessageId: options.assistantMessageId,
-        toolCall,
-        status: "tool_result_committed",
-        executionTiming: streamedResultsById.has(result.toolCallId as ToolCallId)
-          ? "during_stream"
-          : "end_of_stream",
-        input: persisted?.input,
-        startedAt: result.startedAt,
-        committedAt: result.completedAt,
-        resultPartId,
-        recoveryAnchorId,
-      });
-    }
-    await enqueueFollowUpUserInputFromToolResult.call(
-      this,
-      state,
-      result,
-      options.modelTraceContext,
-    );
-  }
+  const deferredCheckpointCancellation = await settleToolResults.call(this, state, {
+    assistantMessageId: options.assistantMessageId,
+    modelTraceContext: options.modelTraceContext,
+    results,
+    streamedResultsById,
+    toolCallById,
+    toolParts,
+  });
 
   if (deferredCheckpointCancellation) {
     throw deferredCheckpointCancellation;

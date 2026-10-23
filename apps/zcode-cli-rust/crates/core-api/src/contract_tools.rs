@@ -133,6 +133,15 @@ pub trait ToolPort: Send + Sync {
     fn mcp_annotations(&self, _session: &str, _name: &str) -> Option<Value> {
         None
     }
+    /// ToolSearch registration metadata (`shouldDefer`/`alwaysLoad`/`searchHint`,
+    /// MCP `_meta` identity) of the session's catalog. Default: not deferred.
+    fn tool_search_metadata(
+        &self,
+        _session: &str,
+        _name: &str,
+    ) -> zcode_cli_domain::tool_search::Metadata {
+        zcode_cli_domain::tool_search::Metadata::default()
+    }
     /// The process notifications of the tools (`process/mcpTelemetry`,
     /// `process/mcpResourceSamples`); the engine takes the receiver once.
     fn process_events(

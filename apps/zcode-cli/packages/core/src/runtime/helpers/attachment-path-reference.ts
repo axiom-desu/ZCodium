@@ -60,6 +60,9 @@ export function resolvedPathReferenceAttachment(
     filename: options.filename,
     metadata: {
       originalUrl: safeAttachmentOriginalRef(attachment),
+      // 冷恢复必须与首发逐字节一致：把完整说明文本随 part 一起持久化，
+      // 恢复时原样复用；不用 preview（那是文件内容，不是降级说明）。
+      pathReferenceText: content,
       recoverability: "metadata_only",
       sizeBytes: options.sizeBytes,
       storageKind: "local_ref",

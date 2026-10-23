@@ -67,6 +67,7 @@ async function runModelBackedTurnStepImpl(
       onStreamToolCall: (toolCall) => streamingToolCoordinator.accept(toolCall),
       streamRecovery: streamRecoveryRequest,
       tools: options.tools,
+      toolSearch: options.toolSearch,
       traceContext: modelTraceContext,
     });
     throwIfTurnAborted(state.turnAbortSignal);

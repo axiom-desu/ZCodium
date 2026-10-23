@@ -7,6 +7,7 @@ import {
   type SystemReminderSource,
 } from "../system-reminder/source.js";
 import { runtimeInputMetadata } from "./runtime-input-presentation.js";
+import { hydrateToolSearchAnnouncement } from "./tool-search-hydration.js";
 import {
   isKnownSystemReminderSource,
   legacySyntheticRuntimeMetadata,
@@ -38,13 +39,23 @@ export function syntheticSystemReminderAttachmentFromTextPart(
 ): SyntheticSystemReminderAttachment | undefined {
   if (!part.synthetic) return undefined;
   if (part.text.trim().length === 0) return undefined;
-  if (isProviderWrappedSystemReminderText(part.text)) return undefined;
   const metadata = metadataFromSyntheticTextPart(part);
+  const announcement = metadata.toolSearchAnnouncement;
+  const wrapped = isProviderWrappedSystemReminderText(part.text);
+  // 公告正文在持久化时可能带 provider 包装；只有已校验的公告身份可以还原，
+  // 普通用户正文即使以 <system-reminder> 开头也不能被改写成 attachment。
+  if (wrapped && !announcement) return undefined;
   if (!isRestorableSystemReminderAttachmentSource(metadata.source)) return undefined;
 
   return {
     metadata,
-    content: part.text,
+    content:
+      wrapped && announcement
+        ? part.text
+            .trim()
+            .replace(/^<system-reminder>\s*/, "")
+            .replace(/\s*<\/system-reminder>$/, "")
+        : part.text,
   };
 }
 
@@ -94,9 +105,23 @@ function metadataFromSyntheticTextPart(
   }
 
   const persistedRuntimeMetadata = runtimeMessageMetadataFromPartMetadata(part.metadata);
-  if (persistedRuntimeMetadata) {
-    return persistedRuntimeMetadata;
+  const topLevelAnnouncement = hydrateToolSearchAnnouncement(
+    isRecord(part.metadata) ? part.metadata.toolSearchAnnouncement : undefined,
+  );
+  const announcement = persistedRuntimeMetadata?.toolSearchAnnouncement ?? topLevelAnnouncement;
+  if (
+    source === "tool_search_announcement" ||
+    persistedRuntimeMetadata?.source === "tool_search_announcement"
+  ) {
+    // 旧写入把增量放在 part.metadata 顶层；已校验的 delta 仍要恢复，否则 fork/resume
+    // 会把已公告工具当成首次出现并重复公告。损坏的 delta 只丢增量字段，不丢 source。
+    return {
+      ...legacySyntheticRuntimeMetadata(),
+      source: "tool_search_announcement",
+      ...(announcement ? { toolSearchAnnouncement: announcement } : {}),
+    };
   }
+  if (persistedRuntimeMetadata) return persistedRuntimeMetadata;
 
   if (source === "subagent") {
     return systemReminderRuntimeMetadata("queued_system_notification");
@@ -129,8 +154,14 @@ export function runtimeMessageMetadataFromPartMetadata(
   if (source === "real_user") {
     return realUserRuntimeMetadata();
   }
-  if (source === "legacy_synthetic") {
-    return legacySyntheticRuntimeMetadata();
+  if (source === "legacy_synthetic" || source === "tool_search_announcement") {
+    const announcement = hydrateToolSearchAnnouncement(runtimeMessage.toolSearchAnnouncement);
+    return {
+      ...legacySyntheticRuntimeMetadata(),
+      ...(announcement
+        ? { source: "tool_search_announcement" as const, toolSearchAnnouncement: announcement }
+        : {}),
+    };
   }
   if (source === "todo_reminder") {
     return todoReminderRuntimeMetadata();

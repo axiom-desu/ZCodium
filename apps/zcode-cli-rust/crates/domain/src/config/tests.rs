@@ -1,6 +1,6 @@
 // ZCodium 下游修改，契约/存储/安全边界适配，来源及许可见 Rust 根 NOTICE.md
 //! Parity with the TS config implementation. Fixtures come from
-//! `scripts/generate-zcode-cli-rust-fixtures.mjs`, which runs the Node functions.
+//! `scripts/generate-zcode-cli-rust-domain-fixtures.mjs`, which runs the Node functions.
 use super::*;
 use serde_json::{Value, json};
 

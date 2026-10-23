@@ -377,3 +377,7 @@ fn model_usage_normalizes_like_node() {
     );
     assert_eq!(model_usage(&json!({})), serde_json::Value::Null);
 }
+
+#[cfg(test)]
+#[path = "failed_usage_tests.rs"]
+mod failed_usage;

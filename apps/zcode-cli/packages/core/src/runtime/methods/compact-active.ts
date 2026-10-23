@@ -1,3 +1,4 @@
+import { DEFERRED_TOOL_CALL_NAME, TOOL_SEARCH_NAME } from "@zcode/contracts";
 import {
   CompactPhase,
   CompactReason,
@@ -8,10 +9,11 @@ import {
   createPartId,
   traceContextToLogContext,
 } from "../deps.js";
-import type { Model, SessionEvent, TraceContext } from "../deps.js";
+import type { Model, ModelToolContract, SessionEvent, TraceContext } from "../deps.js";
 import type { CompactTimelineContext } from "../types.js";
 import type { CompactAttemptOutcome } from "./turn-loop-state.js";
 import type { RuntimeMessageEntry } from "../../agent/message-history.js";
+import { buildToolExposure } from "../../tool/search/exposure.js";
 import {
   compactFailureReasonFromError,
   defaultCompactPhaseForTrigger,
@@ -51,6 +53,7 @@ export async function compactActiveConversation(
     trigger?: CompactTrigger;
     model?: Model;
     activeEntries?: readonly RuntimeMessageEntry[];
+    getContinuationTools?: () => readonly ModelToolContract[];
   } = {},
 ): Promise<{
   displayText: string;
@@ -82,6 +85,7 @@ async function compactActiveConversationImpl(
     trigger?: CompactTrigger;
     model?: Model;
     activeEntries?: readonly RuntimeMessageEntry[];
+    getContinuationTools?: () => readonly ModelToolContract[];
   } = {},
 ): Promise<{
   displayText: string;
@@ -170,8 +174,31 @@ async function compactActiveConversationImpl(
   await this.initializeMcp(turnTraceContext);
   throwIfTurnAborted(options.abortSignal);
   const runtimeCompactTools = this.getTools(compactModel);
-  const compactTools =
-    runtimeCompactTools.length > COMPACT_TOOL_KEEP_MAX_COUNT ? [] : runtimeCompactTools;
+  const registry = this.getToolRegistry();
+  // Bug 根因：compact summary 曾直接携带完整工具目录，ToolSearch 关闭时大量 MCP schema
+  // 会再次撑爆压缩请求；开启时只保留常驻控制入口和 MCP 候选，由同一 exposure 决策。
+  let compactCandidates = runtimeCompactTools.filter(
+    (tool) =>
+      tool.name === "Read" ||
+      tool.name === TOOL_SEARCH_NAME ||
+      tool.name === DEFERRED_TOOL_CALL_NAME ||
+      registry.get(tool.name)?.metadata.mcpPresentation,
+  );
+  if (
+    !buildToolExposure({
+      model: compactModel,
+      mode: this.config.toolSearch?.mode,
+      tools: compactCandidates,
+      registry,
+      entries: [],
+    }).enabled
+  ) {
+    // 实际不可启用时恢复普通工具策略；只看 provider 能力会绕过数量保护。
+    compactCandidates = runtimeCompactTools.filter(
+      (tool) => tool.name !== TOOL_SEARCH_NAME && tool.name !== DEFERRED_TOOL_CALL_NAME,
+    );
+    if (compactCandidates.length > COMPACT_TOOL_KEEP_MAX_COUNT) compactCandidates = [];
+  }
 
   while (true) {
     try {
@@ -181,7 +208,7 @@ async function compactActiveConversationImpl(
         attempt,
         compactModel,
         compactTimeline,
-        compactTools,
+        compactTools: compactCandidates,
         customInstructions,
         events,
         preCompactTokenCount,
@@ -207,6 +234,7 @@ async function compactActiveConversationImpl(
         trigger,
         turnTraceContext,
         useMidConversationSystem,
+        getContinuationTools: options.getContinuationTools,
       });
     } catch (error) {
       if (

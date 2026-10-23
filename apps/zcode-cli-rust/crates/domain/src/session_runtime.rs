@@ -59,6 +59,8 @@ pub struct RuntimeOptions {
     /// Node legacy projection `totalTokenCount`: the `turn_complete` token
     /// counts of this activation.
     pub legacy_tokens: u64,
+    /// 启动偏好确定的 ToolSearch 模式（创建/冷恢复时固定，不写 session 配置）。
+    pub tool_search_mode: crate::tool_search::Mode,
 }
 
 /// A transient reminder kept in the process history (never persisted).

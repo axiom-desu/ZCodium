@@ -1,5 +1,6 @@
 import type { ConfigResult } from "@zcode/adapters/config";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { createNodeToolArtifactStore } from "@zcode/adapters/storage";
 import { createNodeLoggerFactory } from "@zcode/adapters/logging";
 import { resolvePath } from "@zcode/adapters/config";
@@ -88,6 +89,7 @@ export function createAppAdapterPorts(
         caCertFile: configResult.config.network.caCertFile,
       },
       outputRootDir: join(storageRoot, "cli", "exec"),
+      bashOutputTempDir: tmpdir(),
       processEnv: options.env ?? process.env,
     });
   const ownsExecutionPort = options.executionPort === undefined;

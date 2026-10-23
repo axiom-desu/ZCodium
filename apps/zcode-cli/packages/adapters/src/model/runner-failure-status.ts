@@ -2,8 +2,10 @@ import {
   ModelFailureReason,
   type ModelApiErrorPhase,
   type ModelFailureExceptionKind,
+  type ModelUsage,
 } from "@zcode/contracts";
 import { APICallError } from "ai";
+import { AiSdkModelAdapterError } from "./errors.js";
 import {
   findProviderBusinessError,
   inspectProviderFailure,
@@ -100,6 +102,15 @@ export function modelFailureStatusFields(
     retryAfterMs: failure.retryAfterMs,
     ...inspectProviderFailure(error),
   };
+}
+
+/**
+ * 失败事件里 provider 真实报告的用量。
+ * 只在 `AiSdkModelAdapterError` 携带 usage 时出现（空输出上下文超窗），
+ * 因此重试中的失败不会带 usage，成功 `ModelComplete` 仍是唯一成功入账。
+ */
+export function failureUsageFields(error: unknown): { usage?: ModelUsage } {
+  return error instanceof AiSdkModelAdapterError && error.usage ? { usage: error.usage } : {};
 }
 
 export function providerRequestIdFromHeaders(headers: Record<string, string>): string | undefined {

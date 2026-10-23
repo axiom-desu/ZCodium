@@ -11,7 +11,8 @@
 | 3.16.2            | `3c5b227649371507ddc4eb46ac5133afe6db1cab` | `5a082039a1a3b1edfe8364a33c8978689c0d68bf` |
 
 以上版本已从各提交的根 package.json 实读确认。先对账 3.16.1，再叠加 3.16.2；相同功能按后者最终语义交付。
-本地下游先保留 ACK/TUI 响应性及 lint 清零检查点（PR #88，候选 `caccb59f`，精确 CI 尚待通过）。
+本地下游先保留 ACK/TUI 响应性及 lint 清零检查点（PR #88，精确 HEAD `caccb59f` 11 success / 2 条件 skip，
+已 guarded rebase 合并为 `8a781353`，合并树与验收 HEAD 相同）。
 该检查点不是上游同步完成证据。功能分支 `feat/upstream-3.16-sync`；不整体 merge 上游或覆盖本地重构。
 
 完整变更包含 CLI、共享协议、项目存储/侧栏、远端连接、手机远控、分享、文档插件和 UI，不能只同步 CLI 后声称两笔完成。
@@ -99,6 +100,10 @@ Bash admission → prepare tmp directory + frozen output path/handle → cancell
 首选 os tmpdir 下的进程生命周期 zcode-bash-\* 目录，不把持续写输出放进递归搜索的数据根。
 准备发生在 spawn 前；EACCES/EPERM/EROFS/ENOENT/ENOTDIR/ENOSPC/EDQUOT 才回退原 artifacts/exec 路径。
 其他错误明确 spawn_error；准备期取消/close 不 spawn、不泄漏句柄；不迁移历史输出。
+准备期取消/close 的结果分类与运行期取消一致：返回 `status: "cancelled"` 的结果（Node `createStoppedResult`），
+不是 tool error；两侧都不为它创建输出文件或登记后台任务。
+tmp 父目录的唯一注入点是 shell 工具构造参数（Node `bashOutputTempDir` 对位）；storage path 解析不重复持有该值，
+避免与工具实际使用的目录分叉；测试经同一构造参数注入。
 单个既定路径贯穿前台、显式后台、timeout 转后台及 persistedOutputPath/Read；不在 capture 阶段重新选路径。
 验收实际 shell、输出回读、回落、取消及前后台交接，Windows/macOS 路径使用注入而非硬编码 /tmp。
 
@@ -128,7 +133,10 @@ success → existing ModelComplete only (no double accounting)
 已缓存/已安装 describe、list、overview 不等无关 install 下载；仅 manifest 懒加载写阶段使用现有写锁且二次检查。
 未知市场的并发填充仍 single-flight；validate 如需纯读取应收窄锁，不把写行为伪装成读。
 transport 只给明确的插件只读方法独立处理，普通 mutation admission/帧边界/EOF 顺序不变。
-官方四文档插件 componentTypes 保持 ui（包括卸载后的可恢复项）；不解除 CUA env 门控。
+旁路串行队列不等于脱离 transport 生命周期：EOF 半关闭要等已受理只读请求的回复写出（既有 100ms 上限不变），
+不能因为串行链为空就丢弃已受理回复。
+官方四文档插件 componentTypes 保持 ui（包括卸载后的可恢复项，两侧同源）；不解除 CUA env 门控。
+已安装插件的 ui 分类只看插件清单 `ui.surfaces[]`，Rust 复用发现阶段已解析的 manifest，不另建缓存。
 验收阻塞安装 A 时读 B 实际完成、同一缺失市场并发只写一次、失败释放锁及普通命令顺序。
 
 ### DWF / 选型
@@ -172,6 +180,26 @@ CLI/startup preferences → runtime configuration(mode)
 
 验收：两侧纯算法/校验/切模式、权限/钩子/取消/媒体/turn-stop 原路径；真实 loopback HTTP request body/headers，
 临时 SQLite close/reopen/compact/fork/rewind 后下一请求一致；MCP 连接与重启；原 PTY/互操作全保留。
+
+## 运行期首批本地整合状态（不是完整版本对齐）
+
+S1–S7 已落地到 TS 与适用的 Rust 运行期，并经独立审查修复半升级迁移、close/delete 区分、
+插件读 EOF drain、ToolSearch 权限/Off 公告/目标身份/goal 投影、UTF-8 搜索和 raw finish 显式 null 等回归。
+
+- 本地 Rust workspace：869 passed / 1 ignored / 0 failed；clippy `-D warnings`、fmt、16-crate 边界通过。
+- TS core/adapters/contracts/bootstrap：139/50/29/98 passed；Node drivers 63、CI scripts 445 passed。
+- root 与现有 workspace 类型检查、raw lint 0/0、三 gate、架构通过；CLI 0.47 changed-only 格式通过。
+- protocol/config/tools/permissions/reminders/projection/domain/state fixtures 从真实 TS owner 重生成，`--check` 通过；
+  state fixture 不再依靠手填期望。knip 1128→1127 仅删除一个已被真实消费的旧 key，不增加容许量。
+- 真实 TS/Rust engine + loopback HTTP + 临时 SQLite 覆盖搜索/包装执行/权限/取消/compact/冷恢复；
+  进程级 Host 启动偏好探针也已执行。新构建的 Node CLI 与 Rust release binary 实际通过：
+  原 TUI direct/provider-discovery 各 20 assertions / 20 requests / 2 compactions；workbench 35 / 17 requests；
+  responsive 62 / 4 requests；互操作 alternate/crash/concurrent 共 7 sessions 冷读相等、零状态/行/历史差异。
+  精确提交 CI 仍待首批 PR 验收。
+
+仍开放：Rust 的跨工具 typed input-validation 所有者缺失，尚无与 TS 相同的「参数校验失败 → ToolSearch 搜索指引」统一挂接点；
+不为一句提示增加第二校验器或按错误文本猜分类。此为明确架构缺口，不计为已补齐。
+S8–S12（项目树/侧栏、远端/手机、office、分享/完整视图/其余 UI、版本）尚未交付；根版本不提前升为 3.16.2。
 
 ## 后续大面与最终验收
 

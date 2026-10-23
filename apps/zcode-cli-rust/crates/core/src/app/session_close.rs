@@ -6,7 +6,8 @@ use serde_json::{Value, json};
 use zcode_cli_protocol::Command;
 
 impl Engine {
-    /// V4 `deleteSession`: closes the runtime session and records the command ACK.
+    /// V4 `deleteSession`: persists the soft-deletion fact, then closes the runtime and
+    /// records the command ACK.
     pub(super) async fn close_session(&mut self, c: &Command) -> Result<Value> {
         ensure!(
             c.payload.as_object().is_some_and(|p| p.is_empty()),
@@ -14,6 +15,13 @@ impl Engine {
         );
         let id = c.session_id.as_deref().context("Session id required")?;
         ensure!(self.sessions.contains_key(id), "Session unavailable");
+        // 顺序不可交换：先把「已删除」持久事实落库（coalesce 首时间，重复调用幂等），
+        // 再走既有 close/drain 收口。反过来一旦进程在两者之间重启，持久行仍是未删除，
+        // 已发布的 session.removed 会在冷启动后被重新 list 出来（会话复活）。
+        // 失败直接向上冒泡：删除失败不得发布移除事实。
+        self.store
+            .soft_delete_session(&self.workspace, id, self.clock.now())
+            .await?;
         let ack = self.shut_down(id, Some(c)).await?;
         Ok(ack.expect("command close returns an ACK"))
     }

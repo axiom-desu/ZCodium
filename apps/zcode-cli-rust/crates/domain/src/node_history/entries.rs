@@ -11,7 +11,23 @@ pub enum Entry {
         tokens: Option<Value>,
     },
     /// Node `RuntimeAttachmentEntry`: a system reminder rendered at request time.
-    Attachment { source: String, content: String },
+    Attachment {
+        source: String,
+        content: String,
+        /// 本条目自身的运行态 metadata（公告增量等）；`source` 始终单独保留。
+        metadata: Option<Value>,
+    },
+}
+
+/// 内部 `_zcode_*` 公告键在 Node entry 形状里叫 `toolSearchAnnouncement`。
+fn node_metadata(mut metadata: Value) -> Value {
+    let Some(object) = metadata.as_object_mut() else {
+        return metadata;
+    };
+    if let Some(delta) = object.remove(crate::tool_search::ANNOUNCEMENT_KEY) {
+        object.insert("toolSearchAnnouncement".into(), delta);
+    }
+    metadata
 }
 
 impl Entry {
@@ -25,15 +41,21 @@ impl Entry {
             } => {
                 let mut entry = json!({"message": message});
                 if let Some(metadata) = metadata {
-                    entry["metadata"] = metadata.clone();
+                    entry["metadata"] = node_metadata(metadata.clone());
                 }
                 if let Some(tokens) = tokens {
                     entry["tokens"] = tokens.clone();
                 }
                 entry
             }
-            Self::Attachment { source, content } => {
-                json!({"kind": "attachment", "content": content, "metadata": {"source": source}})
+            Self::Attachment {
+                source,
+                content,
+                metadata,
+            } => {
+                let mut runtime = metadata.clone().unwrap_or_else(|| json!({}));
+                runtime["source"] = source.clone().into();
+                json!({"kind": "attachment", "content": content, "metadata": node_metadata(runtime)})
             }
         }
     }
@@ -42,11 +64,26 @@ impl Entry {
     /// extensions) that the live runtime would hold for this entry.
     pub fn canonical(&self) -> Value {
         match self {
-            Self::Attachment { source, content } => json!({
-                "role": "user",
-                "content": super::reminders::wrap(source, content),
-                "_zcode_source": source,
-            }),
+            Self::Attachment {
+                source,
+                content,
+                metadata,
+            } => {
+                let mut message = json!({
+                    "role": "user",
+                    "content": super::reminders::wrap(source, content),
+                    "_zcode_source": source,
+                });
+                // 公告的增量事实属于同一条提醒：冷恢复必须与热历史一致，
+                // 否则 Off 投影无法识别，后续收集还会重复公告。
+                if let Some(delta) = metadata
+                    .as_ref()
+                    .and_then(|m| m.get(crate::tool_search::ANNOUNCEMENT_KEY))
+                {
+                    message[crate::tool_search::ANNOUNCEMENT_KEY] = delta.clone();
+                }
+                message
+            }
             Self::Message {
                 message, metadata, ..
             } => match message["role"].as_str() {
@@ -72,6 +109,12 @@ impl Entry {
                     let source = metadata.as_ref().and_then(|m| m["source"].as_str());
                     if let Some(source) = source.filter(|s| *s != "real_user") {
                         out["_zcode_source"] = source.into();
+                    }
+                    if let Some(delta) = metadata
+                        .as_ref()
+                        .and_then(|m| m.get(crate::tool_search::ANNOUNCEMENT_KEY))
+                    {
+                        out[crate::tool_search::ANNOUNCEMENT_KEY] = delta.clone();
                     }
                     out
                 }
@@ -143,10 +186,14 @@ fn assistant(message: &Value) -> Value {
         .into_iter()
         .flatten()
         .map(|call| {
-            json!({"id": call["id"], "type": "function", "function": {
+            let mut out = json!({"id": call["id"], "type": "function", "function": {
                 "name": call["name"],
                 "arguments": crate::js_json::stringify(&call["input"]),
-            }})
+            }});
+            if let Some(wrapper) = call["modelCallWrapper"].as_str() {
+                out[crate::tool_search::WRAPPER_KEY] = wrapper.into();
+            }
+            out
         })
         .collect();
     if !calls.is_empty() {

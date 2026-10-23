@@ -17,7 +17,7 @@ import type {
   SessionGoal,
   TraceContext,
 } from "../deps.js";
-import { buildRuntimeProviderRequestMessages, throwIfTurnAborted } from "../helpers/index.js";
+import { prepareRuntimeProviderRequest, throwIfTurnAborted } from "../helpers/index.js";
 import { projectMessagesForModelMediaPolicy } from "../helpers/media-budget.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { isRuntimeAttachmentEntry, type RuntimeMessageEntry } from "../../agent/message-history.js";
@@ -134,21 +134,18 @@ async function verifyTargetCompletion(
     ),
     modelTraceContext,
   );
-  const providerMessages = buildRuntimeProviderRequestMessages(this, {
-    entries: [
-      ...withoutTrailingPendingAssistantToolCallEntries(
-        this.messageHistory.borrowReadOnlyRuntimeEntries(),
-      ),
-      {
-        message: {
-          role: "user" as const,
-          content: formatGoalCompletionVerificationPrompt(input.target),
-        },
-      },
-    ],
+  // Goal verifier 使用空工具目录：同一 exposure 决策会把引用降级为占位并隐藏公告，
+  // 不能绕过请求准备直接发送带 tool_reference 的历史。
+  const prepared = prepareRuntimeProviderRequest(this, {
+    entries: withoutTrailingPendingAssistantToolCallEntries(
+      this.messageHistory.borrowReadOnlyRuntimeEntries(),
+    ),
+    prompt: formatGoalCompletionVerificationPrompt(input.target),
+    tools: [],
     applyCacheControl: true,
     model,
-  }).messages;
+  });
+  const providerMessages = prepared.request.messages;
   // verifier 直接消费完整历史但曾绕过正常请求的媒体策略；只补 capability
   // 仍会让聚合超限失败进入 fail-open。请求前统一执行能力和预算投影。
   const messages = projectMessagesForModelMediaPolicy(
@@ -317,7 +314,7 @@ async function generateTargetCompletionVerificationText(
   input: {
     abortSignal?: AbortSignal;
     events: SessionEvent[];
-    messages: ReturnType<typeof buildRuntimeProviderRequestMessages>["messages"];
+    messages: ReturnType<typeof prepareRuntimeProviderRequest>["request"]["messages"];
     model: Model;
     traceContext: TraceContext;
   },

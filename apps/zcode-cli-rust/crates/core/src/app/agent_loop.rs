@@ -1,4 +1,4 @@
-use super::compaction::{self, Outcome, Request, Trigger, compaction_failed};
+use super::compaction::{self, Outcome, Trigger, compaction_failed};
 use super::context::step_prefix;
 use super::stream_recovery::retry_request;
 use crate::contract::{ContextPort, Event, EventSink, ModelPort, ToolPort};
@@ -50,7 +50,7 @@ pub(super) async fn run(
     let tool_filter = history.tool_filter.clone();
     definitions.retain(|d| tool_filter.allows(d["function"]["name"].as_str().unwrap_or("")));
     // 与 Node 一致：禁用集合只从提供给模型的定义中移除；执行边界不据此拦截（D1）。
-    hide(&mut definitions, &history.tool_disallowlist);
+    super::tool_search::hide(&mut definitions, &history.tool_disallowlist);
     let profiles = if definitions.iter().any(|d| d["function"]["name"] == "Agent") {
         tools.agent_profiles(cancel).await?
     } else {
@@ -71,25 +71,20 @@ pub(super) async fn run(
     }
     super::plugin_reference::inject(tools, history, (&skills, &definitions), sink, cancel).await?;
     if let Some(instructions) = manual {
-        // 手动压缩的摘要请求带与 agent step 相同的前缀与工具（Node compactActiveConversation）。
-        let bound = model.bind();
-        let model = bound.as_deref().unwrap_or(model);
-        let (prefix, _) =
-            step_prefix(model, context, history, (&skills, profile.as_ref()), cancel).await?;
-        let reminder = super::plan_tools::plan_reference(tools, sink).await?;
-        let request = Request {
-            prefix: &prefix,
-            tools: &definitions,
-            reminder,
-            port: tools,
-        };
-        let trigger = Trigger::Manual(&instructions);
-        history
-            .compact(model, sink, cancel, trigger, request)
-            .await?;
+        super::manual_compact::run(
+            model,
+            tools,
+            context,
+            history,
+            (&skills, profile.as_ref()),
+            &definitions,
+            &instructions,
+            sink,
+            cancel,
+        )
+        .await?;
         return Ok(());
     }
-    let mut tool_tokens = definition_tokens(&definitions);
     let mut turns = 0;
     let permissions = history.permissions.clone();
     // 本 run 的请求归属副本；Engine 在引导输入提交时下发新 origin。
@@ -136,7 +131,15 @@ pub(super) async fn run(
             step_prefix(model, context, history, (&skills, profile.as_ref()), cancel).await?;
         let identity = model.identity();
         super::plan_tools::remind(history, sink).await?;
-        let (mut messages, tokens) = history.projection(&prefix, tool_tokens);
+        // ToolSearch：每步一次请求准备，再投影最终请求消息。
+        let mut search_plan =
+            super::tool_search::plan(model, tools, &sink.session_id, history, &definitions)?;
+        let tool_tokens = super::tool_search::definition_tokens(&search_plan.tools);
+        let (base, base_tokens) = history.projection(&prefix, tool_tokens);
+        let mut messages = search_plan.project(&base);
+        let tokens = base_tokens
+            + crate::domain::context::estimate(&messages)
+                .saturating_sub(crate::domain::context::estimate(&base));
         if policy.automatic
             && tokens >= policy.threshold()
             && history.compact_failures < compact::MAX_CONSECUTIVE_FAILURES
@@ -147,12 +150,14 @@ pub(super) async fn run(
                 bail!(compact::rapid_refill_error());
             }
             let reminder = super::plan_tools::plan_reference(tools, sink).await?;
-            let request = Request {
-                prefix: &prefix,
-                tools: &definitions,
-                reminder,
-                port: tools,
-            };
+            let prepared = super::tool_search::compact_preparation(
+                model,
+                tools,
+                &sink.session_id,
+                history,
+                &definitions,
+            )?;
+            let request = prepared.request(&prefix, &definitions, reminder, tools);
             match history
                 .compact(model, sink, cancel, Trigger::Auto, request)
                 .await
@@ -160,7 +165,15 @@ pub(super) async fn run(
                 Ok(Outcome::Compacted) => {
                     refill.compacted(count);
                     history.compact_failures = 0;
-                    messages = history.projection(&prefix, tool_tokens).0;
+                    search_plan = super::tool_search::plan(
+                        model,
+                        tools,
+                        &sink.session_id,
+                        history,
+                        &definitions,
+                    )?;
+                    let (base, _) = history.projection(&prefix, tool_tokens);
+                    messages = search_plan.project(&base);
                 }
                 Ok(Outcome::Skipped) => {}
                 // Node：自动压缩失败只计数，本次请求照常发送。
@@ -191,7 +204,13 @@ pub(super) async fn run(
             None => sink,
         };
         let output = match model
-            .complete(messages, &definitions, request, cancel)
+            .complete_with_options(
+                messages,
+                &search_plan.tools,
+                &search_plan.options,
+                request,
+                cancel,
+            )
             .await
         {
             Err(failure)
@@ -210,12 +229,14 @@ pub(super) async fn run(
                     return Err(failure.into());
                 }
                 let reminder = super::plan_tools::plan_reference(tools, sink).await?;
-                let request = Request {
-                    prefix: &prefix,
-                    tools: &definitions,
-                    reminder,
-                    port: tools,
-                };
+                let prepared = super::tool_search::compact_preparation(
+                    model,
+                    tools,
+                    &sink.session_id,
+                    history,
+                    &definitions,
+                )?;
+                let request = prepared.request(&prefix, &definitions, reminder, tools);
                 match history
                     .compact(
                         model,
@@ -267,6 +288,8 @@ pub(super) async fn run(
             result => result?,
         };
         history.anchor_usage(&output.usage);
+        // 包装调用在准入处解包为目标调用（同一 callID）；无效包装由执行返回普通错误。
+        let output = super::tool_search::admit_output(output, search_plan.search.as_ref());
         let response = output.message["content"].as_str().unwrap_or("").to_owned();
         let persist = !output.output_limit
             || output.message.as_object().is_some_and(|m| {
@@ -293,7 +316,7 @@ pub(super) async fn run(
             committed,
         })
         .await?;
-        durable(receipt, cancel).await?;
+        super::durable::durable(receipt, cancel).await?;
         if output.output_limit {
             if continuations == 3 {
                 return Err(crate::contract::ModelFailure::new(
@@ -313,6 +336,7 @@ pub(super) async fn run(
             turn.tool_calls += output.calls.len();
         }
         let scope = super::tool_execution::Scope {
+            search: search_plan.search.as_ref(),
             skills: &skills,
             profile: profile.as_ref(),
             profiles: &profiles,
@@ -329,6 +353,7 @@ pub(super) async fn run(
         {
             return Ok(());
         }
+        super::tool_search::announce(model, tools, history, &definitions, sink, cancel).await?;
         // Node recordCompletedToolBatch：工具批次完成后重新允许反应式压缩，并计一个工具轮。
         reactive_compacted = false;
         refill.tool_batch();
@@ -354,8 +379,7 @@ pub(super) async fn run(
                         history.tool_disallowlist.push(name);
                     }
                 }
-                hide(&mut definitions, &history.tool_disallowlist);
-                tool_tokens = definition_tokens(&definitions);
+                super::tool_search::hide(&mut definitions, &history.tool_disallowlist);
             }
             for message in guide.messages {
                 history.push(message);
@@ -367,33 +391,9 @@ pub(super) async fn run(
             {
                 continue;
             }
-            if !super::goal_loop::advance(model, history, &prefix, sink, cancel).await? {
+            if !super::goal_loop::advance(model, tools, history, &prefix, sink, cancel).await? {
                 return Ok(());
             }
         }
     }
-}
-pub(super) async fn durable(
-    receipt: oneshot::Receiver<()>,
-    cancel: &CancellationToken,
-) -> Result<()> {
-    tokio::select! {biased;
-        _=cancel.cancelled()=>bail!("Cancelled"),
-        result=receipt=>result.context("Session owner stopped before durable commit"),
-    }
-}
-fn hide(definitions: &mut Vec<Value>, disallowed: &[String]) {
-    if !disallowed.is_empty() {
-        definitions.retain(|d| {
-            !disallowed
-                .iter()
-                .any(|name| d["function"]["name"] == name.as_str())
-        });
-    }
-}
-fn definition_tokens(definitions: &[Value]) -> usize {
-    definitions
-        .iter()
-        .map(|d| d.to_string().encode_utf16().count().div_ceil(3))
-        .sum()
 }

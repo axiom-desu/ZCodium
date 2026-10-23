@@ -139,6 +139,8 @@ function inferComponentTypes(raw: Record<string, unknown>): string[] {
   if ("hooks" in raw) types.push("hook");
   if ("mcpServers" in raw) types.push("mcp");
   if ("lspServers" in raw) types.push("lsp");
+  // 目录条目自己声明的额外分类（官方 seed 的 "ui"）：条目 raw 是唯一事实源，不从目录布局猜。
+  if (Array.isArray(raw.componentTypes) && raw.componentTypes.includes("ui")) types.push("ui");
   return types;
 }
 
@@ -154,6 +156,8 @@ function inferComponentTypesFromMetadata(plugin: PluginMetadata): string[] {
     types.push("mcp");
   }
   if (plugin.hookDetails.length > 0) types.push("hook");
+  // 面板声明只存在于插件 manifest：已安装/禁用但保留 surface 元数据的插件仍归入 UI 插件。
+  if (plugin.uiSurfaces?.length) types.push("ui");
   return types;
 }
 

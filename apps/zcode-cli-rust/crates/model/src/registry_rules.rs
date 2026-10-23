@@ -190,7 +190,9 @@ pub(super) fn resolve(
                         json!({"providerId":id,"modelId":model,"reasoningLevel":level,"apiType":config["api"]["type"],"baseUrl":base,"contextWindow":window,"maxOutputTokens":max}),
                     )?;
                     c.format_properties = Some(
-                        json!({"inputFormat":mc["properties"]["inputFormat"],"outputFormat":mc["properties"]["outputFormat"]}),
+                        json!({"inputFormat":mc["properties"]["inputFormat"],"outputFormat":mc["properties"]["outputFormat"],
+                            // ToolSearch 模式判定读取真实 Model property，不能丢字段后按默认放行。
+                            "supportsToolCall":mc["properties"]["supportsToolCall"]}),
                     );
                     c.supports_native_web_search =
                         mc["properties"]["supportsNativeWebSearch"] == true;
@@ -225,6 +227,9 @@ pub(super) fn resolve(
                     } else {
                         c.api_key_value = config["access"]["apiKey"].as_str().map(str::to_owned);
                     }
+                    // Node `resolveToolSearchCapability(api.type, access)` 只读这两个非秘密字段。
+                    c.access_type = config["access"]["type"].as_str().map(str::to_owned);
+                    c.access_mode = config["access"]["mode"].as_str().map(str::to_owned);
                     prepared.push((
                         (id.clone(), model.clone(), level.clone()),
                         Arc::new(HttpModel::new(c, egress.clone())) as Arc<dyn ModelPort>,

@@ -30,6 +30,8 @@ import {
 } from "./transform-parts.js";
 
 export interface AiSdkMessageTransformOptions {
+  /** 仅 Native 搜索开启时编码 tool_reference 与 defer_loading；Local/Off 不发送它们。 */
+  toolSearchEnabled?: boolean;
   apiFormat?: string;
   providerOptions?: Record<string, unknown>;
   providerKind?: "openai" | "anthropic" | "openai-compatible" | "google" | "gateway" | "custom";

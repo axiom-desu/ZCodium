@@ -29,4 +29,32 @@ impl Engine {
         self.titles = enabled;
         self
     }
+    /// CLI prompt/TUI 的 `--toolsearch-mode`：只影响新建与冷恢复的 runtime，不写 session。
+    pub fn with_tool_search_mode(mut self, mode: crate::domain::tool_search::Mode) -> Self {
+        self.tool_search_mode = mode;
+        self.tool_search_override = Some(mode);
+        self
+    }
+    /// app-server 的显式 CLI 覆盖；`None` 表示允许 Host runtimeConfig 决定。
+    pub fn with_tool_search_override(
+        mut self,
+        mode: Option<crate::domain::tool_search::Mode>,
+    ) -> Self {
+        self.tool_search_override = mode;
+        self
+    }
+    /// 本次 create/resume 的实际模式：显式 CLI > Host runtimeConfig > 缺省 Off。
+    pub(super) fn session_tool_search_mode(
+        &self,
+        params: &Value,
+    ) -> crate::domain::tool_search::Mode {
+        self.tool_search_override
+            .or_else(|| {
+                params
+                    .get("runtimeConfig")
+                    .and_then(|config| config["toolSearch"]["mode"].as_str())
+                    .and_then(crate::domain::tool_search::Mode::parse)
+            })
+            .unwrap_or(self.tool_search_mode)
+    }
 }

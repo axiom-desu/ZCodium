@@ -11,6 +11,7 @@ import {
   prepareInitialToolExecutionInput,
 } from "../input-normalization.js";
 import { resolveToolEntryModelContract } from "../model-contract.js";
+import { resolveDeferredToolCall } from "../deferred-call.js";
 import type { ExecutableToolCall, ToolEntry, ToolExecutionResult } from "../types.js";
 import type { BackgroundTaskTracker } from "./background-tasks.js";
 import { finishToolCallSuccess } from "./tool-call-success.js";
@@ -37,6 +38,10 @@ import { withPlanExitDeniedTurnStop, withWorkflowRefineDeniedFollowUp } from "./
 import type { ToolExecuteOptions, ToolExecutorDeps } from "./types.js";
 import { validateInitialModelToolInput, validateInput, validateOutput } from "./validation.js";
 
+const UNDISCOVERED_TOOL_SCHEMA_EXPLANATION =
+  "\n\nThis tool's schema was not sent to the API — it was not in the discovered-tool set derived from message history. " +
+  "Without the schema in your prompt, typed parameters (arrays, numbers, booleans) get emitted as strings and the client-side parser rejects them. ";
+
 export async function executeToolCall(
   deps: ToolExecutorDeps,
   backgroundTasks: BackgroundTaskTracker,
@@ -54,6 +59,25 @@ async function executeToolCallImpl(
   totalStartedAt: number,
   options?: ToolExecuteOptions,
 ): Promise<ToolExecutionResult> {
+  // 包装调用在任何目标事件/权限/Hook 之前解包；失败保持包装身份，不触发目标生命周期。
+  const admission = resolveDeferredToolCall(toolCall, options?.toolSearch, deps.registry);
+  if (admission.error) {
+    const result = createErrorResult(admission.call, admission.error);
+    await emitToolCallError(
+      deps,
+      toolCall.id,
+      options?.traceContext ??
+        deps.traceContext ??
+        createRootTraceContext({ sessionId: deps.sessionId, turnId: deps.turnId }),
+      deps.turnId,
+      result.error,
+    );
+    return result;
+  }
+  // 历史只保存一份原始目标参数；执行/Hook 可修改的对象在执行入口独立复制。
+  toolCall = admission.call.modelCallWrapper
+    ? { ...admission.call, input: structuredClone(admission.call.input) }
+    : admission.call;
   const parentTraceContext =
     options?.traceContext ??
     getCurrentTraceContext() ??
@@ -160,6 +184,23 @@ async function executeToolCallImpl(
     );
     if (initialInputValidation) {
       const result = createErrorResult(canonicalToolCall, initialInputValidation);
+      const search = options?.toolSearch;
+      // 延迟 schema 未加载只提供纠错提示，不增加工具执行拒绝条件。
+      if (
+        search?.enabled &&
+        !search.discovered.has(canonicalToolCall.name) &&
+        search.catalog.some((tool) => tool.name === canonicalToolCall.name && tool.deferred)
+      ) {
+        // 原提示省略了类型退化原因；完整解释与 schema 一并提供，避免只引导盲目重试。
+        result.modelContent =
+          (result.modelContent ?? initialInputValidation.message) +
+          UNDISCOVERED_TOOL_SCHEMA_EXPLANATION +
+          `Load the tool first: call ToolSearch with query "select:${canonicalToolCall.name}", then retry this call. ` +
+          `For reference, this tool's input schema is: ${JSON.stringify(entry.inputSchema)}` +
+          (search.mode === "local"
+            ? `\nCall DeferredToolCall with {name: "${canonicalToolCall.name}", input: {...}}.`
+            : "");
+      }
       // schema 失败与 registry miss 同属 handler/ToolCallStarted 之前的早退；旧代码
       // 只把失败回灌模型，没有发布 ToolCallError，V4 tool row 因而在整个 turn 里停在
       // inputStreaming（CreateWorkflow 卡持续显示「正在编写工作流」），模型重试后又叠一张。

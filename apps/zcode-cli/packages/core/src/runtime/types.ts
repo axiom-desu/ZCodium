@@ -1,4 +1,8 @@
-import type { RuntimeInputPresentation } from "@zcode/contracts";
+import type {
+  RuntimeInputPresentation,
+  ToolSearchExecutionContext,
+  ToolSearchMode,
+} from "@zcode/contracts";
 /* eslint-disable max-lines -- Runtime 类型集中承载 core/runtime 对外结构，拆分需要单独迁移。 */
 import { PermissionService, ToolScheduler } from "./deps.js";
 import type {
@@ -109,6 +113,8 @@ import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-
 // -----------------------------------------------
 
 export interface AgentRuntimeConfig {
+  /** 启动时确定的搜索模式；运行期不变，子 Agent 继承，不写入 session。 */
+  toolSearch?: { mode?: ToolSearchMode };
   /** shared-host CUA request routing metadata; desktop is the safe default. */
   clientMode?: "desktop-continuous" | "web-remote-replayable";
   deliveryKind?: "desktop-continuous" | "web-remote-replayable";
@@ -687,6 +693,8 @@ export interface ExecuteToolsOptions {
   /** 仅透传给当前 turn 同步等待的 Agent child。 */
   subagentModelOverride?: import("@zcode/contracts").SubagentRunOptions["modelOverride"];
   model?: Model;
+  /** 本次请求的搜索上下文：包装准入、handler 搜索与未加载纠错共用。 */
+  toolSearch?: ToolSearchExecutionContext;
   onBatchStart?: (toolCallIds: string[]) => Promise<void>;
 }
 
@@ -783,6 +791,8 @@ export interface RunModelTextRequestOptions {
   onModelNetworkStatus?: (event: ModelNetworkStatusEvent) => void;
   streamRecovery?: ModelStreamRecoveryStatus;
   tools: ModelToolContract[];
+  /** 本次请求的搜索上下文；只影响请求编码与工具准入，不写持久状态。 */
+  toolSearch?: ToolSearchExecutionContext;
   traceContext: TraceContext;
 }
 

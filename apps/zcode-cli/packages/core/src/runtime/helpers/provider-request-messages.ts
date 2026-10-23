@@ -16,6 +16,7 @@ import {
   cloneModelMessageContent,
   isKnownSystemReminderSource,
   isRuntimeAttachmentEntry,
+  toModelToolCall,
 } from "../../agent/message-history.js";
 import {
   getSystemReminderDescriptor,
@@ -39,6 +40,8 @@ export interface ProviderRequestMessageProjectionResult {
 // 相邻 user 合并是 Anthropic provider 的协议序列化责任；
 // MCS/provider projection 保持 provider-neutral，避免影响 OpenAI-compatible 请求形态。
 const ENABLE_MCS_ADJACENT_USER_MERGE = false;
+// Native 成功提示的固定文案；只在最终投影派生，不写 canonical 历史或数据库。
+const TOOL_SEARCH_LOADED_MESSAGE = "Tool loaded.";
 
 // State changes must keep their causal position relative to older target continuations.
 const NON_BUBBLING_ATTACHMENT_SOURCES: ReadonlySet<SystemReminderSource> = new Set([
@@ -50,6 +53,8 @@ export function buildProviderRequestMessages(input: {
   applyCacheControl?: boolean;
   skipCacheWrite?: boolean;
   useMidConversationSystem?: boolean;
+  /** Native 投影中具有有效引用的搜索结果 callID；Local/Off 与失败结果不在其中。 */
+  loadedToolCallIds?: ReadonlySet<string>;
 }): ProviderRequestMessageProjectionResult {
   const useMidConversationSystem = input.useMidConversationSystem !== false;
   const origins = new ProviderEntryOrigins();
@@ -66,9 +71,11 @@ export function buildProviderRequestMessages(input: {
   const renderedMessages = projectedEntries.map(renderProjectedEntryToModelMessage);
   const mergeResult = ENABLE_MCS_ADJACENT_USER_MERGE
     ? mergeAdjacentUserMessages(renderedMessages)
-    : skipAdjacentUserMessageMerge(renderedMessages);
+    : appendToolSearchSuccessMessages(renderedMessages, input.loadedToolCallIds);
   const messages = mergeResult.messages;
-  const sourceEntries: Array<RuntimeMessageEntry | undefined> = [];
+  const sourceEntries: Array<RuntimeMessageEntry | undefined> = Array.from({
+    length: messages.length,
+  });
   for (const [projectedIndex, mergedIndex] of mergeResult.indexMap.entries()) {
     if (sourceEntries[mergedIndex] !== undefined) continue;
     const entry = projectedEntries[projectedIndex];
@@ -89,7 +96,9 @@ export function buildProviderRequestMessages(input: {
     diagnostics: {
       bubbledAttachmentEntryCount: reorderResult.bubbledAttachmentEntryCount,
       // 新标记能证明“没有真实用户”；省略索引会让媒体预算按 user role 重新猜来源。
-      ...(finalLatestRealUserMessageIndex >= 0 || input.entries.some(isPresentedInput)
+      ...(finalLatestRealUserMessageIndex >= 0 ||
+      input.entries.some(isPresentedInput) ||
+      input.loadedToolCallIds?.size
         ? { latestRealUserMessageIndex: finalLatestRealUserMessageIndex }
         : {}),
       strippedRuntimeMetaCount: input.entries.filter((entry) => entry.metadata).length,
@@ -199,7 +208,18 @@ function renderProjectedEntryToModelMessage(
     }
     return message;
   }
-  return cloneModelInputMessage(entry.message);
+  const message = cloneModelInputMessage(entry.message);
+  // 内部历史使用目标身份；只在现有 provider render 中恢复真实模型包装。
+  for (let index = 0; index < (message.toolCalls?.length ?? 0); index++) {
+    message.toolCalls![index] = toModelToolCall(message.toolCalls![index]!);
+  }
+  if (message.modelCallWrapper !== undefined) {
+    // 包装调用的 tool 结果在模型协议里必须以控制入口身份出现，内部标记不外泄。
+    message.toolName = message.modelCallWrapper;
+    const { modelCallWrapper: _internal, ...rest } = message;
+    return rest;
+  }
+  return message;
 }
 
 interface MessageMergeResult {
@@ -228,11 +248,29 @@ function mergeAdjacentUserMessages(messages: readonly ModelInputMessage[]): Mess
   return { messages: merged, indexMap };
 }
 
-function skipAdjacentUserMessageMerge(messages: readonly ModelInputMessage[]): MessageMergeResult {
-  return {
-    messages: [...messages],
-    indexMap: messages.map((_, index) => index),
-  };
+function appendToolSearchSuccessMessages(
+  messages: readonly ModelInputMessage[],
+  loadedToolCallIds?: ReadonlySet<string>,
+): MessageMergeResult {
+  if (!loadedToolCallIds?.size)
+    return { messages: [...messages], indexMap: messages.map((_, index) => index) };
+  const result: ModelInputMessage[] = [];
+  const indexMap: number[] = [];
+  let pendingLoaded = 0;
+  for (const [index, message] of messages.entries()) {
+    indexMap.push(result.length);
+    result.push(message);
+    if (message.role === "tool" && message.toolCallId && loadedToolCallIds.has(message.toolCallId))
+      pendingLoaded++;
+    // 成功提示只在最终投影中派生；整批 tool result 必须连续，不能被提示拆开。
+    if (messages[index + 1]?.role !== "tool") {
+      while (pendingLoaded > 0) {
+        result.push({ role: "user", content: TOOL_SEARCH_LOADED_MESSAGE });
+        pendingLoaded--;
+      }
+    }
+  }
+  return { messages: result, indexMap };
 }
 
 function canMergeAdjacentUserMessages(

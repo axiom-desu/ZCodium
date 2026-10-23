@@ -80,12 +80,16 @@ export async function persistCompactTimelineEvent(
 export function buildCompactSummaryRequestMessages(
   entriesForSummary: readonly RuntimeMessageEntry[],
   compactPrompt: string,
-  options: { useMidConversationSystem?: boolean } = {},
+  options: {
+    loadedToolCallIds?: ReadonlySet<string>;
+    useMidConversationSystem?: boolean;
+  } = {},
 ): RunModelTextRequestOptions["messages"] {
   return buildProviderRequestMessages({
     entries: [...entriesForSummary, { message: { role: "user" as const, content: compactPrompt } }],
     applyCacheControl: true,
     skipCacheWrite: true,
+    ...(options.loadedToolCallIds ? { loadedToolCallIds: options.loadedToolCallIds } : {}),
     useMidConversationSystem: options.useMidConversationSystem,
   }).messages;
 }

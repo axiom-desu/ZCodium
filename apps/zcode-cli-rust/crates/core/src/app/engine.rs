@@ -12,7 +12,6 @@ use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-
 /// Actor output: one ordered channel carrying replies, events and host requests.
 pub type RuntimeOutput = mpsc::Sender<Vec<ServerMsg>>;
 /// A request as the actor sees it; `token` echoes back in the reply.
@@ -91,11 +90,11 @@ pub struct Engine {
     pub(super) headless: bool,
     pub(super) events: mpsc::Sender<RunEvent>,
     pub(super) event_rx: mpsc::Receiver<RunEvent>,
-    /// User config hooks and workspace hook trust.
     pub(super) hooks: super::workspace_trust::HookState,
     pub(super) anomaly_guard: crate::domain::model_anomaly::Guard,
-    /// Generated session titles (Node enables them for protocol sessions only).
     pub(super) titles: bool,
+    pub(super) tool_search_mode: crate::domain::tool_search::Mode,
+    pub(super) tool_search_override: Option<crate::domain::tool_search::Mode>,
 }
 impl Engine {
     pub async fn new(
@@ -166,6 +165,8 @@ impl Engine {
             hooks: Default::default(),
             anomaly_guard: Default::default(),
             titles: false,
+            tool_search_mode: crate::domain::tool_search::Mode::Off,
+            tool_search_override: None,
         })
     }
     pub async fn serve(

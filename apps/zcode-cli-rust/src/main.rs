@@ -13,6 +13,12 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use zcode_cli_app_server::{self as app_server, Sink, stdio};
 use zcode_cli_core_api::SessionStore;
+use zcode_cli_domain::tool_search::Mode as ToolSearchMode;
+
+/// clap 已校验取值；未知值退回 Off（clap value_parser 会先拒绝）。
+fn zcode_cli_rust_domain_mode(value: Option<&str>) -> Option<ToolSearchMode> {
+    value.and_then(ToolSearchMode::parse)
+}
 
 #[tokio::main]
 async fn main() {
@@ -107,12 +113,24 @@ async fn app_server(args: AppServerArgs) -> Result<()> {
     };
     output.send_values(vec![progress("ready", 2)]).await?;
     // Node 的协议会话在首条输入后生成标题（`-p` 不生成）。
+    // CLI 显式值优先；未传时由 Desktop Host 的 runtimeConfig 决定（缺省 Off）。
+    let tool_search_override = zcode_cli_rust_domain_mode(args.toolsearch_mode.as_deref());
+    let request_session_preferences = args.surface == "desktop";
     let engine = ctx
         .engine(store, args.config.as_ref(), args.surface == "desktop")
         .await?
+        .with_tool_search_override(tool_search_override)
         .with_title_generation(true);
     // App Server 独占 stdout；返回时已排空 runtime 输出并释放 sink。
-    let served = app_server::serve(move |rx, tx| engine.serve(rx, tx, cancel), input, output).await;
+    let served = app_server::serve_with_options(
+        move |rx, tx| engine.serve(rx, tx, cancel),
+        input,
+        output,
+        app_server::ServeOptions {
+            request_session_preferences,
+        },
+    )
+    .await;
     // 失败路径同样先等写线程落盘：存储失败的错误响应必须送达 Host 后进程才能退出。
     stdio::finish(writer).await?;
     served

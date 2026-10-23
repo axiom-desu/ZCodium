@@ -1,7 +1,7 @@
 //! Opening the shared Node database: Node `SqliteSessionStore.openStartup`
 //! with `runSqliteSessionMigrationsAsync` (`migration-runner.ts`).
 //! Spec rust-m11-node-storage §2.2, §8.
-use super::migrations::{MIGRATIONS, checksum};
+use super::migrations::{MIGRATIONS, SOFT_DELETE_OUTCOME_MIGRATION, checksum};
 use super::open_error::Attempt;
 pub use super::open_error::StartupError;
 use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
@@ -222,7 +222,16 @@ impl Runner<'_> {
                 error.migration_id = Some(migration.id);
                 error
             };
-            self.sql(self.conn.execute_batch(migration.sql), &context)
+            // 0023 守卫：历史库/其它实现可能已加过这两列中的任意一列，重复 alter 会以
+            // "duplicate column name" 中断启动。逐列判存在，只为缺失列执行 ALTER
+            // （Node `0023-…ts` `apply` 的同一守卫）；账本仍写整段 SQL 的 checksum。
+            let sql = if migration.id == SOFT_DELETE_OUTCOME_MIGRATION {
+                let present = self.session_columns()?;
+                super::migrations::missing_soft_delete_ddl(migration.sql, &present)
+            } else {
+                migration.sql.to_owned()
+            };
+            self.sql(self.conn.execute_batch(&sql), &context)
                 .map_err(tag)?;
             if let Some(facts) = &mut self.facts {
                 facts.executed += 1;
@@ -310,6 +319,20 @@ impl Runner<'_> {
             context,
         )?;
         Ok(if data { "upgrade" } else { "initialize" })
+    }
+
+    /// `pragma table_info(session)` 的列名（Node `0023-…ts` `apply` 的守卫输入）。
+    fn session_columns(&self) -> Result<Vec<String>, StartupError> {
+        let context = "SQLite migration column check failed";
+        let mut statement = self
+            .conn
+            .prepare("select name from pragma_table_info('session')")
+            .map_err(|e| StartupError::sqlite(&e, context))?;
+        statement
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(|e| StartupError::sqlite(&e, context))?
+            .collect::<rusqlite::Result<Vec<String>>>()
+            .map_err(|e| StartupError::sqlite(&e, context))
     }
 
     fn applied(&self, id: &str) -> Result<Option<String>, Attempt> {

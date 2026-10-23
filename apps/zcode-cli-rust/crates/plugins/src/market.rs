@@ -6,6 +6,9 @@ use crate::manifest::{Diagnostic, Severity};
 use serde_json::{Map, Value, json};
 use std::path::Path;
 
+// 默认市场登记与读路径的默认补齐拆到 market_defaults，避免本文件超过 checker 的 400 行上限。
+pub use crate::market_defaults::{default_source, ensure_defaults, known_with_defaults};
+
 /// Node `isKnownMarketplaceRecord`.
 fn known_record(value: &Value) -> bool {
     value["id"].is_string()
@@ -21,55 +24,6 @@ pub async fn known(storage: &Path) -> std::io::Result<Vec<Value>> {
         Some(Value::Object(map)) => map.values().filter(|v| known_record(v)).cloned().collect(),
         _ => vec![],
     };
-    Ok(records)
-}
-
-/// Node `defaultMarketplaceSourceFromString`.
-fn default_source(source: &str) -> Value {
-    let trimmed = crate::js::trim(source);
-    let shorthand = !trimmed.contains(':')
-        && trimmed.split('/').count() == 2
-        && trimmed.split('/').all(|part| !part.is_empty());
-    if shorthand {
-        let cut = trimmed.rfind(['#', '@']).filter(|i| *i > 0);
-        return match cut {
-            Some(i) => json!({"source":"github","repo":&trimmed[..i],"ref":&trimmed[i + 1..]}),
-            None => json!({"source":"github","repo":trimmed}),
-        };
-    }
-    json!({"source":"url","url":trimmed})
-}
-
-/// Node `ensureDefaultPluginMarketplaces`: missing default records are
-/// appended and the file rewritten in its array form.
-pub async fn ensure_defaults(storage: &Path) -> std::io::Result<Vec<Value>> {
-    let mut records = known(storage).await?;
-    let now = chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string();
-    let mut changed = false;
-    for default in crate::official::DATA["defaultMarketplaces"]
-        .as_array()
-        .into_iter()
-        .flatten()
-    {
-        if records.iter().any(|r| r["id"] == default["id"]) {
-            continue;
-        }
-        let mut record = json!({"id":default["id"],"source":default_source(default["source"].as_str().unwrap_or_default()),
-            "name":default["name"],"description":default["description"],"addedAt":now,"pluginCount":default["pluginCount"]});
-        if let Some(updated) = default.get("lastUpdated") {
-            record["lastUpdated"] = updated.clone();
-        }
-        records.push(record);
-        changed = true;
-    }
-    if changed {
-        let text = serde_json::to_string_pretty(&json!({"version":1,"marketplaces":records}))
-            .expect("JSON serializes");
-        tokio::fs::create_dir_all(storage).await?;
-        tokio::fs::write(storage.join("known_marketplaces.json"), format!("{text}\n")).await?;
-    }
     Ok(records)
 }
 

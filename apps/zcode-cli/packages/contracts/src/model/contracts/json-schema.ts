@@ -38,6 +38,15 @@ const modelMessageContentBlockJsonSchema = {
   oneOf: [
     {
       type: "object",
+      required: ["type", "toolName"],
+      additionalProperties: false,
+      properties: {
+        type: { enum: ["tool_reference"] },
+        toolName: { type: "string", minLength: 1 },
+      },
+    },
+    {
+      type: "object",
       required: ["type", "text"],
       additionalProperties: false,
       properties: {

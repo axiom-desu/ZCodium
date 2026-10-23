@@ -1,8 +1,21 @@
 import { parseRemoteWorkspaceIdentity } from "@zcode/shared";
 import { TASK_LIST_SESSION_TYPES } from "../zcode-protocol-v4/task-list-session-membership.js";
-import type { SessionId, WorkspaceId } from "@zcode/contracts";
+import type { SessionId, SessionInfo, WorkspaceId } from "@zcode/contracts";
 import type { V4BridgeBasePorts, V4StoredSummariesPort } from "./v4-bridge-shared.js";
 import { normalizeStoredTitleSource } from "./v4-bridge-cold-hydration.js";
+
+/**
+ * 未加载会话的摘要 phase：只由持久 lastOutcome 派生历史终态。
+ * 原因：原先无条件写 `completedSuccess`，于是 Host 冷启动把历史里的失败/中断任务也画成成功。
+ * 缺 lastOutcome 的历史行保持「空闲完成」旧口径（不猜测）。
+ */
+function storedSummaryPhase(
+  lastOutcome: SessionInfo["lastOutcome"],
+): "completedSuccess" | "completedInterrupted" | "error" {
+  if (lastOutcome === "error") return "error";
+  if (lastOutcome === "interrupted") return "completedInterrupted";
+  return "completedSuccess";
+}
 
 export function createStoredSessionSummaries(ports: V4BridgeBasePorts): V4StoredSummariesPort {
   const context = ports.context;
@@ -55,7 +68,6 @@ export function createStoredSessionSummaries(ports: V4BridgeBasePorts): V4Stored
       }
       const stored = await context.deps.sessionStore.listSessions({
         directory: persistedWorkspacePath,
-        includeArchived: false,
         limit: 200,
         // parentID 只表达会话层级，不能作为左侧任务 membership。
         // 显式 fork 必然带 parentID，但重启后仍应由 taskType 投影进 sessions-index。
@@ -68,7 +80,9 @@ export function createStoredSessionSummaries(ports: V4BridgeBasePorts): V4Stored
         ...(session.parentID ? { parentSessionId: String(session.parentID) } : {}),
         title: session.title ?? "",
         titleSource: normalizeStoredTitleSource(session.titleSource),
-        phase: "completedSuccess" as const,
+        phase: storedSummaryPhase(session.lastOutcome),
+        // 持久「上次结果」原样投影；未知历史值在 codec 已按缺失读取，这里不推测。
+        ...(session.lastOutcome ? { lastOutcome: session.lastOutcome } : {}),
         sessionEnded: true,
         hasBackgroundWork: false,
         lastActivityAt: session.time?.updated ?? 0,

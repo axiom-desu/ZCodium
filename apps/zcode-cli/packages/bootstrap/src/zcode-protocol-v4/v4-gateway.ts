@@ -391,9 +391,9 @@ export class ConversationV4Gateway {
   }
 
   /** 会话关闭：清 publisher 与其全部订阅调度；hydration 标记同清（重开走冷启动重建）；
-   *  并从其 workspace index 移除该会话（session.removed 推给列表订阅者）。 */
-  disposeSession(sessionId: string): void {
-    return lifecycle.disposeSession(this.state, sessionId);
+   *  仅当 `deleted` 表明持久软删除已完成时才从 workspace index 移除（session.removed）。 */
+  disposeSession(sessionId: string, options: { deleted?: boolean } = {}): void {
+    return lifecycle.disposeSession(this.state, sessionId, options);
   }
 
   /**

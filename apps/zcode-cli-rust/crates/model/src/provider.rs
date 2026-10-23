@@ -7,7 +7,9 @@ use super::{
     network_status::{self, Attempt, Reporter},
     sse::SseDecoder,
 };
-use crate::contract::{Event, EventSink, ModelFailure, ModelOutput, ModelPort, RequestOrigin};
+use crate::contract::{
+    Event, EventSink, ModelFailure, ModelOutput, ModelPort, ModelRequestOptions, RequestOrigin,
+};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use serde_json::Value;
@@ -55,6 +57,7 @@ impl HttpModel {
     async fn request(
         &self,
         (body, server_tools): (Bytes, bool),
+        options: &ModelRequestOptions,
         attempt: &mut Attempt,
         output: &mut TextBuffer<'_>,
         auth: &Value,
@@ -71,17 +74,13 @@ impl HttpModel {
                 .map_err(|_| ModelFailure::new("auth_failed", false))?,
         };
         let mut headers = self.headers(key.as_deref(), auth, &output.origin(), attempt)?;
+        if options.tool_search_enabled {
+            // Native ToolSearch 只对 Anthropic 生效；与既有 websearch beta 共存不覆盖。
+            super::tool_search::append_beta(&mut headers, super::tool_search::BETA);
+        }
         if server_tools {
-            // AI SDK webSearch_20260209 的 beta；已有 beta 时逗号追加。
-            const BETA: &str = "code-execution-web-tools-2026-02-09";
-            let merged = match headers.get("anthropic-beta") {
-                Some(existing) if existing.split(',').any(|b| b.trim() == BETA) => {
-                    existing.to_owned()
-                }
-                Some(existing) => format!("{existing},{BETA}"),
-                None => BETA.to_owned(),
-            };
-            headers.set("anthropic-beta", merged);
+            // 既有原生搜索 beta，保留原有追加语义。
+            super::tool_search::append_beta(&mut headers, super::tool_search::WEB_SEARCH_BETA);
         }
         attempt.phase = "stream";
         output.status(reporter.started(attempt)).await?;
@@ -160,6 +159,7 @@ impl HttpModel {
         &self,
         messages: Vec<Value>,
         tools: &[Value],
+        options: &ModelRequestOptions,
         sink: &EventSink,
         (current, logical_call): (&std::sync::Mutex<Option<Attempt>>, &str),
     ) -> Result<ModelOutput> {
@@ -172,7 +172,13 @@ impl HttpModel {
             _ => None,
         };
         let server_tools = tools.iter().any(|t| t["type"] != "function");
-        let body = model_protocol::body(&self.config, messages, tools, user.as_deref())?;
+        let body = model_protocol::body(
+            &self.config,
+            messages,
+            tools,
+            user.as_deref(),
+            options.tool_search_enabled,
+        )?;
         // Bytes 克隆只增加引用计数；同一模型步骤的网络重试不再编码整段历史。
         let encoded = Bytes::from(
             serde_json::to_vec(&body).map_err(|_| ModelFailure::new("invalid_request", false))?,
@@ -212,6 +218,7 @@ impl HttpModel {
                     let result = self
                         .request(
                             (encoded.clone(), server_tools),
+                            options,
                             &mut attempt,
                             &mut output,
                             &auth,
@@ -304,84 +311,10 @@ async fn deadline(at: Option<Instant>) {
         None => std::future::pending().await,
     }
 }
-#[async_trait::async_trait]
-impl ModelPort for HttpModel {
-    fn identity(&self) -> Option<crate::contract::ModelIdentity> {
-        Some(crate::contract::ModelIdentity {
-            provider_id: self.config.provider_id.clone(),
-            model_id: self.config.model_id.clone(),
-            reasoning_level: self.config.reasoning_level.clone(),
-        })
-    }
-    fn format_properties(&self) -> Value {
-        self.config.format_properties.clone().unwrap_or_else(|| serde_json::json!({"inputFormat":{"supportsText":true,"supportsImage":false,"supportsVideo":false,"supportsAudio":false,"supportsPdf":false},"outputFormat":{"supportsText":true}}))
-    }
-    fn auxiliary(&self) -> Option<Arc<dyn ModelPort>> {
-        self.with_max_output_tokens(4096).ok().flatten()
-    }
-    fn supports_native_web_search(&self) -> bool {
-        self.config.supports_native_web_search
-    }
-    fn account_auth(&self) -> bool {
-        self.config.account_access.is_some()
-    }
-    fn with_max_output_tokens(
-        &self,
-        max: usize,
-    ) -> anyhow::Result<Option<std::sync::Arc<dyn ModelPort>>> {
-        anyhow::ensure!(max > 0, "Invalid output token limit");
-        let mut config = self.config.clone();
-        config.max_output_tokens = max.min(config.max_output_tokens);
-        if let Some(map) = &config.max_output_map {
-            let patch = crate::domain::option_map::evaluate(
-                map,
-                "maxOutputTokens",
-                &serde_json::json!(config.max_output_tokens),
-            )?;
-            config.option_patches[1] = patch;
-            crate::domain::option_map::validate_patches(&config.option_patches)?;
-        }
-        Ok(Some(Arc::new(Self::new(config, self.egress.clone()))))
-    }
-    fn context_policy(&self) -> crate::domain::context::ContextPolicy {
-        crate::domain::context::ContextPolicy {
-            window: self.config.context_window,
-            max_output: self.config.max_output_tokens,
-            buffer: self.config.context_buffer_tokens,
-            automatic: self.config.auto_compact,
-        }
-    }
-    async fn complete(
-        &self,
-        messages: Vec<Value>,
-        tools: &[Value],
-        sink: &EventSink,
-        cancel: &CancellationToken,
-    ) -> Result<ModelOutput> {
-        let current = std::sync::Mutex::new(None);
-        // Node 每次模型调用（含其重试）共用一个 logicalCallId。
-        let logical_call = uuid::Uuid::new_v4().to_string();
-        let result = tokio::select! {biased;
-            _=cancel.cancelled()=>Err(ModelFailure::cancelled()),
-            result=self.complete_inner(messages,tools,sink,(&current,&logical_call))=>return result,
-        };
-        let attempt = current.lock().unwrap().take();
-        if let Some(attempt) = attempt {
-            let reporter = Reporter {
-                config: &self.config,
-                origin: &sink.origin,
-                max_attempts: self.retry.max_attempts,
-                logical_call: &logical_call,
-            };
-            let failure = ModelFailure::cancelled();
-            let status = reporter.failed(&attempt, &failure, false, self.idle_ms(attempt.budget()));
-            let _ = sink.send(Event::ModelStatus(status)).await;
-        }
-        result
-    }
-}
 #[path = "provider_auth.rs"]
 mod auth;
+#[path = "provider_port.rs"]
+mod port;
 #[cfg(test)]
 #[path = "provider_retry_tests.rs"]
 mod retry_tests;

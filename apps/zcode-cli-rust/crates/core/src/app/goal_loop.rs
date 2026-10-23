@@ -1,6 +1,6 @@
 use super::context::{RunContext, hidden_request};
 use crate::{
-    contract::{Event, EventSink, ModelPort},
+    contract::{Event, EventSink, ModelPort, ToolPort},
     domain::goal::Verdict,
 };
 use anyhow::{Context, Result, bail};
@@ -10,6 +10,7 @@ use tokio_util::sync::CancellationToken;
 
 pub(super) async fn advance(
     model: &dyn ModelPort,
+    tools: &dyn ToolPort,
     history: &mut RunContext,
     prefix: &[Value],
     sink: &EventSink,
@@ -26,11 +27,16 @@ pub(super) async fn advance(
     };
     let (mut messages, _) = history.projection(prefix, 0);
     messages.push(json!({"role":"user","content":goal.prompt("goalVerify", None)}));
+    // 与主步骤共用请求准备：Goal 用空工具目录自动降级，历史引用/公告仍按
+    // Off 投影（占位/隐藏），包装调用还原，避免 provider 收到未投影引用后 fail-open。
+    let plan = super::tool_search::plan(model, tools, &sink.session_id, history, &[])?;
+    let messages = plan.project(&messages);
     // 修复：验证请求原先复用压缩的 hidden_summary，来源记为 compact；Node 的来源是
     // target_completion_verification，网络状态、session/debug 与用量都按它归属。
     let request = hidden_request(
         model,
-        (messages, &[]),
+        (messages, &plan.tools),
+        &plan.options,
         sink,
         "target_completion_verification",
         cancel,

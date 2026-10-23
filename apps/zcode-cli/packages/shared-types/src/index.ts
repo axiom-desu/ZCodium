@@ -38,6 +38,8 @@ export type GlobalOptions = {
   memoryBench?: boolean;
   noColor: boolean;
   outputFormat?: GlobalOutputFormat;
+  /** --toolsearch-mode 的启动覆盖；缺省 off，只影响本次调用。 */
+  toolSearchMode?: "auto" | "native" | "local" | "off";
   verbose: boolean;
 };
 

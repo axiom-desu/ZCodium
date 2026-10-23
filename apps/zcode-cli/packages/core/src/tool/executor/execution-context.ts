@@ -35,6 +35,7 @@ export function createToolExecutionContext(input: {
     bashAvailable: deps.registry.has("Bash"),
   });
   const context: ToolExecutionContext = {
+    toolSearch: options?.toolSearch,
     toolCallId: canonicalToolCall.id,
     automationTurn: options?.automationTurn,
     traceContext,

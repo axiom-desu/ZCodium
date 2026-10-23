@@ -40,6 +40,8 @@ pub(super) fn definitions() -> Vec<Value> {
     let description = crate::domain::web::search::description(template, &month);
     definitions.push(json!({"type":"function","function":{"name":"WebSearch","description":description,"parameters":schemas["WebSearch"]}}));
     definitions.extend(crate::domain::plan_mode::definitions());
+    // ToolSearch / DeferredToolCall 控制入口也在注册目录里（Off 时请求准备隐藏）。
+    definitions.extend(super::tool_search_meta::definitions());
     definitions
 }
 

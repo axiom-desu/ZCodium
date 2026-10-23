@@ -198,6 +198,7 @@ async fn run(prompt: PromptArgs, cwd: PathBuf) -> anyhow::Result<i32> {
     let engine = ctx
         .standalone_engine(store, config.as_ref(), prompt.surface == "desktop")
         .await?
+        .with_tool_search_mode(prompt.tool_search_mode)
         .with_headless();
     let path = ctx.requested_cwd.to_string_lossy().into_owned();
     let mut workspace = json!({"workspacePath": path, "workspaceKey": ctx.workspace});

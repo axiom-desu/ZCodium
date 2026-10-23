@@ -4,6 +4,8 @@
 
 import {
   type RuntimeInputPresentation,
+  type ModelCallWrapper,
+  type ModelToolCall,
   modelMessageContentToText,
   type ModelCacheControl,
   type ModelMessageContent,
@@ -33,9 +35,21 @@ export {
 
 // Tool call from model (simple type, no brand)
 export interface ToolCallInput {
+  /** 内部历史保存目标身份；该标记只在模型协议出口还原 DeferredToolCall 包装。 */
+  modelCallWrapper?: ModelCallWrapper;
   id: string;
   name: string;
   input: unknown;
+}
+
+// 仅模型协议出口和原始调用诊断使用；内部消费者始终读取目标 name/input。
+export function toModelToolCall(call: ToolCallInput): ModelToolCall {
+  if (!call.modelCallWrapper) return call;
+  return {
+    id: call.id,
+    name: call.modelCallWrapper,
+    input: { name: call.name, input: call.input },
+  };
 }
 
 export type ReasoningContentInput = ModelReasoningContentBlock;
@@ -47,6 +61,8 @@ export interface ModelInputMessage {
   toolCalls?: ToolCallInput[];
   toolCallId?: string;
   toolName?: string;
+  /** 结果侧包装标记：请求渲染据此恢复原始包装名，剥离后不进入模型输入。 */
+  modelCallWrapper?: ModelCallWrapper;
   isError?: boolean;
   providerId?: Model["providerId"];
   modelId?: Model["modelId"];
@@ -61,6 +77,17 @@ export type RuntimeMessageSource =
 export interface RuntimeMessageMetadata {
   source: RuntimeMessageSource;
   inputPresentation?: RuntimeInputPresentation;
+  /** 有效 compact 边界携带的真实发现名；只由成功生效的边界挂到 summary entry。 */
+  compactBoundary?: { boundaryId: string; preCompactDiscoveredTools?: readonly string[] };
+  /**
+   * 本条公告自身的增量事实：不保存完整目录快照或正文，名称事实与文案分开保存。
+   * 三个数组去重排序，readdedNames 是 addedNames 的子集。
+   */
+  toolSearchAnnouncement?: {
+    addedNames: readonly string[];
+    removedNames: readonly string[];
+    readdedNames: readonly string[];
+  };
 }
 
 export interface RuntimeMessageMessageEntry {
@@ -122,6 +149,7 @@ export interface MessageHistory {
     content: ModelMessageContent,
     success: boolean,
     isError?: boolean,
+    modelCallWrapper?: ModelCallWrapper,
   ): void;
 
   // 借用当前权威 entries，只允许同步只读；跨异步边界时由调用方做数组浅快照。
@@ -229,8 +257,11 @@ export class MessageHistoryImpl implements MessageHistory {
     content: ModelMessageContent,
     success: boolean,
     isError = !success,
+    modelCallWrapper?: ModelCallWrapper,
   ): void {
-    this.entries.push(createRuntimeToolResultEntry(toolCallId, toolName, content, isError));
+    this.entries.push(
+      createRuntimeToolResultEntry(toolCallId, toolName, content, isError, modelCallWrapper),
+    );
     this.cacheStats.totalMessages = this.entries.length;
   }
 
@@ -386,6 +417,7 @@ export function createRuntimeAssistantEntry(
         id: toolCall.id,
         name: toolCall.name,
         input: toolCall.input,
+        ...(toolCall.modelCallWrapper ? { modelCallWrapper: toolCall.modelCallWrapper } : {}),
       })),
       ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
     },
@@ -398,6 +430,7 @@ export function createRuntimeToolResultEntry(
   toolName: string,
   content: ModelMessageContent,
   isError: boolean,
+  modelCallWrapper?: ModelCallWrapper,
 ): RuntimeMessageMessageEntry {
   return {
     message: {
@@ -405,6 +438,7 @@ export function createRuntimeToolResultEntry(
       content,
       toolCallId,
       toolName,
+      ...(modelCallWrapper ? { modelCallWrapper } : {}),
       isError,
     },
   };

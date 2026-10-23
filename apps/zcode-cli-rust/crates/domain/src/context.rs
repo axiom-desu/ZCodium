@@ -6,6 +6,9 @@ use serde_json::{Value, json};
 pub struct ContextState {
     pub offset: usize,
     pub summary: Option<String>,
+    /// 上一次成功 compact 生效的发现检查点（ToolSearch，Node `preCompactDiscoveredTools`）。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pre_compact_discovered_tools: Vec<String>,
 }
 #[derive(Clone, Copy)]
 pub struct ContextPolicy {

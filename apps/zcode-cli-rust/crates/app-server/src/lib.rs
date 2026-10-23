@@ -9,6 +9,6 @@ mod server;
 mod sink;
 pub mod stdio;
 mod subscription;
-pub use server::serve;
+pub use server::{ServeOptions, serve, serve_with_options};
 pub use sink::Sink;
 pub use stdio::{finish, start, storage_prepare};

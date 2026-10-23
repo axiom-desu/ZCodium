@@ -86,6 +86,7 @@ impl Engine {
                 source,
                 body,
                 message,
+                metadata,
                 committed,
             } => {
                 let live = self
@@ -96,7 +97,7 @@ impl Engine {
                     session.append_message(message);
                     // 修复：提醒原先只进内存历史，冷恢复后丢失、请求前缀错位；Node 以 model-only
                     // notice 原文落库，hydration 按同一 source 重建提醒。
-                    self.node_model_notice(&id, source, &body);
+                    self.node_model_notice(&id, source, &body, metadata.as_ref());
                     self.persist(&id, None).await?;
                     let _ = committed.send(());
                 }

@@ -45,6 +45,12 @@ pub trait SessionStore: Send + Sync {
     async fn read_session(&self, _workspace: &str, _id: &str) -> Result<Option<Session>> {
         anyhow::bail!("Read-only session snapshot unavailable")
     }
+    /// Node `softDeleteSession(id, at)`: the durable "deleted" fact (coalesce keeps the
+    /// first time, so repeats are idempotent). `workspace` scopes the write to this
+    /// identity's row; another workspace's session is refused, never deleted.
+    async fn soft_delete_session(&self, _workspace: &str, _id: &str, _at: u64) -> Result<()> {
+        anyhow::bail!("Session soft deletion unavailable")
+    }
     /// Node `listSessionSubagents`' stored facts of `parent`; `None` without a
     /// session row.
     async fn subagent_facts(

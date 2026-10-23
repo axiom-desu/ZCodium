@@ -1,3 +1,4 @@
+export type { ToolSearchMode } from "@zcode/contracts";
 import type { TuiReadClipboardImage, TuiWriteClipboardText } from "@zcode/tui";
 import type { UiLocale } from "@zcode/i18n";
 import type { Logger } from "@zcode/contracts";

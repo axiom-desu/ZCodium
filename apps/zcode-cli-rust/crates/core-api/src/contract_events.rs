@@ -68,6 +68,8 @@ pub enum Event {
         /// The reminder body the Node notice stores.
         body: String,
         message: Value,
+        /// Extra structured metadata (ToolSearch 增量公告) of the notice.
+        metadata: Option<Value>,
         committed: oneshot::Sender<()>,
     },
     /// First step of a root session's run: its configured (user and plugin)

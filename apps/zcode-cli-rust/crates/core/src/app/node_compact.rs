@@ -106,10 +106,15 @@ impl Engine {
                 let reminders: Vec<Value> = reminders
                     .iter()
                     .map(|m| {
-                        json!({"messageId": nj::message_id(now, &self.clock.id()),
+                        let mut reminder = json!({"messageId": nj::message_id(now, &self.clock.id()),
                             "partId": nj::part_id(now, &self.clock.id()),
                             "source": m["_zcode_source"],
-                            "content": reminder_body(m["content"].as_str().unwrap_or(""))})
+                            "content": reminder_body(m["content"].as_str().unwrap_or(""))});
+                        // 公告增量事实与正文同次保存（既有 JSON metadata，不加数据库列）。
+                        if let Some(delta) = m.get(crate::domain::tool_search::ANNOUNCEMENT_KEY) {
+                            reminder["toolSearchAnnouncement"] = delta.clone();
+                        }
+                        reminder
                     })
                     .collect();
                 let tools: serde_json::Map<String, Value> = self
@@ -119,6 +124,10 @@ impl Engine {
                     .collect();
                 let s = &self.sessions[id];
                 let selection = json!({"providerId": s.provider, "modelId": s.model});
+                let mut discovery = Value::Null;
+                if !context.pre_compact_discovered_tools.is_empty() {
+                    discovery = json!(context.pre_compact_discovered_tools);
+                }
                 let summary = nj::message_id(now, &self.clock.id());
                 let done = json!({
                     "summaryMessageId": summary,
@@ -135,6 +144,7 @@ impl Engine {
                     "groupsPreserved": groups,
                     "postCompactTokenCount": total_tokens(usage),
                     "truePostCompactTokenCount": tokens + prefix,
+                    "preCompactDiscoveredTools": discovery,
                     "reminders": reminders,
                 });
                 let s = self.sessions.get_mut(id).unwrap();
@@ -162,7 +172,13 @@ impl Engine {
 
     /// A model-only reminder notice of `source` (todo reminder, plugin
     /// reference; Node `persistSyntheticUserNoticeForSession`).
-    pub(super) fn node_model_notice(&mut self, id: &str, source: &str, text: &str) {
+    pub(super) fn node_model_notice(
+        &mut self,
+        id: &str,
+        source: &str,
+        text: &str,
+        metadata: Option<&Value>,
+    ) {
         if !self.journaled(id) {
             return;
         }
@@ -177,7 +193,7 @@ impl Engine {
                 part: nj::part_id(now, &part),
                 source,
                 text,
-                metadata: None,
+                metadata: metadata.cloned(),
                 tools: &tools,
             },
         );

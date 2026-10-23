@@ -7,6 +7,34 @@ use serde_json::{Value, json};
 use std::{collections::BTreeSet, sync::Arc};
 
 impl Hub {
+    /// ToolSearch 元数据：MCP 工具使用真实 `_meta` 与 server 配置。
+    pub fn tool_search_metadata(
+        &self,
+        session: &str,
+        name: &str,
+    ) -> crate::domain::tool_search::Metadata {
+        let Some(binding) = self
+            .state
+            .read()
+            .unwrap()
+            .bindings
+            .get(session)
+            .and_then(|bindings| bindings.iter().find(|b| b.name == name))
+            .cloned()
+        else {
+            return Default::default();
+        };
+        crate::domain::tool_search::Metadata {
+            should_defer: true,
+            always_load: binding.always_load,
+            search_hint: binding.search_hint.clone(),
+            provider_native: false,
+            mcp: Some(crate::domain::tool_search::McpName {
+                server_name: binding.server.clone(),
+                tool_name: binding.original.clone(),
+            }),
+        }
+    }
     fn binding<T>(&self, session: &str, name: &str, f: impl FnOnce(&Binding) -> T) -> Option<T> {
         let state = self.state.read().unwrap();
         let bindings = state.bindings.get(session)?;
@@ -40,6 +68,13 @@ pub(super) fn bind(
         ensure!(names.insert(name.clone()), "MCP tool namespace collision");
         ensure!(tool["inputSchema"].is_object(), "MCP tool schema required");
         let definition = json!({"type":"function","function":{"name":name,"description":tool["description"].as_str().unwrap_or(""),"parameters":tool["inputSchema"]}});
+        // 只读真实 `_meta`：非布尔/非字符串按未配置处理，不改变连接、鉴权或权限。
+        let always_load = matches!(tool["_meta"]["anthropic/alwaysLoad"].as_bool(), Some(true))
+            || server.always_load == Some(true);
+        let search_hint = tool["_meta"]["anthropic/searchHint"]
+            .as_str()
+            .filter(|hint| !hint.trim().is_empty())
+            .map(str::to_owned);
         ensure!(
             definition.to_string().len() <= 256 * 1024,
             "MCP schema exceeds size limit"
@@ -53,6 +88,8 @@ pub(super) fn bind(
                 && tool["annotations"]["destructiveHint"] == false,
             read_only: tool["annotations"]["readOnlyHint"] == true,
             destructive: tool["annotations"]["destructiveHint"] == true,
+            always_load,
+            search_hint,
             definition,
             connection: connection.clone(),
         });

@@ -259,6 +259,14 @@ impl Reporter<'_> {
         status["errorPhase"] = attempt.phase.into();
         status["exceptionType"] = exception_type(failure).into();
         status["streamOutputCommitted"] = failure.output_committed.into();
+        // 失败请求的真实用量只随终止失败事件结算一次（Node `model_request_failed.usage`），
+        // 重试中的失败不携带 usage，避免与后续成功重复计数。
+        if !retryable && let Some(raw) = &failure.usage {
+            let usage = usage(raw);
+            if usage.as_object().is_some_and(|u| !u.is_empty()) {
+                status["usage"] = usage;
+            }
+        }
         if let Some(detail) = &failure.detail {
             for (key, value) in [
                 ("providerErrorCode", &detail.provider_error_code),

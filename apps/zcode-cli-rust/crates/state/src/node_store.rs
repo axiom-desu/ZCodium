@@ -28,6 +28,8 @@ pub(super) enum Request {
     Settings(String, Reply<Settings>),
     SaveSetting(String, (String, String), Value, Reply<()>),
     Commit(String, Vec<Write>, CommitReply),
+    /// Node `softDeleteSession`: the durable fact must land before the runtime is released.
+    SoftDelete(String, String, i64, Reply<()>),
     Usage(Box<crate::domain::usage::Fact>),
     /// Replies once every earlier request was handled.
     Barrier(oneshot::Sender<()>),
@@ -159,6 +161,9 @@ impl Worker {
                 Request::Commit(session, writes, reply) => {
                     let _ = reply.send(self.commit(&session, &writes).map_err(|e| (e, writes)));
                 }
+                Request::SoftDelete(id, workspace, at, reply) => {
+                    let _ = reply.send(self.soft_delete(&id, &workspace, at));
+                }
                 Request::Usage(fact) => {
                     // 用量是观测数据：写入失败只记日志，不影响会话提交。
                     if let Err(error) = self.usage.record(&self.conn, &fact, now_ms() as u64) {
@@ -171,6 +176,18 @@ impl Worker {
                 }
             }
         }
+    }
+
+    /// Node `softDeleteSession` scoped to this workspace: another identity's row is untouched.
+    fn soft_delete(&mut self, id: &str, workspace: &str, at: i64) -> Result<()> {
+        let Some(row) = sessions::get(&self.conn, id)? else {
+            return Ok(());
+        };
+        if listing::workspace_key(&row) != workspace {
+            anyhow::bail!("Foreign session row: {id}");
+        }
+        sessions::soft_delete(&self.conn, id, at)?;
+        Ok(())
     }
 
     fn commit(&mut self, session: &str, writes: &[Write]) -> Result<()> {
@@ -231,6 +248,8 @@ impl Worker {
                     created_at: row.time_created.max(0) as u64,
                     updated_at: row.time_updated.max(0) as u64,
                     archived_at: row.time_archived.map(|t| t.max(0) as u64),
+                    deleted_at: row.time_deleted.map(|t| t.max(0) as u64),
+                    last_outcome: row.last_outcome.clone(),
                 }
             })
             .collect())

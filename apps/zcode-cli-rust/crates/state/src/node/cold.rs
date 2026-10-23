@@ -24,6 +24,8 @@ pub fn records(conn: &Connection, session: &str) -> Result<Vec<Record>> {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct History {
     pub summary: Option<String>,
+    /// 有效 compact 边界的 ToolSearch 发现检查点（Node `preCompactDiscoveredTools`）。
+    pub pre_compact_discovered_tools: Vec<String>,
     pub messages: Vec<Value>,
     /// The stored message id of each of `messages`.
     pub sources: Vec<String>,
@@ -72,6 +74,22 @@ pub fn history_of(
             .and_then(|content| content.as_str().map(str::to_owned))
             .unwrap_or_default()
     });
+    let pre_compact_discovered_tools =
+        summary_record
+            .and_then(|record| {
+                record.as_ref().parts.iter().find(|part| {
+                    part["type"] == "compaction" && part["compactBoundary"].is_object()
+                })
+            })
+            .and_then(|part| part["compactBoundary"]["preCompactDiscoveredTools"].as_array())
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
     let rest = if summary.is_some() {
         &active[1..]
     } else {
@@ -80,6 +98,7 @@ pub fn history_of(
     let hydrated = node_history::hydrate(rest, artifacts);
     History {
         summary,
+        pre_compact_discovered_tools,
         messages: hydrated.entries.iter().map(|e| e.canonical()).collect(),
         sources: hydrated.sources,
         interrupted_tools: hydrated.interrupted_tools,

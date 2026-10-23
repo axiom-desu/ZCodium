@@ -56,7 +56,11 @@ impl Responses {
                         delta(&mut self.inner,output,json!({"tool_calls":[{"index":n,"id":item["call_id"],"type":"function","function":{"name":item["name"],"arguments":args}}]})).await?;
                         args.to_owned()
                     }
-                    "message" | "reasoning" => String::new(),
+                    "message" | "reasoning" => {
+                        // 推理 item（含加密载荷）与 Node hasReasoningContent 同义。
+                        self.inner.reasoning_frames = item["type"] == "reasoning";
+                        String::new()
+                    }
                     _ => return Err(ModelFailure::invalid()),
                 };
                 self.items.insert(

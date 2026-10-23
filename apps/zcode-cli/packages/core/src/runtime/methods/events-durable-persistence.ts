@@ -35,6 +35,24 @@ export async function persistDurableSessionEvent(
 ): Promise<void> {
   if (!this.sessionStore) return;
 
+  if (event.type === SessionEventType.TurnComplete || event.type === SessionEventType.TurnError) {
+    const payload = event.payload as { resultType?: string };
+    // 原因：终态结果只存在内存事件里时，Host 冷启动会把每个历史任务都推导成「成功」，
+    // 侧栏无法区分上次是中断还是失败。这里在终态事件发布前（appendEvent 的 durable 阶段）
+    // 用唯一 session 行写入 last_outcome，不新增第二份事实。
+    await this.sessionStore.updateSession({
+      id: event.sessionId,
+      lastOutcome:
+        event.type === SessionEventType.TurnError
+          ? "error"
+          : payload.resultType === "cancelled"
+            ? "interrupted"
+            : "completed",
+      timeUpdated: event.timestamp.getTime(),
+    });
+    return;
+  }
+
   if (event.type === SessionEventType.CheckpointCreated) {
     await persistWorkspaceCheckpointEntry(this, event, traceContext);
     return;

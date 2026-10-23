@@ -58,7 +58,8 @@ export async function resumeFromStore(
 
   const traceContext = options?.traceContext ?? this.rootTraceContext;
   const persistedSession = await this.sessionStore.getSession(this.sessionId);
-  if (!persistedSession || persistedSession.time.archived !== undefined) {
+  // 软删除的会话等同于不存在：不能靠 resume 重新激活（旧 time_archived 只读兼容，不再拦截）。
+  if (!persistedSession || persistedSession.time.deleted !== undefined) {
     throw createCoreError(CoreErrorType.SessionNotFound, `Session not found: ${this.sessionId}`, {
       context: { sessionId: this.sessionId },
       recoverable: true,
