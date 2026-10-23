@@ -129,7 +129,14 @@ knip 的 `duplicates` 在真实 JSON 报告里是「组 → 成员」的嵌套�
 - `version` 升级必须写迁移；不得静默忽略未知 version（对应上面的结构校验）。
 - 基线只存 key 与 count，不重复存 kind/file/name 字段。
 
-## 基线快照（PR 前本地实测，2026-10-20）
+## 当前基线（ACK/lint 修复候选）
+
+原始 lint 的 231 条诊断（86 errors / 145 warnings）已清零，lint 基线从 180 个指纹收紧为 0；
+format 仍为 0；knip 仅移除已消除的 13 个旧指纹，1141 → 1128。
+逐 key 对比确认没有新增 key 或 count 增长，不以新的忽略/豁免换取通过。
+原始 knip 仍有既有债务，不宣称该工具清零；上游后续同步须守住这个更紧基线。
+
+## 历史基线快照（PR#85 前本地实测，2026-10-20）
 
 | gate   | entries | 诊断总量                      | 基线 sum | 本地 gate 结果 | 原始真值                                           |
 | ------ | ------: | ----------------------------- | -------: | -------------- | -------------------------------------------------- |
@@ -159,9 +166,12 @@ knip 的 `duplicates` 在真实 JSON 报告里是「组 → 成员」的嵌套�
 - **本地口径未复现**：同 HEAD 本地 `pnpm gate:knip` 为 1141（`CI=true` 亦为 1141）。
   该差异原因尚未确认，本地 `dist` 存在只是待验证假设之一，不作为结论；本次只按 CI 证据做 TS 治理修正，
   不据此改动基线或断言 CI 已通过。
-- **回归约束**：`scripts/ci/ts-governance-types.test.mjs` 用 TypeScript compiler API 解析这 2 个源文件，
-  断言 5 个类型仍存在且不再导出，并断言 P0-A 移除的 `PermissionDecisionResult` / `ToolScheduleItem`
-  不在本地重新声明、仍走权威定义。测试只读源码，无运行时变更。
+- **回归约束**：`scripts/ci/ts-governance-types.test.mjs` 首轮断言这 5 个类型文件内私有。
+  在后续 lint 按职责拆分后，3 个 config 类型继续文件内私有；2 个 marketplace 类型在唯一内部类型模块定义，
+  允许为实际包内消费者导出，但不得恢复到 marketplace/plugins/adapters 公开入口。
+  当前守卫核对唯一权威声明、实际跨文件类型消费和公开导出闭包，而不是硬编码已迁走的声明位置。
+  P0-A 移除的 `PermissionDecisionResult` / `ToolScheduleItem` 仍不得重新声明、仍走权威定义。
+  测试只读源码，无运行时变更。
 - **状态**：以上为本地验证；远端 CI 结果以 PR#85 重新运行后的实际结论为准，**本记录不宣称 CI 已通过**。
 
 ## 已知不敏感（不得声称全覆盖）
