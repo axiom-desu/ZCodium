@@ -1,6 +1,7 @@
 //! Applying a session's journal writes with Node's repository SQL (spec
 //! rust-m11-node-storage §5.1). The caller owns the transaction.
 use super::entries::{self, Entry};
+use super::input_history;
 use super::inputs;
 use super::messages::{self, remove_message, save_message, save_part};
 use super::sessions::{self, Create, Update};
@@ -154,6 +155,19 @@ pub fn apply(conn: &Connection, session: &str, writes: &[Write]) -> Result<()> {
             } => {
                 let pair = (&entry(execution), &entry(receipt));
                 super::full_access::commit(conn, session, queue, pair, now)?
+            }
+            // 历史与 accepted input/ACK 同事务：失败提交不会留下孤立历史行。
+            Op::InputHistory(entry) => {
+                input_history::record(
+                    conn,
+                    &entry.id,
+                    &input_history::scope(&entry.project),
+                    entry.session.as_deref(),
+                    &entry.text,
+                    entry.attachments.as_ref(),
+                    &entry.kind,
+                    now,
+                )?;
             }
             Op::StableBoundary {
                 boundary,

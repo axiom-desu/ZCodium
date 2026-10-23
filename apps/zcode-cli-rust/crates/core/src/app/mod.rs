@@ -43,6 +43,7 @@ mod session_residency;
 
 mod busy_input;
 mod input_admission;
+mod input_history;
 mod permission_answers;
 mod permissions;
 mod run;

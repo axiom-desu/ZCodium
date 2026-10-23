@@ -197,6 +197,15 @@ impl crate::contract::SessionStore for NodeStore {
         self.read(move |conn| super::usage_query::task(conn, "", &session))
             .await
     }
+    async fn recall_input_history(&self, workspace: &str, skip: u32) -> Result<Option<Value>> {
+        // 读写共用 `input_history::scope`：完整 identity key，不按路径/slug 合并。
+        let scope = super::node::input_history::scope(workspace);
+        self.read(move |conn| {
+            let entry = super::node::input_history::recall(conn, &scope, i64::from(skip))?;
+            Ok(entry.as_ref().map(super::node::input_history::value))
+        })
+        .await
+    }
     async fn load(&self, _workspace: &str) -> Result<(Vec<Session>, BTreeMap<String, Value>)> {
         bail!("Whole-workspace loading is unavailable; sessions load on demand")
     }

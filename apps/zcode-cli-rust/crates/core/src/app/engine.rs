@@ -337,6 +337,7 @@ impl Engine {
             Method::ConversationFileChanges => self.file_changes(p).await,
             Method::ConversationFileRewindPreview => self.rewind_preview(p).await,
             Method::SessionRead => self.read_cold_session(p).await,
+            Method::InputHistoryRecall => self.input_history_recall(p).await,
             Method::CommandsQuery => self.query_acks(p).await,
             Method::SessionList => self.list_sessions(p).await,
             Method::SessionSubagents => self.subagents_query(p).await,

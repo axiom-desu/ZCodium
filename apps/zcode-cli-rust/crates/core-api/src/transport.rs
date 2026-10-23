@@ -18,6 +18,9 @@ macro_rules! methods {
             TopicOpen,
             /// Return the current snapshot of an already opened topic.
             TopicSnapshot,
+            /// Read one entry of this workspace identity's input history
+            /// (`{skip}`): a frontend read, never a public wire method.
+            InputHistoryRecall,
         }
         impl Method {
             pub fn parse(name: &str) -> Option<Self> {
@@ -36,6 +39,7 @@ macro_rules! methods {
                     $(Self::$variant => $name,)*
                     Self::TopicOpen => "internal/topicOpen",
                     Self::TopicSnapshot => "internal/topicSnapshot",
+                    Self::InputHistoryRecall => "internal/inputHistory/recall",
                 }
             }
         }
@@ -304,6 +308,13 @@ mod tests {
             assert_eq!(Method::parse(method.as_str()), Some(method));
         }
         assert_eq!(Method::parse(Method::TopicOpen.as_str()), None);
+        assert_eq!(Method::parse(Method::TopicSnapshot.as_str()), None);
+        // 历史读取是前端内部方法：公共 stdio 协议不增加历史方法。
+        assert_eq!(
+            Method::InputHistoryRecall.as_str(),
+            "internal/inputHistory/recall"
+        );
+        assert_eq!(Method::parse(Method::InputHistoryRecall.as_str()), None);
         assert_eq!(Method::parse("v4/conversation/subscribe"), None);
     }
 
