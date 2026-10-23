@@ -828,17 +828,20 @@ const v4AttachmentUploadIdSchema = z
   .max(128)
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
 const v4AttachmentChecksumSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
+// 文件名不能含 NUL 与换行。字面量控制字符会被 no-control-regex 拦下，
+// 这里用码点拼出等价字符类，校验语义与 ^[^\0\r\n]+$ 完全一致。
+const v4AttachmentFileNameSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(new RegExp(`^[^${String.fromCharCode(0)}\\r\\n]+$`));
 
 export const v4AttachmentBeginParamsSchema = z
   .object({
     connectionId: z.string().min(1),
     uploadId: v4AttachmentUploadIdSchema,
     sessionId: z.string().min(1),
-    fileName: z
-      .string()
-      .min(1)
-      .max(255)
-      .regex(/^[^\0\r\n]+$/),
+    fileName: v4AttachmentFileNameSchema,
     mime: z
       .string()
       .min(3)

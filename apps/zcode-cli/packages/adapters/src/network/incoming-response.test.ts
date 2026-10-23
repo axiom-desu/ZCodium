@@ -23,7 +23,8 @@ function fakeIncoming(
     statusMessage: options.statusMessage,
   });
   // spy 而不是替换：`Readable.toWeb` 依赖底层流的真实 resume 行为。
-  const resume = vi.spyOn(stream, "resume");
+  // spy 必须安装，但断言只看调用效果；因此不保留未使用的 spy 句柄。
+  vi.spyOn(stream, "resume");
   return stream as http.IncomingMessage & { resume: ReturnType<typeof vi.fn> };
 }
 

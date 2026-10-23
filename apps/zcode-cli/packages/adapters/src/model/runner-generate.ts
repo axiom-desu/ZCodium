@@ -10,13 +10,6 @@ import { AiSdkModelAdapterError } from "./errors.js";
 import { createGenerateTextOptions } from "./runner-options.js";
 import { detectProviderBusinessFinishError } from "./provider-finish-business-error.js";
 import {
-  normalizeReasoning,
-  normalizeSources,
-  normalizeToolCalls,
-  normalizeToolResults,
-  normalizeUsage,
-} from "./runner-normalization.js";
-import {
   getGenerateTextResultMetadata,
   isZeroOutputModelCompletion,
   logGenerateTextDiagnostics,
@@ -43,7 +36,7 @@ import type {
   ResolvedAiSdkModel,
 } from "./runner-runtime.js";
 import { retryAllowedByFailurePolicy } from "./workflow-model-failure-policy.js";
-import { modelFailureStatusFields, providerRequestIdFromHeaders } from "./runner-failure-status.js";
+import { modelFailureStatusFields } from "./runner-failure-status.js";
 import { repairReasoningHistoryAfterSignatureRejection } from "./reasoning-history-normalization.js";
 import { admitAttempt, type AttemptAdmission } from "./request-admission.js";
 import {
@@ -51,6 +44,12 @@ import {
   retryBudgetAllows,
   retryBudgetMaxAttempts,
 } from "./retry-budget.js";
+import {
+  normalizeGenerateTextOutput,
+  publishGenerateTextCompleted,
+  waitForGenerateTextOrAbort,
+} from "./runner-generate-support.js";
+import { publishRetryScheduledStatus, statusPublishOptions } from "./runner-status-publish.js";
 
 export async function runGenerateText(input: {
   env: EnvRecord;
@@ -185,14 +184,8 @@ export async function runGenerateText(input: {
       if (providerBusinessFinishError) {
         throw providerBusinessFinishError;
       }
-      const usage = normalizeUsage(result.totalUsage ?? result.usage);
-      const toolCalls = normalizeToolCalls(result, input.logger);
-      const toolResults = normalizeToolResults(result, toolCalls);
-      const sources = normalizeSources(result);
-      const text = input.request.responseJsonSchema
-        ? serializeStructuredOutput(result)
-        : result.text;
-      const reasoning = normalizeReasoning(result.reasoning);
+      const { usage, toolCalls, toolResults, sources, text, reasoning } =
+        normalizeGenerateTextOutput(result, input.request, input.logger);
       const reasoningLength = (reasoning ?? []).reduce(
         (total, block) => total + block.text.length,
         0,
@@ -246,33 +239,22 @@ export async function runGenerateText(input: {
       }
       const completedAt = Date.now();
 
-      logGenerateTextDiagnostics({
+      await publishGenerateTextCompleted({
+        admission,
         attempt,
         completedAt,
         logger: input.logger,
+        request: input.request,
+        requestHeaderCount,
+        requestHeaders,
+        responseHeaders,
         result,
-        statusContext,
         startedAt,
+        statusContext,
+        statusSink: input.statusSink,
         toolCallCount: toolCalls?.length ?? 0,
         usage,
       });
-      await publishModelStatus(
-        {
-          ...statusContext,
-          attempt,
-          durationMs: completedAt - startedAt,
-          finishReason: result.finishReason,
-          requestHeaderCount,
-          requestHeaders,
-          responseHeaderCount: Object.keys(responseHeaders).length,
-          responseHeaders,
-          providerRequestId: providerRequestIdFromHeaders(responseHeaders),
-          timestamp: new Date(completedAt).toISOString(),
-          type: "model_request_completed",
-          usage,
-        },
-        statusPublishOptions(input, admission),
-      );
 
       return {
         text,
@@ -442,110 +424,5 @@ export async function runGenerateText(input: {
     ModelErrorCode.ModelRequestFailed,
     "Model request failed before an attempt could complete",
     { context: { requestId: baseStatusContext.requestId } },
-  );
-}
-
-function serializeStructuredOutput(result: unknown): string {
-  const output = (result as { output?: unknown }).output;
-  if (output === undefined) {
-    throw new Error("Structured output is unavailable");
-  }
-  const serialized = JSON.stringify(output);
-  if (serialized === undefined) {
-    throw new Error("Structured output is unavailable");
-  }
-  return serialized;
-}
-
-function waitForGenerateTextOrAbort<T>(
-  pending: Promise<T>,
-  abortSignal: AbortSignal | undefined,
-): Promise<T> {
-  if (!abortSignal) {
-    return pending;
-  }
-
-  return new Promise<T>((resolve, reject) => {
-    const cleanup = (): void => {
-      abortSignal.removeEventListener("abort", onAbort);
-    };
-    const onAbort = (): void => {
-      cleanup();
-      reject(
-        abortSignal.reason instanceof Error
-          ? abortSignal.reason
-          : new Error("Model request was cancelled."),
-      );
-    };
-
-    if (abortSignal.aborted) {
-      onAbort();
-      return;
-    }
-
-    abortSignal.addEventListener("abort", onAbort, { once: true });
-    pending.then(
-      (value) => {
-        cleanup();
-        resolve(value);
-      },
-      (error: unknown) => {
-        cleanup();
-        reject(error);
-      },
-    );
-  });
-}
-
-function statusPublishOptions(
-  input: {
-    logger?: Logger;
-    request: AiSdkModelTextRequest;
-    statusSink?: ModelStatusSink;
-  },
-  admission?: AttemptAdmission,
-) {
-  return {
-    logger: input.logger,
-    requestStatusSink: input.request.statusSink,
-    statusSink: input.statusSink,
-    // 本次尝试的准入票据也是它的状态事件汇。
-    ...(admission?.ticket === undefined ? {} : { admissionTicket: admission.ticket }),
-  };
-}
-
-async function publishRetryScheduledStatus(
-  input: {
-    logger?: Logger;
-    request: AiSdkModelTextRequest;
-    statusSink?: ModelStatusSink;
-  },
-  statusContext: ReturnType<typeof createStatusContext>,
-  attempt: number,
-  delayMs: number,
-  failure: ReturnType<typeof classifyModelFailure>,
-  requestHeaders: Record<string, string>,
-  responseHeaders: Record<string, string>,
-  admission?: AttemptAdmission,
-): Promise<void> {
-  await publishModelStatus(
-    {
-      ...statusContext,
-      attempt,
-      delayMs,
-      message: failure.message,
-      nextAttempt: attempt + 1,
-      reason: failure.retryReason,
-      requestHeaderCount: Object.keys(requestHeaders).length,
-      requestHeaders,
-      responseHeaderCount: Object.keys(responseHeaders).length,
-      responseHeaders,
-      statusCode: failure.statusCode,
-      errorCode: failure.code,
-      retryAfterMs: failure.retryAfterMs,
-      timestamp: new Date().toISOString(),
-      type: "model_retry_scheduled",
-    },
-    statusPublishOptions(input, admission),
   );
 }

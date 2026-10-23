@@ -7,7 +7,7 @@
  */
 
 import { createGzip } from "node:zlib";
-import { createReadStream, createWriteStream, openAsBlob } from "node:fs";
+import { createWriteStream, openAsBlob } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { pipeline } from "node:stream/promises";

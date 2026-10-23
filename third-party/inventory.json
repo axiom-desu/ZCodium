@@ -1415,7 +1415,7 @@
     "packages/rpc/examples/01-basic-ipc.ts": "bb4423c1642918846010f9307262c379536ca9541d79df6ebba120b5cf792f3e",
     "packages/rpc/examples/02-proxy-channel.ts": "66dda9aec12cd46da8a56560cb765a3de590917bbc40f329185e6fd05a388fff",
     "packages/rpc/examples/03-ipc-server-client.ts": "9b873f565b4a3426ee3a5338a975cb6ab76e29af094cf6bbee4f7030f872f758",
-    "packages/rpc/examples/04-remote-connection.ts": "fe43a2d631ba54a1cf63a86e344b6e2e58d83c2e8c95f2f8b7371f63e6442541",
+    "packages/rpc/examples/04-remote-connection.ts": "db268ab9e21a6e20eff2a16ce7c88de571d6688a6f46aa9eb0508ca734bcdc1c",
     "packages/rpc/package.json": "5f8bb83df4cecc0e93490b1990517d67c4bd65fcc4fdb8c18f2c9baf45477eed",
     "packages/rpc/src/buffer.ts": "6bc6a44e6abd088f72d57616d9556d78ce078b6f3813bf75402dde386781492c",
     "packages/rpc/src/channelClient.ts": "d2504929253ebb18f020e6f35e51a3741190558875d18a47192f9af78ca3f8ac",
@@ -1423,14 +1423,14 @@
     "packages/rpc/src/channels.ts": "afaba1724055a3d2e6b8b379553569489b71ac6eb252f636ab91649657485209",
     "packages/rpc/src/channelServer.ts": "b9c61bd3881fff11b38a93853c60fa5c2bc871bcbea5dad0e9be0a4674f6c9da",
     "packages/rpc/src/delayedChannel.ts": "e7607b7fe9f35c742db206df90852e2ccafb75abc088606cf1ddbae801574ecf",
-    "packages/rpc/src/foundation.ts": "b4874401965e7bad7e84245a2fc5960657a349b146f355ac7343562fa724da9f",
+    "packages/rpc/src/foundation.ts": "6fe01c40830ee1d266a08da7022665d70ea2632723d0658fa38d37402875cb20",
     "packages/rpc/src/index.ts": "6a5adcfb0e6c7a7d385e10fede09c3e9c808e3555c27b938091868cdf0c3fbef",
-    "packages/rpc/src/ipc.ts": "2ec3dfe0654a68300dbed7afd5ac436b563abf983d6e0f59a2b028469fdf71ef",
+    "packages/rpc/src/ipc.ts": "53bcc9f09406515ee75b1bec8768d88f19351a05c33e66ed3a87f8c58f481d94",
     "packages/rpc/src/logging-middleware.ts": "f89a07d0c3ebab89ad1e03194080fc38f466036f8677fe78029531371794969b",
     "packages/rpc/src/network-telemetry-middleware.ts": "b21ba5fc9fba2b87f9f3b68819613f74eb8177112cd5ca318ba274be69dd0a30",
     "packages/rpc/src/persistent-protocol.ts": "80609595b89188272d743e557502c6cad3858f828acae31c2ef64206bb3c8978",
     "packages/rpc/src/protocol.ts": "aafc0c098c75fcba4519fad2ecbee7e025d5d8a27c15c87e5ccb4ca6ce554670",
-    "packages/rpc/src/proxy-channel.ts": "ec5b43e6a3a622a88a8aaa6af9cb37dbfe517932ee7f4a337019ec138bb2d513",
+    "packages/rpc/src/proxy-channel.ts": "67dc42c2550a79e4772cb06d5f3c1b8521c91602b04cb7a842f077e3263318ef",
     "packages/rpc/src/remote.ts": "a11e072d5df7e1c1ce64814a68f72afc081246b364f0da409b5c9d22bc815957",
     "packages/rpc/src/serialization.ts": "e949418e1cd17cc863c147fc8d1ff15237e1b5f0cb8e3344fd2a9ccfae9d54e7",
     "packages/server/package.json": "e85547db6a750c787287e0d290eb6f10646477d00c0d6172e4b75169bca0ba9c",
@@ -29207,7 +29207,7 @@
         },
         {
           "file": "packages/rpc/src/foundation.ts",
-          "sha256": "b4874401965e7bad7e84245a2fc5960657a349b146f355ac7343562fa724da9f"
+          "sha256": "6fe01c40830ee1d266a08da7022665d70ea2632723d0658fa38d37402875cb20"
         },
         {
           "file": "packages/rpc/src/index.ts",
@@ -29215,7 +29215,7 @@
         },
         {
           "file": "packages/rpc/src/ipc.ts",
-          "sha256": "2ec3dfe0654a68300dbed7afd5ac436b563abf983d6e0f59a2b028469fdf71ef"
+          "sha256": "53bcc9f09406515ee75b1bec8768d88f19351a05c33e66ed3a87f8c58f481d94"
         },
         {
           "file": "packages/rpc/src/logging-middleware.ts",
@@ -29235,7 +29235,7 @@
         },
         {
           "file": "packages/rpc/src/proxy-channel.ts",
-          "sha256": "ec5b43e6a3a622a88a8aaa6af9cb37dbfe517932ee7f4a337019ec138bb2d513"
+          "sha256": "67dc42c2550a79e4772cb06d5f3c1b8521c91602b04cb7a842f077e3263318ef"
         },
         {
           "file": "packages/rpc/src/remote.ts",
@@ -29259,7 +29259,7 @@
         },
         {
           "file": "packages/rpc/examples/04-remote-connection.ts",
-          "sha256": "fe43a2d631ba54a1cf63a86e344b6e2e58d83c2e8c95f2f8b7371f63e6442541"
+          "sha256": "db268ab9e21a6e20eff2a16ce7c88de571d6688a6f46aa9eb0508ca734bcdc1c"
         },
         {
           "file": "packages/shared/src/zcode-protocol-v4/wire-codec.ts",

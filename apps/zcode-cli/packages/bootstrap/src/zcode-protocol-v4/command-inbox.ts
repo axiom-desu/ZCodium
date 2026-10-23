@@ -6,31 +6,13 @@ import type {
   CommandKey,
   ConversationInputIntent,
 } from "@zcode/shared/zcode-protocol-v4";
-import {
-  COMMANDS_REQUIRING_BASE_REVISION,
-  PROTOCOL_V4_LIMITS,
-  ROW_TARGETING_COMMANDS,
-  parseCommandEnvelope,
-} from "@zcode/shared/zcode-protocol-v4";
-
-/** guard 裁决结果：拒绝（撤 optimistic）或 noop（晚到者静默收口）。 */
-type GuardDecision =
-  | { verdict: "allow" }
-  | { verdict: "stale"; reasonCode: string; message?: string }
-  | { verdict: "reject"; reasonCode: string; message?: string }
-  | { verdict: "noop"; reasonCode: string; result?: CommandAck["result"] };
+import { PROTOCOL_V4_LIMITS, parseCommandEnvelope } from "@zcode/shared/zcode-protocol-v4";
+import { decideCommandAdmission, type CommandAdmissionHost } from "./command-inbox-admission.js";
+import { AsyncGateRegistry } from "./async-gate-registry.js";
 
 type PersistentLookup = (key: CommandKey) => Promise<CommandAck | null> | CommandAck | null;
 
-interface CommandInboxHost {
-  /** 会话当前 revision；未知会话返回 null（createSession 用 null sessionId）。 */
-  getRevision(sessionId: string): number | null;
-  /** 会话当前投影代际；CAS 必须先校验 epoch，再校验 revision。 */
-  getLogEpoch(sessionId: string): string | null;
-  /** row-targeting command 的 entity/action 同源 resolver 裁决。 */
-  validateRowTarget?(envelope: CommandEnvelope): GuardDecision;
-  /** 业务 guard（product-protocol guard id）。缺省一律放行。 */
-  guard?(envelope: CommandEnvelope): GuardDecision;
+interface CommandInboxHost extends CommandAdmissionHost {
   /** 以下回调顺序就是持久化事实优先级；实现必须精确匹配 sourceCommandId。 */
   lookupTranscriptCommand?: PersistentLookup;
   lookupTimelineCommand?: PersistentLookup;
@@ -74,34 +56,6 @@ const GLOBAL_BUCKET = "@global";
 
 export function queueItemIdForCommand(commandId: string): string {
   return `queue_${commandId}`;
-}
-
-type GateRelease = () => void;
-
-/**
- * FIFO async gate。返回显式 release 是因为 per-session gate 要跨过 gateway execute，
- * 直到 settle 才释放；普通 with-lock 会在 handle 返回时过早放行下一条 admission。
- */
-class AsyncGateRegistry {
-  private readonly tails = new Map<string, Promise<void>>();
-
-  async acquire(key: string): Promise<GateRelease> {
-    const previous = this.tails.get(key) ?? Promise.resolve();
-    let releaseCurrent!: () => void;
-    const current = new Promise<void>((resolve) => {
-      releaseCurrent = resolve;
-    });
-    const tail = previous.then(() => current);
-    this.tails.set(key, tail);
-    await previous;
-    let released = false;
-    return () => {
-      if (released) return;
-      released = true;
-      releaseCurrent();
-      if (this.tails.get(key) === tail) this.tails.delete(key);
-    };
-  }
 }
 
 export class CommandInbox {
@@ -152,7 +106,7 @@ export class CommandInbox {
           return this.ackOnly(this.retryAck(afterWait));
         }
 
-        const decision = this.decide(envelope);
+        const decision = decideCommandAdmission(this.host, envelope);
         if (decision.kind === "ack") {
           if (decision.remember) this.rememberSettled(bucketKey, envelope.commandId, decision.ack);
           releaseSession();
@@ -303,144 +257,6 @@ export class CommandInbox {
       if (found) return found;
     }
     return null;
-  }
-
-  private decide(
-    envelope: CommandEnvelope,
-  ): { kind: "execute"; ack: CommandAck } | { kind: "ack"; ack: CommandAck; remember: boolean } {
-    const revision = envelope.sessionId === null ? 0 : this.host.getRevision(envelope.sessionId);
-    if (revision === null || (envelope.type !== "createSession" && envelope.sessionId === null)) {
-      return {
-        kind: "ack",
-        remember: false,
-        ack: {
-          commandId: envelope.commandId,
-          status: "rejected",
-          reasonCode: "proto.sessionNotFound",
-          revisionAtDecision: 0,
-        },
-      };
-    }
-
-    if (COMMANDS_REQUIRING_BASE_REVISION.has(envelope.type)) {
-      if (envelope.baseRevision === undefined) {
-        return {
-          kind: "ack",
-          remember: false,
-          ack: {
-            commandId: envelope.commandId,
-            status: "rejected",
-            reasonCode: "proto.missingBaseRevision",
-            revisionAtDecision: revision,
-          },
-        };
-      }
-      const logEpoch =
-        envelope.sessionId === null ? null : this.host.getLogEpoch(envelope.sessionId);
-      if (ROW_TARGETING_COMMANDS.has(envelope.type) && envelope.baseLogEpoch !== logEpoch) {
-        return {
-          kind: "ack",
-          remember: false,
-          ack: {
-            commandId: envelope.commandId,
-            status: "stale",
-            reasonCode: "proto.staleLogEpoch",
-            revisionAtDecision: revision,
-          },
-        };
-      }
-      if (envelope.baseRevision !== revision) {
-        return {
-          kind: "ack",
-          remember: false,
-          ack: {
-            commandId: envelope.commandId,
-            status: "stale",
-            reasonCode: "proto.staleRevision",
-            revisionAtDecision: revision,
-          },
-        };
-      }
-    }
-
-    const targetDecision = this.host.validateRowTarget?.(envelope);
-    if (targetDecision?.verdict === "stale") {
-      return {
-        kind: "ack",
-        remember: false,
-        ack: {
-          commandId: envelope.commandId,
-          status: "stale",
-          reasonCode: targetDecision.reasonCode,
-          message: targetDecision.message,
-          revisionAtDecision: revision,
-        },
-      };
-    }
-    if (targetDecision?.verdict === "reject") {
-      return {
-        kind: "ack",
-        remember: false,
-        ack: {
-          commandId: envelope.commandId,
-          status: "rejected",
-          reasonCode: targetDecision.reasonCode,
-          message: targetDecision.message,
-          revisionAtDecision: revision,
-        },
-      };
-    }
-
-    const decision = this.host.guard?.(envelope) ?? {
-      verdict: "allow" as const,
-    };
-    if (decision.verdict === "stale") {
-      return {
-        kind: "ack",
-        remember: false,
-        ack: {
-          commandId: envelope.commandId,
-          status: "stale",
-          reasonCode: decision.reasonCode,
-          message: decision.message,
-          revisionAtDecision: revision,
-        },
-      };
-    }
-    if (decision.verdict === "reject") {
-      return {
-        kind: "ack",
-        remember: false,
-        ack: {
-          commandId: envelope.commandId,
-          status: "rejected",
-          reasonCode: decision.reasonCode,
-          message: decision.message,
-          revisionAtDecision: revision,
-        },
-      };
-    }
-    if (decision.verdict === "noop") {
-      return {
-        kind: "ack",
-        remember: true,
-        ack: {
-          commandId: envelope.commandId,
-          status: "noop",
-          reasonCode: decision.reasonCode,
-          revisionAtDecision: revision,
-          result: decision.result,
-        },
-      };
-    }
-    return {
-      kind: "execute",
-      ack: {
-        commandId: envelope.commandId,
-        status: "accepted",
-        revisionAtDecision: revision,
-      },
-    };
   }
 
   private retryAck(ack: CommandAck): CommandAck {

@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { RuntimeConfigPatch } from "@zcode/contracts";
 
 const stringRecordSchema = z.record(z.string(), z.string());
-const unknownRecordSchema = z.record(z.string(), z.unknown());
 const positiveNumberSchema = z.number().finite().positive();
 const positiveIntegerSchema = z.number().int().positive();
 const modelStreamSchema = z.object({

@@ -33,13 +33,13 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync, spawnSync } = require('child_process');
+const { execSync } = require('child_process');
 
 // ── Playwright resolution ──
 
 function loadPlaywright() {
   for (const name of ['playwright', 'playwright-core']) {
-    try { return require(name); } catch (_) {}
+    try { return require(name); } catch {}
   }
 
   // Node never searches npm's global dir, and when node itself was installed
@@ -56,7 +56,7 @@ function loadPlaywright() {
   try {
     const g = execSync('npm root -g', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
     if (g) roots.add(g);
-  } catch (_) {}
+  } catch {}
 
   for (const base of roots) {
     for (const name of ['playwright', 'playwright-core']) {
@@ -64,7 +64,7 @@ function loadPlaywright() {
       if (!fs.existsSync(path.join(dir, 'package.json'))) continue;
       // Require by absolute path — createRequire() would still walk the
       // node_modules chain and miss roots not named node_modules.
-      try { return Module.createRequire(__filename)(dir); } catch (_) {}
+      try { return Module.createRequire(__filename)(dir); } catch {}
     }
   }
   return null;
@@ -74,7 +74,7 @@ function loadPlaywright() {
 
 function resolveChromium(chromiumObj) {
   let exe;
-  try { exe = chromiumObj.executablePath(); } catch (_) { exe = null; }
+  try { exe = chromiumObj.executablePath(); } catch { exe = null; }
   if (exe && fs.existsSync(exe)) return { status: 'ok', executablePath: exe };
 
   const candidates = [

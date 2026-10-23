@@ -38,7 +38,7 @@ export function installOfflineChecks() {
       for (const file of [
         "floating-ui-core-1.7.3.min.js",
         "floating-ui-dom-1.7.4.min.js",
-        "lucide-1.17.0.js",
+        "lucide-1.17.0.min.js",
         "d3-7.9.0.min.js",
       ])
         assert.ok(loaded.includes(file), `${file} did not load locally`);

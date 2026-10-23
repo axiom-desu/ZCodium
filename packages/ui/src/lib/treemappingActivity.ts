@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Treemapping v1 的 tool call 解析规则需要集中保持优先级一致，避免 UI 和测试分散维护后产生识别差异。 */
 import type { TaskChatMessage, TaskChatToolCall } from "@/lib/taskChatMessageTypes.js";
-import { getPathLeaf, isAbsoluteFilePath } from "@/lib/path.js";
+import { isAbsoluteFilePath } from "@/lib/path.js";
 import { readRawToolCallFileSummaries } from "@/ToolCallBlocks/fileSummaries.js";
 import { resolveToolCallIdentity } from "@/lib/toolIdentity.js";
 

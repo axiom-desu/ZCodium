@@ -2,7 +2,6 @@
 import {
   ServiceCollection,
   IFileService,
-  IMediaPreviewService,
   IGitService,
   IGitCheckpointService,
   ISystemService,
@@ -47,7 +46,6 @@ import {
   createSettingsSyncService,
   createBotsService,
   createUsageStatsService,
-  createMediaPreviewService,
   createCodingPlanSubscriptionService,
   createClientScenesService,
   createServiceLogger,

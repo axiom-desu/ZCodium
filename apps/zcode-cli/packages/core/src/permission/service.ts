@@ -7,9 +7,7 @@ import {
   FILL_WORKFLOW_HOLE_TOOL_NAME,
   isAmendWorkflowOwnedPredecessor,
   isFillWorkflowHoleOwnedRun,
-  PermissionCapabilityGroup,
   type PermissionCapabilityGroup as PermissionCapabilityGroupType,
-  type PermissionRuleValue,
   type PermissionRuleset,
   type PermissionUpdate,
   type CollaborationMode,
@@ -17,12 +15,18 @@ import {
   type RiskLevel,
   type ToolPermissionSpec,
 } from "@zcode/contracts";
-import { OFFICIAL_CUA_PERMISSION_RULE_TOOL_NAME } from "@zcode/shared";
+import {
+  allowDecision,
+  askDecision,
+  denyDecision,
+  resolveCapabilityFor,
+  resolveRiskLevel,
+  type ResolvedPermissionCapability,
+} from "./capability-resolution.js";
+import { isPreapprovedWebFetchRequest, matchesProjectRules } from "./rule-evaluation.js";
 import { resolvePlanModeTransitionPermission } from "./plan-mode-policy.js";
-import { webFetchRuleSubjects, wildcardToRegExp } from "./rule-matching.js";
 import { isPreapprovedWorkflowDraftWrite } from "./workflow-draft-path.js";
 import { applyPermissionUpdates } from "../tool/executor/permission-rules.js";
-import { isWebFetchPreapprovedUrl } from "../tool/webfetch-preapproved.js";
 import type { ToolPermissionRulePolicy } from "../tool/types.js";
 
 // -----------------------------------------------
@@ -102,18 +106,18 @@ export class PermissionService {
     projectRules?: PermissionRuleset | null,
     rulePolicy?: ToolPermissionRulePolicy,
   ): PermissionDecisionResult {
-    const capability = this.resolveCapability(context, toolCapability);
+    const capability = resolveCapabilityFor(context, toolCapability);
     const planModeTransition = resolvePlanModeTransitionPermission(context);
 
     if (planModeTransition) {
       return planModeTransition.behavior === "allow"
-        ? this.allow(context, capability, planModeTransition.ruleId, planModeTransition.reason)
-        : this.deny(context, capability, planModeTransition.ruleId, planModeTransition.reason);
+        ? allowDecision(context, capability, planModeTransition.ruleId, planModeTransition.reason)
+        : denyDecision(context, capability, planModeTransition.ruleId, planModeTransition.reason);
     }
 
     if (capability.requiresUserInteraction) {
       if (this.config.disallowedTools.has(context.toolName)) {
-        return this.deny(
+        return denyDecision(
           context,
           capability,
           "rule.disallowedTools",
@@ -121,7 +125,7 @@ export class PermissionService {
         );
       }
 
-      return this.ask(
+      return askDecision(
         context,
         capability,
         "tool.userInteraction",
@@ -136,11 +140,16 @@ export class PermissionService {
 
     const planEnabled = context.planEnabled ?? context.mode === "plan";
     if (context.mode === "yolo" && !planEnabled) {
-      return this.allow(context, capability, "mode.yolo", "Yolo mode bypasses permission prompts");
+      return allowDecision(
+        context,
+        capability,
+        "mode.yolo",
+        "Yolo mode bypasses permission prompts",
+      );
     }
 
     if (context.mode === "auto") {
-      return this.deny(
+      return denyDecision(
         context,
         capability,
         "mode.auto.unimplemented",
@@ -149,7 +158,7 @@ export class PermissionService {
     }
 
     if (this.config.disallowedTools.has(context.toolName)) {
-      return this.deny(
+      return denyDecision(
         context,
         capability,
         "rule.disallowedTools",
@@ -157,8 +166,8 @@ export class PermissionService {
       );
     }
 
-    if (this.matchesProjectRules(projectRules, "deny", context, capability, rulePolicy)) {
-      return this.deny(
+    if (matchesProjectRules(projectRules, "deny", context, capability, rulePolicy)) {
+      return denyDecision(
         context,
         capability,
         "rule.project.deny",
@@ -166,8 +175,8 @@ export class PermissionService {
       );
     }
 
-    if (this.matchesProjectRules(projectRules, "ask", context, capability, rulePolicy)) {
-      return this.ask(
+    if (matchesProjectRules(projectRules, "ask", context, capability, rulePolicy)) {
+      return askDecision(
         context,
         capability,
         "rule.project.ask",
@@ -179,8 +188,8 @@ export class PermissionService {
       return this.checkPlanMode(context, capability);
     }
 
-    if (this.matchesProjectRules(projectRules, "allow", context, capability, rulePolicy)) {
-      return this.allow(
+    if (matchesProjectRules(projectRules, "allow", context, capability, rulePolicy)) {
+      return allowDecision(
         context,
         capability,
         "rule.project.allow",
@@ -188,8 +197,8 @@ export class PermissionService {
       );
     }
 
-    if (this.isPreapprovedWebFetchRequest(context)) {
-      return this.allow(
+    if (isPreapprovedWebFetchRequest(context)) {
+      return allowDecision(
         context,
         capability,
         "tool.webfetch.preapproved",
@@ -208,7 +217,7 @@ export class PermissionService {
         workingDirectory: context.workingDirectory,
       })
     ) {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         WORKFLOW_DRAFT_PREAPPROVED_RULE_ID,
@@ -217,7 +226,7 @@ export class PermissionService {
     }
 
     if (this.config.allowedTools.has(context.toolName)) {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         "rule.allowedTools",
@@ -230,95 +239,6 @@ export class PermissionService {
     }
 
     return this.checkBuildMode(context, capability);
-  }
-
-  private matchesProjectRules(
-    ruleset: PermissionRuleset | null | undefined,
-    behavior: PermissionBehavior,
-    context: PermissionContext,
-    capability: ResolvedPermissionCapability,
-    rulePolicy?: ToolPermissionRulePolicy,
-  ): boolean {
-    const rules = ruleset?.[behavior];
-    if (!Array.isArray(rules)) return false;
-    const toolRules = rules.filter((rule) =>
-      this.matchesRuleScope(rule, context.toolName, capability),
-    );
-    if (toolRules.length === 0) return false;
-    if (rulePolicy) return rulePolicy.evaluateRules(behavior, toolRules);
-    return toolRules.some((rule) => this.matchesRule(rule, context, capability));
-  }
-
-  private matchesRule(
-    rule: PermissionRuleValue,
-    context: PermissionContext,
-    capability: ResolvedPermissionCapability,
-  ): boolean {
-    if (!this.matchesRuleScope(rule, context.toolName, capability)) return false;
-    if (!rule.ruleContent) return true;
-
-    const subjects = this.ruleSubjects(context.input, context.toolName);
-    if (subjects.length === 0) return false;
-
-    return subjects.some((subject) => this.matchesRuleContent(subject, rule.ruleContent!));
-  }
-
-  private matchesRuleToolName(ruleToolName: string, contextToolName: string): boolean {
-    if (ruleToolName === contextToolName) return true;
-    return contextToolName === "Write" && ruleToolName === "Edit";
-  }
-
-  private matchesRuleScope(
-    rule: PermissionRuleValue,
-    contextToolName: string,
-    capability: ResolvedPermissionCapability,
-  ): boolean {
-    if (rule.toolName === OFFICIAL_CUA_PERMISSION_RULE_TOOL_NAME) {
-      // 保留 key 只有在当前 tool entry 另行携带宿主验证后的 official_cua
-      // capability 时才匹配。同名第三方 MCP、authority 漂移以及旧普通 tool
-      // 都不能把可解析的 wire/storage 字符串升级成可信能力。
-      return capability.permissionCapabilityGroup === PermissionCapabilityGroup.OfficialCua;
-    }
-    return this.matchesRuleToolName(rule.toolName, contextToolName);
-  }
-
-  private ruleSubjects(input: unknown, toolName: string): string[] {
-    if (typeof input === "string") return [input];
-    if (!input || typeof input !== "object") return [];
-
-    const record = input as Record<string, unknown>;
-    if (toolName === "WebFetch" && typeof record.url === "string") {
-      return webFetchRuleSubjects(record.url);
-    }
-
-    for (const key of ["command", "url", "file_path", "path", "pattern", "patch_text"]) {
-      const value = record[key];
-      if (typeof value === "string") return [value];
-    }
-
-    return [];
-  }
-
-  private isPreapprovedWebFetchRequest(context: PermissionContext): boolean {
-    if (context.toolName !== "WebFetch") return false;
-    if (!context.input || typeof context.input !== "object") return false;
-    const url = (context.input as Record<string, unknown>).url;
-    return typeof url === "string" && isWebFetchPreapprovedUrl(url);
-  }
-
-  private matchesRuleContent(subject: string, ruleContent: string): boolean {
-    if (ruleContent.endsWith(":*")) {
-      const prefix = ruleContent.slice(0, -2);
-      return (
-        subject === prefix || subject.startsWith(`${prefix} `) || subject.startsWith(`${prefix}\t`)
-      );
-    }
-
-    if (ruleContent.includes("*")) {
-      return wildcardToRegExp(ruleContent).test(subject);
-    }
-
-    return subject === ruleContent;
   }
 
   /**
@@ -339,7 +259,7 @@ export class PermissionService {
     rulePolicy?: ToolPermissionRulePolicy,
   ): PermissionDecisionResult {
     if (context.mode === "auto") {
-      return this.deny(
+      return denyDecision(
         context,
         capability,
         "mode.auto.unimplemented",
@@ -347,15 +267,15 @@ export class PermissionService {
       );
     }
     if (this.config.disallowedTools.has(context.toolName)) {
-      return this.deny(
+      return denyDecision(
         context,
         capability,
         "rule.disallowedTools",
         `Tool ${context.toolName} is explicitly disallowed`,
       );
     }
-    if (this.matchesProjectRules(projectRules, "deny", context, capability, rulePolicy)) {
-      return this.deny(
+    if (matchesProjectRules(projectRules, "deny", context, capability, rulePolicy)) {
+      return denyDecision(
         context,
         capability,
         "rule.project.deny",
@@ -367,9 +287,9 @@ export class PermissionService {
     // Fill 的会话全工具授权会放行 foreign/manual-stop；只有该 run 的 owner 能免确认。
     if (
       context.toolName !== FILL_WORKFLOW_HOLE_TOOL_NAME &&
-      this.matchesProjectRules(this.sessionRules, "allow", context, capability, rulePolicy)
+      matchesProjectRules(this.sessionRules, "allow", context, capability, rulePolicy)
     ) {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         "rule.session.allow",
@@ -382,14 +302,14 @@ export class PermissionService {
     // parent_session_id / stopReason），不是内存表：重启、冷恢复后依然成立，也没有可播种、可撤销的
     // 东西。别的会话的 run、用户停过的 run 照常 ask：钥匙是 run 的归属，不是字段的在场。
     if (this.isOwnedWorkflowAmend(context)) {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         "rule.session.workflowOwner",
         `Tool ${context.toolName} amends a run this session started`,
       );
     }
-    return this.ask(
+    return askDecision(
       context,
       capability,
       "tool.alwaysAsk",
@@ -419,7 +339,7 @@ export class PermissionService {
     capability: ResolvedPermissionCapability,
   ): PermissionDecisionResult {
     if (capability.readOnly && !capability.destructive) {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         "mode.plan.readOnly",
@@ -428,7 +348,7 @@ export class PermissionService {
     }
 
     if (this.isMcpToolCapability(capability) && !capability.destructive) {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         "mode.plan.mcp",
@@ -442,7 +362,7 @@ export class PermissionService {
       !capability.destructive &&
       !capability.needsApproval
     ) {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         "mode.plan.explicitSessionCapability",
@@ -450,7 +370,7 @@ export class PermissionService {
       );
     }
 
-    return this.deny(
+    return denyDecision(
       context,
       capability,
       "mode.plan.nonReadOnly",
@@ -467,7 +387,7 @@ export class PermissionService {
     capability: ResolvedPermissionCapability,
   ): PermissionDecisionResult {
     if (capability.readOnly && !capability.destructive && !capability.needsApproval) {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         "mode.build.readOnly",
@@ -476,7 +396,7 @@ export class PermissionService {
     }
 
     if (capability.riskLevel === "critical") {
-      return this.ask(
+      return askDecision(
         context,
         capability,
         "mode.build.criticalRisk",
@@ -485,7 +405,7 @@ export class PermissionService {
     }
 
     if (capability.riskLevel === "high" && !this.config.autoApproveHighRisk) {
-      return this.ask(
+      return askDecision(
         context,
         capability,
         "mode.build.highRisk",
@@ -499,7 +419,7 @@ export class PermissionService {
       !capability.destructive &&
       !capability.needsApproval
     ) {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         "mode.build.sessionState",
@@ -512,7 +432,7 @@ export class PermissionService {
       capability.destructive ||
       capability.sideEffectScope !== "none"
     ) {
-      return this.ask(
+      return askDecision(
         context,
         capability,
         "mode.build.sideEffect",
@@ -520,7 +440,7 @@ export class PermissionService {
       );
     }
 
-    return this.allow(
+    return allowDecision(
       context,
       capability,
       "mode.build.lowRisk",
@@ -533,7 +453,7 @@ export class PermissionService {
     capability: ResolvedPermissionCapability,
   ): PermissionDecisionResult {
     if (capability.permissionName === "edit" && capability.sideEffectScope === "workspace") {
-      return this.allow(
+      return allowDecision(
         context,
         capability,
         "mode.edit.fileEdit",
@@ -550,137 +470,8 @@ export class PermissionService {
   }
 
   getRiskLevel(toolName: string, toolCapability?: PermissionToolCapability): RiskLevel {
-    if (toolCapability?.riskLevel) {
-      return toolCapability.riskLevel;
-    }
-
-    if (this.isReadOnlyTool(toolName)) {
-      return "low";
-    }
-
-    if (this.isWriteTool(toolName)) {
-      return "medium";
-    }
-
-    if (this.isDestructiveTool(toolName)) {
-      return "high";
-    }
-
-    return "medium";
+    return resolveRiskLevel(toolName, toolCapability);
   }
-
-  private isReadOnlyTool(name: string): boolean {
-    return new Set([
-      "Read",
-      "Glob",
-      "Grep",
-      "WebSearch",
-      "WebFetch",
-      "TodoRead",
-      "TodoWrite",
-      "AskUserQuestion",
-      "Agent",
-      "Task",
-      "Skill",
-    ]).has(name);
-  }
-
-  private isWriteTool(name: string): boolean {
-    return new Set(["Write", "Edit", "ApplyPatch", "Bash"]).has(name);
-  }
-
-  private isDestructiveTool(name: string): boolean {
-    return new Set(["Bash"]).has(name);
-  }
-
-  private resolveCapability(
-    context: PermissionContext,
-    toolCapability?: PermissionToolCapability,
-  ): ResolvedPermissionCapability {
-    return {
-      allowedInPlanMode: toolCapability?.allowedInPlanMode ?? false,
-      alwaysAsk: toolCapability?.permission?.alwaysAsk ?? toolCapability?.alwaysAsk ?? false,
-      readOnly: toolCapability?.readOnly ?? this.isReadOnlyTool(context.toolName),
-      destructive: toolCapability?.destructive ?? this.isDestructiveTool(context.toolName),
-      requiresUserInteraction:
-        toolCapability?.requiresUserInteraction ??
-        (toolCapability?.permission?.sideEffectScope ?? toolCapability?.sideEffectScope) ===
-          "userInteraction",
-      sideEffectScope:
-        toolCapability?.permission?.sideEffectScope ??
-        toolCapability?.sideEffectScope ??
-        (this.isReadOnlyTool(context.toolName) ? "none" : "workspace"),
-      riskLevel:
-        toolCapability?.permission?.riskLevel ??
-        this.getRiskLevel(context.toolName, toolCapability),
-      needsApproval:
-        toolCapability?.permission?.needsApproval ??
-        toolCapability?.needsApproval ??
-        !this.isReadOnlyTool(context.toolName),
-      permissionCapabilityGroup: toolCapability?.permissionCapabilityGroup,
-      permissionName: toolCapability?.permission?.permission,
-    };
-  }
-
-  private allow(
-    context: PermissionContext,
-    capability: ResolvedPermissionCapability,
-    ruleId: string,
-    reason?: string,
-  ): PermissionDecisionResult {
-    return this.result("allow", context, capability, ruleId, reason);
-  }
-
-  private ask(
-    context: PermissionContext,
-    capability: ResolvedPermissionCapability,
-    ruleId: string,
-    reason: string,
-  ): PermissionDecisionResult {
-    return this.result("ask", context, capability, ruleId, reason);
-  }
-
-  private deny(
-    context: PermissionContext,
-    capability: ResolvedPermissionCapability,
-    ruleId: string,
-    reason: string,
-  ): PermissionDecisionResult {
-    return this.result("deny", context, capability, ruleId, reason);
-  }
-
-  private result(
-    decision: PermissionBehavior,
-    context: PermissionContext,
-    capability: ResolvedPermissionCapability,
-    ruleId: string,
-    reason?: string,
-  ): PermissionDecisionResult {
-    return {
-      decision,
-      allowed: decision === "allow",
-      escalated: decision === "ask",
-      mode: context.mode,
-      reason,
-      riskLevel: capability.riskLevel,
-      ruleId,
-      sideEffectScope: capability.sideEffectScope,
-      ...(capability.alwaysAsk ? { alwaysAsk: true } : {}),
-    };
-  }
-}
-
-interface ResolvedPermissionCapability {
-  allowedInPlanMode: boolean;
-  alwaysAsk: boolean;
-  readOnly: boolean;
-  destructive: boolean;
-  requiresUserInteraction: boolean;
-  sideEffectScope: ModelToolSideEffectScope;
-  riskLevel: RiskLevel;
-  needsApproval: boolean;
-  permissionCapabilityGroup?: PermissionCapabilityGroupType;
-  permissionName?: string;
 }
 
 // -----------------------------------------------

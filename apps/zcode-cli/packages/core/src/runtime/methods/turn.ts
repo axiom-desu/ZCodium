@@ -1,23 +1,18 @@
 import { beginLocalTurnPreparation, type LocalTtftDetail } from "@zcode/contracts";
-import { runtimeInputMetadata } from "../../agent/runtime-input-presentation.js";
 import {
-  CoreErrorType,
   HookEventName,
   SessionEventType,
   createChildTraceContext,
   createQueryId,
-  createModelUsageSummaryFromEvents,
   createMessageId,
   createTurnId,
   runWithContextAsync,
   traceContextToLogContext,
   TurnMachineImpl,
-  formatLocalIsoDate,
 } from "../deps.js";
 import type {
   HookRunResult,
   MessageId,
-  MessagePart,
   QueryId,
   SessionEvent,
   SessionGoal,
@@ -30,13 +25,7 @@ import {
   throwIfTurnAborted,
   createTurnFailureError,
   appendTurnOutcomeEvent,
-  buildDateChangeReminderBody,
-  buildRuntimeUserEntriesFromTurn,
-  buildUserContentFromTurn,
-  logResolvedTurnAttachments,
-  resolveTurnAttachments,
   summarizeTurnAttachmentsForEvent,
-  runtimeMetadataForSyntheticUserMessageSource,
 } from "../helpers/index.js";
 import type { ActiveTurnSteeringState, ExecuteTurnOptions, TurnResult } from "../types.js";
 import type { ActiveTurnStartReservation } from "../types.js";
@@ -44,22 +33,21 @@ import type { AgentRuntimeInternal } from "../internal.js";
 import { createRuntimeCommandId } from "../command-queue.js";
 import type { PromptRuntimeCommand } from "../command-queue.js";
 import { enqueueCancellableRuntimeCommand } from "./runtime-command-submit.js";
-import { buildReferencedSessionContextReminderBody } from "../../session-context/read-session-context.js";
 import { runRegularTurnLoop } from "./turn-loop.js";
-import { maybeStartSessionTitleGeneration } from "./session-title.js";
 import type { RegularTurnLoopState } from "./turn-loop-state.js";
 import { finishOutputTokenRecovery } from "./turn-output-token-continuation.js";
-import { recordTurnUsageFact } from "./usage-observability.js";
-import { persistStableForkCompletionBoundary } from "./stable-fork-boundary.js";
 import {
   closeGoalStateChangeReminderDeferral,
   openGoalStateChangeReminderDeferral,
 } from "./goal-state-reminder.js";
-import { scheduleProjectMemoryExtraction } from "../helpers/project-memory-extraction.js";
-import { appendBrowserTurnScreenshot } from "./browser-turn-screenshot.js";
-import { clearBrowserTurnState } from "../../repl/browser-turn-state.js";
 import { applySubmissionExecutionState, createTurnModel } from "./turn-model.js";
-import { rebuildContextPrefix } from "./context-refresh.js";
+import { applyRegularTurnUserInput } from "./turn-user-input.js";
+import { createRegularTurnLoopState } from "./turn-loop-state-create.js";
+import { completePreventedTurn, completeRegularTurn } from "./turn-completion.js";
+import { cleanupTurnExecution } from "./turn-cleanup.js";
+import { failTurnExecution } from "./turn-failure.js";
+import { startRegularTurn } from "./turn-start.js";
+import { startTargetRunHeartbeat } from "./turn-target-heartbeat.js";
 
 const TARGET_RUN_HEARTBEAT_MS = 15_000;
 
@@ -201,62 +189,27 @@ export async function executeTurnCommand(
         });
         throw coreError;
       }
-      let phaseStartedAt = startTurnPhase("context_initialization");
-      if (this.contextInitialized) {
-        // 每个后续 model step 都按该步骤实际持有的 Model 重新投影 Context；
-        // Session Selection 只决定未来创建哪个 Model，不能充当执行事实。
-        rebuildContextPrefix(this, { model: admittedModel });
-      } else {
-        // 首轮初始化已经用 admitted Model 构造并安装完整 Context，随后再 rebuild
-        // 会把同一 Prefix 连续构造两次。未初始化与已初始化分支互斥，每个 model step 只构造一次。
-        await this.ensureContextInitialized(turnTraceContext, admittedModel);
-      }
-      completeTurnPhase("context_initialization", phaseStartedAt);
-      throwIfTurnAborted(turnAbortSignal);
-      phaseStartedAt = startTurnPhase("session_start_hooks");
-      const sessionStartHookResult = await this.runSessionStartHooks(
-        "startup",
-        turnTraceContext,
-        turnAbortSignal,
+      let phaseStartedAt = 0;
+      const earlyResult = await startRegularTurn.call(this, {
         admittedModel,
-      );
-      completeTurnPhase("session_start_hooks", phaseStartedAt);
-      this.injectHookAdditionalContextIntoMessageHistory(
-        HookEventName.SessionStart,
-        sessionStartHookResult.additionalContexts,
-      );
-
-      if (compactInstructions !== null) {
-        const compactModel = await applySubmissionExecutionState(
-          this,
-          options?.intent,
-          turnTraceContext,
-          options?.modelExecution,
-          admittedModel,
-        );
-        return this.executeManualCompact(
-          input,
-          compactInstructions,
-          turnId,
-          turnTraceContext,
-          turnAbortSignal,
-          options?.inputId,
-          compactModel,
-        );
-      }
-      if (rewindCommand !== null) {
-        return this.executeRewindCommand(
-          input,
-          rewindCommand,
-          turnId,
-          turnTraceContext,
-          turnAbortSignal,
-          options?.inputId,
-        );
-      }
-      activeTurn = this.beginActiveTurn(turnId, turnTraceContext, "regular", true, {
-        ...(options?.inputId === undefined ? {} : { inputId: options.inputId }),
+        compactInstructions,
+        completePhase: completeTurnPhase,
+        input,
+        options,
+        rewindCommand,
+        startPhase: startTurnPhase,
+        turnAbortSignal,
+        turnId,
+        turnTraceContext,
       });
+      if (earlyResult) return earlyResult;
+      activeTurn = this.beginActiveTurn(
+        turnId,
+        turnTraceContext,
+        "regular",
+        true,
+        options?.inputId === undefined ? {} : { inputId: options.inputId },
+      );
       this.logger?.info("Turn started", {
         ...traceContextToLogContext(turnTraceContext),
         event: "turn.started",
@@ -324,21 +277,11 @@ export async function executeTurnCommand(
         traceContext: turnTraceContext,
       });
       completeTurnPhase("target_accounting", phaseStartedAt);
-      if (startedTarget && this.sessionStore?.heartbeatTargetRun) {
-        targetRunHeartbeat = setInterval(() => {
-          void this.trackResidencyBlockingWork(
-            this.heartbeatTargetTurnAccounting({
-              inputID: targetRunInputID,
-              seenAtMs: Date.now(),
-              startedTarget,
-              traceContext: turnTraceContext,
-            }),
-          );
-        }, TARGET_RUN_HEARTBEAT_MS);
-        if (typeof targetRunHeartbeat === "object" && "unref" in targetRunHeartbeat) {
-          targetRunHeartbeat.unref();
-        }
-      }
+      targetRunHeartbeat = startTargetRunHeartbeat(
+        this,
+        { inputID: targetRunInputID, startedTarget, traceContext: turnTraceContext },
+        TARGET_RUN_HEARTBEAT_MS,
+      );
 
       try {
         phaseStartedAt = startTurnPhase("user_prompt_hooks");
@@ -352,237 +295,54 @@ export async function executeTurnCommand(
             );
         completeTurnPhase("user_prompt_hooks", phaseStartedAt);
         if (userPromptHookResult.preventContinuation) {
-          const response =
-            userPromptHookResult.stopReason ?? "Prompt blocked by UserPromptSubmit hook.";
-          if (activeTurn) activeTurn.steerable = false;
-          turnMachine = new TurnMachineImpl(turnMachine.complete(response, "success"));
-          const turnUsage = createModelUsageSummaryFromEvents(events);
-          const completeEvent = this.createEvent(
-            SessionEventType.TurnComplete,
-            {
-              response,
-              tokenCount: 0,
-              usage: turnUsage,
-              toolCallCount: 0,
-              duration: Date.now() - turnMachine.state.startedAt.getTime(),
-              resultType: "success",
-              cacheStats: this.messageHistory.getCacheStats(),
-              inputId: options?.inputId,
-            },
-            turnTraceContext,
-          );
-          await this.appendEvent(completeEvent, turnTraceContext);
-          events.push(completeEvent);
-          await recordTurnUsageFact(this, {
-            completedAt: Date.now(),
+          return await completePreventedTurn.call(this, {
+            activeTurn,
             events,
-            startedAt: turnStartedAtMs,
-            status: "completed",
-            traceContext: turnTraceContext,
-            turnId,
-          });
-          this.turnNumber++;
-          const projection = await this.rebuildProjection();
-          await this.accountTargetTurnCompletion({
-            inputID: targetRunInputID,
+            inputId: options?.inputId,
+            response: userPromptHookResult.stopReason ?? "Prompt blocked by UserPromptSubmit hook.",
             startedAtMs: turnStartedAtMs,
             startedTarget,
-            traceContext: turnTraceContext,
-            usage: turnUsage,
-          });
-          return {
-            response,
-            turnId,
+            targetRunInputID,
             traceId,
-            usage: turnUsage,
-            events,
-            projection,
-          };
+            turnId,
+            turnMachine,
+            turnTraceContext,
+          });
         }
         this.injectHookAdditionalContextIntoMessageHistory(
           HookEventName.UserPromptSubmit,
           userPromptHookResult.additionalContexts,
         );
-        injectReferencedSessionContextReminderIntoMessageHistory.call(this, input, options);
-        injectDateChangeReminderIntoMessageHistory.call(this);
-        const resolvedAttachments = await resolveTurnAttachments(attachments, {
-          abortSignal: turnAbortSignal,
-          artifactStore: this.artifactStore,
-          fileSystemPort: this.fileSystemPort,
-          imageProcessorPort: this.imageProcessorPort,
-          sessionId: this.sessionId,
-          traceContext: turnTraceContext,
+        await applyRegularTurnUserInput.call(this, {
+          attachments,
+          displayInput,
+          input,
+          options,
+          turnAbortSignal,
           turnId,
-          workingDirectory: this.workingDirectory,
+          turnTraceContext,
+          userMessageId,
         });
-        logResolvedTurnAttachments(this.logger, turnTraceContext, resolvedAttachments);
-        const sharedContextRefs = options?.sharedContextRefs ?? options?.intent?.sharedContextRefs;
-        if (sharedContextRefs && sharedContextRefs.length > 0) {
-          const [reference] = sharedContextRefs;
-          if (!reference || reference.kind !== "shared_context_import") {
-            throw new Error("invalid shared context reference");
-          }
-          if (!this.sessionStore) throw new Error("shared context import storage is unavailable");
-          const alreadyHydrated = this.messageHistory
-            .borrowReadOnlyRuntimeEntries()
-            .some(
-              (entry) => entry.kind !== "attachment" && entry.metadata?.source === "shared_context",
-            );
-          if (!alreadyHydrated) {
-            const importedMessages = await this.sessionStore.messages({
-              sessionID: this.sessionId,
-            });
-            const contextMessage = importedMessages.find(
-              (message) =>
-                message.info.role === "user" &&
-                message.info.source === "shared_context" &&
-                message.info.metadata &&
-                typeof message.info.metadata === "object" &&
-                (message.info.metadata as Record<string, unknown>).contextId ===
-                  reference.context_id,
-            );
-            const contextText = contextMessage?.parts
-              .filter(
-                (part): part is Extract<MessagePart, { type: "text" }> => part.type === "text",
-              )
-              .map((part) => part.text)
-              .join("\n")
-              .trim();
-            if (!contextText) throw new Error("shared context content is unavailable");
-            this.messageHistory.addUser(
-              contextText,
-              runtimeMetadataForSyntheticUserMessageSource("shared_context"),
-            );
-          }
-        }
-        await this.persistPendingModelChangeTimeline(turnTraceContext);
-        if (options?.skipInputRecord !== true && options?.inputVisibility === "model-only") {
-          const inputSource = options.inputSource ?? "goal-continuation";
-          const userContent = buildUserContentFromTurn(input, resolvedAttachments);
-          this.messageHistory.addUser(
-            userContent,
-            runtimeInputMetadata(options.inputPresentation) ??
-              runtimeMetadataForSyntheticUserMessageSource(inputSource),
-          );
-          // /goal 自动续跑是 runtime 注入给模型的内部 user-role 输入，
-          // 不是用户在聊天里新发的一条消息。持久化时保留 raw 输入供恢复/排查使用，
-          // 但用 model-only 语义阻止 UI-facing snapshot 把它渲染成用户气泡。
-          await this.persistSyntheticUserNoticeForSession({
-            messageID: userMessageId,
-            metadata: {
-              ...(options.targetId ? { targetId: options.targetId } : {}),
-              ...(options.inputPresentation
-                ? { inputPresentation: options.inputPresentation }
-                : {}),
-              visibility: "model-only",
-            },
-            sessionId: this.sessionId,
-            source: inputSource,
-            text: input,
-            traceContext: turnTraceContext,
-            visibility: "model-only",
-          });
-        } else if (options?.skipInputRecord !== true) {
-          this.messageHistory.addEntries(
-            buildRuntimeUserEntriesFromTurn(input, resolvedAttachments, {
-              browserAmbientContext: options?.browserAmbientContext,
-            }).map((entry) => {
-              const metadata = runtimeInputMetadata(options?.inputPresentation);
-              return entry.kind !== "attachment" && metadata ? { ...entry, metadata } : entry;
-            }),
-          );
-          // /init 和自定义 slash command 会把模型输入展开成较长的内部
-          // prompt。模型可见的历史必须使用展开后的 input，但 UI 展示、会话标题和
-          // 恢复快照只能展示用户真实提交的原始 query。
-          await this.persistUserPrompt(
-            userMessageId,
-            displayInput,
-            resolvedAttachments,
-            turnTraceContext,
-            {
-              intent: options?.intent,
-              inputPresentation: options?.inputPresentation,
-              sessionInputId: options?.intent?.queueItemId,
-              sourceCommandId: options?.inputId,
-              ...(options?.epilogueStart === undefined
-                ? {}
-                : { epilogueStart: options.epilogueStart }),
-            },
-          );
-          // 标题生成以前等主 turn 成功后才启动，用户 stop/cancel 首轮请求时
-          // generated title 永远没有机会发起。首条 query 持久化后即可异步生成，避免被主链路取消拖死。
-          maybeStartSessionTitleGeneration.call(
-            this,
-            displayInput,
-            userMessageId,
-            turnTraceContext,
-          );
-        }
-        // Plugin reminder 必须在对应 user 消息写入历史和 session store 后再追加：
-        // provider 形态因此稳定为 user → system，cold hydration 也按同一因果顺序恢复。
-        // 根因：input 可能已经被自定义命令展开，解析它会让命令模板里的 plugin://
-        // 凭空获得“用户引用”语义；这里只解析真实持久化的 canonical displayInput。
-        // runtime 内部的 model-only continuation 不代表新的用户意图，不重复解析。
-        if (options?.inputVisibility !== "model-only") {
-          await this.injectPluginReferenceReminderFromTurn(
-            displayInput,
-            turnTraceContext,
-            options?.toolDisallowlist,
-          );
-        }
 
-        this.messageHistory.setCacheMiss();
         const loopModel = submissionModel ?? admittedModel;
         if (!loopModel) {
           throw new Error("Turn model was not created before execution");
         }
-        loopState = {
+        loopState = createRegularTurnLoopState({
           activeTurn,
-          ...(options?.automationId ? { automationId: options.automationId } : {}),
-
-          anomalyWarningsInjected: 0,
-          backgroundSubagentResultConsumed: options?.backgroundSubagentResultConsumed === true,
-          workflowResultConsumed: options?.workflowResultConsumed === true,
-          currentUserMessageId: userMessageId,
+          admittedOutputStyle,
           events,
+          historyEntries: this.messageHistory.borrowReadOnlyRuntimeEntries(),
           input,
-          modelResponse: "",
           model: loopModel,
-          ...(options?.modelExecution?.selectionScope === "execution"
-            ? { modelSelectionScope: "execution" as const }
-            : {}),
-          ...(options?.modelExecution?.subagents && options.intent?.modelSelection
-            ? {
-                subagentModelOverride: {
-                  selection: options.intent.modelSelection,
-                  background: options.modelExecution.subagents.background,
-                },
-              }
-            : {}),
-          modelStepCount: 0,
-          historyRoundCount: 0,
-          reactiveCompactAttemptedInCurrentModelStep: false,
-          repeatedToolCallSignature: undefined,
-          repeatedToolCallStreakCount: 0,
-          stopHookContinuationCount: 0,
-          streamRecoveryRetryCount: 0,
-          tokenCount: 0,
-          toolCallCount: 0,
-          turnRequestState: {
-            // Turn 只借一次 canonical 成员集合，之后由显式 commit 推进；entry 本身
-            // 遵循 MessageHistory 的不可变约定。
-            entries: [...this.messageHistory.borrowReadOnlyRuntimeEntries()],
-            outputTokenContinuationCount: 0,
-          },
-          toolDisallowlist: options?.toolDisallowlist,
+          options,
           traceId,
           turnAbortSignal,
           turnId,
           turnMachine,
-          turnOutputStyle: admittedOutputStyle,
           turnTraceContext,
           userMessageId,
-        };
+        });
 
         openGoalStateChangeReminderDeferral(activeTurn);
         phaseStartedAt = startTurnPhase("regular_turn_loop");
@@ -595,170 +355,35 @@ export async function executeTurnCommand(
         }
         turnMachine = loopState.turnMachine;
 
-        const turnUsage = createModelUsageSummaryFromEvents(events);
-        // goal usage/active-run 先结算，再固定 exact goal/verifier boundary；只有两者都
-        // 已持久化，TurnComplete 才能让 projection/UI 开放最终 assistant fork。
-        await this.accountTargetTurnCompletion({
-          inputID: targetRunInputID,
+        return await completeRegularTurn.call(this, {
+          events,
+          inputId: options?.inputId,
+          loopState,
+          options,
           startedAtMs: turnStartedAtMs,
           startedTarget,
-          traceContext: turnTraceContext,
-          usage: turnUsage,
-        });
-        if (loopState.stableProductStartMessageId && loopState.stableBoundaryAssistantMessageId) {
-          await persistStableForkCompletionBoundary(this, {
-            boundaryMessageId: loopState.stableBoundaryAssistantMessageId,
-            startMessageId: loopState.stableProductStartMessageId,
-            historyRoundCount: loopState.historyRoundCount,
-            traceContext: turnTraceContext,
-          });
-        }
-        if (loopState.stableBoundaryAssistantMessageId) {
-          await appendBrowserTurnScreenshot(
-            this,
-            loopState,
-            loopState.stableBoundaryAssistantMessageId,
-          );
-        }
-        const completeEvent = this.createEvent(
-          SessionEventType.TurnComplete,
-          {
-            response: loopState.modelResponse,
-            tokenCount: loopState.tokenCount,
-            usage: turnUsage,
-            toolCallCount: loopState.toolCallCount,
-            historyRoundCount: loopState.historyRoundCount,
-            duration: Date.now() - turnMachine.state.startedAt.getTime(),
-            resultType: "success",
-            ...(loopState.backgroundSubagentResultConsumed
-              ? { backgroundSubagentResultConsumed: true }
-              : {}),
-            ...(loopState.workflowResultConsumed ? { workflowResultConsumed: true } : {}),
-            cacheStats: this.messageHistory.getCacheStats(),
-            inputId: options?.inputId,
-          },
-          turnTraceContext,
-        );
-        await this.appendEvent(completeEvent, turnTraceContext);
-        events.push(completeEvent);
-        await recordTurnUsageFact(this, {
-          completedAt: Date.now(),
-          events,
-          startedAt: turnStartedAtMs,
-          status: "completed",
-          traceContext: turnTraceContext,
-          turnId,
-          userMessageId,
-        });
-        this.turnNumber++;
-
-        const projection = await this.rebuildProjection();
-        this.logger?.info("Turn completed", {
-          ...traceContextToLogContext(turnTraceContext),
-          durationMs: Date.now() - turnMachine.state.startedAt.getTime(),
-          event: "turn.completed",
-          module: "core.runtime",
-          status: "completed",
-          toolCallCount: loopState.toolCallCount,
-        });
-        // 单轮执行策略只抑制本次成功 Turn 的后台提取，不修改 Session Memory 配置。
-        if (options?.modelExecution?.memoryExtraction !== "skip") {
-          scheduleProjectMemoryExtraction(this, {
-            model: loopState.model,
-            traceContext: turnTraceContext,
-          });
-        }
-
-        const result: TurnResult = {
-          response: loopState.modelResponse,
-          turnId,
+          targetRunInputID,
           traceId,
-          usage: turnUsage,
-          events,
-          projection,
-        };
-        return result;
+          turnId,
+          turnTraceContext,
+        });
       } catch (error) {
         turnFailureHandled = true;
-        const coreError = createTurnFailureError(error, turnAbortSignal, "Turn execution failed");
-        const preserveQueueAutoDrainOnCancel =
-          coreError.type === CoreErrorType.TurnCancelled &&
-          this.activeForegroundExecution?.preserveQueueAutoDrainOnCancel === true;
-        const finishedTarget = await this.finishTargetTurnAccounting({
-          endedAtMs: Date.now(),
-          inputID: targetRunInputID,
+        return await failTurnExecution.call(this, {
+          activeTurn,
+          error,
+          events,
+          loopState,
+          options,
+          startedAtMs: turnStartedAtMs,
           startedTarget,
-          status: coreError.type === CoreErrorType.TurnCancelled ? "paused" : undefined,
-          traceContext: turnTraceContext,
-        });
-        if (finishedTarget?.targetID === startedTarget?.targetID) {
-          startedTarget = finishedTarget;
-        }
-        if (coreError.type === CoreErrorType.TurnCancelled) {
-          await this.pauseActiveTargetForCancellation(turnTraceContext);
-          if (activeTurn) {
-            await this.fallbackPendingGuidesToQueue({
-              activeTurn,
-              events,
-              reasonCode: "guide.turnInterrupted",
-              traceContext: turnTraceContext,
-            });
-          }
-        }
-        // 普通 TurnError 只结束当前 turn，不撤销已经 accepted 的 future input。
-        // V4 TurnError 投影将队列切成 error-paused，runtime 同步关闭行内 drain，
-        // 保留排队输入，等待用户显式继续。
-        if (activeTurn && coreError.type !== CoreErrorType.TurnCancelled) {
-          const pendingInputs = (await this.rebuildProjection()).pendingSteerInputs;
-          if (pendingInputs.length > 0) {
-            this.queueAutoDrain = false;
-            this.queueExternalDrainActive = false;
-          }
-        } else if (
-          activeTurn &&
-          coreError.type === CoreErrorType.TurnCancelled &&
-          !preserveQueueAutoDrainOnCancel &&
-          activeTurn.pendingInputs.length > 0
-        ) {
-          // runtime 授权位与投影同步：投影在 TurnComplete(cancelled)+queue>0 时把
-          // queue.autoDrain 置 false（held），runtime 的 drain 门也必须同步翻转，
-          // 否则 held 期间新起的 turn 会把后续入队项 drain 掉，与投影语义分叉。
-          this.queueAutoDrain = false;
-          this.queueExternalDrainActive = false;
-        }
-
-        // background wake 可能在 loopState 初始化前取消；此时仍要保留已 dequeue 的结果事实。
-        const backgroundSubagentResultConsumed =
-          options?.backgroundSubagentResultConsumed === true ||
-          loopState?.backgroundSubagentResultConsumed === true;
-        const workflowResultConsumed =
-          options?.workflowResultConsumed === true || loopState?.workflowResultConsumed === true;
-        await appendTurnOutcomeEvent(this, {
-          coreError,
-          events,
-          durationMs: Date.now() - turnMachine.state.startedAt.getTime(),
-          turnPhase: turnMachine.state.phase,
-          inputId: options?.inputId,
-          traceContext: turnTraceContext,
-          fallbackMessage: "Turn execution failed",
-          logEvent: "turn.failed",
-          logLabel: "Turn",
-          preserveQueueAutoDrainOnCancel,
-          backgroundSubagentResultConsumed,
-          workflowResultConsumed,
-          historyRoundCount: loopState?.historyRoundCount,
-        });
-        await recordTurnUsageFact(this, {
-          completedAt: Date.now(),
-          error: coreError,
-          events,
-          startedAt: turnStartedAtMs,
-          status: coreError.type === CoreErrorType.TurnCancelled ? "cancelled" : "error",
-          traceContext: turnTraceContext,
+          targetRunInputID,
+          turnAbortSignal,
           turnId,
+          turnMachine,
+          turnTraceContext,
           userMessageId,
         });
-        throw coreError;
       }
     }).then(
       (result) => {
@@ -781,52 +406,12 @@ export async function executeTurnCommand(
     );
 
   return execute().finally(async () => {
-    if (targetRunHeartbeat) {
-      clearInterval(targetRunHeartbeat);
-    }
-    this.releaseTurnStart(turnId);
-    clearBrowserTurnState(this.sessionId, turnId);
-    this.finishActiveTurn(activeTurn);
-    turnAbortScope.dispose();
-    try {
-      await this.browserControlPort?.turnEnded?.({
-        sessionId: this.sessionId,
-        turnId: String(turnId),
-        traceContext: turnTraceContext,
-      });
-    } catch (error) {
-      // 生命周期清理失败不能覆盖已经完成/失败的主 turn；backend 会在 session close 再兜底释放。
-      this.logger?.warn("Browser turn cleanup failed", {
-        error: error instanceof Error ? error.message : String(error),
-        event: "browser.turn_cleanup.failed",
-        turnId: String(turnId),
-      });
-    }
+    await cleanupTurnExecution.call(this, {
+      activeTurn,
+      targetRunHeartbeat,
+      turnAbortScope,
+      turnId,
+      turnTraceContext,
+    });
   });
-}
-
-function injectDateChangeReminderIntoMessageHistory(this: AgentRuntimeInternal): void {
-  const currentDate = formatLocalIsoDate(this.now());
-  const previousDate = this.lastEmittedLocalDate;
-  this.lastEmittedLocalDate = currentDate;
-
-  if (!previousDate || previousDate === currentDate) {
-    return;
-  }
-
-  this.messageHistory.addAttachment(
-    "date_change",
-    buildDateChangeReminderBody(previousDate, currentDate),
-  );
-}
-
-function injectReferencedSessionContextReminderIntoMessageHistory(
-  this: AgentRuntimeInternal,
-  input: string,
-  options?: ExecuteTurnOptions,
-): void {
-  if (options?.inputVisibility === "model-only") return;
-  const reminderBody = buildReferencedSessionContextReminderBody(input);
-  if (!reminderBody) return;
-  this.messageHistory.addAttachment("referenced_session_context", reminderBody);
 }

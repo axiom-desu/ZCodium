@@ -294,7 +294,7 @@ export interface SessionPaneProps {
   onSelectionSideChatUnavailable?: () => void;
   /**
    * Focus 层：全局快捷键（Esc stop）与 add-to-chat 事件只路由到
-   * focused pane。单 pane 消费者（V4ChatPane）缺省 true。
+   * focused pane。只挂单个 pane 的消费者（如静态回放/侧 pane 宿主）缺省 true。
    */
   focused?: boolean;
   /** 向右拆分新 draft 窗格（叶子数达上限时宿主不下发）。 */

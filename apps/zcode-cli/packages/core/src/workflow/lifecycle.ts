@@ -1,82 +1,51 @@
 import {
   deriveWorkflowSessionLinks,
-  type WorkflowActivitySnapshot,
   type WorkflowGraphCollection,
-  type WorkflowGraphEdge,
   type WorkflowGraphNode,
   type WorkflowGraphSeed,
   WorkflowGraphSeedSchema,
   type WorkflowNodePromptUpdate,
   WorkflowNodePromptUpdateSetSchema,
   type WorkflowNodeStatus,
-  type WorkflowPhaseSnapshot,
   type WorkflowRunSnapshot,
 } from "@zcode/contracts";
+import {
+  closeActivity,
+  closePhase,
+  isInScope,
+  nodeChange,
+  normalizeSeedEdges,
+  resetPhaseForRetry,
+  shouldRepairActivity,
+  shouldRepairPhase,
+  uniqueStrings,
+  validateAddedEdges,
+} from "./lifecycle-internals.js";
+import type {
+  ApplyWorkflowGraphSeedOptions,
+  ApplyWorkflowGraphSeedResult,
+  ApplyWorkflowNodePromptUpdatesOptions,
+  ApplyWorkflowNodePromptUpdatesResult,
+  CancelWorkflowSnapshotOptions,
+  ReconcileWorkflowSnapshotForResumeOptions,
+  ReopenWorkflowGraphNodeOptions,
+  ReopenWorkflowGraphNodeResult,
+  WorkflowGraphNodeChange,
+  WorkflowSnapshotLifecycleResult,
+} from "./lifecycle-types.js";
 
-export interface WorkflowGraphNodeChange {
-  nodeId: string;
-  phase?: string;
-  status: WorkflowNodeStatus;
-}
-
-export interface WorkflowSnapshotLifecycleResult<TSnapshot extends WorkflowRunSnapshot> {
-  activityIds: string[];
-  changed: boolean;
-  nodeChanges: WorkflowGraphNodeChange[];
-  phaseIds: string[];
-  snapshot: TSnapshot;
-}
-
-export interface ReconcileWorkflowSnapshotForResumeOptions {
-  nodeIds?: Iterable<string>;
-  reason?: string;
-  resetActivities?: boolean;
-  resetPhases?: boolean;
-  timestamp: string;
-}
-
-export interface CancelWorkflowSnapshotOptions {
-  reason?: string;
-  timestamp: string;
-}
-
-export interface ReopenWorkflowGraphNodeOptions {
-  maxReopens?: number;
-  nodeId: string;
-  reason?: string;
-  timestamp: string;
-}
-
-export interface ReopenWorkflowGraphNodeResult<TSnapshot extends WorkflowRunSnapshot> {
-  changed: boolean;
-  nodeChange: WorkflowGraphNodeChange;
-  reopenAttempts: number;
-  snapshot: TSnapshot;
-}
-
-export interface ApplyWorkflowGraphSeedOptions {
-  phase?: string;
-  timestamp: string;
-}
-
-export interface ApplyWorkflowGraphSeedResult<TSnapshot extends WorkflowRunSnapshot> {
-  addedCollections: WorkflowGraphCollection[];
-  addedEdges: WorkflowGraphEdge[];
-  addedNodes: WorkflowGraphNode[];
-  changed: boolean;
-  snapshot: TSnapshot;
-}
-
-export interface ApplyWorkflowNodePromptUpdatesOptions {
-  phase: string;
-  timestamp: string;
-}
-
-export interface ApplyWorkflowNodePromptUpdatesResult<TSnapshot extends WorkflowRunSnapshot> {
-  changed: boolean;
-  snapshot: TSnapshot;
-  updatedNodes: WorkflowGraphNode[];
-}
+export type {
+  ApplyWorkflowGraphSeedOptions,
+  ApplyWorkflowGraphSeedResult,
+  ApplyWorkflowNodePromptUpdatesOptions,
+  ApplyWorkflowNodePromptUpdatesResult,
+  CancelWorkflowSnapshotOptions,
+  ReconcileWorkflowSnapshotForResumeOptions,
+  ReopenWorkflowGraphNodeOptions,
+  ReopenWorkflowGraphNodeResult,
+  WorkflowGraphNodeChange,
+  WorkflowSnapshotLifecycleResult,
+} from "./lifecycle-types.js";
 
 const DEFAULT_RESUME_RESET_REASON =
   "Reset during workflow resume because the previous process stopped before completion.";
@@ -440,151 +409,4 @@ export function applyWorkflowNodePromptUpdates<TSnapshot extends WorkflowRunSnap
     } as TSnapshot,
     updatedNodes,
   };
-}
-
-function isInScope(value: string, scope: ReadonlySet<string> | undefined): boolean {
-  return !scope || scope.has(value);
-}
-
-function shouldRepairPhase(
-  phase: string,
-  nodeScope: ReadonlySet<string> | undefined,
-  resetPhaseIdsFromNodes: ReadonlySet<string>,
-): boolean {
-  if (!nodeScope) return true;
-  return resetPhaseIdsFromNodes.has(phase);
-}
-
-function shouldRepairActivity(
-  activity: WorkflowActivitySnapshot,
-  nodeScope: ReadonlySet<string> | undefined,
-  resetPhaseIdsFromNodes: ReadonlySet<string>,
-): boolean {
-  if (!nodeScope) return true;
-  if (activity.nodeId && nodeScope.has(activity.nodeId)) return true;
-  return resetPhaseIdsFromNodes.has(activity.phase);
-}
-
-function nodeChange(node: WorkflowGraphNode, status: WorkflowNodeStatus): WorkflowGraphNodeChange {
-  return {
-    nodeId: node.id,
-    ...(node.phase ? { phase: node.phase } : {}),
-    status,
-  };
-}
-
-function resetPhaseForRetry(phase: WorkflowPhaseSnapshot, reason: string): WorkflowPhaseSnapshot {
-  return {
-    error: reason,
-    phase: phase.phase,
-    status: "pending",
-  };
-}
-
-function closePhase(
-  phase: WorkflowPhaseSnapshot,
-  status: WorkflowNodeStatus,
-  timestamp: string,
-  reason: string,
-): WorkflowPhaseSnapshot {
-  return {
-    ...phase,
-    completedAt: phase.completedAt ?? timestamp,
-    error: phase.error ?? reason,
-    status,
-  };
-}
-
-function closeActivity(
-  activity: WorkflowActivitySnapshot,
-  status: WorkflowNodeStatus,
-  timestamp: string,
-  reason: string,
-): WorkflowActivitySnapshot {
-  return {
-    ...activity,
-    completedAt: activity.completedAt ?? timestamp,
-    error: activity.error ?? reason,
-    status,
-  };
-}
-
-function normalizeSeedEdges(
-  existingEdges: readonly WorkflowGraphEdge[],
-  addedNodes: readonly WorkflowGraphNode[],
-  seedEdges: readonly WorkflowGraphEdge[],
-): WorkflowGraphEdge[] {
-  const edges = seedEdges.map((edge) => ({ from: edge.from, to: edge.to }));
-  const knownEdgeIds = new Set([...existingEdges, ...edges].map(edgeId));
-  for (const node of addedNodes) {
-    for (const dependencyId of node.dependsOn) {
-      const edge = { from: dependencyId, to: node.id };
-      const id = edgeId(edge);
-      if (knownEdgeIds.has(id)) continue;
-      edges.push(edge);
-      knownEdgeIds.add(id);
-    }
-  }
-  return edges;
-}
-
-function validateAddedEdges(
-  existingNodes: readonly WorkflowGraphNode[],
-  existingEdges: readonly WorkflowGraphEdge[],
-  addedNodes: readonly WorkflowGraphNode[],
-  addedEdges: readonly WorkflowGraphEdge[],
-): void {
-  const nodeIds = new Set([...existingNodes, ...addedNodes].map((node) => node.id));
-  const seenEdgeIds = new Set(existingEdges.map(edgeId));
-  const pendingEdges = [...existingEdges];
-  for (const edge of addedEdges) {
-    if (edge.from === edge.to) {
-      throw new Error(`Workflow graph seed returned a self-loop edge: ${edge.from} -> ${edge.to}`);
-    }
-    if (!nodeIds.has(edge.from)) {
-      throw new Error(
-        `Workflow graph seed returned an edge with unknown source node: ${edge.from}`,
-      );
-    }
-    if (!nodeIds.has(edge.to)) {
-      throw new Error(`Workflow graph seed returned an edge with unknown target node: ${edge.to}`);
-    }
-    const id = edgeId(edge);
-    if (seenEdgeIds.has(id)) {
-      throw new Error(`Workflow graph seed returned duplicate edge: ${id}`);
-    }
-    if (wouldFormCycle(pendingEdges, edge)) {
-      throw new Error(`Workflow graph seed returned an edge that would create a cycle: ${id}`);
-    }
-    seenEdgeIds.add(id);
-    pendingEdges.push(edge);
-  }
-}
-
-function wouldFormCycle(edges: readonly WorkflowGraphEdge[], newEdge: WorkflowGraphEdge): boolean {
-  const outgoing = new Map<string, string[]>();
-  for (const edge of edges) {
-    const list = outgoing.get(edge.from) ?? [];
-    list.push(edge.to);
-    outgoing.set(edge.from, list);
-  }
-
-  const visited = new Set<string>();
-  const queue = [newEdge.to];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    if (current === newEdge.from) return true;
-    if (visited.has(current)) continue;
-    visited.add(current);
-    queue.push(...(outgoing.get(current) ?? []));
-  }
-  return false;
-}
-
-function edgeId(edge: WorkflowGraphEdge): string {
-  return `${edge.from}->${edge.to}`;
-}
-
-function uniqueStrings(values: readonly string[]): string[] {
-  return [...new Set(values.filter((value) => value.length > 0))];
 }

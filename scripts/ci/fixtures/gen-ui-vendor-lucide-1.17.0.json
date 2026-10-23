@@ -1,0 +1,122 @@
+{
+  "package": "lucide",
+  "version": "1.17.0",
+  "license": "ISC",
+  "tarball": "https://registry.npmjs.org/lucide/-/lucide-1.17.0.tgz",
+  "integrity": "sha512-icbHK+hG15rWoacjNi3aw+UXHRmZ9Ee1fJ6ZSu7lbC4GOig7evVEXYCfK77FvjQHusPgi0D/QN7zTO+5wZ8PwQ==",
+  "source": "dist/umd/lucide.min.js",
+  "unminifiedSource": "dist/umd/lucide.js",
+  "unminifiedSha256": "fde878a4f7aebe548b071eaaf343d898f66d275e93970abe95d8ca5fda290b51",
+  "file": "lucide-1.17.0.min.js",
+  "sha256": "5e943127343691a9b640d959bbfbdeb742f4a99e0ebc17a4fa77e94654e5318b",
+  "licenseFile": "lucide-1.17.0.min.js.LICENSE",
+  "licenseSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+  "exportCount": 1961,
+  "iconCount": 1958,
+  "nonIconExports": ["createElement", "createIcons", "icons"],
+  "apiSurfaceSha256": "be24a7e00e2d43d632cc72b93b3974c9ab69e85439de06f83bc362bfab2f9b4f",
+  "iconShapes": {
+    "Search": [
+      [
+        "path",
+        {
+          "d": "m21 21-4.34-4.34"
+        }
+      ],
+      [
+        "circle",
+        {
+          "cx": "11",
+          "cy": "11",
+          "r": "8"
+        }
+      ]
+    ],
+    "ChartColumn": [
+      [
+        "path",
+        {
+          "d": "M3 3v16a2 2 0 0 0 2 2h16"
+        }
+      ],
+      [
+        "path",
+        {
+          "d": "M18 17V9"
+        }
+      ],
+      [
+        "path",
+        {
+          "d": "M13 17V5"
+        }
+      ],
+      [
+        "path",
+        {
+          "d": "M8 17v-3"
+        }
+      ]
+    ],
+    "ChevronLeft": [
+      [
+        "path",
+        {
+          "d": "m15 18-6-6 6-6"
+        }
+      ]
+    ],
+    "ChevronRight": [
+      [
+        "path",
+        {
+          "d": "m9 18 6-6-6-6"
+        }
+      ]
+    ],
+    "X": [
+      [
+        "path",
+        {
+          "d": "M18 6 6 18"
+        }
+      ],
+      [
+        "path",
+        {
+          "d": "m6 6 12 12"
+        }
+      ]
+    ],
+    "Calendar": [
+      [
+        "path",
+        {
+          "d": "M8 2v4"
+        }
+      ],
+      [
+        "path",
+        {
+          "d": "M16 2v4"
+        }
+      ],
+      [
+        "rect",
+        {
+          "width": "18",
+          "height": "18",
+          "x": "3",
+          "y": "4",
+          "rx": "2"
+        }
+      ],
+      [
+        "path",
+        {
+          "d": "M3 10h18"
+        }
+      ]
+    ]
+  }
+}

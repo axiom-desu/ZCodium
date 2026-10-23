@@ -25,7 +25,7 @@
   function sessionKey() {
     try {
       return window.sessionStorage && window.sessionStorage.getItem('brainstorm-session-key');
-    } catch (e) {}
+    } catch {}
     return null;
   }
 
@@ -96,7 +96,7 @@
 
     ws.onmessage = (msg) => {
       let data;
-      try { data = JSON.parse(msg.data); } catch (e) { return; }
+      try { data = JSON.parse(msg.data); } catch { return; }
       if (data.type === 'reload') window.location.reload();
     };
 
@@ -114,7 +114,7 @@
     };
 
     // Let onclose own reconnection so we don't schedule it twice.
-    ws.onerror = () => { try { ws.close(); } catch (e) {} };
+    ws.onerror = () => { try { ws.close(); } catch {} };
   }
 
   function sendEvent(event) {

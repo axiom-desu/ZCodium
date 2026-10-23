@@ -46,7 +46,7 @@ try {
 
 function resolveChromium(chromiumObj) {
   let exe;
-  try { exe = chromiumObj.executablePath(); } catch (_) { exe = null; }
+  try { exe = chromiumObj.executablePath(); } catch { exe = null; }
   if (exe && fs.existsSync(exe)) return { status: 'ok', executablePath: exe };
 
   const candidates = [

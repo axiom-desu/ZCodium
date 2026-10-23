@@ -328,7 +328,7 @@ function buildRemotePluginSyncPluginOptions(
   }
   return {
     configuredOptions: { ...configuredOptions },
-    userConfig: { ...(plugin?.userConfig ?? {}) },
+    userConfig: { ...plugin?.userConfig },
   };
 }
 
@@ -724,7 +724,7 @@ async function syncPortablePluginOptions(
     return;
   }
   const mergedOptions = {
-    ...(remotePlugin.configuredOptions ?? {}),
+    ...remotePlugin.configuredOptions,
     ...plan.options,
   };
   if (arePluginOptionsEqual(remotePlugin.configuredOptions ?? {}, mergedOptions)) {

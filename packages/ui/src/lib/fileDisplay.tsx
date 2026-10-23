@@ -5,9 +5,6 @@ import {
   normalizePath,
   trimTrailingSeparator,
   resolveIconName,
-  getIconPalette,
-  getIconLabel,
-  buildInlineSvgDataUrl,
 } from "@/lib/fileDisplayHelpers.js";
 
 export const INLINE_FALLBACK_FILE_ICON_SRC =

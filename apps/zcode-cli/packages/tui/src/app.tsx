@@ -2,27 +2,22 @@ import type { ModelUsageSummary, TodoItem, TurnId } from "@zcode/contracts";
 import { getZCodeCopy } from "@zcode/i18n";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { AppView } from "./app-view.js";
-import { syncTextareaValue, type PromptInputEditor } from "./app-input-pane.js";
+import type { PromptInputEditor } from "./app-input-pane.js";
 import { selectionCopyStatus, type SelectionCopyResult } from "./app-copy.js";
 import { useClipboardImagePaste } from "./app-clipboard-image.js";
+import { useTuiDraftEditing } from "./app-draft-edit.js";
 import { useFileMentionController } from "./app-file-mentions.js";
+import { createTuiInitialState } from "./app-initial-state.js";
 import { useTuiKeyboardControls } from "./app-keyboard.js";
 import { useTuiModeSwitcher } from "./app-mode.js";
 import { createTuiPermissionRequester } from "./app-permission.js";
-import { appendAgentResult } from "./app-submit.js";
 import { useSubmitValue } from "./app-submit-controller.js";
-import {
-  filterSlashCommands,
-  reconcileSlashSelection,
-  tuiSlashCommands,
-  trySubmitTuiQuit,
-} from "./app-input.js";
+import { filterSlashCommands, tuiSlashCommands, trySubmitTuiQuit } from "./app-input.js";
 import { useEffortCommandController } from "./app-effort-command.js";
 import { useInputHistory } from "./app-input-history.js";
 import { useModeCommandController } from "./app-mode-command.js";
 import { useModelCommandController } from "./app-model-command.js";
 import { useSidebarController } from "./app-sidebar-layout.js";
-import { createSelectionState } from "./app-selection-state.js";
 import { resolveComposerSubmittedText } from "./app-submit-resolver.js";
 import type {
   ApprovalPrompt,
@@ -56,33 +51,20 @@ export function TuiApp({
   onExit,
   options,
 }: TuiAppProps): React.ReactElement {
-  // Startup sentinels are diagnostics, not user-visible transcript messages.
-  const initialResult = options.initialResult;
+  const [initialState] = useState(() => createTuiInitialState(options));
   useTuiThemeSync(options);
-  const [messages, setMessages] = useState<Message[]>(() =>
-    initialResult
-      ? appendAgentResult([], initialResult, { workspaceDirectory: options.workspaceDirectory })
-      : [],
-  );
+  const [messages, setMessages] = useState<Message[]>(initialState.messages);
   const [draft, setDraftState] = useState("");
-  const [, setDraftAttachmentsState] = useState<DraftAttachment[]>([]);
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState(initialResult?.mode ?? options.initialMode ?? "build");
-  const [model, setModel] = useState(initialResult?.model ?? options.initialModel ?? "unknown");
-  const [thoughtLevel, setThoughtLevel] = useState(
-    initialResult?.thoughtLevel ?? options.initialThoughtLevel ?? "",
-  );
-  const [locale, setLocale] = useState(options.locale ?? "en-US");
+  const [mode, setMode] = useState(initialState.mode);
+  const [model, setModel] = useState(initialState.model);
+  const [thoughtLevel, setThoughtLevel] = useState(initialState.thoughtLevel);
+  const [locale, setLocale] = useState(initialState.locale);
   const [lastEvent, setLastEvent] = useState("idle");
   const [lastError, setLastError] = useState<string | undefined>();
   const copy = useMemo(() => getZCodeCopy(locale), [locale]);
-  const [modelSetupRequired, setModelSetupRequired] = useState(
-    initialResult?.modelSetupRequired ?? options.modelSetupRequired ?? false,
-  );
-  const [status, setStatus] = useState(
-    initialResult?.selection?.prompt ??
-      (modelSetupRequired ? copy.tui.modelSetupRequired.status : copy.tui.status.ready),
-  );
+  const [modelSetupRequired, setModelSetupRequired] = useState(initialState.modelSetupRequired);
+  const [status, setStatus] = useState(initialState.status);
   const [statusDetails, setStatusDetails] = useState<string[]>([]);
   const [traceId, setTraceId] = useState<string | undefined>();
   const [activeTurnId, setActiveTurnId] = useState<TurnId | undefined>();
@@ -94,9 +76,7 @@ export function TuiApp({
   const [modifiedFiles, setModifiedFiles] = useState<ModifiedFileStat[]>([]);
   const [liveModelText, setLiveModelText] = useState("");
   const [queuedInputs, setQueuedInputs] = useState<QueuedInput[]>([]);
-  const [selection, setSelection] = useState<SelectionState | undefined>(() =>
-    createSelectionState(initialResult?.selection),
-  );
+  const [selection, setSelection] = useState<SelectionState | undefined>(initialState.selection);
   const [slashSelection, setSlashSelection] = useState<SlashSelectionState | undefined>();
   const [approvalQueue, setApprovalQueueState] = useState<ApprovalPrompt[]>([]);
   const approvalQueueRef = useRef<ApprovalPrompt[]>([]);
@@ -115,8 +95,6 @@ export function TuiApp({
 
   const abortControllerRef = useRef<AbortController | undefined>(undefined);
   const exitRequestedRef = useRef(false);
-  const draftRef = useRef("");
-  const draftAttachmentsRef = useRef<DraftAttachment[]>([]);
   const inputEditorRef = useRef<PromptInputEditor | null>(null);
   const inputHistoryIndexRef = useRef(0);
   const inputHistoryDraftAttachmentsRef = useRef<DraftAttachment[] | undefined>(undefined);
@@ -131,7 +109,7 @@ export function TuiApp({
     [options.slashCommands, copy.tui.terminal.quit],
   );
   const [effortOptions, setEffortOptions] = useState<NonNullable<TuiOptions["effortOptions"]>>(
-    () => initialResult?.effortOptions ?? options.effortOptions ?? [],
+    initialState.effortOptions,
   );
   const filteredSlashCommands = useMemo(
     () => filterSlashCommands(draft, slashCommands),
@@ -141,52 +119,19 @@ export function TuiApp({
   const modelCommand = useModelCommandController(draft, options);
   const modeCommand = useModeCommandController(draft);
 
-  const setDraftAttachments = useCallback((action: React.SetStateAction<DraftAttachment[]>) => {
-    const nextAttachments =
-      typeof action === "function" ? action(draftAttachmentsRef.current) : action;
-    draftAttachmentsRef.current = nextAttachments;
-    setDraftAttachmentsState(nextAttachments);
-  }, []);
-
-  const setDraftValue = useCallback(
-    (value: string) => {
-      if (exitRequestedRef.current) return;
-      draftRef.current = value;
-      // 同批原生输入的提交会先于 React layout effect；立即清空同一 editor，
-      // 防止延迟 content-change 复活旧 prompt，把下一条 /quit 拼到旧输入后排队。
-      if (value.length === 0 && inputEditorRef.current)
-        syncTextareaValue(inputEditorRef.current, value);
-      setDraftState(value);
-      setDraftAttachments((current) =>
-        current.filter((attachment) => value.includes(attachment.placeholder)),
-      );
-      inputHistoryIndexRef.current = 0;
-      inputHistoryDraftAttachmentsRef.current = undefined;
-      inputHistoryDraftRef.current = undefined;
-      const nextModelSelection = modelCommand.reconcileDraft(value);
-      const nextEffortSelection = nextModelSelection
-        ? undefined
-        : effortCommand.reconcileDraft(value);
-      const nextModeSelection =
-        nextModelSelection || nextEffortSelection ? undefined : modeCommand.reconcileDraft(value);
-      if (nextModelSelection) {
-        effortCommand.setSelection(undefined);
-        modeCommand.setSelection(undefined);
-      } else if (nextEffortSelection) {
-        modelCommand.setSelection(undefined);
-        modeCommand.setSelection(undefined);
-      } else if (nextModeSelection) {
-        effortCommand.setSelection(undefined);
-        modelCommand.setSelection(undefined);
-      }
-      setSlashSelection(
-        nextModelSelection || nextEffortSelection || nextModeSelection
-          ? undefined
-          : reconcileSlashSelection(value, slashCommands),
-      );
-    },
-    [effortCommand, modeCommand, modelCommand, setDraftAttachments, slashCommands],
-  );
+  const { draftAttachmentsRef, draftRef, setDraftAttachments, setDraftValue } = useTuiDraftEditing({
+    effortCommand,
+    exitRequestedRef,
+    inputEditorRef,
+    inputHistoryDraftAttachmentsRef,
+    inputHistoryDraftRef,
+    inputHistoryIndexRef,
+    modeCommand,
+    modelCommand,
+    setDraftState,
+    setSlashSelection,
+    slashCommands,
+  });
 
   const applyResult = useTuiApplyResult({
     fallback: { locale, modelSetupRequired, mode, model },

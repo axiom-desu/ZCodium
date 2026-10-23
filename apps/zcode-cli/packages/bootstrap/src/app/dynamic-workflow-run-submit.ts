@@ -22,7 +22,6 @@ import {
   type Caps,
   type ImportedRunCache,
   type RunSettlement,
-  type WorkflowProgram,
 } from "@zcode/dynamic-workflow";
 import { formatModelPickerValue } from "@zcode/shared/model-selection";
 import type { ModelSelection } from "@zcode/shared/model-selection";
@@ -37,7 +36,11 @@ import {
   compileOnce,
   compileProgram,
 } from "./dynamic-workflow-run-compile.js";
-import { openHoleIndexes, phaseNamesFromEvents, readRunHoleEvents } from "./dynamic-workflow-run-holes.js";
+import {
+  openHoleIndexes,
+  phaseNamesFromEvents,
+  readRunHoleEvents,
+} from "./dynamic-workflow-run-holes.js";
 import {
   readRunLaunchAnchor,
   readRunScriptPath,

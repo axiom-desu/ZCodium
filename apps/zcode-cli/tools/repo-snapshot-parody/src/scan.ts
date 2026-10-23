@@ -7,7 +7,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { lstat, readdir, stat } from "node:fs/promises";
+import { lstat, readdir } from "node:fs/promises";
 import { openAsBlob } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -52,9 +52,7 @@ function pathSegments(relativePath: string): string[] {
 function isTopLevelBuildOutputPath(segments: string[]): boolean {
   const first = segments[0]?.toLowerCase();
   if (!first) return false;
-  return (
-    BUILD_OUTPUT_DIRS.has(first) || first.startsWith("dist-") || first.endsWith("-unpacked")
-  );
+  return BUILD_OUTPUT_DIRS.has(first) || first.startsWith("dist-") || first.endsWith("-unpacked");
 }
 
 function hasElectronUnpackedSegment(segments: string[]): boolean {
@@ -121,17 +119,17 @@ export function decideBeforeSample(input: {
 }
 
 /** 采样后判定。`.git` 再次跳过二进制检测。 */
-export function decideAfterSample(input: {
-  relativePath: string;
-  sample: Buffer;
-}): ScanDecision {
+export function decideAfterSample(input: { relativePath: string; sample: Buffer }): ScanDecision {
   const before = decideBeforeSample({
     relativePath: input.relativePath,
     sizeBytes: 0,
     isSymbolicLink: false,
   });
   if (!before.include) return before;
-  if (isRootGitMetadataFile(input.relativePath) || hasGitInternalSegment(pathSegments(input.relativePath))) {
+  if (
+    isRootGitMetadataFile(input.relativePath) ||
+    hasGitInternalSegment(pathSegments(input.relativePath))
+  ) {
     return { include: true, reason: "git-internal" };
   }
   if (input.sample.includes(0)) return { include: false, reason: "binary" };
@@ -155,11 +153,9 @@ async function looksBinary(absolutePath: string): Promise<boolean> {
 
 async function listGitFiles(workspacePath: string): Promise<string[] | null> {
   return new Promise((resolvePromise) => {
-    const child = spawn(
-      "git",
-      ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-      { cwd: workspacePath },
-    );
+    const child = spawn("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+      cwd: workspacePath,
+    });
     const chunks: Buffer[] = [];
     child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
     child.on("error", () => resolvePromise(null));
@@ -188,7 +184,8 @@ async function walkWorkspace(workspacePath: string): Promise<string[]> {
     for (const entry of entries) {
       const relativePath = relative(workspacePath, join(absoluteDir, entry.name));
       const segments = pathSegments(relativePath);
-      if (segments.some((segment) => NODE_MODULES.has(segment) || CACHE_DIRS.has(segment))) continue;
+      if (segments.some((segment) => NODE_MODULES.has(segment) || CACHE_DIRS.has(segment)))
+        continue;
       if (entry.isDirectory()) {
         if (isTopLevelBuildOutputPath(segments) || hasElectronUnpackedSegment(segments)) continue;
         await visit(join(absoluteDir, entry.name), depth + 1);

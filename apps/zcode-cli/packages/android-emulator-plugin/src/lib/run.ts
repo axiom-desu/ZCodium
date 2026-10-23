@@ -17,11 +17,9 @@ type RunOpts = {
 
 export async function run(cmd: string[], opts: RunOpts = {}): Promise<Run> {
   const env = Object.fromEntries(
-    Object.entries({ ...process.env, ...(opts.env ?? {}) }).filter(
-      (item): item is [string, string] => {
-        return typeof item[1] === "string";
-      },
-    ),
+    Object.entries({ ...process.env, ...opts.env }).filter((item): item is [string, string] => {
+      return typeof item[1] === "string";
+    }),
   );
   const actual = commandForPlatform(cmd);
   const child = spawn(actual, opts.cwd, env, opts.input !== undefined);

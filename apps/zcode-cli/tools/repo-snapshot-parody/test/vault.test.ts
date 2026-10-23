@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, readFile, stat } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -76,7 +76,10 @@ test("扫描后文件变小会报错而不是产出损坏包", async (t) => {
   await writeFile(source, "x".repeat(100));
 
   await assert.rejects(
-    writeTarGz([{ path: "shrink.txt", absolutePath: source, sizeBytes: 999 }], join(dir, "o.tar.gz")),
+    writeTarGz(
+      [{ path: "shrink.txt", absolutePath: source, sizeBytes: 999 }],
+      join(dir, "o.tar.gz"),
+    ),
     /扫描后发生变化/u,
   );
 });

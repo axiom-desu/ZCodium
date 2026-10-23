@@ -1,4 +1,4 @@
-import { createPartId, traceContextToLogContext, TurnMachineImpl } from "../deps.js";
+import { TurnMachineImpl } from "../deps.js";
 import type {
   MessageId,
   ModelToolCall,
@@ -15,16 +15,11 @@ import {
   isTurnCancellationError,
   modelContentForToolResult,
   stringifyToolResultOutput,
-  toRecordInput,
 } from "../helpers/index.js";
 import { persistToolResultMediaAttachments } from "../helpers/tool-result-media-persistence.js";
 import type { RuntimeModelTextResult, StreamedToolExecutionResult } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
-import { emitSyntheticStreamedToolError } from "./streaming-tool-synthetic-result.js";
-import {
-  persistPendingToolPart,
-  projectToolNameForNonEmptyBoundary,
-} from "./tool-part-persistence.js";
+import { projectToolNameForNonEmptyBoundary } from "./tool-part-persistence.js";
 import { persistToolModelStepFinish } from "./turn-step-finish.js";
 import { completedToolPartMetadata, mcpToolPartMetadata } from "./tool-part-metadata.js";
 import { drainInlineGuideForNextRequest } from "./turn-guide-drain.js";
@@ -36,6 +31,8 @@ import { recordToolUsageFromResult } from "./turn-tool-usage.js";
 import { recordBrowserTurnToolResult } from "../../repl/browser-turn-state.js";
 import { createRuntimeToolResultEntry } from "../../agent/message-history.js";
 import { commitTurnRequestEntries } from "./turn-output-token-continuation.js";
+import { persistDeclaredToolParts, type ToolPartHandle } from "./turn-tools-declaration.js";
+import { enqueueFollowUpUserInputFromToolResult } from "./turn-tools-follow-up-input.js";
 export async function executeToolCallsForModelStep(
   this: AgentRuntimeInternal,
   state: RegularTurnLoopState,
@@ -52,7 +49,6 @@ export async function executeToolCallsForModelStep(
   if (!model) {
     throw new Error("Model-backed tool execution requires the loop Model");
   }
-  const modelSelection = { providerId: model.providerId, modelId: model.modelId };
   const coreToolCalls: ToolCall[] = options.toolCalls.map((tc) => ({
     id: tc.id as ToolCallId,
     // Model step admission 已完成类型/ID 校验；这里保留可恢复的原始空白名称，
@@ -64,76 +60,13 @@ export async function executeToolCallsForModelStep(
     (options.streamedToolResults ?? []).map((entry) => [entry.toolCallId, entry]),
   );
   const toolCallById = new Map(coreToolCalls.map((toolCall) => [toolCall.id, toolCall]));
-  const toolParts = new Map<
-    string,
-    {
-      partID: ReturnType<typeof createPartId>;
-      declarationIndex: number;
-      input: Record<string, unknown>;
-      startedAt: number;
-    }
-  >();
-  for (const [declarationIndex, toolCall] of coreToolCalls.entries()) {
-    const streamed = streamedResultsById.get(toolCall.id as ToolCallId);
-    if (streamed) {
-      toolParts.set(toolCall.id, {
-        declarationIndex,
-        partID: streamed.partID,
-        input: streamed.input,
-        startedAt: streamed.result.startedAt.getTime(),
-      });
-      if (streamed.ledgerRecorded === false) {
-        await persistPendingToolPart(this, {
-          assistantMessageId: options.assistantMessageId,
-          declarationIndex,
-          input: streamed.input,
-          partID: streamed.partID,
-          toolCall,
-          traceContext: options.modelTraceContext,
-          model,
-          metadata: mcpToolPartMetadata(this.registry.getMetadata(toolCall.name)?.mcpPresentation),
-        });
-        await emitStreamingToolLedgerUpdate(this, state.events, options.modelTraceContext, {
-          assistantMessageId: options.assistantMessageId,
-          toolCall,
-          status: "tool_call_closed",
-          executionTiming: "during_stream",
-          input: streamed.input,
-        });
-        await emitSyntheticStreamedToolError(
-          this,
-          state.events,
-          options.modelTraceContext,
-          streamed.result,
-        );
-      }
-      continue;
-    }
-    const partID = createPartId();
-    const normalizedInput = toRecordInput(toolCall.input);
-    toolParts.set(toolCall.id, {
-      declarationIndex,
-      partID,
-      input: normalizedInput,
-      startedAt: Date.now(),
-    });
-    await persistPendingToolPart(this, {
-      assistantMessageId: options.assistantMessageId,
-      declarationIndex,
-      input: normalizedInput,
-      partID,
-      toolCall,
-      traceContext: options.modelTraceContext,
-      model,
-      metadata: mcpToolPartMetadata(this.registry.getMetadata(toolCall.name)?.mcpPresentation),
-    });
-    await emitStreamingToolLedgerUpdate(this, state.events, options.modelTraceContext, {
-      assistantMessageId: options.assistantMessageId,
-      toolCall,
-      status: "tool_call_closed",
-      input: normalizedInput,
-    });
-  }
+  const toolParts = new Map<string, ToolPartHandle>();
+  await persistDeclaredToolParts.call(this, state, options, {
+    coreToolCalls,
+    model,
+    streamedResultsById,
+    toolParts,
+  });
 
   // assistant tool_use 已经进入 history 后，Stop 不能在 tool result
   // 创建前直接抛出。继续把 aborted signal 交给 executor，由现有取消路径为
@@ -470,53 +403,4 @@ export async function executeToolCallsForModelStep(
     reactiveCompactAttemptedInCurrentModelStep: state.reactiveCompactAttemptedInCurrentModelStep,
   });
   return "continue";
-}
-
-async function enqueueFollowUpUserInputFromToolResult(
-  this: AgentRuntimeInternal,
-  state: RegularTurnLoopState,
-  result: ToolExecutionResult,
-  traceContext: TraceContext,
-): Promise<void> {
-  const followUp = result.followUpUserInput;
-  if (!followUp) return;
-
-  const input = followUp.input.trim();
-  if (!input) return;
-
-  const steerResult = await this.steerTurn({
-    delivery: "guide",
-    expectedTurnId: state.activeTurn?.turnId,
-    input,
-    source: followUp.reasonSource,
-    traceContext,
-  });
-
-  if (steerResult.kind === "queued") {
-    this.logger?.debug("Queued follow-up user input from tool result", {
-      ...traceContextToLogContext(traceContext),
-      event: "tool.follow_up_user_input.queued",
-      module: "core.runtime",
-      pendingInputId: steerResult.pendingInputId,
-      reasonSource: followUp.reasonSource,
-      status: "waiting",
-      toolCallId: result.toolCallId,
-      toolName: result.toolName,
-    });
-    return;
-  }
-
-  // ExitPlanMode 审批反馈必须升级成真实 user message；
-  // 如果这里被拒绝，说明 active turn 状态异常或输入超过 steer 限制，不能静默吞掉。
-  this.logger?.warn("Failed to queue follow-up user input from tool result", {
-    ...traceContextToLogContext(traceContext),
-    activeTurnId: steerResult.activeTurnId,
-    event: "tool.follow_up_user_input.rejected",
-    module: "core.runtime",
-    reason: steerResult.reason,
-    reasonSource: followUp.reasonSource,
-    status: "failed",
-    toolCallId: result.toolCallId,
-    toolName: result.toolName,
-  });
 }

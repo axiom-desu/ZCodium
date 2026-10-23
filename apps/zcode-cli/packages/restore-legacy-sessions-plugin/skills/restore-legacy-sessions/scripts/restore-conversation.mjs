@@ -12,9 +12,17 @@
  *   --dry-run           Print what would be done without writing
  */
 
-import { copyFileSync, existsSync, readFileSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
+import {
+  ZCODE_PROVIDER,
+  optionalNumber,
+  optionalString,
+  removeUndefined,
+} from "./restore-values.mjs";
+import { buildRestorePlan, printPlan } from "./restore-plan.mjs";
+import { buildPartDataList, messageCompletedAt } from "./restore-parts.mjs";
 
 const originalEmitWarning = process.emitWarning;
 process.emitWarning = function filterSqliteExperimentalWarning(warning, ...args) {
@@ -24,7 +32,6 @@ process.emitWarning = function filterSqliteExperimentalWarning(warning, ...args)
 const { DatabaseSync } = await import("node:sqlite");
 process.emitWarning = originalEmitWarning;
 
-const ZCODE_PROVIDER = "glm";
 // 目录分工（不要合并成同一个根）：
 // - 源：`~/.zcode/v2/sessions` —— ACP 时代的 ZCode 数据，是上游那代的用户级数据根，
 //   本仓库不改写它，只读。
@@ -33,7 +40,6 @@ const ZCODE_PROVIDER = "glm";
 // 两个根不同名是刻意的：改名是为了与上游/其它 fork 隔离，不是迁移。
 const defaultTaskIndexPath = join(homedir(), ".zcodium-exp", "v2", "tasks-index.sqlite");
 const defaultCliDbPath = join(homedir(), ".zcodium-exp", "cli", "db", "db.sqlite");
-
 function parseArgs(argv) {
   const args = {
     snapshot: null,
@@ -75,296 +81,6 @@ function backupDb(path) {
   const backupPath = `${path}.bak-${stamp}`;
   copyFileSync(path, backupPath);
   return backupPath;
-}
-
-function projectIdFromPath(workspacePath) {
-  // 保持和现有 CLI session project_id 约定一致。
-  return "proj_" + workspacePath.replace(/^\//, "").replace(/\//g, "-");
-}
-
-function workspaceKey(workspacePath, workspaceIdentity) {
-  return (workspaceIdentity || "").trim() || workspacePath;
-}
-
-function optionalString(value) {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
-function optionalNumber(value) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function removeUndefined(value) {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  );
-}
-
-function jsonObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
-}
-
-function jsonText(value) {
-  if (value === undefined || value === null) return "";
-  return typeof value === "string" ? value : JSON.stringify(value);
-}
-
-function messageContent(message) {
-  return typeof message.content === "string"
-    ? message.content
-    : message.content === undefined || message.content === null
-      ? ""
-      : String(message.content);
-}
-
-function messageCompletedAt(message, messageTimestamp) {
-  return typeof message.timestamp === "number"
-    ? message.timestamp + (optionalNumber(message.durationMs) ?? 0)
-    : messageTimestamp;
-}
-
-function legacyToolName(tool) {
-  const raw = jsonObject(tool.raw);
-  const meta = jsonObject(raw._meta);
-  const claudeCode = jsonObject(meta.claudeCode);
-  return (
-    optionalString(claudeCode.toolName) ||
-    optionalString(tool.toolName) ||
-    optionalString(tool.name) ||
-    optionalString(tool.kind) ||
-    optionalString(tool.title) ||
-    "legacy_tool"
-  );
-}
-
-function legacyToolTitle(tool, toolName) {
-  return optionalString(tool.title) || toolName;
-}
-
-function legacyToolCallId(messageId, toolIndex, tool) {
-  return (
-    optionalString(tool.id) ||
-    optionalString(tool.callID) ||
-    optionalString(tool.callId) ||
-    `call_legacy_${messageId}_${toolIndex}`
-  );
-}
-
-function legacyToolMetadata(tool) {
-  return removeUndefined({
-    legacyRestore: true,
-    legacyKind: optionalString(tool.kind),
-    legacyStatus: optionalString(tool.status),
-  });
-}
-
-function buildToolPartData(tool, messageId, toolIndex, messageTimestamp, completedAt) {
-  const toolName = legacyToolName(tool);
-  const input = jsonObject(tool.input);
-  const metadata = legacyToolMetadata(tool);
-  const status = optionalString(tool.status) || "completed";
-  const startedAt = optionalNumber(tool.startedAt) ?? messageTimestamp;
-  const endedAt = optionalNumber(tool.completedAt) ?? completedAt;
-  let state;
-
-  // Bugfix: CLI session-store 持久化的是 contracts 形状，tool 时间必须放在 state.time。
-  // 如果直接写 protocol 的 startedAt/completedAt，app-server 映射 session/read 时会读不到 state.time 而失败。
-  if (status === "running") {
-    state = {
-      status: "running",
-      input,
-      title: legacyToolTitle(tool, toolName),
-      metadata,
-      time: { start: startedAt },
-    };
-  } else if (status === "pending") {
-    state = {
-      status: "pending",
-      input,
-      raw: jsonText(tool.raw || tool),
-    };
-  } else if (status === "failed" || status === "error" || status === "denied") {
-    state = {
-      status: "error",
-      input,
-      error: jsonText(tool.error || tool.output || status),
-      metadata,
-      time: { start: startedAt, end: endedAt },
-    };
-  } else {
-    state = {
-      status: "completed",
-      input,
-      output: jsonText(tool.output),
-      title: legacyToolTitle(tool, toolName),
-      metadata,
-      time: { start: startedAt, end: endedAt },
-    };
-  }
-
-  return {
-    type: "tool",
-    callID: legacyToolCallId(messageId, toolIndex, tool),
-    tool: toolName,
-    state,
-  };
-}
-
-function buildTextPartData(text, messageTimestamp, completedAt) {
-  return {
-    type: "text",
-    text,
-    time: {
-      start: messageTimestamp,
-      end: completedAt,
-    },
-  };
-}
-
-function buildReasoningPartData(text, messageTimestamp, completedAt) {
-  return {
-    type: "reasoning",
-    text,
-    time: {
-      start: messageTimestamp,
-      end: completedAt,
-    },
-  };
-}
-
-function buildPartDataList(message, messageId, messageTimestamp) {
-  const content = messageContent(message);
-  const completedAt = messageCompletedAt(message, messageTimestamp);
-  const tools = Array.isArray(message.tools) ? message.tools : [];
-  const persistedParts = Array.isArray(message.parts) ? message.parts : [];
-  const partDataList = [];
-
-  if (message.role === "assistant" && persistedParts.length > 0) {
-    for (const part of persistedParts) {
-      if (part?.type === "content" && typeof part.content === "string" && part.content.length > 0) {
-        partDataList.push(buildTextPartData(part.content, messageTimestamp, completedAt));
-      } else if (
-        part?.type === "thought" &&
-        typeof part.content === "string" &&
-        part.content.length > 0
-      ) {
-        partDataList.push(buildReasoningPartData(part.content, messageTimestamp, completedAt));
-      } else if (part?.type === "tool-call" && Number.isInteger(part.toolIndex)) {
-        const tool = tools[part.toolIndex];
-        if (tool) {
-          partDataList.push(
-            buildToolPartData(tool, messageId, part.toolIndex, messageTimestamp, completedAt),
-          );
-        }
-      }
-    }
-  } else {
-    const thought = optionalString(message.thought);
-    if (message.role === "assistant" && thought) {
-      partDataList.push(buildReasoningPartData(thought, messageTimestamp, completedAt));
-    }
-    if (content.length > 0) {
-      partDataList.push(buildTextPartData(content, messageTimestamp, completedAt));
-    }
-    for (const [toolIndex, tool] of tools.entries()) {
-      partDataList.push(
-        buildToolPartData(tool, messageId, toolIndex, messageTimestamp, completedAt),
-      );
-    }
-  }
-
-  const hasVisibleText = partDataList.some(
-    (part) => (part.type === "text" || part.type === "reasoning") && part.text.length > 0,
-  );
-  if (!hasVisibleText && content.length > 0) {
-    partDataList.push(buildTextPartData(content, messageTimestamp, completedAt));
-  }
-  return partDataList;
-}
-
-function buildRestorePlan(snapshotPath) {
-  const raw = JSON.parse(readFileSync(snapshotPath, "utf8"));
-  const meta = raw.meta || {};
-  const messages = Array.isArray(raw.messages) ? raw.messages : [];
-
-  const legacyTaskId = String(meta.taskId || basename(snapshotPath, ".json"));
-  const acpSessionId = optionalString(meta.acpSessionId) || "";
-  const restoredTaskId = acpSessionId || legacyTaskId;
-  const workspacePath = optionalString(meta.workspacePath) || "";
-  if (!workspacePath) {
-    throw new Error(`Snapshot has no workspacePath: ${snapshotPath}`);
-  }
-
-  const workspaceIdentity = optionalString(meta.workspaceIdentity) || "";
-  const workspaceHash = basename(dirname(snapshotPath));
-  const sourceProvider = optionalString(meta.provider) || "unknown";
-  const title = optionalString(meta.title) || "Untitled session";
-  const mode = optionalString(meta.mode) || "build";
-  const model = optionalString(meta.model) || "";
-  const traceId = optionalString(meta.traceId) || `zcode-${restoredTaskId}`;
-  const createdAt = optionalNumber(meta.createdAt) ?? Date.now();
-  const updatedAt = optionalNumber(meta.updatedAt) ?? createdAt;
-
-  // 旧 ACP provider 只代表来源。恢复后的新 ZCode 任务必须按 glm 写入，否则任务列表会被过滤掉。
-  const normalizedMeta = removeUndefined({
-    ...meta,
-    taskId: restoredTaskId,
-    traceId,
-    title,
-    workspacePath,
-    workspaceIdentity: workspaceIdentity || undefined,
-    createdAt,
-    updatedAt,
-    mode,
-    model: model || undefined,
-    thoughtLevel: optionalString(meta.thoughtLevel),
-    runtimeEpoch: optionalNumber(meta.runtimeEpoch),
-    provider: ZCODE_PROVIDER,
-    legacyTaskId,
-    restoredTaskId,
-    workspaceHash,
-    messageCount: messages.length,
-    migrationSource: undefined,
-  });
-
-  return {
-    snapshotPath,
-    raw,
-    meta,
-    messages,
-    legacyTaskId,
-    restoredTaskId,
-    workspacePath,
-    workspaceIdentity,
-    workspaceHash,
-    workspaceKey: workspaceKey(workspacePath, workspaceIdentity),
-    projectId: projectIdFromPath(workspacePath),
-    sourceProvider,
-    title,
-    mode,
-    model,
-    traceId,
-    createdAt,
-    updatedAt,
-    searchableText: messages.map((message) => String(message.content || "")).join("\n"),
-    metaJson: JSON.stringify(normalizedMeta),
-  };
-}
-
-function printPlan(plan, dryRun) {
-  console.log("=== Restoring conversation ===");
-  console.log(`  Title:          ${plan.title}`);
-  console.log(`  SourceProvider: ${plan.sourceProvider}`);
-  console.log(`  RuntimeProvider: ${ZCODE_PROVIDER}`);
-  console.log(`  Model:          ${plan.model}`);
-  console.log(`  Workspace:      ${plan.workspacePath}`);
-  console.log(`  Messages:       ${plan.messages.length}`);
-  console.log(`  restoredTaskId: ${plan.restoredTaskId}`);
-  console.log(`  legacyTaskId:   ${plan.legacyTaskId}`);
-  console.log(`  workspaceHash:  ${plan.workspaceHash}`);
-  console.log("  migrationSource: <empty>");
-  console.log(`  Dry run:        ${dryRun}`);
-  console.log();
 }
 
 function writeTaskIndex(taskDb, plan) {

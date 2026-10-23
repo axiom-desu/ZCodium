@@ -88,7 +88,10 @@ describe("InMemorySessionEventStore", () => {
       after.filter((e) => e.turnId === "t2" && e.type === SessionEventType.ModelStreaming).length,
       3,
     );
-    assert.equal(after.some((e) => e.type === SessionEventType.ModelComplete), true);
+    assert.equal(
+      after.some((e) => e.type === SessionEventType.ModelComplete),
+      true,
+    );
 
     // 11 条追加（SessionCreated + 2×TurnStarted + 6 delta + ModelComplete + TurnComplete），淘汰 turn 1 的 3 条 delta。
     assert.deepEqual(store.getStats(), {
@@ -123,11 +126,11 @@ describe("InMemorySessionEventStore", () => {
       events
         .filter((e) => e.type !== SessionEventType.ModelStreaming)
         .map((e) => [e.type, e.turnId, e.sequenceNumber]);
-    assert.deepEqual(nonTransient(await bounded.getEvents(S)), nonTransient(await unbounded.getEvents(S)));
-    assert.equal(
-      (await unbounded.getEvents(S)).length,
-      (await bounded.getEvents(S)).length + 3,
+    assert.deepEqual(
+      nonTransient(await bounded.getEvents(S)),
+      nonTransient(await unbounded.getEvents(S)),
     );
+    assert.equal((await unbounded.getEvents(S)).length, (await bounded.getEvents(S)).length + 3);
     assert.equal(unbounded.getStats().evictedEvents, 0);
   });
 
@@ -253,9 +256,12 @@ describe("InMemorySessionEventStore · model_request 元数据瘦身", () => {
       querySource: "repl_main_thread",
       toolCount: 3,
     });
-    assert.equal((open?.payload as { messages: unknown[] }).messages.length, 6);
+    assert.ok(open, "第二个 ModelRequest 必须存在");
+    assert.equal((open.payload as { messages: unknown[] }).messages.length, 6);
     // live sink 拿到的是 append 返回值，必须仍含完整上下文（debug JSONL 依赖）。
-    assert.equal((appended[1]?.payload as { messages: unknown[] }).messages.length, 4);
+    const appendedSecond = appended[1];
+    assert.ok(appendedSecond, "第二次 modelRequest 的 append 返回值必须存在");
+    assert.equal((appendedSecond.payload as { messages: unknown[] }).messages.length, 4);
   });
 
   it("RET-011 时间兜底淘汰一次性 session 时同样瘦身", async () => {

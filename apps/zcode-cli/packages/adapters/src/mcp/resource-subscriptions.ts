@@ -33,7 +33,7 @@ export class McpResourceSubscriptionRegistry {
     const released: Array<{ serverName: string; uri: string }> = [];
     for (const [serverName, byUri] of this.byServer) {
       for (const [uri, subscribers] of byUri) {
-        for (const key of [...subscribers]) {
+        for (const key of Array.from(subscribers)) {
           if (key.startsWith(subscriberKeyPrefix)) subscribers.delete(key);
         }
         if (subscribers.size === 0) {
