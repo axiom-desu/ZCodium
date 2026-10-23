@@ -26,12 +26,29 @@ pub(crate) async fn handle(
     // 全局退出/取消最高优先级：弹窗、队列编辑或读票据都不能吞掉它。
     if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c' | 'd'))
     {
-        let was_busy = view.busy();
-        if was_busy && let Err(error) = session::stop(client, view).await {
-            view.push(&error.to_string());
-        }
-        if key.code == KeyCode::Char('d') || !was_busy {
+        if key.code == KeyCode::Char('d') {
+            // Ctrl-D 不等待 stop ACK：只登记 root 退出意图，transport 取消共享 token。
+            frontend.request_quit();
             return Ok(true);
+        }
+        // Ctrl-C 立即显示停止意图；slot 被 submit/交互占用时排队，真实 stop 等结算后由
+        // `Frontend::poll` 补发，expectedForegroundExecutionId 防护保持不变。
+        if view.busy() {
+            let already_pending = view.operations.stop_pending();
+            if view.operations.request_stop(client.mutation_flow_busy()) {
+                if let Err(error) = session::stop(client, view).await {
+                    // begin 失败表示别的 mutation 仍占槽；不要用 abort 误删在飞草稿。
+                    view.push(&error.to_string());
+                }
+            } else if already_pending || view.operations.stop_pending() {
+                let note = view
+                    .text(
+                        "Stop requested; waiting for the current operation to settle.",
+                        "已请求停止；等待当前操作结算。",
+                    )
+                    .to_owned();
+                view.push(&note);
+            }
         }
         view.selector = None;
         view.queue_edit = None;
@@ -172,6 +189,14 @@ pub(crate) async fn handle(
         (KeyCode::Tab, _) => {
             view.accept_completion();
             view.history.edited();
+        }
+        // Ctrl-Y 交换 / Ctrl-Shift-Y 显式丢弃 alternate（见 frontend_operations）。
+        // 终端对 Ctrl-Shift-Y 的大小写报告不一致，这里同时接受 'y' 与 'Y'。
+        (KeyCode::Char('y' | 'Y'), modifiers) if modifiers.contains(KeyModifiers::CONTROL) => {
+            crate::frontend_operations::swap_alternate(
+                view,
+                modifiers.contains(KeyModifiers::SHIFT),
+            );
         }
         (KeyCode::Char('u'), modifiers) if modifiers.contains(KeyModifiers::CONTROL) => {
             // 只清主 editor；队列编辑/选择器有各自 filter，不能被 Ctrl-U 误清。

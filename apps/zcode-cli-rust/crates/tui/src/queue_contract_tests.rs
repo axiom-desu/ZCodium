@@ -106,13 +106,16 @@ async fn stale_ack_keeps_the_actor_reason_code() {
         "reasonCode":"queue.revisionMismatch"
     })]);
     let mut client = Client::new(&to, &mut from);
-    let error = queue::dispatch(&mut client, &mut view, "/queue delete q1")
-        .await
-        .unwrap_err()
-        .to_string();
+    // 非阻塞：mutation 只登记 workflow；stale 由同一 poll 结算，reasonCode 原样带出。
     assert!(
-        error.contains("queue.revisionMismatch"),
-        "stale must keep the actor reasonCode: {error}"
+        queue::dispatch(&mut client, &mut view, "/queue delete q1")
+            .await
+            .unwrap()
+    );
+    let reported = view.notices.last().cloned().unwrap_or_default();
+    assert!(
+        reported.contains("queue.revisionMismatch"),
+        "stale must keep the actor reasonCode: {reported}"
     );
     actor.await.unwrap();
 }

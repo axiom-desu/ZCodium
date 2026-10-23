@@ -193,3 +193,52 @@ fn questions_use_the_selected_interaction_question_names() {
     assert!(interactions::answer(&q, "A").is_err());
     assert!(interactions::prompt(&q).contains("Which?"));
 }
+
+/// 严格快照 source guard：畸形空快照/同会话 seq 倒退不得擦 View；同会话保滚动与 pending。
+#[test]
+fn snapshot_guard_rejects_malformed_or_stale_replies_and_preserves_scroll() {
+    use crate::operations::{OpKind, SentDraft};
+    let mut v = view();
+    v.operations
+        .begin(
+            OpKind::Submit,
+            "s",
+            v.generation,
+            Some(SentDraft::default()),
+        )
+        .unwrap();
+    v.pending_submit = true;
+    v.follow = false;
+    v.scroll = 11;
+    let rows = v.rows.clone();
+    assert!(!v.snapshot(&json!({})), "空 object 不得擦全 View");
+    assert!(!v.snapshot(&json!({"sessionId":"","seq":1,"rows":{"window":[]}})));
+    assert_eq!(v.rows, rows);
+    assert_eq!(v.session, "s");
+    let mut same = snapshot();
+    same["seq"] = 1.into();
+    assert!(v.snapshot(&same));
+    assert!(v.pending_submit, "同会话快照保留真实在飞 overlay");
+    assert!(!v.follow);
+    assert_eq!(v.scroll, 11);
+    assert!(!v.snapshot(&json!({"sessionId":"s","seq":0,"rows":{"window":[]}})));
+    // 显式新会话才重置滚动与 pending。
+    assert!(v.snapshot(&json!({"sessionId":"s2","seq":0,"rows":{"window":[]}})));
+    assert!(v.follow);
+    assert_eq!(v.scroll, 0);
+    assert!(!v.pending_submit);
+}
+
+/// owner reset 同会话新 logEpoch 可重排 seq：不能当迟到回包拒绝；普通快照仍守 FIFO。
+#[test]
+fn same_session_owner_reset_with_new_epoch_may_rewind_seq() {
+    let mut v = view();
+    v.seq = 9;
+    v.state["logEpoch"] = json!("epoch-2");
+    let reset = json!({"sessionId":"s","seq":2,"logEpoch":"epoch-3","rows":{"window":[]},
+        "control":{"canStop":false},"config":{"mode":"build"},"pendingInteractions":[]});
+    assert!(v.reset_snapshot(&reset));
+    assert_eq!(v.seq, 2);
+    assert_eq!(v.state["logEpoch"], "epoch-3");
+    assert!(!v.snapshot(&json!({"sessionId":"s","seq":1,"rows":{"window":[]}})));
+}

@@ -2,7 +2,9 @@
 use crate::{
     client::Client,
     frontend::{self, Frontend},
-    frontend_test_support::{draft_with, endpoints, key, next_request, reply, request, view},
+    frontend_test_support::{
+        complete, draft_with, endpoints, key, next_request, reply, request, view,
+    },
     keyboard,
 };
 use crossterm::event::KeyCode;
@@ -36,6 +38,7 @@ async fn busy_plain_text_is_enqueued_with_draft_attachments() {
         }
     );
     assert!(!quit.unwrap());
+    complete(&mut client, &mut view).await;
     assert_eq!(method, "v4/command");
     assert_eq!(params["type"], "sendText");
     assert_eq!(params["payload"]["text"], "@a.txt hello");
@@ -73,6 +76,7 @@ async fn rejected_send_keeps_text_and_attachments() {
         }
     );
     assert!(!result.unwrap());
+    complete(&mut client, &mut view).await;
     assert_eq!(params["payload"]["attachments"][0]["ref"], "a.txt");
     assert_eq!(view.editor.text(), "@a.txt hi");
     assert_eq!(
@@ -144,6 +148,7 @@ async fn file_mention_accept_consumes_enter_and_the_next_enter_sends() {
         }
     );
     assert!(!quit.unwrap());
+    complete(&mut client, &mut view).await;
     assert_eq!(params["type"], "sendText");
     assert_eq!(params["payload"]["text"], "@a.txt ");
     assert_eq!(params["payload"]["attachments"][0]["ref"], "a.txt");

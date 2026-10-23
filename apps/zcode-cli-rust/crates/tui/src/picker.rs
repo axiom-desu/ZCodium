@@ -1,5 +1,11 @@
+//! 模型/档位/会话选择器：本地候选直接打开，会话列表走只读 workflow。
+//!
+//! 确认动作只登记一条 mutation workflow（setting 或 boot），不等 ACK；菜单是否关闭由
+//! 该 workflow 在成功后按发起时的 owner/世代结算，迟到的旧回包不会清掉新菜单。
 use crate::{
     client::Client,
+    flow::Flow,
+    flow_picker::PickerOpen,
     projection::View,
     selector::{Choice, Selector},
     session,
@@ -24,16 +30,79 @@ pub(crate) fn model_options(models: &[Value]) -> Vec<(Choice, String)> {
         })
         .collect()
 }
-pub(crate) async fn open(
+
+/// 会话候选：稳定 id + 标题，按 updatedAt 倒序取前 200（与旧菜单一致）。
+pub(crate) fn session_options(view: &View, data: &Value) -> Vec<(Choice, String)> {
+    let mut sessions = data["sessions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|s| s.get("parentSessionId").is_none_or(Value::is_null))
+        .collect::<Vec<_>>();
+    sessions.sort_by_key(|s| std::cmp::Reverse(s["updatedAt"].as_u64().unwrap_or(0)));
+    let _ = view;
+    sessions
+        .into_iter()
+        .take(200)
+        .filter_map(|s| {
+            let id = s["sessionId"].as_str()?;
+            Some((
+                Choice::Session(id.to_owned()),
+                format!("{} · {id}", s["title"].as_str().unwrap_or("")),
+            ))
+        })
+        .collect()
+}
+
+/// 菜单打开时把光标放到当前生效项；过滤为空时列表与原始 options 同序。
+pub(crate) fn select_current(view: &View, selector: &mut Selector) {
+    selector.selected = selector
+        .options
+        .iter()
+        .position(|(choice, _)| match choice {
+            Choice::Model(model) => {
+                model["providerId"] == view.state["config"]["provider"]
+                    && model["modelId"] == view.state["config"]["model"]
+            }
+            Choice::Mode(mode) => mode == view.mode(),
+            Choice::Session(id) => id == &view.session,
+            Choice::Queue(_) => false,
+        })
+        .unwrap_or(0);
+}
+
+fn show(view: &mut View, title: &str, options: Vec<(Choice, String)>, draft: &str) {
+    let selector = Selector::new(
+        title.to_owned(),
+        options,
+        view.session.clone(),
+        draft.to_owned(),
+    );
+    let Some(mut selector) = selector else {
+        let note = view.text("No choices available", "暂无可选项").to_owned();
+        view.push(&note);
+        return;
+    };
+    select_current(view, &mut selector);
+    view.selector = Some(selector);
+}
+
+/// 打开选择器：`/model`、`/mode` 的候选全部来自本地快照，不需要请求。
+pub(crate) fn begin_open(
     client: &mut Client<'_>,
     view: &mut View,
     request: &Request,
     text: &str,
 ) -> Result<()> {
-    let owner = view.session.clone();
-    let (title, options) = match text.trim() {
-        "/model" => (view.text("Models", "模型"), model_options(&view.models)),
-        "/mode" => (
+    match text.trim() {
+        "/model" => show(
+            view,
+            view.text("Models", "模型"),
+            model_options(&view.models),
+            text,
+        ),
+        "/mode" => show(
+            view,
             view.text("Modes", "模式"),
             ["build", "plan", "edit", "yolo"]
                 .into_iter()
@@ -46,64 +115,40 @@ pub(crate) async fn open(
                     (Choice::Mode(m.into()), label.to_owned())
                 })
                 .collect(),
+            text,
         ),
         _ => {
-            let data = client
-                .call(
-                    view,
-                    Method::SessionList,
-                    json!({"workspace":request.workspace}),
-                )
-                .await?;
-            let mut sessions = data["sessions"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter(|s| s.get("parentSessionId").is_none_or(Value::is_null))
-                .collect::<Vec<_>>();
-            sessions.sort_by_key(|s| std::cmp::Reverse(s["updatedAt"].as_u64().unwrap_or(0)));
-            let options = sessions
-                .into_iter()
-                .take(200)
-                .filter_map(|s| {
-                    let id = s["sessionId"].as_str()?;
-                    Some((
-                        Choice::Session(id.to_owned()),
-                        format!("{} · {id}", s["title"].as_str().unwrap_or("")),
-                    ))
-                })
-                .collect();
-            (view.text("Sessions", "会话"), options)
+            if !client.begin_flow(
+                view,
+                Flow::Picker(PickerOpen::new(view, &request.workspace, text)),
+            )? {
+                anyhow::bail!(
+                    "{}",
+                    view.text(
+                        "A session list request is already in flight.",
+                        "已有会话列表请求在等待回包。"
+                    )
+                );
+            }
         }
-    };
-    ensure!(
-        owner == view.session,
-        "Session changed while loading choices"
-    );
-    let mut selector = Selector::new(title.to_owned(), options, owner, text.to_owned());
-    if let Some(s) = selector.as_mut() {
-        // 打开时 filter 为空，过滤列表与原始 options 同序，因此当前项下标可直接复用。
-        s.selected = s
-            .options
-            .iter()
-            .position(|(choice, _)| match choice {
-                Choice::Model(model) => {
-                    model["providerId"] == view.state["config"]["provider"]
-                        && model["modelId"] == view.state["config"]["model"]
-                }
-                Choice::Mode(mode) => mode == view.mode(),
-                Choice::Session(id) => id == &view.session,
-                Choice::Queue(_) => false,
-            })
-            .unwrap_or(0);
-    }
-    view.selector = selector;
-    if view.selector.is_none() {
-        view.push(view.text("No choices available", "暂无可选项"));
     }
     Ok(())
 }
-pub(crate) async fn confirm(
+
+pub(crate) async fn open(
+    client: &mut Client<'_>,
+    view: &mut View,
+    request: &Request,
+    text: &str,
+) -> Result<()> {
+    begin_open(client, view, request, text)?;
+    #[cfg(test)]
+    crate::frontend_test_support::drive(client, view).await;
+    Ok(())
+}
+
+/// 确认的唯一生产入口：只登记 workflow（或本地开子菜单），不等回包。
+pub(crate) fn begin_confirm(
     client: &mut Client<'_>,
     view: &mut View,
     request: &Request,
@@ -116,7 +161,7 @@ pub(crate) async fn confirm(
             .and_then(|selector| selector.choice().map(|(choice, _)| choice)),
         Some(Choice::Queue(_))
     ) {
-        crate::queue::confirm(client, view).await?;
+        crate::queue::begin_confirm(client, view)?;
         return Ok(());
     }
     ensure!(!view.busy(), "Turn is busy; selection was not applied");
@@ -134,35 +179,35 @@ pub(crate) async fn confirm(
     };
     let choice = choice.clone();
     match choice {
-        Choice::Model(model) => {
-            session::set_setting(
-                client,
-                view,
-                Method::SessionSetModel,
-                json!({"sessionId":view.session,"model":model}),
-            )
-            .await?;
-        }
-        Choice::Mode(mode) => {
-            session::set_setting(
-                client,
-                view,
-                Method::SessionSetMode,
-                json!({"sessionId":view.session,"mode":mode}),
-            )
-            .await?;
-        }
+        Choice::Model(model) => session::begin_setting(
+            client,
+            view,
+            Method::SessionSetModel,
+            json!({"sessionId":view.session,"model":model}),
+        )?,
+        Choice::Mode(mode) => session::begin_setting(
+            client,
+            view,
+            Method::SessionSetMode,
+            json!({"sessionId":view.session,"mode":mode}),
+        )?,
         Choice::Session(id) => {
-            session::open(client, view, request, Resume::Id(id)).await?;
+            session::begin_open(client, view, request, Resume::Id(id))?;
         }
         // 队列菜单由 queue 模块独占（typed id + 捕获的 CAS 基线，含关闭时机）。
-        Choice::Queue(_) => {
-            crate::queue::confirm(client, view).await?;
-            return Ok(());
-        }
+        Choice::Queue(_) => crate::queue::begin_confirm(client, view)?,
     }
-    // 只有 actor 接受并刷新成功后才关闭选择器；配置事实仍由 snapshot 给出。
-    view.selector = None;
+    Ok(())
+}
+
+pub(crate) async fn confirm(
+    client: &mut Client<'_>,
+    view: &mut View,
+    request: &Request,
+) -> Result<()> {
+    begin_confirm(client, view, request)?;
+    #[cfg(test)]
+    crate::frontend_test_support::drive(client, view).await;
     Ok(())
 }
 #[cfg(test)]

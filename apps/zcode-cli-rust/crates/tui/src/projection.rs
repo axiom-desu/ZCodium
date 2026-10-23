@@ -4,12 +4,13 @@ use crate::{
     editor::{Editor, sanitize},
     file_mentions::FileMentions,
     input_history::History,
+    operations::Operations,
     selector::Selector,
     telemetry::Telemetry,
 };
 use serde_json::Value;
 
-const MAX_ROWS: usize = 2000;
+pub(crate) const MAX_ROWS: usize = 2000;
 pub(crate) const MAX_FIELD_BYTES: usize = 16 * 1024;
 pub(crate) const MAX_RENDER_BYTES: usize = 512 * 1024;
 const MAX_NOTICE_BYTES: usize = 4 * 1024;
@@ -67,7 +68,7 @@ fn append_bounded(current: &str, append: &str, limit: usize) -> String {
     result
 }
 
-fn bound_row(row: &mut Value) {
+pub(crate) fn bound_row(row: &mut Value) {
     for path in ["text", "inputText", "output.text", "error.message"] {
         let mut target = &mut *row;
         let mut parts = path.split('.').peekable();
@@ -80,6 +81,49 @@ fn bound_row(row: &mut Value) {
             } else {
                 target = &mut target[part];
             }
+        }
+    }
+}
+
+/// 正在等待 actor 回包的非阻塞操作：纯 UI 派生摘要，不是新的服务端事实 owner。
+///
+/// 只由 `Client` 的 workflow/draft 状态每轮投影到 View，帮助用户分辨“命令还在打开/应用/
+/// 保存”与“命令被静默丢弃”。真实结果仍由 actor 回包结算。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Pending {
+    /// boot / 会话切换（list → resume/create → topicOpen → snapshot）。
+    Opening,
+    /// setter + 同一 workflow 的快照续步。
+    Setting,
+    /// 队列 mutation + 快照续步。
+    Queue,
+    /// `/sessions` 的只读列表。
+    Sessions,
+    /// gaprepair 只读快照。
+    Syncing,
+    /// compact 等一次性 Command workflow。
+    Command,
+    /// 已发送、等待 actor admission/结果的正文 mutation。
+    Submitting,
+}
+
+impl Pending {
+    pub(crate) fn text(self, zh: bool) -> &'static str {
+        match (self, zh) {
+            (Self::Opening, false) => "Opening session...",
+            (Self::Opening, true) => "正在打开会话...",
+            (Self::Setting, false) => "Applying setting...",
+            (Self::Setting, true) => "正在应用设置...",
+            (Self::Queue, false) => "Saving queue change...",
+            (Self::Queue, true) => "正在保存队列变更...",
+            (Self::Sessions, false) => "Loading sessions...",
+            (Self::Sessions, true) => "正在加载会话...",
+            (Self::Syncing, false) => "Refreshing session...",
+            (Self::Syncing, true) => "正在刷新会话...",
+            (Self::Command, false) => "Waiting for the actor...",
+            (Self::Command, true) => "正在等待 actor...",
+            (Self::Submitting, false) => "Waiting for the actor...",
+            (Self::Submitting, true) => "正在等待 actor...",
         }
     }
 }
@@ -101,6 +145,8 @@ pub(crate) struct View {
     pub scroll: usize,
     pub follow: bool,
     pub pending_submit: bool,
+    /// 非阻塞 UI mutation 状态机：唯一在飞 workflow、SentDraft owner 与拒绝草稿槽。
+    pub operations: Operations,
     pub resync: bool,
     pub zh: bool,
     pub models: Vec<Value>,
@@ -118,6 +164,8 @@ pub(crate) struct View {
     pub no_color: bool,
     pub directory: String,
     pub display_revision: u64,
+    /// 每轮由 `Client` 从在飞 workflow/draft 派生的可见摘要；绝不持久化、不回传 actor。
+    pub pending: Option<Pending>,
 }
 impl View {
     pub fn text<'a>(&self, en: &'a str, zh: &'a str) -> &'a str {
@@ -156,44 +204,6 @@ impl View {
     }
     pub fn busy(&self) -> bool {
         self.pending_submit || self.state["control"]["canStop"] == true
-    }
-    pub fn snapshot(&mut self, snapshot: &Value) {
-        self.display_revision = self.display_revision.wrapping_add(1);
-        let session = snapshot["sessionId"].as_str().unwrap_or_default();
-        // 成功快照/打开就是新的 owner 事实，解除 TopicClosed 的本地提交门禁。
-        self.topic_closed = false;
-        if self.session != session {
-            self.selector = None;
-            // 旧 queue edit 不在这里静默删除：它属于旧会话/世代，保留为失效缓冲由用户
-            // Esc 取消，避免编辑文本无声消失或落到新会话主 editor。
-            // 补全是会话内的本地展示状态；切会话必须失效，不把旧草稿候选带到新会话。
-            self.completion = Completion::default();
-            // 同 id 重新进入也是一次新的票据世代：generation 推进并清掉旧遥测，
-            // 同会话的普通 snapshot 则保留已取到的真实 MCP/usage。
-            self.generation = self.generation.wrapping_add(1);
-            self.telemetry.reset();
-            // 历史游标/在飞票据同样按 generation 失效；旧 reply 不能写进新会话草稿。
-            self.history.reset(session, self.generation);
-        }
-        self.session = session.into();
-        self.rows = snapshot["rows"]["window"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
-        for row in &mut self.rows {
-            bound_row(row);
-        }
-        if self.rows.len() > MAX_ROWS {
-            self.rows.drain(..self.rows.len() - MAX_ROWS);
-        }
-        self.seq = snapshot["seq"].as_u64().unwrap_or(0);
-        self.state = snapshot.clone();
-        if let Some(state) = self.state.as_object_mut() {
-            state.remove("rows");
-        }
-        self.resync = false;
-        self.pending_submit = false;
-        self.follow = true;
     }
     pub fn deltas(
         &mut self,
@@ -250,7 +260,9 @@ impl View {
                     if was_running && !running(&self.state["control"]) {
                         self.telemetry.mcp_dirty = true;
                     }
-                    if patch.contains_key("control") {
+                    // control.updated 是事实投影，不能清掉仍在飞的 draft overlay；
+                    // pending 只由真实 operation 结算/派生。
+                    if patch.contains_key("control") && !self.operations.busy() {
                         self.pending_submit = false;
                     }
                 }

@@ -102,6 +102,13 @@ const COMMANDS: &[Command] = &[
         summary_zh: "查看或修改由 actor 持有的排队输入",
     },
     Command {
+        name: "draft",
+        aliases: &[],
+        usage: "/draft [swap|discard]",
+        summary_en: "Inspect, swap, or explicitly discard the kept rejected/unknown-outcome draft",
+        summary_zh: "查看、交换或显式丢弃保留的被拒绝/结果未知草稿",
+    },
+    Command {
         name: "mcp",
         aliases: &[],
         usage: "/mcp",
@@ -137,14 +144,38 @@ pub(crate) fn find(token: &str) -> Option<&'static Command> {
         .find(|command| command.name == token || command.aliases.contains(&token))
 }
 
+/// 恢复/丢弃草稿的可生成入口：`/draft` 是唯一可靠操作，按键只是便捷方式。
+///
+/// 普通 TTY 下 Ctrl-Shift-Y 与 Ctrl-Y 都常报 ASCII 25，无法保证区分；因此不能把
+/// 唯一的“丢弃/恢复”路径绑在需要 kitty keyboard enhancement 的组合键上。
+fn keys(zh: bool) -> &'static str {
+    if zh {
+        "草稿：/draft 查看备用草稿，/draft swap（或 /draft restore）与当前编辑器交换，/draft discard 显式丢弃。按键：Ctrl-Y 交换（便捷方式，不是唯一路径）；Ctrl-C 停止；Ctrl-D 退出。"
+    } else {
+        "Drafts: /draft shows the alternate draft, /draft swap (or /draft restore) exchanges it with the editor, /draft discard drops it explicitly. Keys: Ctrl-Y swaps (shortcut, not the only path); Ctrl-C stops; Ctrl-D quits."
+    }
+}
+
+/// 是否是完全不依赖 actor/session 的本地命令：boot/setting/queue 在飞时仍可立即执行。
+pub(crate) fn is_local(text: &str) -> bool {
+    matches!(
+        text.split_whitespace().next().unwrap_or_default(),
+        "/help" | "/draft" | "/quit" | "/exit"
+    )
+}
+
 /// `/help` 与 `/help <command>` 的正文；未知命令是本地错误，不发送给模型。
 pub(crate) fn help(topic: Option<&str>, zh: bool) -> Result<String> {
     match topic {
-        None => Ok(all()
-            .iter()
-            .map(|command| command.describe(zh))
-            .collect::<Vec<_>>()
-            .join("\n")),
+        None => Ok(format!(
+            "{}\n\n{}",
+            all()
+                .iter()
+                .map(|command| command.describe(zh))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            keys(zh)
+        )),
         Some(topic) => find(topic)
             .map(|command| command.describe(zh))
             .ok_or_else(|| {

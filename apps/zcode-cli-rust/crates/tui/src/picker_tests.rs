@@ -44,10 +44,15 @@ async fn rejected_setter_keeps_selector_and_draft() {
     let mut client = Client::new(&to, &mut from);
     let mut view = view();
     view.selector = Some(model_selector("s", ""));
-    let error = confirm(&mut client, &mut view, &request())
-        .await
-        .unwrap_err();
-    assert!(error.to_string().contains("unknown model"));
+    // 非阻塞：确认只登记 workflow；拒绝效果由同一 poll 结算成明确错误。
+    confirm(&mut client, &mut view, &request()).await.unwrap();
+    assert!(
+        view.notices
+            .last()
+            .is_some_and(|note| note.contains("unknown model")),
+        "{:?}",
+        view.notices.last()
+    );
     // 失败时不得丢弃 selector（否则 Esc 无法恢复原草稿）。
     assert_eq!(view.selector.as_ref().unwrap().draft, "/model");
     actor.await.unwrap();

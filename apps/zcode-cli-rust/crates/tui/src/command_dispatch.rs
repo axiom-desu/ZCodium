@@ -33,6 +33,30 @@ pub(crate) async fn dispatch(
     request: &Request,
     text: &str,
 ) -> Result<bool> {
+    // `/draft` 是纯本地恢复入口：不发送、不拼接、不跨会话重发；这条命令必须在
+    // has_rejected 拦截新提交时仍然可用，且不依赖终端能否区分组合键。
+    if text.split_whitespace().next() == Some("/draft") {
+        let words: Vec<_> = text.split_whitespace().collect();
+        match words.as_slice() {
+            ["/draft"] => {
+                let status = crate::frontend_operations::draft_status(view);
+                view.push(&status);
+                return Ok(false);
+            }
+            ["/draft", "swap" | "restore"] => {
+                crate::frontend_operations::swap_alternate(view, false);
+                return Ok(false);
+            }
+            ["/draft", "discard"] => {
+                crate::frontend_operations::swap_alternate(view, true);
+                return Ok(false);
+            }
+            ["/draft", ..] => {
+                return Err(usage_error(view, "/draft [swap|discard]"));
+            }
+            _ => {}
+        }
+    }
     // `/queue` 前缀由 queue 模块精确拥有：命中后不再进入通用白名单，也不改其他分支。
     if crate::queue::handles(text) {
         crate::queue::dispatch(client, view, text).await?;
@@ -40,7 +64,7 @@ pub(crate) async fn dispatch(
     }
     // compact 的附注是正文，必须先按完整首 token 精确识别，再进入普通白名单分流。
     if let Some(instructions) = commands::compact_instructions(text) {
-        compact(client, view, instructions).await?;
+        session::compact(client, view, text, instructions).await?;
         return Ok(false);
     }
     let words: Vec<_> = text.split_whitespace().collect();
@@ -61,22 +85,7 @@ pub(crate) async fn dispatch(
         ["/resume"] | ["/resume", _, _, ..] => {
             return Err(usage_error(view, "/resume <sessionId>"));
         }
-        ["/sessions"] => {
-            let data = client
-                .call(
-                    view,
-                    Method::SessionList,
-                    json!({"workspace":request.workspace}),
-                )
-                .await?;
-            for session in data["sessions"].as_array().into_iter().flatten() {
-                view.push(&format!(
-                    "{} {}",
-                    session["sessionId"].as_str().unwrap_or("?"),
-                    session["title"].as_str().unwrap_or("")
-                ));
-            }
-        }
+        ["/sessions"] => session::begin_list(client, view, request)?,
         ["/sessions", ..] => return Err(usage_error(view, "/sessions")),
         ["/mode", mode] => {
             session::set_setting(
@@ -154,32 +163,6 @@ pub(crate) async fn dispatch(
         }
     }
     Ok(false)
-}
-
-/// 压缩只走 actor admission：不附带启动附件、不写本地 marker。
-///
-/// 不能直接发 `type: "compact"` + `payload.text`：共享 v4 schema 的 compact payload 是
-/// `z.object({})`，真实 `protocol::parse_command` 按 zod strip 语义会丢掉附加指令
-/// （PTY 实测指令因此丢失；fake ACK 只比对发出的对象，所以漏检）。因此这里发送
-/// canonical `/compact [instructions]` 的最小 sendText，由 `crates/core/src/app/commands.rs`
-/// 既有的 parse 后归一化把 `text` 首 token 恰为 `/compact` 的输入改判为 compact 并回填指令，
-/// 控制轮不会变成普通用户消息（不调用 `session::submit`、不插 user row、不加 pending/queue）。
-async fn compact(client: &mut Client<'_>, view: &mut View, instructions: &str) -> Result<()> {
-    // core 归一化按 `trimmed == "/compact" || trimmed.starts_with("/compact ")` 识别，
-    // 所以无指令时不能带尾随空格；有指令时保留其内部换行与空格。
-    let text = if instructions.is_empty() {
-        "/compact".to_owned()
-    } else {
-        format!("/compact {instructions}")
-    };
-    let ack = client
-        .call(
-            view,
-            Method::Command,
-            session::command(&view.session, "sendText", json!({"text": text})),
-        )
-        .await?;
-    session::accepted(ack)
 }
 
 /// actor 当前提交的档位与可用档位；空档位是明确错误，不编造默认等级。

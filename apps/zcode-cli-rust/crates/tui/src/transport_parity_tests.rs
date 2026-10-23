@@ -5,6 +5,7 @@
 //! 而不是另写一份 parser 断言。
 use crate::{
     client::Client,
+    frontend_test_support::complete,
     projection::View,
     transport::{Request, Resume, submit_editor},
 };
@@ -152,8 +153,8 @@ async fn pending_interaction_treats_compact_as_an_answer() {
 }
 
 #[tokio::test]
-async fn busy_quit_still_stops_without_sending_a_prompt() {
-    let (to, mut from, mut requests) = harness(vec![json!({"status":"accepted"})]).await;
+async fn busy_quit_returns_root_exit_without_waiting_for_a_stop_ack() {
+    let (to, mut from, mut requests) = harness(Vec::new()).await;
     let mut client = Client::new(&to, &mut from);
     let mut view = view();
     view.pending_submit = true;
@@ -164,9 +165,7 @@ async fn busy_quit_still_stops_without_sending_a_prompt() {
             .await
             .unwrap()
     );
-    let sent = sent(&mut requests);
-    assert_eq!(sent.len(), 1);
-    assert_eq!(command_type(&sent[0].1), "stop");
+    assert!(sent(&mut requests).is_empty(), "/quit 不等待 stop ACK");
 }
 
 #[tokio::test]
@@ -203,6 +202,7 @@ async fn rejected_submit_keeps_the_same_draft() {
             .await
             .unwrap()
     );
+    complete(&mut client, &mut view).await;
     let sent = sent(&mut requests);
     assert_eq!(sent.len(), 1);
     assert_eq!(command_type(&sent[0].1), "sendText");

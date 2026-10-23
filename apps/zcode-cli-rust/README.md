@@ -22,6 +22,13 @@ use the same Rust actor and persisted session store. `/compact [instructions]`
 `/queue [list|pause|resume|edit|delete|send|up|down <id>]` projects and mutates only
 the actor's accepted queue. `/mcp` refreshes the read-only MCP status shown in the
 sidebar without reconnecting, and `/usage` reads the actor's real usage totals.
+Requests remain responsive while admission ACKs or snapshots are pending: the single UI loop
+keeps editing, paste, redraw and exit live without changing actor serialization or durable ACKs.
+A second Enter while a mutation is in flight is rejected locally with the draft kept.
+`/draft` shows alternate recovery status, `/draft swap` (or `restore`) exchanges it with
+the current draft, and `/draft discard` explicitly discards it; Ctrl-Y is a convenience.
+A sent draft with an unknown outcome is never automatically resent.
+See the [responsive operations contract](../../.agents/specs/cli-rust-tui-responsive-operations.md).
 Slash suggestions support Tab completion and Enter confirmation; model/mode/session
 pickers support text filtering, Ctrl-U clearing, and Escape draft restoration.
 The composer shows the committed model, provider, and reasoning level, and compaction
@@ -56,10 +63,12 @@ model fixture to exercise multiple turns, Read/Write, permission allow/deny,
 questions, cancellation, continue/history, exit and terminal restoration. The separate
 workbench acceptance, `node scripts/zcode-cli-rust-workbench-smoke.mjs`, passed 35 local
 PTY checks (attachments 9, queue 13, usage 10, shutdown 3); the existing 20-request
-baseline and its provider-discovery mode also pass. Final local verification reports
-714 Rust workspace tests passed (1 ignored), including 222 TUI tests; Node drivers
-59 passed and CI scripts 430 passed. These are local results pending exact PR HEAD CI;
-no merge or CI pass is claimed. This is not full
+baseline and its provider-discovery mode also pass. The responsive acceptance
+`node scripts/zcode-cli-rust-responsive-smoke.mjs` adds 62 real SQLite-lock PTY checks
+and 4 model requests, including queue edit continuation and exit before unlocking.
+The ACK/lint checkpoint reports 769 Rust tests passed (1 ignored), including 277 TUI
+tests; Node drivers 63 and CI scripts 442 passed. These are scoped local results;
+exact PR HEAD CI and merge evidence are recorded separately. This is not full
 TS TUI parity: the visible transcript is a bounded snapshot window, and advanced terminal
 plugin/marketplace, memory/CUA and rich terminal widgets are not claimed. Native
 Windows/macOS interactive execution is separate from compile acceptance.

@@ -175,7 +175,7 @@ async fn busy_compact_and_unknown_slash_stay_local() {
 }
 
 #[tokio::test]
-async fn stop_carries_the_known_execution_id_even_with_a_history_read_in_flight() {
+async fn ctrl_d_cancels_root_without_waiting_for_a_stop_ack() {
     let req = request();
     let (to, mut requests, responses, mut from) = endpoints();
     let mut client = Client::new(&to, &mut from);
@@ -203,19 +203,15 @@ async fn stop_carries_the_known_execution_id_even_with_a_history_read_in_flight(
     assert_ne!(history_token, 0);
 
     let ctrl_d = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL);
-    let (quit, params) = tokio::join!(
-        keyboard::handle(&mut frontend, &mut client, &mut view, &req, ctrl_d, false),
-        async {
-            // 历史读仍未回包：stop 不能等待它。
-            let (token, method, params) = next_request(&mut requests).await;
-            reply(&responses, token, json!({"status":"accepted"})).await;
-            assert_eq!(method, "v4/command");
-            params
-        }
+    // 历史读未回包时 Ctrl-D 也必须立即登记 root 退出，不发送/等待 stop。
+    assert!(
+        keyboard::handle(&mut frontend, &mut client, &mut view, &req, ctrl_d, false)
+            .await
+            .unwrap()
     );
-    assert!(quit.unwrap());
-    assert_eq!(params["type"], "stop");
-    assert_eq!(params["payload"]["expectedForegroundExecutionId"], "exec-1");
+    assert!(frontend.take_quit());
+    assert!(requests.try_recv().is_err(), "Ctrl-D 不能等 stop ACK");
+    drop(responses);
 }
 
 #[tokio::test]

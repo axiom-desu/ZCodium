@@ -162,13 +162,14 @@ async fn rejected_admission_releases_only_the_optimistic_overlay() {
     });
     let mut c = Client::new(&to, &mut from);
     let mut v = view();
-    assert!(
-        session::submit(&mut c, &mut v, &request(), "hello")
-            .await
-            .is_err()
-    );
+    session::submit(&mut c, &mut v, &request(), "hello")
+        .await
+        .unwrap();
+    assert!(v.pending_submit);
+    crate::frontend_test_support::complete(&mut c, &mut v).await;
     assert!(!v.pending_submit);
     assert!(v.rows.is_empty());
+    assert_eq!(v.editor.text(), "hello");
 }
 #[tokio::test]
 async fn host_only_requests_are_declined_not_fabricated_as_permission_acceptance() {
@@ -217,10 +218,10 @@ async fn model_setter_uses_runtime_validation_and_preserves_session_on_error() {
     });
     let mut c = Client::new(&to, &mut from);
     let mut v = view();
+    // 非阻塞：setter 只登记 workflow；运行时校验结果由同一 poll 结算成明确错误。
     assert!(
-        session::slash(&mut c, &mut v, &request(), "/model provider missing none")
+        !session::slash(&mut c, &mut v, &request(), "/model provider missing none")
             .await
-            .is_err()
+            .unwrap()
     );
-    assert_eq!(v.session, "s");
 }

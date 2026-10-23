@@ -69,8 +69,11 @@ async fn delayed_mcp_reply_never_blocks_stop() {
             )
             .unwrap()
     );
-    // stop 必须在 MCP 回包之前完成。
+    // stop 先发出且不等 MCP；两个回包都按票据分流，读回包不能阻塞退出。
     session::stop(&mut client, &mut view).await.unwrap();
+    let message = client.next().await.unwrap();
+    client.observe(&mut view, message).await.unwrap();
+    assert_eq!(client.take_operation_replies().len(), 1);
     assert!(client.take_read_replies().is_empty());
     let message = client.next().await.unwrap();
     client.observe(&mut view, message).await.unwrap();

@@ -60,6 +60,65 @@ def rendered(data, rows=40, cols=160):
     return "\n".join("".join(line).rstrip() for line in grid)
 
 
+# composer 顶边：mode_title 来自 config.mode（build/plan/edit/yolo → Build/Plan/Edit/Yolo），
+# 带附件时标题为 `Build · 1 attachments`。transcript/tool card 也会用 `│`，不能只按前缀匹配。
+COMPOSER_TOP = re.compile(
+    r"^┌ (?:Build|Plan|Edit|Yolo|构建|计划|编辑|全权)(?:\b| ·)", re.IGNORECASE
+)
+
+# 与 Rust `projection::Pending::text` 的英文文案逐字一致：帮助栏显示这些摘要时，
+# workflow 仍在等待 actor 回包，后续命令不能仅凭旧 welcome/同步回显就发出去。
+PENDING_LABELS = (
+    "Opening session...",
+    "Applying setting...",
+    "Saving queue change...",
+    "Loading sessions...",
+    "Refreshing session...",
+    "Waiting for the actor...",
+)
+
+
+def composer_lines(screen):
+    """当前最末 composer box 的内容行；旧 transcript 的 `│` 行不属于 editor。"""
+    lines = screen.splitlines()
+    top = next(
+        (index for index in range(len(lines) - 1, -1, -1) if COMPOSER_TOP.match(lines[index])),
+        None,
+    )
+    if top is None:
+        return []
+    bottom = next(
+        (index for index in range(top + 1, len(lines)) if lines[index].startswith("└")),
+        None,
+    )
+    if bottom is None:
+        return []
+    contents = []
+    for line in lines[top + 1 : bottom]:
+        if not line.startswith("│"):
+            continue
+        content = line[1:]
+        if content.endswith("│"):
+            content = content[:-1]
+        contents.append(content)
+    return contents
+
+
+def composer_line(screen, needle):
+    """只从最末 composer box 读取草稿，避免旧 transcript 的同名文本造成假阳性。"""
+    return any(needle in content for content in composer_lines(screen))
+
+
+def composer_empty(screen):
+    """严格确认当前 editor 为空：只认最末 composer 的 placeholder，不扫 transcript。"""
+    return composer_line(screen, "Type a prompt")
+
+
+def pending_visible(screen):
+    """帮助栏是否仍展示真实在飞 workflow 摘要（英文 locale 基线）。"""
+    return any(label in screen for label in PENDING_LABELS)
+
+
 def main():
     config = json.load(sys.stdin)
     binary, cwd, env = config["binary"], config["cwd"], config["env"]
@@ -135,8 +194,9 @@ def main():
 
     def composer(text, draft):
         # 参数必须是当前屏幕；此前误把草稿当屏幕，splitlines 后永远匹配不到行首边框。
-        # 补全面板会盖住输入框右边框，因此只锚定行首 `│` + 完整草稿，不要求闭合边框。
-        return any(re.match(r"│" + re.escape(draft), line) for line in text.splitlines())
+        # 只认最末 composer box：老 transcript 的 user/assistant 行同样以 `│` 开头，
+        # 全屏前缀匹配会把历史里的同名草稿误当成当前 editor，从而提前放行下一条命令。
+        return composer_line(text, draft)
 
     def picker_selected(text):
         for line in text.splitlines():
@@ -178,6 +238,18 @@ def main():
         # 本地错误会把同一份草稿放回编辑器；Ctrl-U 只清本地文本，不发送命令。
         send("\x15")
         wait_for("Type a prompt")
+    def fresh_session():
+        # `/new` 的 boot 是异步 workflow，旧 welcome 在命令前就已存在，不能当完成信号。
+        # 先让当前 bottom composer 真的出现完整 `/new`，再 Enter；随后只有 editor 清空且
+        # 帮助栏不再显示任何在飞 pending 摘要，才证明本轮 open workflow 已结算。
+        # 这样 `/sessions` 不会在 mutation 槽仍被 boot 占用时被本地 busy 拒绝。
+        send("/new")
+        wait_until(lambda s: composer(s, "/new"), "typed /new in bottom composer")
+        send("\r")
+        wait_until(
+            lambda s: composer_empty(s) and not pending_visible(s),
+            "fresh session open workflow completed",
+        )
     def prompt(text, response): send(text + "\r"); wait_for(response); ready()
     def scroll_back_to(text, label, pages=12):
         # --continue 打开时跟随底部，早期消息不在 40 行视口内；PageUp 是真实滚动状态，
@@ -238,7 +310,7 @@ def main():
         result["assertions"].append("welcome/sidebar/toggle/resize/model-mode pickers")
         # 计划切换有真实 system-reminder；新会话隔离该上下文，不让 echo fixture 把提醒当用户问题。
         prior = session_id("current session id")
-        send("/new\r"); wait_for("███████")
+        fresh_session()
         fresh = session_id("fresh session id")
         if prior == fresh: raise AssertionError("session id did not change after /new")
         result["assertions"].append("new session/new id")
@@ -319,7 +391,7 @@ def main():
         # 新会话隔离上面的 13 请求 baseline，供选择器/档位/真实 compact 使用。
         # 13 而不是旧的 14：旧 fixture 的伪问答多了一次「工具参数错误 + 普通 SMOKE_ANSWER prompt」
         # 请求，真实问答把答案放进同一 AskUserQuestion 的 tool result，请求数少 1。
-        send("/new\r"); wait_for("███████"); ready()
+        fresh_session(); ready()
         wait_until(lambda s: "model-a personal:fixture" in s, "new session default model status")
         send("/model\r"); wait_for("Models")
         paste("模型筛选")

@@ -54,11 +54,14 @@ async fn stale_ack_is_reported_without_retry_or_refresh() {
         json!({"status":"stale","reasonCode":"proto.staleRevision"}),
     ]);
     let mut client = Client::new(&to, &mut from);
-    let error = queue::dispatch(&mut client, &mut view, "/queue delete q1")
-        .await
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("stale"), "{error}");
+    // 非阻塞：mutation 只登记 workflow；stale 由同一 poll 结算成明确错误。
+    assert!(
+        queue::dispatch(&mut client, &mut view, "/queue delete q1")
+            .await
+            .unwrap()
+    );
+    let reported = view.notices.last().cloned().unwrap_or_default();
+    assert!(reported.contains("proto.staleRevision"), "{reported}");
     let recorded = recorded.lock().unwrap().clone();
     // 只有一次 command，没有自动重试、也没有回拉快照。
     assert_eq!(recorded.len(), 1);
