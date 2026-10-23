@@ -49,7 +49,9 @@ export async function workbenchModelServer() {
         );
     };
     if (body.includes(TITLE)) return send({ content: '{"title":"Workbench"}' }, "stop");
-    requests.push(parsed);
+    // marker 序号 = 真实 main request 的 push 计数（TITLE 已在上面排除），
+    // 让 PTY 能证明自己等的是这一轮的新回复，而不是 transcript 里的旧 response/旧 Ready。
+    const index = requests.push(parsed);
     const messages = parsed.messages.filter(
       (message) =>
         message.role !== "user" ||
@@ -95,7 +97,8 @@ export async function workbenchModelServer() {
       return send({ content: "slow done" }, "stop");
     }
     const usage = USAGE_TURN.test(text.trim()) ? USAGE_TURN_USAGE : WORKBENCH_USAGE;
-    send({ content: `answer: ${text}` }, "stop", usage);
+    // 保留原 `answer: <text>` 正文供既有断言，追加的 nonce 仅用于 PTY 等待新请求。
+    send({ content: `answer: ${text}\nWB_REPLY_${index}` }, "stop", usage);
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");

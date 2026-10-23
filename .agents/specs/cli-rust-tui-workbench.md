@@ -173,6 +173,16 @@ SessionStore 新增 `recall_input_history(workspace, skip)`，NodeStore 走现�
 | queue               | busy输入被接受并串行；display只来自actor；edit/delete/reorder/sendNow/pause/resume真实效果；stale/reserved不误写；edit遇审批不误答；停止保留队列      |
 | E2E                 | 隔离HOME/DB/临时workspace+loopback模型与MCP；重启history、真实附件内容、慢run排队和操作、usage/MCP；旧compact/effort/问答/权限/continue/termios全保留 |
 
+E2E 探针约束（防止旧 transcript / 旧 Ready 假阳性）：
+
+- `composer_line` 只读取最末 composer 顶边（mode 标题）到对应 `└` 底边之间的内容；transcript 有全边框，
+  历史 user/assistant 行同样以 `│` 开头，不得参与当前 editor 判断。无 border 的提示行也不扫描。
+  重启后同一份 gamma 草稿必须靠此区分“旧 transcript 命中”和“当前 editor 内容”。
+- 普通模型答复附加 `WB_REPLY_<requestIndex>`（requestIndex = 排除 TITLE 的真实请求 push 计数）。
+  PTY 在 Enter 前读取 loopback `/state` 的 `{requests}`，Enter 后必须等到 `WB_REPLY_<before+1>`、
+  预期正文和 main composer 清空/Ready；不允许用旧 response 或旧 Ready 放行。
+- 慢流与 MCP 专用回复保留原协议，不附加 nonce；队列/工具时序断言不变。
+
 必须执行 Rust locked workspace tests、fmt、clippy -D warnings、16-crate boundaries、Node driver/CI scripts、
 根 typecheck、原始 lint（存量如实报告）、三 gate、architecture、格式与协议/contract资产 check。
 不读取真实用户数据，不替换本机 `.395`，不打 tag/Release、不上传本地安装包。精确 PR HEAD CI 通过再合并。
@@ -195,7 +205,7 @@ SessionStore 新增 `recall_input_history(workspace, skip)`，NodeStore 走现�
 最终证据按实际命令回填，旧截图/旧 deb 不证明新功能。
 
 - 最终源码本地复验：Rust locked workspace 714 passed / 1 ignored / 0 failed，其中 TUI 222 passed；
-  Node drivers 59 passed、CI scripts 429 passed。16-crate boundaries、所有 src ≤400 行、fmt、clippy `-D warnings` 通过。
+  Node drivers 59 passed、CI scripts 430 passed。16-crate boundaries、所有 src ≤400 行、fmt、clippy `-D warnings` 通过。
 - 根 typecheck、协议/contract/domain fixture assets `--check`、architecture 与三 gate 通过；
   原始 lint 仍为既有 86 errors / 145 warnings，未清零、未放宽基线。
 - TUI 新 dev-dependency `tempfile` 改变 Cargo.lock 摘要；已用现有生成器重验 279-crate 许可闭包并更新 provenance 和根声明，

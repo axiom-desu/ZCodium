@@ -399,20 +399,19 @@ try {
 
 async function controlServer(instance) {
   const server = createServer(async (request, response) => {
+    // 只读 loopback probe：只报已发生的真实请求数，绝不触发新的模型请求。
+    if (request.method === "GET" && request.url === "/state")
+      return response.end(JSON.stringify({ requests: instance.requests.length }));
     let body = "";
     for await (const chunk of request) body += chunk;
-    const payload = JSON.parse(body || "{}");
-    let released = false;
     try {
-      instance.releaseSlow(payload.text);
-      released = true;
+      instance.releaseSlow(JSON.parse(body || "{}").text);
     } catch (error) {
       response.writeHead(409, { "content-type": "application/json" });
-      response.end(JSON.stringify({ released, error: String(error) }));
-      return;
+      return response.end(JSON.stringify({ released: false, error: String(error) }));
     }
     response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ released }));
+    response.end(JSON.stringify({ released: true }));
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");

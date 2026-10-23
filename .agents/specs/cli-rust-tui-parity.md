@@ -209,7 +209,7 @@ Rust 命令目录统一广告新增交互：`/queue [list|pause|resume|edit|dele
 
 本地 workbench PTY 35 checks 全绿（attachments 9 / queue 13 / usage 10 / shutdown 3），
 既有 20-request baseline 与 provider-discovery 模式通过。最终源码本地复验为 Rust 714 passed / 1 ignored，
-其中 TUI 222 passed；Node drivers 59、CI scripts 429 通过。精确 PR HEAD CI 仍待完成。
+其中 TUI 222 passed；Node drivers 59、CI scripts 430 通过。精确 PR HEAD CI 仍待完成。
 
 ## 首批总体验收（提交前本地证据）
 

@@ -137,9 +137,44 @@ class PtySession:
         os.close(self.slave)
 
 
+# composer 顶边：mode_title 来自 config.mode（build/plan/edit/yolo → Build/Plan/Edit/Yolo），
+# 带附件时标题为 `Build · 1 attachments`。transcript/tool card 也会用 `│`，不能只按前缀匹配。
+COMPOSER_TOP = re.compile(
+    r"^┌ (?:Build|Plan|Edit|Yolo|构建|计划|编辑|全权)(?:\b| ·)", re.IGNORECASE
+)
+
+
 def composer_line(screen, needle):
-    """The editor border line holding `needle` (a selection panel may hide its right border)."""
-    return any(line.startswith("│") and needle in line for line in screen.splitlines())
+    """The composer box content holding `needle`.
+
+    只读取最末 composer 顶边（mode 标题）与其对应 `└` 底边之间的内容：transcript 有
+    Borders::ALL，历史 user/assistant 行同样以 `│` 开头，按全屏前缀扫描会把旧草稿
+    当成当前 editor。选择面板可能遮住右侧，因此不要求右 `│`；但只接受 box 内的
+    有边线行，不扫描无 border 的提示/状态行。
+    """
+    lines = screen.splitlines()
+    top = None
+    for index in range(len(lines) - 1, -1, -1):
+        if COMPOSER_TOP.match(lines[index]):
+            top = index
+            break
+    if top is None:
+        return False
+    bottom = next(
+        (index for index in range(top + 1, len(lines)) if lines[index].startswith("└")),
+        None,
+    )
+    if bottom is None:
+        return False
+    for line in lines[top + 1 : bottom]:
+        if not line.startswith("│"):
+            continue
+        content = line[1:]
+        if content.endswith("│"):
+            content = content[:-1]
+        if needle in content:
+            return True
+    return False
 
 
 def activity(screen):
