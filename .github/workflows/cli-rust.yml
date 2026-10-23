@@ -95,6 +95,8 @@ jobs:
         run: node scripts/ci/tui-quit-pty-smoke.mjs
       - name: Rust TUI real PTY acceptance
         run: node scripts/zcode-cli-rust-tui-smoke.mjs --provider-discovery
+      - name: Rust TUI workbench PTY acceptance
+        run: node scripts/zcode-cli-rust-workbench-smoke.mjs
 
   native-platform-check:
     name: Native compile (${{ matrix.os }})
