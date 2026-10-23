@@ -187,7 +187,10 @@ E2E 探针约束（防止旧 transcript / 旧 Ready 假阳性）：
 根 typecheck、原始 lint（存量如实报告）、三 gate、architecture、格式与协议/contract资产 check。
 不读取真实用户数据，不替换本机 `.395`，不打 tag/Release、不上传本地安装包。精确 PR HEAD CI 通过再合并。
 
-## 继承的生命周期边界
+## 首批继承的生命周期边界（后续已修复）
+
+以下是 PR #87 时点的限制，不是当前实现保证；后续修复见
+[responsive operations](cli-rust-tui-responsive-operations.md)，命令/boot/setting/queue/snapshot 现均走非阻塞续步。
 
 本批非阻塞保证只覆盖 MCP/usage/history 三类只读票据：`Frontend::poll` 从完成队列 drain 这三类结果时
 不 await 读回包。继承的 gaprepair 仍使用串行 `Client::refresh(TopicSnapshot).await`；bootstrap

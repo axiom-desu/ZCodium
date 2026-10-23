@@ -97,6 +97,10 @@ jobs:
         run: node scripts/zcode-cli-rust-tui-smoke.mjs --provider-discovery
       - name: Rust TUI workbench PTY acceptance
         run: node scripts/zcode-cli-rust-workbench-smoke.mjs
+      # Slow-ACK responsiveness stays a separate entry: it holds a real SQLite
+      # write lock and must not replace the 20-request or workbench baselines.
+      - name: Rust TUI responsive PTY acceptance
+        run: node scripts/zcode-cli-rust-responsive-smoke.mjs
 
   native-platform-check:
     name: Native compile (${{ matrix.os }})

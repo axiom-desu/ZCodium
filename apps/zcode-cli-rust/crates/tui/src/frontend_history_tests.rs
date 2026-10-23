@@ -4,7 +4,7 @@ use crate::{
     draft_attachments::DraftAttachments,
     frontend::{self, Frontend},
     frontend_test_support::{
-        draft_with, endpoints, key, next_request, observe_next, reply, request, view,
+        complete, draft_with, endpoints, key, next_request, observe_next, reply, request, view,
     },
     input_history::{Applied, Step},
     keyboard,
@@ -163,6 +163,7 @@ async fn accepted_prompt_after_an_exhausted_null_reopens_recall() {
         }
     );
     assert!(!result.unwrap());
+    complete(&mut client, &mut view).await;
     assert_eq!(params["type"], "sendText");
     assert!(view.editor.text().is_empty());
 

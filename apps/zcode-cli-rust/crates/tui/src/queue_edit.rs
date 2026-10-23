@@ -1,5 +1,8 @@
 //! 队列编辑交互：独立 `QueueEdit` 草稿的按键归属与提交。
-use crate::{client::Client, projection::View, queue::mutate, queue_render, queue_state};
+use crate::{
+    client::Client, flow_queue::SentEdit, projection::View, queue::Settle, queue::begin_mutate,
+    queue_render, queue_state,
+};
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::json;
@@ -89,10 +92,19 @@ pub(crate) fn stale_notice(view: &mut View) {
 
 /// Enter 提交：空文本/reserved/stale 一律本地拒绝；失败保留编辑文本，不自动重试。
 async fn commit(client: &mut Client<'_>, view: &mut View) -> Result<bool> {
+    let handled = begin_commit(client, view)?;
+    #[cfg(test)]
+    crate::frontend_test_support::drive(client, view).await;
+    Ok(handled)
+}
+
+/// 同步登记一次保存：真实键盘与测试共用这一入口，测试可在回包前继续编辑。
+pub(crate) fn begin_commit(client: &mut Client<'_>, view: &mut View) -> Result<bool> {
     let Some(edit) = view.queue_edit.as_ref() else {
         return Ok(false);
     };
-    let text = edit.text().trim().to_owned();
+    let raw_editor_text = edit.text().to_owned();
+    let text = raw_editor_text.trim().to_owned();
     let (id, revision, log_epoch) = (
         edit.queue_item_id.clone(),
         edit.revision,
@@ -113,10 +125,30 @@ async fn commit(client: &mut Client<'_>, view: &mut View) -> Result<bool> {
         view.push(&format!("Error: {error}"));
         return Ok(true);
     }
-    let payload = json!({"queueItemId": id, "newText": text});
-    match mutate(client, view, "editQueueItem", payload, revision, &log_epoch).await {
-        Ok(()) => view.queue_edit = None,
-        Err(error) => view.push(&format!("Error: {error}")),
+    let payload = json!({"queueItemId": id.clone(), "newText": text.clone()});
+    // 只登记保存 workflow：accepted 后由它比较“所发的这一版”再结算本地编辑，
+    // 保存期间继续输入的新文字不会被迟到的 OK 清空；失败/stale 原稿保留。
+    let sent = SentEdit {
+        queue_item_id: id,
+        revision,
+        log_epoch: log_epoch.clone(),
+        text,
+        raw_editor_text,
+        generation: view.generation,
+    };
+    if let Err(error) = begin_mutate(
+        client,
+        view,
+        "editQueueItem",
+        payload,
+        revision,
+        &log_epoch,
+        Settle {
+            edit: Some(sent),
+            close_selector: false,
+        },
+    ) {
+        view.push(&format!("Error: {error}"));
     }
     Ok(true)
 }

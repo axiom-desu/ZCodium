@@ -2,7 +2,7 @@
 use crate::{
     client::Client,
     frontend::{self, Frontend},
-    frontend_test_support::{endpoints, key, next_request, reply, request},
+    frontend_test_support::{complete, endpoints, key, next_request, reply, request},
     keyboard,
     projection::View,
     queue::QueueEdit,
@@ -43,12 +43,12 @@ async fn stop_uses_the_real_control_active_works_id_not_a_root_lookalike() {
         ..View::default()
     };
     session::stop(&mut client, &mut view).await.unwrap();
+    actor.await.unwrap();
     let recorded = recorded.lock().unwrap().clone();
     assert_eq!(
         recorded[0].1["payload"]["expectedForegroundExecutionId"],
         "exec-real"
     );
-    actor.await.unwrap();
 }
 
 #[tokio::test]
@@ -63,6 +63,7 @@ async fn stop_without_a_real_foreground_id_keeps_the_stale_run_guard() {
         ..View::default()
     };
     session::stop(&mut client, &mut view).await.unwrap();
+    actor.await.unwrap();
     let recorded = recorded.lock().unwrap().clone();
     assert!(
         recorded[0].1["payload"]
@@ -71,7 +72,6 @@ async fn stop_without_a_real_foreground_id_keeps_the_stale_run_guard() {
         "没有真实 known id 时不得伪造：{:?}",
         recorded[0].1
     );
-    actor.await.unwrap();
 }
 
 #[tokio::test]
@@ -97,6 +97,7 @@ async fn paused_queue_rejection_keeps_the_draft_and_names_the_real_exit() {
             .unwrap()
     );
     reply_task.await.unwrap();
+    complete(&mut client, &mut view).await;
     assert_eq!(view.editor.text(), "new prompt");
     assert!(!view.pending_submit);
     let notice = view.notices.last().expect("visible rejection");
@@ -113,18 +114,19 @@ async fn held_queue_sendtext_never_auto_sets_a_disposition() {
     })]);
     let mut client = Client::new(&to, &mut from);
     let mut view = idle_view(json!([item("q1", "sendText", "held item")]), false);
-    let error = session::submit(&mut client, &mut view, &request(), "draft")
+    session::submit(&mut client, &mut view, &request(), "draft")
         .await
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("heldQueueDispositionRequired"), "{error}");
+        .unwrap();
+    complete(&mut client, &mut view).await;
     assert!(!view.pending_submit);
+    let notice = view.notices.last().expect("visible rejection");
+    assert!(notice.contains("heldQueueDispositionRequired"), "{notice}");
+    actor.await.unwrap();
     let recorded = recorded.lock().unwrap().clone();
     let payload = &recorded[0].1["payload"];
     assert!(payload.get("heldQueueDisposition").is_none(), "{payload:?}");
     assert!(payload.get("expectedHeldQueueItemIds").is_none());
     assert_eq!(payload["text"], "draft");
-    actor.await.unwrap();
 }
 
 #[tokio::test]
@@ -134,11 +136,12 @@ async fn other_rejections_still_show_the_original_reason_code() {
     })]);
     let mut client = Client::new(&to, &mut from);
     let mut view = idle_view(json!([]), true);
-    let error = session::submit(&mut client, &mut view, &request(), "draft")
+    session::submit(&mut client, &mut view, &request(), "draft")
         .await
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("guard.modelUnavailable"), "{error}");
+        .unwrap();
+    complete(&mut client, &mut view).await;
+    let notice = view.notices.last().expect("visible rejection");
+    assert!(notice.contains("guard.modelUnavailable"), "{notice}");
     actor.await.unwrap();
 }
 

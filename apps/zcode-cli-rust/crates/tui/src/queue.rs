@@ -11,12 +11,17 @@
 //! - `/queue` 精确首 token 归本模块（`/queuefoo` 仍是未知命令）。
 //! - 权限/问答优先：`handle_key` 在交互期间不吃键盘，`QueueEdit` 文本绝不作为答案。
 use crate::{
-    client::Client, projection::View, queue_render, queue_state, selector::Choice, session,
+    client::Client,
+    flow::Flow,
+    flow_queue::{Owned, QueueFlow, SentEdit},
+    projection::View,
+    queue_render, queue_state,
+    selector::Choice,
+    session,
 };
-use anyhow::{Result, ensure};
+use anyhow::{Result, bail, ensure};
 use ratatui::layout::Rect;
 use serde_json::{Value, json};
-use zcode_cli_core_api::Method;
 
 /// 队列模块公开的类型入口：selector/picker 只通过这里引用 typed 选择项。
 // 集成层入口：按键优先级的 queue edit 分支经 `queue::handle_key` 调用。
@@ -69,7 +74,10 @@ fn usage(view: &View) -> anyhow::Error {
 }
 
 /// 菜单确认（由 `picker::confirm` 委派）：第一步开操作菜单，第二步提交 typed 操作。
-pub(crate) async fn confirm(client: &mut Client<'_>, view: &mut View) -> Result<()> {
+///
+/// 两步都是本地状态迁移；第二步只登记 queue workflow，不等 ACK。菜单关闭由该
+/// workflow 在 accepted 后按发起时的 owner/世代结算，迟到的旧回包不会关掉新菜单。
+pub(crate) fn begin_confirm(client: &mut Client<'_>, view: &mut View) -> Result<()> {
     let Some(selector) = view.selector.as_ref() else {
         return Ok(());
     };
@@ -105,17 +113,38 @@ pub(crate) async fn confirm(client: &mut Client<'_>, view: &mut View) -> Result<
         return Ok(());
     }
     let payload = crate::queue_menu::payload(view, &choice, op)?;
-    mutate(
-        client,
-        view,
+    let command = cas(
+        &view.session,
         op.kind(),
         payload,
         choice.revision,
         &choice.log_epoch,
-    )
-    .await?;
-    // 只有 actor 接受并回拉成功后才关闭菜单；失败保留原选择器与草稿。
-    view.selector = None;
+    );
+    let owned = Owned {
+        session: view.session.clone(),
+        generation: view.generation,
+    };
+    if !client.begin_flow(
+        view,
+        Flow::Queue(QueueFlow::new(command, None, Some(owned))),
+    )? {
+        bail!(
+            "{}",
+            queue_state::local(
+                view,
+                "Another operation is still in flight; the queue was not changed.".into(),
+                "已有操作在等待回包；队列未修改。".into()
+            )
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) async fn confirm(client: &mut Client<'_>, view: &mut View) -> Result<()> {
+    begin_confirm(client, view)?;
+    #[cfg(test)]
+    crate::frontend_test_support::drive(client, view).await;
     Ok(())
 }
 
@@ -193,7 +222,46 @@ pub(crate) fn cas(
     command
 }
 
-/// 唯一提交路径：accepted/duplicate/noop 后回拉快照；stale/拒绝原样报错且不重试。
+/// 唯一提交路径：accepted/duplicate/noop 后同一 workflow 续一步快照。
+///
+/// 失败/stale 原样报错且不重试；本地编辑与菜单保留给用户显式处理。
+/// 一次 mutation 成功后要结算的本地 UI：只结算发起时那一份。
+#[derive(Default)]
+pub(crate) struct Settle {
+    pub edit: Option<SentEdit>,
+    pub close_selector: bool,
+}
+
+pub(crate) fn begin_mutate(
+    client: &mut Client<'_>,
+    view: &mut View,
+    kind: &str,
+    payload: Value,
+    revision: u64,
+    log_epoch: &str,
+    settle: Settle,
+) -> Result<()> {
+    let command = cas(&view.session, kind, payload, revision, log_epoch);
+    let owned = settle.close_selector.then(|| Owned {
+        session: view.session.clone(),
+        generation: view.generation,
+    });
+    if !client.begin_flow(
+        view,
+        Flow::Queue(QueueFlow::new(command, settle.edit, owned)),
+    )? {
+        bail!(
+            "{}",
+            queue_state::local(
+                view,
+                "Another operation is still in flight; the queue was not changed.".into(),
+                "已有操作在等待回包；队列未修改。".into()
+            )
+        );
+    }
+    Ok(())
+}
+
 pub(crate) async fn mutate(
     client: &mut Client<'_>,
     view: &mut View,
@@ -202,36 +270,18 @@ pub(crate) async fn mutate(
     revision: u64,
     log_epoch: &str,
 ) -> Result<()> {
-    let command = cas(&view.session, kind, payload, revision, log_epoch);
-    let ack = client.call(view, Method::Command, command).await?;
-    match ack["status"].as_str().unwrap_or_default() {
-        "accepted" | "duplicate" | "noop" => {
-            // 队列事实只来自 actor：回拉快照，本地不插/不改 queue items。
-            client.refresh(view).await
-        }
-        "stale" => {
-            // actor 的 reasonCode 是这次拒绝的真实原因（revision/logEpoch/已消费等），
-            // 不能换成笼统的本地提示把它丢掉。
-            let code = ack["reasonCode"].as_str().unwrap_or("stale");
-            Err(queue_state::local(
-                view,
-                format!("The queue changed before this action ({code}); reopen /queue and retry."),
-                format!("队列在你操作前已变化（{code}）；请重新打开 /queue 再试。"),
-            ))
-        }
-        _ => {
-            let code = ack["reasonCode"].as_str().unwrap_or_default();
-            let message = ack["message"]
-                .as_str()
-                .filter(|message| !message.is_empty())
-                .unwrap_or(code);
-            Err(queue_state::local(
-                view,
-                format!("Queue command was not applied: {message}"),
-                format!("队列命令未生效：{message}"),
-            ))
-        }
-    }
+    begin_mutate(
+        client,
+        view,
+        kind,
+        payload,
+        revision,
+        log_epoch,
+        Settle::default(),
+    )?;
+    #[cfg(test)]
+    crate::frontend_test_support::drive(client, view).await;
+    Ok(())
 }
 
 /// composer 上方队列条（供集成层在正文与编辑器之间渲染）。

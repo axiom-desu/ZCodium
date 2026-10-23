@@ -72,6 +72,35 @@ pub(crate) async fn observe_next(client: &mut Client<'_>, view: &mut View) {
     client.observe(view, message).await.unwrap();
 }
 
+/// 测试驱动：真实异步发送后，等 fake runtime 的回包并由同一 `Frontend::poll` 结算。
+pub(crate) async fn complete(client: &mut Client<'_>, view: &mut View) {
+    if view.operations.busy() {
+        observe_next(client, view).await;
+    }
+    crate::frontend::Frontend::default()
+        .poll(client, view)
+        .await
+        .unwrap();
+}
+
+/// 测试驱动：推进同一 workflow 状态机直到 mutation 槽空，不新建第二条发送路径。
+pub(crate) async fn drive(client: &mut Client<'_>, view: &mut View) {
+    loop {
+        while let Some(message) = client.try_next() {
+            client.observe(view, message).await.unwrap();
+        }
+        crate::frontend::Frontend::default()
+            .poll(client, view)
+            .await
+            .unwrap();
+        if !client.mutation_flow_busy() {
+            return;
+        }
+        let message = client.next().await.unwrap();
+        client.observe(view, message).await.unwrap();
+    }
+}
+
 pub(crate) fn draft_with(path: &str, bytes: u64) -> DraftAttachments {
     let mut drafts = DraftAttachments::default();
     assert_eq!(

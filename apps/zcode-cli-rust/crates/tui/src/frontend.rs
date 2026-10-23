@@ -1,16 +1,17 @@
 //! 前端集成：Enter/Paste 分流、已完成结果的有界 poll，以及历史读写桥接。
 //!
 //! 这里不拥有会话事实：历史只从内部读票据取回，队列/审批/会话仍由 actor 提交后的
-//! snapshot 驱动。MCP/usage/history 三类只读票据由 [`Frontend::poll`] 从 Client 完成队列
-//! drain，不 await 这些读回包；继承的 gaprepair/`resync` 仍走 `Client::refresh` 的串行
-//! `TopicSnapshot`，bootstrap 与会话 setter 也仍是串行 `call` + snapshot，故 poll 并非全路径非阻塞。
+//! snapshot 驱动。所有回包（只读票据、draft mutation、boot/setting/queue/picker/snapshot
+//! 续步）都由 [`Frontend::poll`] 从 Client 完成队列 drain，不 await 任何新 ACK；poll 只做
+//! 有界本地工作，慢 admission 期间键盘/退出/重绘照常推进。
 use crate::{
-    client::{Client, QueryKind, ReadReply},
+    client::{Client, QueryKind},
     commands,
     draft_attachments::DraftAttachments,
     editor::sanitize,
-    input_history::{Applied, Draft, Step},
-    interactions, picker,
+    frontend_history_apply::{apply_history, restore},
+    input_history::Step,
+    picker,
     projection::View,
     queue, session, telemetry,
     transport::Request,
@@ -28,10 +29,21 @@ pub(crate) struct Frontend {
     /// 这里只记录本地收敛基线，绝不据此推断 TopicClosed 事件。
     session: String,
     generation: u64,
+    /// Ctrl-D / `/quit` 的 root 退出意图：主循环据此取消共享 token 并立即返回。
+    quit: bool,
 }
 
 impl Frontend {
     /// 启动时把 `--attach` 投影成第一份草稿的 pinned 附件；非法项整批报错。
+    /// Ctrl-D/`/quit` 不等待 stop ACK：只记下 root 退出意图，由 transport 取消共享 token。
+    pub(crate) fn request_quit(&mut self) {
+        self.quit = true;
+    }
+
+    pub(crate) fn take_quit(&mut self) -> bool {
+        std::mem::take(&mut self.quit)
+    }
+
     pub(crate) fn start(&mut self, view: &mut View, request: &Request) -> Result<()> {
         view.draft_attachments = DraftAttachments::from_startup(request.attachments.clone())?;
         if view.draft_attachments.startup_duplicates() > 0 {
@@ -46,9 +58,8 @@ impl Frontend {
         Ok(())
     }
 
-    /// 主循环每个 tick / 事件后调用：drain MCP/usage/history 三类已完成只读结果，
-    /// 不 await 这些读回包；但继承的 `resync` gaprepair 仍会 `client.refresh(view).await`
-    /// 串行拉取并应用 `TopicSnapshot`，因此 poll 的该路径仍可能阻塞键盘/退出。
+    /// 主循环每个 tick / 事件后调用：drain 只读票据与所有 workflow 回包并推进续步，
+    /// 不 await 新回包；gaprepair 由 `Client::pump_flows` 以单飞只读 workflow 发出。
     pub(crate) async fn poll(&mut self, client: &mut Client<'_>, view: &mut View) -> Result<bool> {
         let mut dirty = false;
         if view.file_mentions.poll() {
@@ -64,10 +75,10 @@ impl Frontend {
                 }
             };
         }
-        if view.resync {
-            client.refresh(view).await?;
-            dirty = true;
-        }
+        // 唯一 mutation 回包结算点：accepted/rejected 与续步都按票据身份判定，
+        // 绝不 await 新 ACK。结算后立即尝试发出续步/staged 请求与 gaprepair。
+        dirty |= crate::frontend_operations::settle(client, view).await?;
+        dirty |= client.pump_flows(view)?;
         Ok(dirty)
     }
 
@@ -82,6 +93,32 @@ impl Frontend {
             // 选择器/历史属于上一世代；队列编辑草稿保留为失效缓冲，由用户 Esc 取消。
             view.selector = None;
             view.history.reset(&view.session, view.generation);
+            // 旧世代 operation 的票据效果必须失效；已发送但结果未知的草稿转为旧 owner
+            // pending（保留原 session 标签，只由用户显式恢复），绝不静默丢弃。
+            let had_unknown = view.operations.has_unknown();
+            if let Some(stranded) = view.operations.invalidate(view.generation) {
+                if view.editor.text().is_empty() {
+                    view.editor.replace_all(&stranded.text);
+                    view.draft_attachments = stranded.attachments;
+                } else {
+                    let note = view
+                        .text(
+                            "An unknown-outcome draft could not be kept with the two recovery slots full; save your current draft and retry.",
+                            "两个恢复槽都已占用，无法再保留结果未知的草稿；请先保存当前草稿后重试。",
+                        )
+                        .to_owned();
+                    view.push(&note);
+                }
+            } else if !had_unknown && view.operations.has_unknown() {
+                // 已发送但会话已换代：结果未知；草稿留在 alternate，必须由用户显式复核/丢弃。
+                let note = view
+                    .text(
+                        "The in-flight draft was already sent, but the session changed before its result arrived. Its outcome is unknown; it was NOT resent or discarded. Use /draft swap to review it, or /draft discard to drop it.",
+                        "在飞草稿已发送，但结果到达前会话已变化。结果未知；未自动重发，也未丢弃。使用 /draft swap 复核，或用 /draft discard 显式丢弃。",
+                    )
+                    .to_owned();
+                view.push(&note);
+            }
         }
         view.draft_attachments.retain_for_text(view.editor.text());
         let enabled =
@@ -104,23 +141,68 @@ impl Frontend {
     }
 }
 
-/// Enter 的唯一提交入口：先接受补全，再清空草稿走原 enter 分流；
-/// 本地/远端拒绝都把同一份草稿放回编辑器，草稿附件保持不动。
+/// Enter 的唯一提交入口：先接受补全，再把草稿整份转移给唯一在飞 operation。
+///
+/// 普通正文与交互回答只发出、不等待 ACK；slash/本地命令仍保留原分流。已有 mutation
+/// 在飞时明确拒绝并保留草稿，不重复 admission，也不在前端排队。
 pub(crate) async fn submit_editor(
     client: &mut Client<'_>,
     view: &mut View,
     request: &Request,
 ) -> Result<bool> {
     view.accept_completion();
+    // 恢复槽存在时新提交必须被拦，但 /draft、/help 等纯本地命令必须始终可执行：
+    // 否则唯一能清空恢复槽的入口反被恢复槽自己挡住，形成死锁。
+    if view.operations.has_rejected() && !commands::is_local(view.editor.text()) {
+        let note = view
+            .text(
+                "A rejected draft is waiting. Use /draft swap to review it, or /draft discard to drop it (Ctrl-Y is a shortcut).",
+                "还有一份被拒绝的草稿未处理。使用 /draft swap 复核，或用 /draft discard 丢弃（Ctrl-Y 是便捷方式）。",
+            )
+            .to_owned();
+        view.push(&note);
+        return Ok(false);
+    }
+    let interaction = view.interaction().is_some();
+    let draft = view.editor.text().to_owned();
+    let plain = !interaction && !draft.trim().is_empty() && !draft.starts_with('/');
+    if !interaction && !plain {
+        // slash/本地命令不占 mutation 槽；失败时只恢复正文，附件从未转移。
+        let text = view.editor.clear();
+        return match enter(client, view, request, &text).await {
+            Ok(quit) => Ok(quit),
+            Err(error) => {
+                view.editor.replace_all(&text);
+                view.push(&format!("Error: {error}"));
+                Ok(false)
+            }
+        };
+    }
+    if view.operations.busy() {
+        let note = view
+            .text(
+                "A previous operation is still waiting for the actor; this draft was kept and not sent.",
+                "上一条操作仍在等待 actor 回包；本次草稿已保留，未发送。",
+            )
+            .to_owned();
+        view.push(&note);
+        return Ok(false);
+    }
     let text = view.editor.clear();
-    match enter(client, view, request, &text).await {
-        Ok(quit) => Ok(quit),
+    let result = if interaction {
+        session::resolve_interaction(client, view, &text).await
+    } else {
+        session::submit(client, view, request, &text).await
+    };
+    match result {
+        Ok(()) if !interaction => view.history.edited(),
+        Ok(()) => {}
         Err(error) => {
-            view.push(&format!("Error: {error}"));
             view.editor.replace_all(&text);
-            Ok(false)
+            view.push(&format!("Error: {error}"));
         }
     }
+    Ok(false)
 }
 
 /// `/quit`、审批回答、slash 与普通正文的唯一分流点。
@@ -131,20 +213,8 @@ async fn enter(
     text: &str,
 ) -> Result<bool> {
     if matches!(text.trim(), "/quit" | "/exit") {
-        if view.busy() {
-            session::stop(client, view).await?;
-        }
+        // root 退出不等待 stop ACK、不撤销已接受输入；transport 负责取消共享 token。
         return Ok(true);
-    }
-    if let Some(interaction) = view.interaction().cloned() {
-        let answer = interactions::answer(&interaction, text)?;
-        let params = session::command(
-            &view.session,
-            "resolveInteraction",
-            json!({"interactionId":interaction["interactionId"],"answer":answer}),
-        );
-        session::accepted(client.call(view, Method::Command, params).await?)?;
-        return Ok(false);
     }
     if text.starts_with('/') {
         return slash(client, view, request, text).await;
@@ -167,6 +237,14 @@ async fn slash(
     request: &Request,
     text: &str,
 ) -> Result<bool> {
+    // 纯本地命令不依赖 actor/session，任何时候都可执行（包括恢复槽存在/busy 时）。
+    if commands::is_local(text) {
+        return session::slash(client, view, request, text).await;
+    }
+    // boot/setting/queue 在飞时明确拒绝（不静默丢、不二次 admission）。
+    if client.mutation_flow_busy() {
+        return Err(crate::frontend_operations::busy_slash_error(view));
+    }
     if view.busy() {
         if queue::handles(text) {
             return session::slash(client, view, request, text).await;
@@ -273,56 +351,4 @@ async fn run_step(client: &mut Client<'_>, view: &mut View, step: Step) -> Resul
         Step::Ignore => {}
     }
     Ok(())
-}
-
-fn apply_history(view: &mut View, reply: ReadReply) -> bool {
-    let QueryKind::History { skip } = reply.kind else {
-        return false;
-    };
-    if reply.session != view.session || reply.generation != view.generation {
-        return false;
-    }
-    // 审批/问答、selector 或队列编辑会接管主 editor；同 session/generation 也不能把
-    // 迟到的历史正文写进回答草稿。清掉 pending/revision，后续 ↑ 重新按当前上下文开始。
-    if view.interaction().is_some() || view.selector.is_some() || view.queue_edit.is_some() {
-        view.history.edited();
-        return false;
-    }
-    let directory = view.directory.clone();
-    let applied = view.history.apply(
-        &view.session,
-        view.generation,
-        skip,
-        reply.result,
-        &directory,
-    );
-    match applied {
-        Applied::Restore(draft) => {
-            restore(view, draft);
-            true
-        }
-        Applied::End => {
-            let note = view
-                .text("No earlier input history.", "没有更早的输入历史。")
-                .to_owned();
-            view.push(&note);
-            true
-        }
-        Applied::Failed(error) => {
-            let lowered = error.to_lowercase();
-            if lowered.contains("unavailable") || lowered.contains("unsupported") {
-                view.history.mark_unsupported();
-            }
-            view.push(&format!("Error: {error}"));
-            true
-        }
-        Applied::Stale => false,
-    }
-}
-
-/// 历史恢复只写未提交草稿；附件由 `DraftAttachments::from_history` 依据正文占位符重建。
-fn restore(view: &mut View, draft: Draft) {
-    view.editor.replace_all(&draft.text);
-    view.draft_attachments = draft.attachments;
-    view.sync_completion();
 }

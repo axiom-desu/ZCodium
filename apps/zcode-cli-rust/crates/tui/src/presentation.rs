@@ -118,22 +118,32 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
     }
     if help_height > 0 {
         let help = if let Some(s) = &view.selector {
-            format!(
+            let base = format!(
                 "{} · {}",
                 s.title,
                 view.text(
                     "↑/↓ Enter select · Esc cancel",
                     "↑/↓ 选择 · Enter 确认 · Esc 取消"
                 )
-            )
+            );
+            // 菜单确认后的 setting/queue workflow 仍在飞：即使菜单开着也要显示待处理状态。
+            match view.pending {
+                Some(pending) => format!("{} · {base}", pending.text(view.zh)),
+                None => base,
+            }
         } else if let Some(interaction) = view.interaction() {
             interactions::panel(interaction, view.zh)
         } else {
-            view.text(
+            let hint = view.text(
                 "Enter send · Alt/Shift+Enter newline · Ctrl-X,B sidebar · /help",
                 "Enter 发送 · Alt/Shift+Enter 换行 · Ctrl-X,B 侧栏 · /help",
-            )
-            .into()
+            );
+            // 在飞 workflow 的派生摘要：让“正在打开/应用/保存”可被用户与真实 PTY
+            // 断言看见，而不是在回包前看起来像命令已被静默丢弃。
+            match view.pending {
+                Some(pending) => format!("{} · {hint}", pending.text(view.zh)),
+                None => hint.into(),
+            }
         };
         let mut widget = Paragraph::new(clean_terminal(&help))
             .style(Style::default().fg(MUTED))

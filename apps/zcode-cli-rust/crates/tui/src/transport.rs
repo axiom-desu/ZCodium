@@ -96,7 +96,8 @@ pub async fn run(
     let mut frontend = frontend::Frontend::default();
     // `--attach` 只投影一次成第一份草稿的 pinned 附件，接受后清理，不会每轮重复发送。
     frontend.start(&mut view, &request)?;
-    session::open(&mut client, &mut view, &request, request.resume.clone()).await?;
+    // boot 只登记并立即尝试发第一步：首帧在 boot 完成前就可绘制、可输入、可 quit/resize。
+    session::begin_open(&mut client, &mut view, &request, request.resume.clone())?;
     let mut cache = terminal::RenderCache::default();
     // 扫光只需要 UI 时钟：欢迎页可见时按 80ms 一帧推进，正文出现后立即停止重绘。
     let started = std::time::Instant::now();
@@ -123,6 +124,8 @@ pub async fn run(
                 Some(Ok(Event::Key(key))) if key.kind==KeyEventKind::Press=>{
                     let narrow = terminal.size()?.width <= 120;
                     if keyboard::handle(&mut frontend, &mut client, &mut view, &request, key, narrow).await? {
+                        // root 退出只取消共享 token；不新增第二 reader，也不等 stop ACK。
+                        cancel.cancel();
                         return Ok(0);
                     }
                     dirty = true;
@@ -139,6 +142,10 @@ pub async fn run(
         }
         // 有界处理已完成 IO/回包（含 finally refresh）：不会在这里等待新的远端读请求。
         dirty |= frontend.poll(&mut client, &mut view).await?;
+        if frontend.take_quit() {
+            cancel.cancel();
+            return Ok(0);
+        }
         frontend.after_change(&mut view);
         if dirty {
             terminal.draw(|frame| terminal::draw(frame, &view, &mut cache, frame_ms))?;

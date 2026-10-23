@@ -120,14 +120,18 @@ async fn rejected_compact_ack_creates_no_marker_or_state() {
     );
     let mut c = Client::new(&to, &mut from);
     let mut v = view();
-    let error = command_dispatch::dispatch(&mut c, &mut v, &request(), "/compact")
-        .await
-        .unwrap_err();
+    // 非阻塞：只登记 command workflow；拒绝由同一 poll 结算，原输入整份交还。
+    assert!(
+        !command_dispatch::dispatch(&mut c, &mut v, &request(), "/compact")
+            .await
+            .unwrap()
+    );
     actor.await.unwrap();
-    assert!(error.to_string().contains("busy"));
+    assert!(v.notices.last().is_some_and(|note| note.contains("busy")));
     assert!(v.rows.is_empty());
     assert!(!v.pending_submit);
     assert_eq!(v.session, "s");
+    assert_eq!(v.editor.text(), "/compact");
 }
 
 #[tokio::test]
@@ -217,12 +221,18 @@ async fn rejected_effort_setter_keeps_previous_facts() {
     let mut v = view();
     v.state["config"]["thought"] = "low".into();
     v.state["config"]["thoughtLevels"] = json!(["low", "high"]);
+    // 非阻塞：setter 失败由同一 poll 结算，本地不伪造档位。
     assert!(
-        command_dispatch::dispatch(&mut c, &mut v, &request(), "/variant high")
+        !command_dispatch::dispatch(&mut c, &mut v, &request(), "/variant high")
             .await
-            .is_err()
+            .unwrap()
     );
     actor.await.unwrap();
+    assert!(
+        v.notices
+            .last()
+            .is_some_and(|note| note.contains("unsupported"))
+    );
     assert_eq!(v.state["config"]["thought"], "low");
     assert!(v.rows.is_empty());
 }
@@ -319,4 +329,40 @@ async fn blank_thought_levels_are_not_valid_levels_and_never_hit_the_actor() {
         assert!(idle, "{levels} 设置不得调用 actor");
         assert!(v.rows.is_empty());
     }
+}
+
+#[test]
+fn draft_recovery_is_advertised_as_a_generated_local_command() {
+    let listing = crate::commands::help(None, false).unwrap();
+    assert!(listing.contains("/draft [swap|discard]"));
+    assert!(listing.contains("/draft swap"));
+    assert!(listing.contains("/draft discard"));
+    assert!(crate::commands::is_local("/draft"));
+    assert!(!crate::commands::is_local("/sessions"));
+}
+
+#[tokio::test]
+async fn draft_discard_is_local_and_works_while_submit_is_blocked() {
+    use crate::operations::{OpKind, SentDraft};
+    let (to, mut input) = mpsc::channel(4);
+    let (_output, mut from) = mpsc::channel(4);
+    let mut c = Client::new(&to, &mut from);
+    let mut v = view();
+    v.operations
+        .begin(
+            OpKind::Submit,
+            "s",
+            v.generation,
+            Some(SentDraft::new("old", Default::default())),
+        )
+        .unwrap();
+    v.operations
+        .rejected("s", v.generation, OpKind::Submit, None);
+    assert!(v.operations.has_rejected());
+    command_dispatch::dispatch(&mut c, &mut v, &request(), "/draft discard")
+        .await
+        .unwrap();
+    assert!(!v.operations.has_rejected());
+    assert!(input.try_recv().is_err(), "/draft 不得产生请求");
+    assert!(v.notices.iter().any(|note| note.contains("discarded")));
 }
