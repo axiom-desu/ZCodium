@@ -346,10 +346,6 @@
       "count": 1
     },
     {
-      "key": "knip\u0000duplicates\u0000apps/zcode-cli/packages/contracts/src/workflow/index.ts\u0000",
-      "count": 1
-    },
-    {
       "key": "knip\u0000duplicates\u0000packages/desktop/src/main/browserView/electronBrowserWebmRecorder.ts\u0000",
       "count": 1
     },
@@ -374,15 +370,15 @@
       "count": 1
     },
     {
-      "key": "knip\u0000duplicates\u0000packages/ui/src/app-shell/workflow-artifacts/presets/ArtifactChartView.tsx\u0000",
-      "count": 1
-    },
-    {
       "key": "knip\u0000duplicates\u0000packages/ui/src/SSHDialog.tsx\u0000",
       "count": 1
     },
     {
       "key": "knip\u0000duplicates\u0000packages/ui/src/ToolCallBlocks/renderers/cuaIcon.tsx\u0000",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000duplicates\u0000packages/ui/src/app-shell/workflow-artifacts/presets/ArtifactChartView.tsx\u0000",
       "count": 1
     },
     {
@@ -398,14 +394,6 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000deriveCredentialPair",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000isCanonicalCredentials",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000MCP_OAUTH_CANONICAL_CREDENTIALS_KEY",
       "count": 1
     },
@@ -415,6 +403,14 @@
     },
     {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000MCP_OAUTH_SUPPORTED_CREDENTIAL_VERSIONS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000deriveCredentialPair",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/adapters/src/mcp/oauth-credentials.ts\u0000isCanonicalCredentials",
       "count": 1
     },
     {
@@ -438,11 +434,11 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000findMissingBundledSkillPackPaths",
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000SEA_BUNDLED_SKILL_ASSET_PREFIX",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000SEA_BUNDLED_SKILL_ASSET_PREFIX",
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/app/bundled-skills.ts\u0000findMissingBundledSkillPackPaths",
       "count": 1
     },
     {
@@ -510,11 +506,11 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/prompt-turn.ts\u0000resolveTurnAutomationId",
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/prompt-turn.ts\u0000V4PromptRejectedError",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/prompt-turn.ts\u0000V4PromptRejectedError",
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/prompt-turn.ts\u0000resolveTurnAutomationId",
       "count": 1
     },
     {
@@ -579,10 +575,6 @@
     },
     {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/session-debug.ts\u0000readSessionDebug",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/bootstrap/src/zcode-protocol/session-mapper.ts\u0000mapSessionEvents",
       "count": 1
     },
     {
@@ -722,23 +714,11 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000buildExploreSystemPrompt",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000buildGeneralPurposeSystemPrompt",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000DEFAULT_COMPACT_CONTEXT_WINDOW",
       "count": 1
     },
     {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000DEFAULT_SUBAGENT_TYPE",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000escapeGoalPromptText",
       "count": 1
     },
     {
@@ -750,27 +730,7 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000formatGoalCompletionVerificationFailurePrompt",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000formatGoalCompletionVerificationPassedContent",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000formatTodoStateForModel",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000GENERAL_PURPOSE_AGENT_TYPE",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000getMessagesToSummarize",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000join",
       "count": 1
     },
     {
@@ -787,6 +747,38 @@
     },
     {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000VIDEO_INPUT_MAX_BYTES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000buildExploreSystemPrompt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000buildGeneralPurposeSystemPrompt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000escapeGoalPromptText",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000formatGoalCompletionVerificationFailurePrompt",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000formatGoalCompletionVerificationPassedContent",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000formatTodoStateForModel",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000getMessagesToSummarize",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000join",
       "count": 1
     },
     {
@@ -930,11 +922,11 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-skill-gate.ts\u0000isDynamicWorkflowSkillLoaded",
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-skill-gate.ts\u0000WORKFLOW_SKILL_NOT_LOADED_CODE",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-skill-gate.ts\u0000WORKFLOW_SKILL_NOT_LOADED_CODE",
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/core/src/tool/handlers/workflow-skill-gate.ts\u0000isDynamicWorkflowSkillLoaded",
       "count": 1
     },
     {
@@ -958,6 +950,10 @@
       "count": 1
     },
     {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000CTRL_C_EXIT_CONFIRMATION_WINDOW_MS",
+      "count": 1
+    },
+    {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000completeEffortCommand",
       "count": 1
     },
@@ -975,10 +971,6 @@
     },
     {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000createCtrlCExitGuard",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-keyboard.ts\u0000CTRL_C_EXIT_CONFIRMATION_WINDOW_MS",
       "count": 1
     },
     {
@@ -1014,11 +1006,11 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-workflow-card.tsx\u0000actorRowsForCard",
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-workflow-card.tsx\u0000MAX_ACTOR_ROWS",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-workflow-card.tsx\u0000MAX_ACTOR_ROWS",
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/app-workflow-card.tsx\u0000actorRowsForCard",
       "count": 1
     },
     {
@@ -1046,6 +1038,10 @@
       "count": 1
     },
     {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000LIGHT_TUI_THEME",
+      "count": 1
+    },
+    {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000getActiveTuiThemeMode",
       "count": 1
     },
@@ -1055,10 +1051,6 @@
     },
     {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000isTuiThemeMode",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/tui/src/theme/index.ts\u0000LIGHT_TUI_THEME",
       "count": 1
     },
     {
@@ -1110,15 +1102,15 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-errors.mjs\u0000decideRetryPolicy",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-errors.mjs\u0000POINTLESS_RETRY_CODES",
       "count": 1
     },
     {
       "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-errors.mjs\u0000REACQUIRE_FIRST_CODES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000apps/zcode-cli/packages/zcode-cua-plugin/scripts/computer-use-errors.mjs\u0000decideRetryPolicy",
       "count": 1
     },
     {
@@ -1154,15 +1146,15 @@
       "count": 1
     },
     {
+      "key": "knip\u0000exports\u0000packages/desktop/scripts/desktop-product-identity.mjs\u0000ZCODE_PREVIEW_IDENTITY_ENV",
+      "count": 1
+    },
+    {
       "key": "knip\u0000exports\u0000packages/desktop/scripts/desktop-product-identity.mjs\u0000isPreviewIdentityRequested",
       "count": 1
     },
     {
       "key": "knip\u0000exports\u0000packages/desktop/scripts/desktop-product-identity.mjs\u0000resolveWindowsAppUserModelId",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/desktop/scripts/desktop-product-identity.mjs\u0000ZCODE_PREVIEW_IDENTITY_ENV",
       "count": 1
     },
     {
@@ -1187,10 +1179,6 @@
     },
     {
       "key": "knip\u0000exports\u0000packages/desktop/scripts/devElectronAppBundle.mjs\u0000resolveDevElectronAppBundlePath",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/desktop/scripts/koffi-package-assets.mjs\u0000stageKoffiIntoBundledAgents",
       "count": 1
     },
     {
@@ -1306,19 +1294,19 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/index.ts\u0000getSourceDescriptor",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/index.ts\u0000MCP_SOURCE_DESCRIPTORS",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/types.ts\u0000getSourceDescriptor",
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/index.ts\u0000getSourceDescriptor",
       "count": 1
     },
     {
       "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/types.ts\u0000MCP_SOURCE_DESCRIPTORS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/mcpUserDirectory/types.ts\u0000getSourceDescriptor",
       "count": 1
     },
     {
@@ -1327,6 +1315,14 @@
     },
     {
       "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/csp.ts\u0000PLUGIN_SANDBOX_PERMISSIONS_POLICY",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000PLUGIN_SANDBOX_SHELL_CSP",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000PLUGIN_SANDBOX_USER_GESTURE_TTL_MS",
       "count": 1
     },
     {
@@ -1362,19 +1358,7 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000PLUGIN_SANDBOX_SHELL_CSP",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/index.ts\u0000PLUGIN_SANDBOX_USER_GESTURE_TTL_MS",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/permissions.ts\u0000readPluginSandboxIdFromPluginUrl",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000injectPluginSandboxAliasScript",
       "count": 1
     },
     {
@@ -1387,6 +1371,10 @@
     },
     {
       "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000PLUGIN_SANDBOX_SHELL_HTML_FILE",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/desktop/src/main/pluginSandbox/protocol.ts\u0000injectPluginSandboxAliasScript",
       "count": 1
     },
     {
@@ -1454,15 +1442,15 @@
       "count": 1
     },
     {
+      "key": "knip\u0000exports\u0000packages/services/src/bots/providers/feishuProvider.ts\u0000FEISHU_STREAMING_CARD_TAGGED_ELEMENT_BUDGET",
+      "count": 1
+    },
+    {
       "key": "knip\u0000exports\u0000packages/services/src/bots/providers/feishuProvider.ts\u0000countFeishuCardTaggedElements",
       "count": 1
     },
     {
       "key": "knip\u0000exports\u0000packages/services/src/bots/providers/feishuProvider.ts\u0000createFeishuWebSocketEventHandlers",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/services/src/bots/providers/feishuProvider.ts\u0000FEISHU_STREAMING_CARD_TAGGED_ELEMENT_BUDGET",
       "count": 1
     },
     {
@@ -1590,6 +1578,74 @@
       "count": 1
     },
     {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyScratchWorkspaceDialog.tsx\u0000getScratchWorkspaceLocationHint",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyScratchWorkspaceDialog.tsx\u0000getScratchWorkspaceNameErrorKind",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyState.tsx\u0000getScratchWorkspaceLocationHint",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyState.tsx\u0000getScratchWorkspaceNameErrorKind",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ChatErrorBanner.tsx\u0000resolveChatErrorBannerDisplayMessage",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ModelTrajectoryPane.tsx\u0000resolveTrajectoryInputMessages",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ModelTrajectoryPane.tsx\u0000resolveTrajectoryTimelineItems",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ModelTrajectoryTimeline.tsx\u0000resolveTrajectoryInputMessages",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/TaskList.tsx\u0000deriveTaskLeadingIndicator",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/ToolCallProgressIndicator.tsx\u0000TID_TOOL_CALL_PROGRESS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/renderers/EditInlineDiffContent.tsx\u0000buildInlineDiffHighlightCode",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/renderers/EditInlineDiffContent.tsx\u0000getInlineDiffHighlightLine",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/renderers/create-workflow.tsx\u0000readWorkflowKindMessageId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar.tsx\u0000WorkspaceSidebarCollapsedRail",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar.tsx\u0000applyWorkspaceTriggerSelection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar/WorkspaceSidebarCollapsedRail.tsx\u0000WorkspaceSidebarCollapsedRail",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar/workspaceSidebarSelection.ts\u0000applyWorkspaceTriggerSelection",
+      "count": 1
+    },
+    {
       "key": "knip\u0000exports\u0000packages/ui/src/botsUi.ts\u0000BOT_REPLY_GRANULARITIES",
       "count": 1
     },
@@ -1611,26 +1667,6 @@
     },
     {
       "key": "knip\u0000exports\u0000packages/ui/src/chat-input-toolbar/display.tsx\u0000getRenderableTaskUsage",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyScratchWorkspaceDialog.tsx\u0000getScratchWorkspaceLocationHint",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyScratchWorkspaceDialog.tsx\u0000getScratchWorkspaceNameErrorKind",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyState.tsx\u0000getScratchWorkspaceLocationHint",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ChatEmptyState.tsx\u0000getScratchWorkspaceNameErrorKind",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ChatErrorBanner.tsx\u0000resolveChatErrorBannerDisplayMessage",
       "count": 1
     },
     {
@@ -1730,15 +1766,15 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/lib/chatAttachments.ts\u0000countClipboardTextLines",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000packages/ui/src/lib/chatAttachments.ts\u0000MissingInlineImageContentError",
       "count": 1
     },
     {
       "key": "knip\u0000exports\u0000packages/ui/src/lib/chatAttachments.ts\u0000OversizedInlineImageAttachmentError",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/lib/chatAttachments.ts\u0000countClipboardTextLines",
       "count": 1
     },
     {
@@ -1794,18 +1830,6 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/ModelTrajectoryPane.tsx\u0000resolveTrajectoryInputMessages",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ModelTrajectoryPane.tsx\u0000resolveTrajectoryTimelineItems",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ModelTrajectoryTimeline.tsx\u0000resolveTrajectoryInputMessages",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000packages/ui/src/onboarding/OnboardingDialog.tsx\u0000shouldAutoScanOnboardingSessions",
       "count": 1
     },
@@ -1814,11 +1838,11 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/adapters/pluginUiDownloads.ts\u0000createPluginUiDownloadHandler",
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/adapters/PluginUiModelContextChip.tsx\u0000TID_PLUGIN_UI_MODEL_CONTEXT_CHIP",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/adapters/PluginUiModelContextChip.tsx\u0000TID_PLUGIN_UI_MODEL_CONTEXT_CHIP",
+      "key": "knip\u0000exports\u0000packages/ui/src/plugin-ui/adapters/pluginUiDownloads.ts\u0000createPluginUiDownloadHandler",
       "count": 1
     },
     {
@@ -1974,27 +1998,35 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000BIGMODEL_REGISTRATION_URL",
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/ModelProviderSection.tsx\u0000fuzzyMatch",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000CODING_PLAN_PROVIDER_SPECS",
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/ModelProviderSection.tsx\u0000handleEndpointSuggestionPopoverOpenAutoFocus",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000generateId",
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/ModelProviderSection.tsx\u0000resolveEndpointSuggestionOpenRequest",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PRESET_PROVIDER_SPEC_BY_ID",
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/PluginComponentGroups.tsx\u0000PluginComponentGroups",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PRESET_PROVIDER_SPECS",
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/PluginStoreListView.tsx\u0000SegmentPill",
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PRESET_SUBSCRIPTION_TIMEOUT_MS",
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/RemoteSkillSyncDialog.tsx\u0000RemoteSkillSyncSelectionList",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/RemoteSkillSyncDialog.tsx\u0000shouldToggleRemoteSkillSyncCardSelection",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/RemoteSkillSyncSelectionList.tsx\u0000shouldToggleRemoteSkillSyncCardSelection",
       "count": 1
     },
     {
@@ -2011,6 +2043,30 @@
     },
     {
       "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/ProviderCardSections.tsx\u0000resolveProviderConnectionApiFormatOptions",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000BIGMODEL_REGISTRATION_URL",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000CODING_PLAN_PROVIDER_SPECS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PRESET_PROVIDER_SPECS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PRESET_PROVIDER_SPEC_BY_ID",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000PRESET_SUBSCRIPTION_TIMEOUT_MS",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/model-provider-section/constants.ts\u0000generateId",
       "count": 1
     },
     {
@@ -2038,19 +2094,7 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/ModelProviderSection.tsx\u0000fuzzyMatch",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/ModelProviderSection.tsx\u0000handleEndpointSuggestionPopoverOpenAutoFocus",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/ModelProviderSection.tsx\u0000resolveEndpointSuggestionOpenRequest",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/PluginComponentGroups.tsx\u0000PluginComponentGroups",
+      "key": "knip\u0000exports\u0000packages/ui/src/settings/pluginStoreListing.ts\u0000KNOWN_CATEGORY_ORDER",
       "count": 1
     },
     {
@@ -2058,27 +2102,7 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/pluginStoreListing.ts\u0000KNOWN_CATEGORY_ORDER",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000packages/ui/src/settings/pluginStoreListing.ts\u0000resolveLocalizedText",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/PluginStoreListView.tsx\u0000SegmentPill",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/RemoteSkillSyncDialog.tsx\u0000RemoteSkillSyncSelectionList",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/RemoteSkillSyncDialog.tsx\u0000shouldToggleRemoteSkillSyncCardSelection",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/settings/RemoteSkillSyncSelectionList.tsx\u0000shouldToggleRemoteSkillSyncCardSelection",
       "count": 1
     },
     {
@@ -2095,26 +2119,6 @@
     },
     {
       "key": "knip\u0000exports\u0000packages/ui/src/settings/usage-stats/usageStatsUiParts.tsx\u0000RANGE_OPTIONS",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/TaskList.tsx\u0000deriveTaskLeadingIndicator",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/renderers/create-workflow.tsx\u0000readWorkflowKindMessageId",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/renderers/EditInlineDiffContent.tsx\u0000buildInlineDiffHighlightCode",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/renderers/EditInlineDiffContent.tsx\u0000getInlineDiffHighlightLine",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/ToolCallBlocks/ToolCallProgressIndicator.tsx\u0000TID_TOOL_CALL_PROGRESS",
       "count": 1
     },
     {
@@ -2146,15 +2150,15 @@
       "count": 1
     },
     {
+      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/shared.tsx\u0000TASK_GROUP_ROW_CLASS",
+      "count": 1
+    },
+    {
       "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/shared.tsx\u0000cloneView",
       "count": 1
     },
     {
       "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/shared.tsx\u0000removeTaskFromGroupedView",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/shared.tsx\u0000TASK_GROUP_ROW_CLASS",
       "count": 1
     },
     {
@@ -2183,22 +2187,6 @@
     },
     {
       "key": "knip\u0000exports\u0000packages/ui/src/workspace-grouped-tasks/virtualized-top-level-list.tsx\u0000shouldVirtualizeGroupedTopLevelNodes",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar.tsx\u0000applyWorkspaceTriggerSelection",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar.tsx\u0000WorkspaceSidebarCollapsedRail",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar/WorkspaceSidebarCollapsedRail.tsx\u0000WorkspaceSidebarCollapsedRail",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000packages/ui/src/WorkspaceSidebar/workspaceSidebarSelection.ts\u0000applyWorkspaceTriggerSelection",
       "count": 1
     },
     {
@@ -2278,19 +2266,11 @@
       "count": 1
     },
     {
-      "key": "knip\u0000exports\u0000scripts/lib/zcode-cli-rust-interop-fixture.mjs\u0000contentText",
-      "count": 1
-    },
-    {
       "key": "knip\u0000exports\u0000scripts/lib/zcodeCliRustCommandTransforms.mjs\u0000EXPECTED_ZOD_VERSION",
       "count": 1
     },
     {
       "key": "knip\u0000exports\u0000scripts/native-search-tools-bundle-meta.mjs\u0000resolveNativeSearchBundleMetaPath",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000exports\u0000scripts/native-search-tools-config.mjs\u0000getNativeSearchProducerOutputIds",
       "count": 1
     },
     {
@@ -2307,6 +2287,10 @@
     },
     {
       "key": "knip\u0000exports\u0000scripts/native-search-tools-config.mjs\u0000NATIVE_SEARCH_SOURCE_ARCHIVES",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000exports\u0000scripts/native-search-tools-config.mjs\u0000getNativeSearchProducerOutputIds",
       "count": 1
     },
     {
@@ -2466,31 +2450,7 @@
       "count": 1
     },
     {
-      "key": "knip\u0000files\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/cover_validate.js\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/cover_validate.js",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000files\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2pdf-next.js\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2pdf-next.js",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000files\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2poster.js\u0000apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts/html2poster.js",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000files\u0000apps/zcode-cli/packages/restore-legacy-sessions-plugin/skills/restore-legacy-sessions/scripts/restore-conversation.mjs\u0000apps/zcode-cli/packages/restore-legacy-sessions-plugin/skills/restore-legacy-sessions/scripts/restore-conversation.mjs",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000files\u0000apps/zcode-cli/packages/restore-legacy-sessions-plugin/skills/restore-legacy-sessions/scripts/scan-legacy-sessions.mjs\u0000apps/zcode-cli/packages/restore-legacy-sessions-plugin/skills/restore-legacy-sessions/scripts/scan-legacy-sessions.mjs",
-      "count": 1
-    },
-    {
       "key": "knip\u0000files\u0000apps/zcode-cli/packages/superpowers-plugin/skills/brainstorming/scripts/helper.js\u0000apps/zcode-cli/packages/superpowers-plugin/skills/brainstorming/scripts/helper.js",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000files\u0000apps/zcode-cli/packages/superpowers-plugin/skills/brainstorming/scripts/server.cjs\u0000apps/zcode-cli/packages/superpowers-plugin/skills/brainstorming/scripts/server.cjs",
       "count": 1
     },
     {
@@ -2818,11 +2778,11 @@
       "count": 1
     },
     {
-      "key": "knip\u0000files\u0000packages/web/src/mobile/main.tsx\u0000packages/web/src/mobile/main.tsx",
+      "key": "knip\u0000files\u0000packages/web/src/mobile/MobileApp.tsx\u0000packages/web/src/mobile/MobileApp.tsx",
       "count": 1
     },
     {
-      "key": "knip\u0000files\u0000packages/web/src/mobile/MobileApp.tsx\u0000packages/web/src/mobile/MobileApp.tsx",
+      "key": "knip\u0000files\u0000packages/web/src/mobile/main.tsx\u0000packages/web/src/mobile/main.tsx",
       "count": 1
     },
     {
@@ -3102,10 +3062,6 @@
       "count": 1
     },
     {
-      "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/provider-registry-model-runtime.ts\u0000RuntimeModelFactory",
-      "count": 1
-    },
-    {
       "key": "knip\u0000types\u0000apps/zcode-cli/packages/bootstrap/src/app/subagent-observation.ts\u0000SubagentTranscriptSnapshot",
       "count": 1
     },
@@ -3331,14 +3287,6 @@
     },
     {
       "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/deps.ts\u0000TokenUsageInfo",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/helpers/compact-selection.ts\u0000CompactEntrySelection",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000apps/zcode-cli/packages/core/src/runtime/helpers/compact.ts\u0000CompactEntrySelection",
       "count": 1
     },
     {
@@ -3598,11 +3546,11 @@
       "count": 1
     },
     {
-      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/authorization.ts\u0000StartAuthorizationTarget",
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/authProvider.ts\u0000WebRemoteControlRelayAuthProvider",
       "count": 1
     },
     {
-      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/authProvider.ts\u0000WebRemoteControlRelayAuthProvider",
+      "key": "knip\u0000types\u0000packages/desktop/src/main/webRemoteControl/authorization.ts\u0000StartAuthorizationTarget",
       "count": 1
     },
     {
@@ -3806,15 +3754,15 @@
       "count": 1
     },
     {
-      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageCleanability",
-      "count": 1
-    },
-    {
       "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageCleanRequest",
       "count": 1
     },
     {
       "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageCleanResult",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/services/src/storage/contract.ts\u0000StorageCleanability",
       "count": 1
     },
     {
@@ -3871,6 +3819,42 @@
     },
     {
       "key": "knip\u0000types\u0000packages/shared/src/zcode-protocol-v4/workflow-runs-unlisted.ts\u0000WorkflowRunUnlistedDelta",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/SortableWorkspaceSidebar.tsx\u0000SortableBindings",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/renderers/createWorkflowInput.ts\u0000WorkflowRetuneCall",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/shared.tsx\u0000EditKindLabelId",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/shared.tsx\u0000EditOperationKind",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/shared.tsx\u0000RawToolCallFileSummary",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/toolResultDisplay.ts\u0000ToolResultDisplay",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/WorkspaceHeaderSections.tsx\u0000WorkspaceHeaderActionSectionProps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/WorkspaceHeaderSections.tsx\u0000WorkspaceHeaderTitleSectionProps",
+      "count": 1
+    },
+    {
+      "key": "knip\u0000types\u0000packages/ui/src/WorkspaceHeaderSections/WorkspaceHeaderActionSection.tsx\u0000WorkspaceHeaderActionSectionProps",
       "count": 1
     },
     {
@@ -4046,6 +4030,10 @@
       "count": 1
     },
     {
+      "key": "knip\u0000types\u0000packages/ui/src/settings/RemoteSkillSyncDialog.tsx\u0000RemoteSkillSyncRow",
+      "count": 1
+    },
+    {
       "key": "knip\u0000types\u0000packages/ui/src/settings/automationTemplateCatalog.ts\u0000AutomationTemplateLocalizedText",
       "count": 1
     },
@@ -4062,10 +4050,6 @@
       "count": 1
     },
     {
-      "key": "knip\u0000types\u0000packages/ui/src/settings/RemoteSkillSyncDialog.tsx\u0000RemoteSkillSyncRow",
-      "count": 1
-    },
-    {
       "key": "knip\u0000types\u0000packages/ui/src/settingsPageHelpers.tsx\u0000Locale",
       "count": 1
     },
@@ -4075,10 +4059,6 @@
     },
     {
       "key": "knip\u0000types\u0000packages/ui/src/settingsPageHelpers.tsx\u0000SettingsSectionId",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000packages/ui/src/SortableWorkspaceSidebar.tsx\u0000SortableBindings",
       "count": 1
     },
     {
@@ -4095,26 +4075,6 @@
     },
     {
       "key": "knip\u0000types\u0000packages/ui/src/store/zcodeSessionStore.ts\u0000WorkspaceNavEntry",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/renderers/createWorkflowInput.ts\u0000WorkflowRetuneCall",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/shared.tsx\u0000EditKindLabelId",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/shared.tsx\u0000EditOperationKind",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/shared.tsx\u0000RawToolCallFileSummary",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000packages/ui/src/ToolCallBlocks/toolResultDisplay.ts\u0000ToolResultDisplay",
       "count": 1
     },
     {
@@ -4139,18 +4099,6 @@
     },
     {
       "key": "knip\u0000types\u0000packages/ui/src/workspace-grouped-tasks/view.ts\u0000GroupedTaskInsertPosition",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000packages/ui/src/WorkspaceHeaderSections.tsx\u0000WorkspaceHeaderActionSectionProps",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000packages/ui/src/WorkspaceHeaderSections.tsx\u0000WorkspaceHeaderTitleSectionProps",
-      "count": 1
-    },
-    {
-      "key": "knip\u0000types\u0000packages/ui/src/WorkspaceHeaderSections/WorkspaceHeaderActionSection.tsx\u0000WorkspaceHeaderActionSectionProps",
       "count": 1
     },
     {
