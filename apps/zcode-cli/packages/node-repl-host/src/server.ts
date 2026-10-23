@@ -23,7 +23,7 @@ import {
   type ActiveCuaNodeReplCall,
   type NodeReplCuaBrokerConnection,
 } from "./cua-bridge.js";
-import { createNodeReplCuaBroker, type NodeReplCuaBroker } from "./cua-broker.js";
+import { createNodeReplCuaBroker } from "./cua-broker.js";
 import {
   isDirectMcpEntrypoint,
   installNodeReplProcessGuards,

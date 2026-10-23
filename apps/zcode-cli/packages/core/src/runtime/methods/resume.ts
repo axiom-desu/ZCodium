@@ -7,24 +7,18 @@ import {
   SessionEventType,
   createCoreError,
   traceContextToLogContext,
-  formatGoalStateForModel,
   activeSessionMessages,
   hydrateReadFileStateFromSession,
   hydrateMessageHistoryFromSession,
   MessageHistoryImpl,
 } from "../deps.js";
 import type {
-  EnvInfo,
-  MessageWithParts,
   SessionEvent,
   SessionGoal,
   SessionInfo,
-  SessionTitleSource,
   TodoItem,
   TraceContext,
   TurnId,
-  TurnState,
-  ToolSchedule,
 } from "../deps.js";
 import { getLatestActiveSessionMessageId } from "../helpers/index.js";
 import type { ResumeSessionOptions, ResumeSessionResult } from "../types.js";
@@ -40,21 +34,15 @@ import {
   restoreWorkspaceFileRewindEntries,
 } from "./workspace-checkpoint-persistence.js";
 import { mainTurnCacheHitAggregateFromMessages } from "./turn-model-step-usage.js";
+import {
+  extractPersistedEnvInfo,
+  hasRestoredTitleEvent,
+  injectTargetStateIntoMessageHistory,
+  toScheduleState,
+} from "./resume-projection.js";
 
-export function toScheduleState(
-  this: AgentRuntimeInternal,
-  schedule: ToolSchedule,
-): TurnState["scheduledTools"] {
-  return {
-    items: schedule.items.map((item) => ({
-      toolCallId: item.toolCallId,
-      dependencies: item.dependencies,
-      canRunParallel: item.canRunParallel,
-    })),
-    parallelGroups: schedule.parallelGroups,
-    executionOrder: schedule.executionOrder,
-  };
-}
+// 投影实现已按职责提取；保留原 export 路径与 runtime 方法装配面。
+export { injectTargetStateIntoMessageHistory, toScheduleState } from "./resume-projection.js";
 
 export async function resumeFromStore(
   this: AgentRuntimeInternal,
@@ -356,33 +344,6 @@ async function syncPersistedSessionTitleForResume(
   );
 }
 
-function hasRestoredTitleEvent(
-  events: readonly SessionEvent[],
-  title: string,
-  source: SessionTitleSource,
-): boolean {
-  return events.some((event) => {
-    if (event.type !== SessionEventType.SessionTitleUpdated) return false;
-    const payload = event.payload as { source?: unknown; title?: unknown };
-    return payload.title === title && payload.source === source;
-  });
-}
-
-function extractPersistedEnvInfo(messages: MessageWithParts[]): EnvInfo | undefined {
-  for (const message of messages) {
-    if (message.info.role !== "user") {
-      continue;
-    }
-
-    const envInfo = message.info.contextSnapshot?.envInfo;
-    if (envInfo) {
-      return envInfo;
-    }
-  }
-
-  return undefined;
-}
-
 export async function readSessionTodosForContext(
   this: AgentRuntimeInternal,
   traceContext: TraceContext,
@@ -429,25 +390,4 @@ export async function readSessionTargetForContext(
     });
     return null;
   }
-}
-
-export function injectTargetStateIntoMessageHistory(
-  this: AgentRuntimeInternal,
-  target: SessionGoal | null,
-): void {
-  const targetState = formatGoalStateForModel(target);
-  if (!targetState) {
-    return;
-  }
-
-  this.messageHistory.addAttachment(
-    "resume_goal_state",
-    [
-      "The current session goal state was restored from session storage.",
-      targetState,
-      "Use it as the authoritative long-running objective unless a later GoalRead result or runtime goal event updates it.",
-      "Do not mark the goal complete unless real evidence shows the objective has been achieved.",
-      "A completed plan, todo list, checklist, or planning phase is not completion evidence unless the objective was only to produce that artifact.",
-    ].join("\n"),
-  );
 }

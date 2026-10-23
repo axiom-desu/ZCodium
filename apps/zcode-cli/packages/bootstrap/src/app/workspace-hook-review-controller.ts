@@ -5,7 +5,6 @@ import {
 } from "@zcode/contracts";
 import {
   WorkspaceHookReviewFlowRegistry,
-  createWorkspaceHookTrustRecords,
   type WorkspaceHookReviewFlow,
   type WorkspaceHookReviewTarget,
   type WorkspaceHookRuntimeAdmissionPort,
@@ -27,14 +26,21 @@ import type {
   WorkspaceHookReviewMutationPort,
   WorkspaceHookTrustStoreMutationPort,
 } from "./workspace-hook-review-types.js";
-import {
-  buildWorkspaceHookReviewRequest,
-  resolveWorkspaceHookReviewDigests,
-  toWorkspaceHookReviewTarget,
-} from "./workspace-hook-review-request.js";
+import { resolveWorkspaceHookReviewDigests } from "./workspace-hook-review-request.js";
 import { WorkspaceHookReviewDiagnostics } from "./workspace-hook-review-diagnostics.js";
 import { superviseWorkspaceHookReviewFlow } from "./workspace-hook-review-supervisor.js";
 import { applyWorkspaceHookRevoke } from "./workspace-hook-review-revoke.js";
+import {
+  applyWorkspaceHookPersistentTrust,
+  emitWorkspaceHookAdmissionUpdated,
+  buildWorkspaceHookReviewRequestPayload,
+  requestWorkspaceHookReview,
+  revokeCurrentWorkspaceHookTrust,
+  getOrCreateWorkspaceHookSupervision,
+  openOrReuseWorkspaceHookReviewFlow,
+  openWorkspaceHookReviewFlowForNewPendingItems,
+  refreshWorkspaceHookPendingFlow,
+} from "./workspace-hook-review-mutation-runner.js";
 
 export class WorkspaceHookReviewController {
   private readonly diagnostics: WorkspaceHookReviewDiagnostics;
@@ -76,17 +82,15 @@ export class WorkspaceHookReviewController {
    * 按 flow 对象单例化，重复请求直接复用已有的监管 promise。
    */
   private superviseFlow(flow: WorkspaceHookReviewFlow): Promise<void> {
-    const existing = this.supervisedFlows.get(flow);
-    if (existing) return existing;
-    const supervision = superviseWorkspaceHookReviewFlow({
-      flow,
-      diagnostics: this.diagnostics,
-      host: this.host,
-      registry: this.registry,
-      sessionId: this.sessionId,
-    });
-    this.supervisedFlows.set(flow, supervision);
-    return supervision;
+    return getOrCreateWorkspaceHookSupervision(this.supervisedFlows, flow, () =>
+      superviseWorkspaceHookReviewFlow({
+        flow,
+        diagnostics: this.diagnostics,
+        host: this.host,
+        registry: this.registry,
+        sessionId: this.sessionId,
+      }),
+    );
   }
 
   /**
@@ -101,41 +105,15 @@ export class WorkspaceHookReviewController {
     workspaceIdentity: string;
     bundleDigest: string;
   }): Promise<WorkspaceHookReviewCommandResult> {
-    const snapshot = this.admission.getCurrentSnapshot();
-    if (
-      target.workspaceIdentity !== snapshot.workspaceIdentity ||
-      target.bundleDigest !== snapshot.bundleDigest
-    ) {
-      return {
-        accepted: false,
-        reasonCode: "workspace_hooks_snapshot_mismatch" as const,
-      };
-    }
-    const evaluation = this.coordinator.evaluateSnapshot({ snapshot });
-    // 旧实现只把 configuredEnabled=true 的 pending 当成可审核项，导致
-    // Settings 把未信任开关锁定后形成死锁——disabled Hook 不会运行、不会触发 Banner，
-    // 也永远无法预先建立 Trust。配置 gate 与 Trust 正交；review request 本就携带全部
-    // snapshot items，因此按 admissionClass 判断即可，disabled item 信任后仍不会运行。
-    const hasPending = evaluation.items.some((item) => item.admissionClass === "pending");
-    if (!hasPending) {
-      if (evaluation.items.some((item) => item.trustState === "blocked_policy")) {
-        return {
-          accepted: false,
-          reasonCode: "workspace_hooks_blocked_by_policy" as const,
-        };
-      }
-      if (evaluation.storeStatus === "corrupt") {
-        return {
-          accepted: false,
-          reasonCode: "workspace_hooks_trust_store_corrupt" as const,
-        };
-      }
-      // 无待审项:安全 no-op
-      return { accepted: true, reviewItemIds: [] };
-    }
-    const flow = await this.openOrReuseFlow(snapshot, evaluation);
-    void this.superviseFlow(flow).catch(() => undefined);
-    return { accepted: true, reviewItemIds: [] };
+    return await requestWorkspaceHookReview(
+      {
+        admission: this.admission,
+        coordinator: this.coordinator,
+        openOrReuseFlow: (snapshot, evaluation) => this.openOrReuseFlow(snapshot, evaluation),
+        superviseFlow: (flow) => this.superviseFlow(flow),
+      },
+      target,
+    );
   }
 
   respond(
@@ -339,95 +317,64 @@ export class WorkspaceHookReviewController {
   }
 
   revokeCurrent(target: WorkspaceHookTrustRevokeTarget): Promise<WorkspaceHookReviewCommandResult> {
-    return this.enqueueMutation(async () => {
-      const snapshot = this.admission.getCurrentSnapshot();
-      if (
-        target.sessionId !== this.sessionId ||
-        target.remoteSessionId !== this.host.remoteSessionId ||
-        target.workspaceIdentity !== snapshot.workspaceIdentity ||
-        target.bundleDigest !== snapshot.bundleDigest
-      ) {
-        return {
-          accepted: false,
-          reasonCode: "workspace_hooks_snapshot_mismatch" as const,
-        };
-      }
-      const digests = [...new Set(target.hookDeclarationDigests)];
-      const entries = snapshot.hooks.filter((entry) =>
-        digests.includes(entry.hookDeclarationDigest),
-      );
-      if (
-        digests.length === 0 ||
-        new Set(entries.map((entry) => entry.hookDeclarationDigest)).size !== digests.length
-      ) {
-        return {
-          accepted: false,
-          reasonCode: "workspace_hooks_snapshot_mismatch" as const,
-        };
-      }
-      const result = await applyWorkspaceHookRevoke({
-        coordinator: this.coordinator,
-        digests,
-        reviewItemIds: entries.map((entry) => entry.reviewItemId),
-        snapshot,
-        store: this.store,
-      });
-      if (result.accepted) {
-        this.diagnostics.revoked(digests.length);
-        await this.refreshPendingFlow(snapshot);
-        // 软门禁:revokeCurrent 后重新评估 pending 状态
-        await this.emitAdmissionUpdatedAfterMutation();
-      }
-      return result;
-    });
+    return this.enqueueMutation(
+      async () =>
+        await revokeCurrentWorkspaceHookTrust(
+          {
+            admission: this.admission,
+            applyRevoke: (input) =>
+              applyWorkspaceHookRevoke({
+                coordinator: input.coordinator,
+                digests: input.digests,
+                reviewItemIds: input.reviewItemIds,
+                snapshot: input.snapshot,
+                store: input.store,
+              }),
+            coordinator: this.coordinator,
+            diagnostics: this.diagnostics,
+            emitAdmissionUpdated: () => this.emitAdmissionUpdatedAfterMutation(),
+            host: this.host,
+            refreshPendingFlow: (snapshot) => this.refreshPendingFlow(snapshot),
+            sessionId: this.sessionId,
+            store: this.store,
+          },
+          target,
+        ),
+    );
   }
 
   private async refreshPendingFlow(
     snapshot: WorkspaceHookBundleSnapshot,
   ): Promise<WorkspaceHookReviewFlow | undefined> {
-    const current = this.registry.getCurrentFlow(this.sessionId);
-    if (!current || current.state.state !== "pending") {
-      // 无 pending flow 时直接返回会让
-      // 「授权 → review resolved → 撤销」之后，当前会话再没有任何重新授权入口，
-      // 用户只能新建对话。
-      //
-      // revoke 的语义是 revoked → admission=pending，本就应重新征询，
-      // 因此这里在确实产生了待审项时开启新 flow：不新增「直接授予信任」的旁路，
-      // 授权仍只能经当前不可变 review 绑定的行内按钮完成。
-      return await this.openReviewFlowForNewPendingItems(snapshot);
-    }
-    const target = toWorkspaceHookReviewTarget(current.request);
-    const evaluation = this.coordinator.evaluateSnapshot({ snapshot });
-    const replacement = this.buildRequest(snapshot, evaluation, {
-      reviewFlowId: current.request.reviewFlowId,
-      generation: current.request.generation + 1,
-    });
-    const nextFlow = this.registry.supersede(target, replacement);
-    this.diagnostics.superseded(replacement);
-    this.generation = replacement.generation;
-    await this.host.emit({
-      type: SessionEventType.WorkspaceHookReviewSuperseded,
-      payload: {
-        interactionId: current.request.interactionId,
-        supersededByInteractionId: replacement.interactionId,
-      },
-    });
-    this.diagnostics.requestCreated(replacement);
-    await this.host.emit({
-      type: SessionEventType.WorkspaceHookReviewRequested,
-      payload: { request: replacement },
-    });
-    if (replacement.summary.pendingCount === 0) {
-      this.registry.closeWithoutDecision(toWorkspaceHookReviewTarget(replacement));
-      await this.host.emit({
-        type: SessionEventType.WorkspaceHookReviewSettled,
-        payload: {
-          interactionId: replacement.interactionId,
-          state: "resolved",
+    return await refreshWorkspaceHookPendingFlow(
+      {
+        buildRequest: (snapshotInput, evaluation, flow) =>
+          buildWorkspaceHookReviewRequestPayload(
+            {
+              createId: this.createId,
+              host: this.host,
+              now: this.now,
+              sessionId: this.sessionId,
+            },
+            snapshotInput,
+            evaluation,
+            flow,
+          ),
+        closeWithoutDecision: (target) => this.registry.closeWithoutDecision(target),
+        coordinator: this.coordinator,
+        diagnostics: this.diagnostics,
+        getCurrentFlow: (sessionId) => this.registry.getCurrentFlow(sessionId),
+        host: this.host,
+        openReviewFlowForNewPendingItems: (snapshotInput) =>
+          this.openReviewFlowForNewPendingItems(snapshotInput),
+        sessionId: this.sessionId,
+        setGeneration: (generation) => {
+          this.generation = generation;
         },
-      });
-    }
-    return nextFlow;
+        supersede: (target, replacement) => this.registry.supersede(target, replacement),
+      },
+      snapshot,
+    );
   }
 
   /**
@@ -441,77 +388,59 @@ export class WorkspaceHookReviewController {
   private async openReviewFlowForNewPendingItems(
     snapshot: WorkspaceHookBundleSnapshot,
   ): Promise<WorkspaceHookReviewFlow | undefined> {
-    const evaluation = this.coordinator.evaluateSnapshot({
+    return await openWorkspaceHookReviewFlowForNewPendingItems(
+      {
+        coordinator: this.coordinator,
+        openOrReuseFlow: (snapshotInput, evaluation) =>
+          this.openOrReuseFlow(snapshotInput, evaluation),
+        superviseFlow: (flow) => this.superviseFlow(flow),
+      },
       snapshot,
-    });
-    const hasPending = evaluation.items.some((item) => item.admissionClass === "pending");
-    if (!hasPending) return undefined;
-    const flow = await this.openOrReuseFlow(snapshot, evaluation);
-    // 必须监管：否则该 flow 超时后静默死亡，面板永久失效（见 superviseFlow 注释）。
-    // 这里刻意不 await——revoke 命令不能被 10 分钟的审核 deadline 阻塞；
-    // catch 兜底避免未处理拒绝，flow 终结本身不产生需要向调用方冒泡的错误。
-    void this.superviseFlow(flow).catch(() => undefined);
-    return flow;
+    );
   }
 
   private async openOrReuseFlow(
     snapshot: WorkspaceHookBundleSnapshot,
     evaluation: WorkspaceHookSnapshotEvaluation,
   ): Promise<WorkspaceHookReviewFlow> {
-    const current = this.registry.getCurrentFlow(this.sessionId);
-    if (
-      current?.state.state === "pending" &&
-      current.request.bundleDigest === snapshot.bundleDigest
-    ) {
-      return current;
-    }
-    this.reviewFlowId ??= `workspace-hook-review:${this.createId()}`;
-    const request = this.buildRequest(snapshot, evaluation, {
-      reviewFlowId: this.reviewFlowId,
-      generation: this.generation + 1,
-    });
-    this.generation = request.generation;
-    const flow = this.registry.open(request);
-    this.diagnostics.requestCreated(request);
-    await this.host.emit({
-      type: SessionEventType.WorkspaceHookReviewRequested,
-      payload: { request },
-    });
-    return flow;
-  }
-
-  private buildRequest(
-    snapshot: WorkspaceHookBundleSnapshot,
-    evaluation: WorkspaceHookSnapshotEvaluation,
-    flow: { reviewFlowId: string; generation: number },
-  ): WorkspaceHookReviewRequestPayload {
-    return buildWorkspaceHookReviewRequest({
+    return await openOrReuseWorkspaceHookReviewFlow(
+      {
+        createId: this.createId,
+        diagnostics: this.diagnostics,
+        getCurrentFlow: (sessionId) => this.registry.getCurrentFlow(sessionId),
+        getGeneration: () => this.generation,
+        getReviewFlowId: () => this.reviewFlowId,
+        host: this.host,
+        now: this.now,
+        open: (request) => this.registry.open(request),
+        sessionId: this.sessionId,
+        setGeneration: (generation) => {
+          this.generation = generation;
+        },
+        setReviewFlowId: (reviewFlowId) => {
+          this.reviewFlowId = reviewFlowId;
+        },
+      },
       snapshot,
       evaluation,
-      ...flow,
-      sessionId: this.sessionId,
-      host: this.host,
-      now: this.now,
-      createId: this.createId,
-    });
+    );
   }
 
   private async applyPersistentTrust(
     reviewItemIds: readonly string[],
   ): Promise<{ grantedRecordCount?: number }> {
-    const snapshot = this.admission.getCurrentSnapshot();
-    this.coordinator.assertPersistentTrustMutationAllowed(snapshot.workspaceIdentity);
-    const records = createWorkspaceHookTrustRecords({
-      snapshot,
-      reviewItemIds,
-      grantedAt: new Date(this.now()).toISOString(),
-      ...(this.appVersion ? { appVersion: this.appVersion } : {}),
-    });
-    const file = await (await this.store).grant(records);
-    this.coordinator.replacePersistentTrustRecords(file.records, {
-      status: "ok",
-    });
-    return { grantedRecordCount: records.length };
+    return await applyWorkspaceHookPersistentTrust(this.mutationRunnerPorts(), reviewItemIds);
+  }
+
+  private mutationRunnerPorts() {
+    return {
+      admission: this.admission,
+      appVersion: this.appVersion,
+      coordinator: this.coordinator,
+      host: this.host,
+      now: this.now,
+      store: this.store,
+    };
   }
 
   private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
@@ -532,18 +461,6 @@ export class WorkspaceHookReviewController {
    * 这里直接用 coordinator 重新评估快照,与 admission.emitAdmissionState 同源。
    */
   private async emitAdmissionUpdatedAfterMutation(): Promise<void> {
-    const snapshot = this.admission.getCurrentSnapshot();
-    const evaluation = this.coordinator.evaluateSnapshot({ snapshot });
-    const pendingCount = evaluation.items.filter(
-      (item) => item.configuredEnabled && item.admissionClass === "pending",
-    ).length;
-    await this.host.emit({
-      type: SessionEventType.WorkspaceHookAdmissionUpdated,
-      payload: {
-        pendingCount,
-        bundleDigest: snapshot.bundleDigest,
-        ...(snapshot.workspaceIdentity ? { workspaceIdentity: snapshot.workspaceIdentity } : {}),
-      },
-    });
+    await emitWorkspaceHookAdmissionUpdated(this.mutationRunnerPorts());
   }
 }

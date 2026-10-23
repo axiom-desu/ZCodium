@@ -294,7 +294,7 @@ function buildFinishProviderMetadata(
   const merged = {
     ...providerMetadata,
     ...(response ? { response } : {}),
-    ...(responseBody ?? {}),
+    ...responseBody,
     ...(record.rawFinishReason === undefined ? {} : { rawFinishReason: record.rawFinishReason }),
   };
 

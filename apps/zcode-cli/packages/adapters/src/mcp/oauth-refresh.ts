@@ -252,14 +252,17 @@ async function resolveAsMetadata(
   >,
   current: Pick<CredentialPairSnapshot, "issuer">,
 ): Promise<ResolvedAsMetadata> {
-  const cached = await loadDiscoveryRecord(input.credentialStore, input.keyPrefix, {
-    ...(current.issuer ? { expectedIssuer: current.issuer } : {}),
-  });
+  const cached = await loadDiscoveryRecord(
+    input.credentialStore,
+    input.keyPrefix,
+    current.issuer ? { expectedIssuer: current.issuer } : {},
+  );
   const discovered: OAuthDiscoveryState =
     cached ??
-    (await discoverOAuthServerInfo(input.serverUrl, {
-      ...(input.fetchFn ? { fetchFn: input.fetchFn } : {}),
-    }));
+    (await discoverOAuthServerInfo(
+      input.serverUrl,
+      input.fetchFn ? { fetchFn: input.fetchFn } : {},
+    ));
   if (!cached) {
     await saveDiscoveryRecord(input.credentialStore, input.keyPrefix, discovered);
   }

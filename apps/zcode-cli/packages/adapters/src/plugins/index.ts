@@ -1,56 +1,43 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type {
   CustomCommandRoot,
-  HookConfig,
-  HookEventName,
-  HookMatcherConfig,
-  HookPluginContext,
   PluginConfig,
   PluginDiagnostic,
   PluginDiscoverRequest,
   PluginHookDetail,
   PluginLoadOutcome,
-  PluginManifest,
-  PluginUiSurfaceDefinition,
   PluginMetadata,
   PluginOperationOptions,
   PluginPort,
+  PluginUiSurfaceDefinition,
   SkillRoot,
 } from "@zcode/contracts";
 import {
-  HookEventName as HookEventNameValue,
-  HookMatcherConfigSchema,
   ZCODE_INLINE_PLUGIN_MARKETPLACE,
   ZCODE_OFFICIAL_PLUGIN_MARKETPLACE,
 } from "@zcode/contracts";
-import {
-  directoryExists,
-  fileExists,
-  isMissingPath,
-  isRecord,
-  parsePathList,
-  resolveInside,
-  sanitizePluginId,
-  throwIfAborted,
-} from "./helpers.js";
-import { scanSkillFilesUnderRootSync } from "../skills/scan.js";
-import { loadPluginMcpServerDefinitions, resolvePluginMcpServers } from "./mcp.js";
+import { sanitizePluginId, throwIfAborted } from "./helpers.js";
+import { loadPluginMcpServerDefinitions } from "./mcp.js";
 import { parsePluginUiSurfaces } from "./ui-surfaces.js";
-import { listPluginHookSources } from "./hook-sources.js";
 import { enumeratePluginComponents } from "./plugin-components.js";
 import {
   listInstalledPluginRecords,
   normalizeAuthorValue,
   resolveInstalledPluginRoot,
 } from "./marketplace.js";
-import { loadBundledOfficialPluginRootsSync } from "./official-marketplace.js";
 import type {
   LoadedPlugin,
   PluginAbortOptions,
   PluginCandidate,
   PluginComponents,
 } from "./types.js";
+import { inspectPluginHooks, mergeHookEvents } from "./plugin-hooks.js";
+import {
+  canRunPluginHooks,
+  resolveEnabledComponents,
+  warnUnsupportedComponents,
+} from "./plugin-components-resolve.js";
+import { loadPlugin, scanOfficialCache } from "./plugin-load.js";
 
 export {
   addMarketplace,
@@ -83,31 +70,16 @@ export {
   type PluginMarketplaceEntry,
   type PluginMarketplaceManifest,
 } from "./marketplace.js";
-
 export { writeBundledOfficialMarketplacePartitionSync } from "./official-marketplace.js";
-
 export { getPluginSourceDiagnosticCode } from "./source-errors.js";
-
 export {
   comparePluginUpdate,
   comparePluginVersions,
   type PluginUpdateStatus,
 } from "./version-compare.js";
 
-const ZCODE_MANIFEST_PATH = join(".zcodium-plugin", "plugin.json");
-const CLAUDE_MANIFEST_PATH = join(".claude-plugin", "plugin.json");
-const CODEX_MANIFEST_PATH = join(".codex-plugin", "plugin.json");
-const DEFAULT_VERSION = "0.0.0";
 const FIRST_PLUGIN_PRIORITY = 1_000;
 const PRIORITY_STEP = 10;
-const PLUGIN_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-const UNSUPPORTED_COMPONENT_KEYS = ["channels", "lspServers", "outputStyles", "settings"] as const;
-const SUPPORTED_HOOK_EVENTS = new Set<string>(Object.values(HookEventNameValue));
-
-interface PluginHookInspection {
-  details: PluginHookDetail[];
-  events: Partial<Record<HookEventName, HookMatcherConfig[]>>;
-}
 
 export interface NodePluginAdapterOptions {
   storageRoot: string;
@@ -329,604 +301,7 @@ function createPluginMetadata(
   };
 }
 
-function resolveEnabledComponents(input: {
-  dataPath: string;
-  diagnostics: PluginDiagnostic[];
-  env: Record<string, string | undefined>;
-  hookDetails: PluginHookDetail[];
-  hookEvents: Partial<Record<HookEventName, HookMatcherConfig[]>>;
-  loaded: LoadedPlugin;
-  mcpServerDefinitions: Record<string, unknown>;
-  options: Record<string, string | number | boolean>;
-  priority: number;
-  workingDirectory: string;
-}): PluginComponents {
-  mkdirSync(input.dataPath, { recursive: true });
-
-  const skillRoots = resolveSkillRoots(input, input.priority);
-  return {
-    commandRoots: resolveCommandRoots(input, input.priority + 1),
-    hooks: input.hookEvents,
-    hookDetails: input.hookDetails,
-    mcpServers: resolvePluginMcpServers({
-      ...input,
-      definitions: input.mcpServerDefinitions,
-    }),
-    // 插件页要展示真实技能数量。之前只统计 skills root 数，
-    // document-skills 这种一个 root 下有多个 SKILL.md 的插件会被显示成 1。
-    skillCount: countSkillFiles(skillRoots),
-    skillRoots,
-  };
-}
-
-function canRunPluginHooks(_loaded: LoadedPlugin): boolean {
-  // 三方 marketplace 插件 hook 默认放行（与内置/官方一致）。
-  // 上限：放弃了「仅官方可执行 hook」的信任边界，三方插件 hook 会直接执行；
-  // 升级路径：需要逐插件 trust（如 user config 白名单）时，把判断收回这里。
-  return true;
-}
-
-function warnUnsupportedComponents(loaded: LoadedPlugin, diagnostics: PluginDiagnostic[]): void {
-  for (const key of UNSUPPORTED_COMPONENT_KEYS) {
-    if (key in loaded.manifest) {
-      diagnostics.push({
-        code: "plugin_unsupported_component",
-        message: `Plugin component is diagnostic-only in this ZCode runtime: ${key}`,
-        path: loaded.manifestPath,
-        pluginId: loaded.id,
-        severity: "warning",
-      });
-    }
-  }
-}
-
-function resolveSkillRoots(
-  input: { diagnostics: PluginDiagnostic[]; loaded: LoadedPlugin },
-  priority: number,
-): SkillRoot[] {
-  warnEmptyDeclaredSkillRoots(input);
-  return resolveComponentRoots("skills", input, priority);
-}
-
-/**
- * manifest 显式声明的 skills 路径没有可用技能时发出诊断，避免路径配置错误静默失败。
- * 声明集合独立于 roots 列表计算，默认 skills/ 目录为空时不误报；路径缺失、目录为空和
- * 符号链接越界分别保留可操作的诊断信息，权限错误交给实际扫描链路报告。
- */
-function warnEmptyDeclaredSkillRoots(input: {
-  diagnostics: PluginDiagnostic[];
-  loaded: LoadedPlugin;
-}): void {
-  const declared = parsePathList(input.loaded.manifest.skills);
-  if (declared.length === 0) return;
-  const seenPaths = new Set<string>();
-  for (const rawPath of declared) {
-    const resolved = resolveInside(input.loaded.rootPath, rawPath);
-    if (!resolved || seenPaths.has(resolved)) continue;
-    seenPaths.add(resolved);
-    // 路径缺失判定只认 ENOENT/ENOTDIR（statSync 精确分类），EACCES 等权限
-    // 错误不得误报成「不存在」——此时没有证据下结论，跳过告警，由 skill adapter
-    // 扫描同一目录时发 skill_scan_failed。
-    // message 按原因区分：「路径不存在」是 manifest 配错，「存在但没有技能」
-    // 是内容问题，「symlink 逃逸出插件根」是安全拒绝，三者修复方式不同；
-    // code 保持单一，UI 无需感知分类。
-    if (isMissingPath(resolved)) {
-      input.diagnostics.push({
-        code: "plugin_skill_root_empty",
-        message: `Plugin skills path does not exist: ${rawPath}`,
-        path: resolved,
-        pluginId: input.loaded.id,
-        severity: "warning",
-      });
-      continue;
-    }
-    // 信任边界：声明路径是插件内容，扫描不跟随符号链接（目录级/文件级逃逸
-    // 一并拒绝，含 Windows junction）。链接根/链接 SKILL.md 扫描为空后落入下方
-    // 「没有任何技能」告警，不误报「不存在」（词法路径本身存在）。
-    let skillFiles: string[];
-    try {
-      skillFiles = scanSkillFilesUnderRootSync(resolved, { followSymbolicLinks: false });
-    } catch {
-      continue;
-    }
-    if (skillFiles.length > 0) continue;
-    input.diagnostics.push({
-      code: "plugin_skill_root_empty",
-      message: `Plugin skills path does not contain any skills: ${rawPath}`,
-      path: resolved,
-      pluginId: input.loaded.id,
-      severity: "warning",
-    });
-  }
-}
-
-function resolveCommandRoots(
-  input: { dataPath: string; diagnostics: PluginDiagnostic[]; loaded: LoadedPlugin },
-  priority: number,
-): CustomCommandRoot[] {
-  const roots = resolveComponentRoots<CustomCommandRoot>(
-    "commands",
-    input,
-    priority,
-    createHookPluginContext(input.loaded, input.dataPath),
-  );
-  const generatedRoot = materializeCommandMetadataRoot(input, priority + 1);
-  if (generatedRoot) roots.push(generatedRoot);
-  return roots;
-}
-
-function inspectPluginHooks(input: {
-  dataPath: string;
-  diagnostics: PluginDiagnostic[];
-  loaded: LoadedPlugin;
-  runnable: boolean;
-}): PluginHookInspection {
-  const inspection = emptyHookInspection();
-  for (const source of listPluginHookSources({
-    diagnostics: input.diagnostics,
-    loaded: input.loaded,
-  })) {
-    const loaded = parsePluginHookEvents({
-      diagnostics: input.diagnostics,
-      loaded: input.loaded,
-      pluginDataPath: input.dataPath,
-      rawHooks: source.rawHooks,
-      runnable: input.runnable,
-      sourcePath: source.sourcePath,
-      wrapper: source.wrapper,
-    });
-    mergeHookInspection(inspection, loaded);
-  }
-
-  return inspection;
-}
-
-function parsePluginHookEvents(input: {
-  diagnostics: PluginDiagnostic[];
-  loaded: LoadedPlugin;
-  pluginDataPath: string;
-  rawHooks: unknown;
-  runnable: boolean;
-  sourcePath: string;
-  wrapper: boolean;
-}): PluginHookInspection {
-  const hooksRoot = input.wrapper
-    ? isRecord(input.rawHooks)
-      ? input.rawHooks.hooks
-      : undefined
-    : input.rawHooks;
-  const inspection = emptyHookInspection();
-  if (!isRecord(hooksRoot)) {
-    input.diagnostics.push({
-      code: "plugin_hook_invalid",
-      message: input.wrapper
-        ? "Plugin hooks file must contain a hooks object"
-        : "Plugin manifest hooks entry must be an object, a path, or an array",
-      path: input.sourcePath,
-      pluginId: input.loaded.id,
-      severity: "error",
-    });
-    return inspection;
-  }
-
-  const plugin = createHookPluginContext(input.loaded, input.pluginDataPath, input.sourcePath);
-  for (const [eventName, matcherConfigs] of Object.entries(hooksRoot)) {
-    if (!SUPPORTED_HOOK_EVENTS.has(eventName)) {
-      input.diagnostics.push({
-        code: "plugin_hook_unsupported_event",
-        message: `Plugin hook event is not supported by this ZCode runtime: ${eventName}`,
-        path: input.sourcePath,
-        pluginId: input.loaded.id,
-        severity: "warning",
-      });
-      continue;
-    }
-    if (!Array.isArray(matcherConfigs)) {
-      input.diagnostics.push({
-        code: "plugin_hook_invalid",
-        message: `Plugin hook event must be an array: ${eventName}`,
-        path: input.sourcePath,
-        pluginId: input.loaded.id,
-        severity: "error",
-      });
-      continue;
-    }
-
-    const event = eventName as HookEventName;
-    for (const matcherConfig of matcherConfigs) {
-      const validation = HookMatcherConfigSchema.safeParse(matcherConfig);
-      if (!validation.success) {
-        input.diagnostics.push({
-          code: "plugin_hook_invalid",
-          message: `Invalid plugin hook matcher for ${eventName}: ${validation.error.issues
-            .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-            .join("; ")}`,
-          path: input.sourcePath,
-          pluginId: input.loaded.id,
-          severity: "error",
-        });
-        continue;
-      }
-      const withPlugin: HookMatcherConfig = {
-        ...validation.data,
-        hooks: validation.data.hooks.map((hook) => attachPluginToHook(hook, plugin)),
-      };
-      (inspection.events[event] ??= []).push(withPlugin);
-      for (const hook of validation.data.hooks) {
-        inspection.details.push(
-          toPluginHookDetail({
-            event,
-            hook,
-            ...(validation.data.matcher !== undefined ? { matcher: validation.data.matcher } : {}),
-            runnable: input.runnable,
-            sourcePath: input.sourcePath,
-          }),
-        );
-      }
-    }
-  }
-
-  return inspection;
-}
-
-function toPluginHookDetail(input: {
-  event: HookEventName;
-  hook: HookConfig;
-  matcher?: string;
-  runnable: boolean;
-  sourcePath: string;
-}): PluginHookDetail {
-  const detail: PluginHookDetail = {
-    command: input.hook.command,
-    event: input.event,
-    runnable: input.runnable,
-    sourcePath: input.sourcePath,
-    type: input.hook.type,
-  };
-  if (input.matcher !== undefined) detail.matcher = input.matcher;
-  if (input.hook.statusMessage !== undefined) detail.statusMessage = input.hook.statusMessage;
-  if (input.hook.timeoutMs !== undefined) detail.timeoutMs = input.hook.timeoutMs;
-  if (input.hook.type === "process") {
-    if (input.hook.args !== undefined) detail.args = input.hook.args;
-    return detail;
-  }
-  if (input.hook.async !== undefined) detail.async = input.hook.async;
-  if (input.hook.shell !== undefined) detail.shell = input.hook.shell;
-  if (input.hook.timeout !== undefined) detail.timeout = input.hook.timeout;
-  return detail;
-}
-
-function createHookPluginContext(
-  loaded: LoadedPlugin,
-  dataPath: string,
-  sourcePath?: string,
-): HookPluginContext {
-  return {
-    dataPath,
-    id: loaded.id,
-    name: loaded.manifest.name,
-    rootPath: loaded.rootPath,
-    ...(sourcePath ? { sourcePath } : {}),
-  };
-}
-
-function attachPluginToHook(hook: HookConfig, plugin: HookPluginContext): HookConfig {
-  return {
-    ...hook,
-    plugin,
-  };
-}
-
-function mergeHookEvents(
-  target: Partial<Record<HookEventName, HookMatcherConfig[]>>,
-  source: Partial<Record<HookEventName, HookMatcherConfig[]>>,
-): void {
-  for (const [eventName, matchers] of Object.entries(source) as Array<
-    [HookEventName, HookMatcherConfig[]]
-  >) {
-    if (matchers.length > 0) {
-      (target[eventName] ??= []).push(...matchers);
-    }
-  }
-}
-
-function mergeHookInspection(target: PluginHookInspection, source: PluginHookInspection): void {
-  mergeHookEvents(target.events, source.events);
-  target.details.push(...source.details);
-}
-
-function emptyHookInspection(): PluginHookInspection {
-  return {
-    details: [],
-    events: {},
-  };
-}
-
-function countSkillFiles(skillRoots: SkillRoot[]): number {
-  // 技能识别规则收敛到共享 scan helper（根自身含
-  // SKILL.md 时根自身是一个技能）；同时声明根与
-  // 默认 skills/ 根会命中同一个 SKILL.md，必须按文件路径去重，否则计数翻倍。
-  // 顺带修正漂移：只认 isDirectory() 会漏掉 symlink 技能子目录，统一 helper 后一并计入。
-  // helper 只吞 ENOENT；权限错误（EACCES 等）会抛出，这里按原语义把该根计 0，
-  // 真正的 skill_scan_failed 诊断由 skill adapter 在运行时扫描同一目录时发出。
-  // 信任边界：这里只消费 plugin roots（resolveSkillRoots 产物），不跟随符号链接。
-  const seenFiles = new Set<string>();
-  for (const skillRoot of skillRoots) {
-    try {
-      for (const file of scanSkillFilesUnderRootSync(skillRoot.path, {
-        followSymbolicLinks: skillRoot.source !== "plugin",
-      })) {
-        seenFiles.add(file);
-      }
-    } catch {
-      // 概览计数降级为 0；扫描诊断由 skill adapter 负责。
-    }
-  }
-  return seenFiles.size;
-}
-
-function resolveComponentRoots<T extends CustomCommandRoot | SkillRoot>(
-  key: "commands" | "skills",
-  input: { diagnostics: PluginDiagnostic[]; loaded: LoadedPlugin },
-  priority: number,
-  plugin?: HookPluginContext,
-): T[] {
-  const paths = parsePathList(input.loaded.manifest[key]);
-  const defaultPath = join(input.loaded.rootPath, key);
-  if (directoryExists(defaultPath)) {
-    paths.unshift(key);
-  }
-  const roots: T[] = [];
-  const seenPaths = new Set<string>();
-  for (const rawPath of paths) {
-    const path = resolveInside(input.loaded.rootPath, rawPath);
-    if (!path) {
-      input.diagnostics.push({
-        code: "plugin_component_path_invalid",
-        message: `Plugin ${key} path escapes plugin root: ${rawPath}`,
-        path: input.loaded.manifestPath,
-        pluginId: input.loaded.id,
-        severity: "error",
-      });
-      continue;
-    }
-    if (seenPaths.has(path)) continue;
-    seenPaths.add(path);
-    roots.push({
-      path,
-      ...(plugin ? { plugin } : {}),
-      ...(key === "skills" ? { pluginId: input.loaded.id } : {}),
-      priority,
-      scope: input.loaded.source === "official" ? "system" : "user",
-      source: "plugin",
-    } as T);
-  }
-  return roots;
-}
-
-function materializeCommandMetadataRoot(
-  input: { dataPath: string; diagnostics: PluginDiagnostic[]; loaded: LoadedPlugin },
-  priority: number,
-): CustomCommandRoot | null {
-  const spec = input.loaded.manifest.commands;
-  if (!isRecord(spec)) return null;
-
-  const generatedRoot = join(input.dataPath, "generated-commands");
-  let wroteCommand = false;
-  mkdirSync(generatedRoot, { recursive: true });
-
-  for (const [rawName, rawMetadata] of Object.entries(spec)) {
-    if (!isRecord(rawMetadata)) {
-      input.diagnostics.push({
-        code: "plugin_manifest_invalid",
-        message: `Plugin command metadata must be an object: ${rawName}`,
-        path: input.loaded.manifestPath,
-        pluginId: input.loaded.id,
-        severity: "error",
-      });
-      continue;
-    }
-
-    const name = normalizeGeneratedCommandName(rawName);
-    if (!name) {
-      input.diagnostics.push({
-        code: "plugin_manifest_invalid",
-        message: `Invalid plugin command name: ${rawName}`,
-        path: input.loaded.manifestPath,
-        pluginId: input.loaded.id,
-        severity: "error",
-      });
-      continue;
-    }
-
-    const source = typeof rawMetadata.source === "string" ? rawMetadata.source : undefined;
-    const content = typeof rawMetadata.content === "string" ? rawMetadata.content : undefined;
-    if ((source && content) || (!source && !content)) {
-      input.diagnostics.push({
-        code: "plugin_manifest_invalid",
-        message: `Plugin command '${rawName}' must provide exactly one of source or content`,
-        path: input.loaded.manifestPath,
-        pluginId: input.loaded.id,
-        severity: "error",
-      });
-      continue;
-    }
-
-    let markdown = content;
-    if (source) {
-      const sourcePath = resolveInside(input.loaded.rootPath, trimRelativePrefix(source));
-      if (!sourcePath) {
-        input.diagnostics.push({
-          code: "plugin_component_path_invalid",
-          message: `Plugin command source escapes plugin root: ${source}`,
-          path: input.loaded.manifestPath,
-          pluginId: input.loaded.id,
-          severity: "error",
-        });
-        continue;
-      }
-      if (!fileExists(sourcePath)) {
-        input.diagnostics.push({
-          code: "plugin_component_path_invalid",
-          message: `Plugin command source file not found: ${source}`,
-          path: sourcePath,
-          pluginId: input.loaded.id,
-          severity: "error",
-        });
-        continue;
-      }
-      markdown = readFileSync(sourcePath, "utf8");
-    }
-    if (markdown === undefined) continue;
-
-    // 市场清单支持 commands object mapping 和 inline content。
-    // ZCode 的 custom command loader 只扫描 markdown 根目录，因此把低风险命令内容
-    // materialize 到插件 data 目录；生成路径不在 plugin root 外暴露，也不执行命令本身。
-    writeFileSync(
-      join(generatedRoot, `${name}.md`),
-      applyCommandMetadataFrontmatter(markdown, rawMetadata),
-      "utf8",
-    );
-    wroteCommand = true;
-  }
-
-  return wroteCommand
-    ? {
-        path: generatedRoot,
-        plugin: createHookPluginContext(input.loaded, input.dataPath),
-        priority,
-        scope: input.loaded.source === "official" ? "system" : "user",
-        source: "plugin",
-      }
-    : null;
-}
-
-function normalizeGeneratedCommandName(name: string): string | null {
-  const normalized = name.trim().replace(/^\/+/, "").toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_:-]{0,63}$/.test(normalized)) return null;
-  return normalized;
-}
-
-function trimRelativePrefix(path: string): string {
-  return path.replace(/^\.\//, "");
-}
-
-function applyCommandMetadataFrontmatter(
-  markdown: string,
-  metadata: Record<string, unknown>,
-): string {
-  const frontmatter = new Map<string, string>();
-  if (typeof metadata.description === "string" && metadata.description.trim()) {
-    frontmatter.set("description", metadata.description.trim());
-  }
-  if (typeof metadata.argumentHint === "string" && metadata.argumentHint.trim()) {
-    frontmatter.set("argument-hint", metadata.argumentHint.trim());
-  }
-  if (typeof metadata.model === "string" && metadata.model.trim()) {
-    frontmatter.set("model", metadata.model.trim());
-  }
-  if (Array.isArray(metadata.allowedTools)) {
-    const allowedTools = metadata.allowedTools
-      .filter((tool): tool is string => typeof tool === "string" && tool.trim().length > 0)
-      .map((tool) => tool.trim());
-    if (allowedTools.length > 0) frontmatter.set("allowed-tools", allowedTools.join(", "));
-  }
-  if (frontmatter.size === 0) return markdown;
-  const body = stripMarkdownFrontmatter(markdown).trimStart();
-  return `---\n${Array.from(frontmatter, ([key, value]) => `${key}: ${value}`).join("\n")}\n---\n\n${body}`;
-}
-
-function stripMarkdownFrontmatter(markdown: string): string {
-  const normalized = markdown.replace(/^\uFEFF/, "");
-  if (!normalized.startsWith("---")) return markdown;
-  const lines = normalized.split(/\r?\n/);
-  if (lines[0]?.trim() !== "---") return markdown;
-  const endIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
-  return endIndex > 0 ? lines.slice(endIndex + 1).join("\n") : markdown;
-}
-
-function scanOfficialCache(storageRoot: string, options?: PluginAbortOptions): string[] {
-  // 旧目录扫描会在 seed 缺失时把历史缓存误当内置插件复活；只有随包清单能授权隐式发现。
-  // 用户显式安装的记录仍在 resolveCandidates 的 installed 分支独立处理。
-  throwIfAborted(options);
-  return loadBundledOfficialPluginRootsSync(storageRoot) ?? [];
-}
-
-function loadPlugin(
-  candidate: PluginCandidate,
-  diagnostics: PluginDiagnostic[],
-): LoadedPlugin | null {
-  if (!directoryExists(candidate.rootPath)) {
-    diagnostics.push({
-      code: "plugin_root_not_found",
-      message: `Plugin root does not exist: ${candidate.rootPath}`,
-      path: candidate.rootPath,
-      severity: "warning",
-    });
-    return null;
-  }
-
-  const manifestPath = findManifest(candidate.rootPath);
-  if (!manifestPath) {
-    diagnostics.push({
-      code: "plugin_manifest_not_found",
-      message: `Plugin manifest not found: ${candidate.rootPath}`,
-      path: candidate.rootPath,
-      severity: "error",
-    });
-    return null;
-  }
-
-  const manifest = readManifest(manifestPath, diagnostics);
-  if (!manifest) return null;
-  return {
-    id: `${manifest.name}@${candidate.marketplace}`,
-    manifest,
-    manifestPath,
-    marketplace: candidate.marketplace,
-    rootPath: candidate.rootPath,
-    source: candidate.source,
-  };
-}
-
-function findManifest(rootPath: string): string | null {
-  const zcodePath = join(rootPath, ZCODE_MANIFEST_PATH);
-  if (fileExists(zcodePath)) {
-    return zcodePath;
-  }
-
-  // 兼容不同 manifest 目录约定，发现阶段按稳定优先级回退。
-  const claudePath = join(rootPath, CLAUDE_MANIFEST_PATH);
-  if (fileExists(claudePath)) {
-    return claudePath;
-  }
-  const codexPath = join(rootPath, CODEX_MANIFEST_PATH);
-  return fileExists(codexPath) ? codexPath : null;
-}
-
-function readManifest(path: string, diagnostics: PluginDiagnostic[]): PluginManifest | null {
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
-    if (!isRecord(parsed)) throw new Error("Manifest must be a JSON object");
-    const name = typeof parsed.name === "string" ? parsed.name.trim() : "";
-    if (!PLUGIN_NAME_PATTERN.test(name)) throw new Error(`Invalid plugin name: ${name}`);
-    return {
-      ...parsed,
-      name,
-      version: typeof parsed.version === "string" ? parsed.version : DEFAULT_VERSION,
-    } as PluginManifest;
-  } catch (error) {
-    diagnostics.push({
-      code: "plugin_manifest_invalid",
-      message: error instanceof Error ? error.message : `Invalid plugin manifest: ${path}`,
-      path,
-      severity: "error",
-    });
-    return null;
-  }
-}
-
-function emptyOutcome(): PluginLoadOutcome {
+export function emptyOutcome(): PluginLoadOutcome {
   return {
     commandRoots: [],
     diagnostics: [],
@@ -937,7 +312,7 @@ function emptyOutcome(): PluginLoadOutcome {
   };
 }
 
-function emptyComponents(hookDetails: PluginHookDetail[] = []): PluginComponents {
+export function emptyComponents(hookDetails: PluginHookDetail[] = []): PluginComponents {
   return {
     commandRoots: [],
     hooks: {},
@@ -948,6 +323,6 @@ function emptyComponents(hookDetails: PluginHookDetail[] = []): PluginComponents
   };
 }
 
-function resolveEnabled(config: PluginConfig, id: string, defaultEnabled: boolean): boolean {
+export function resolveEnabled(config: PluginConfig, id: string, defaultEnabled: boolean): boolean {
   return config.enabledPlugins[id] ?? defaultEnabled;
 }

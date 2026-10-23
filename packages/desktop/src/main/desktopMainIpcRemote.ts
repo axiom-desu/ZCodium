@@ -176,11 +176,6 @@ export function registerRemoteIpcHandlers(options: {
       wrappedPayload.workspaceIdentity.trim().length > 0
         ? wrappedPayload.workspaceIdentity
         : undefined;
-    const connectTriggerValue = wrappedPayload.connectTrigger;
-    const connectTrigger =
-      connectTriggerValue === "reconnect" || connectTriggerValue === "restore"
-        ? connectTriggerValue
-        : "new";
 
     try {
       const win = BrowserWindow.fromWebContents(event.sender);

@@ -134,8 +134,6 @@ export function SettingsPage({
   captionWorkspacePath,
   onBack,
   onCreateTask,
-  onOpenWorkspace,
-  allowOpenWorkspace = true,
 }: {
   isDesktop?: boolean;
   isWindowsDesktop?: boolean;

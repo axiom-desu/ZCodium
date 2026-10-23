@@ -9,7 +9,6 @@ import type {
   PermissionResolvedPayload,
   SessionEvent,
   ToolCallErrorPayload,
-  ToolExecutionPerformance,
   ToolCallProgressPayload,
   ToolCallResultPayload,
   ToolCallScheduledPayload,
@@ -18,201 +17,27 @@ import type {
   TurnErrorPayload,
   TurnStartedPayload,
 } from "@zcode/contracts";
-import { getModelUsageTotalTokens, SessionEventType } from "@zcode/contracts";
+import { SessionEventType } from "@zcode/contracts";
 import { workflowLifecycleFactFromProgress } from "./conversation-telemetry-workflow-facts.js";
+import { BoundedKeySet, BoundedValueMap } from "./conversation-telemetry-bounded-state.js";
+import {
+  compactTerminalStatus,
+  diagnosticToolName,
+  eventTimestamp,
+  isStepUsageModelComplete,
+  mirroredSubagentToolFields,
+  nonNegative,
+  optionalString,
+  recordValue,
+  streamingParentToolCallId,
+  terminalStatus,
+  toToolPerformanceFact,
+  totalTokensOf,
+} from "./conversation-telemetry-fact-mappers.js";
 import {
   conversationTelemetryFactSchema,
   type ConversationTelemetryFact,
 } from "@zcode/shared/zcode-protocol-v4";
-
-const MAX_TRACKED_LIFECYCLE_KEYS = 2_000;
-
-class BoundedKeySet {
-  private readonly keys = new Set<string>();
-
-  add(key: string): boolean {
-    if (this.keys.has(key)) return false;
-    this.keys.add(key);
-    if (this.keys.size > MAX_TRACKED_LIFECYCLE_KEYS) {
-      const oldest = this.keys.values().next().value;
-      if (typeof oldest === "string") this.keys.delete(oldest);
-    }
-    return true;
-  }
-
-  deletePrefix(prefix: string): void {
-    for (const key of this.keys) {
-      if (key.startsWith(prefix)) this.keys.delete(key);
-    }
-  }
-}
-
-class BoundedValueMap<T> {
-  private readonly values = new Map<string, T>();
-
-  get(key: string): T | undefined {
-    return this.values.get(key);
-  }
-
-  set(key: string, value: T): void {
-    this.values.delete(key);
-    this.values.set(key, value);
-    if (this.values.size > MAX_TRACKED_LIFECYCLE_KEYS) {
-      const oldest = this.values.keys().next().value;
-      if (typeof oldest === "string") this.values.delete(oldest);
-    }
-  }
-
-  delete(key: string): void {
-    this.values.delete(key);
-  }
-
-  deletePrefix(prefix: string): void {
-    for (const key of this.values.keys()) {
-      if (key.startsWith(prefix)) this.values.delete(key);
-    }
-  }
-}
-
-function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function nonNegative(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-export function streamingParentToolCallId(payload: Record<string, unknown>): string | undefined {
-  const meta = recordValue(payload._meta);
-  const zcode = recordValue(meta.zcode);
-  return (
-    optionalString(payload.parentToolCallId) ??
-    optionalString(payload.parentToolUseId) ??
-    optionalString(meta.parentToolCallId) ??
-    optionalString(meta.parentToolUseId) ??
-    optionalString(zcode.parentToolCallId) ??
-    optionalString(zcode.parentToolUseId)
-  );
-}
-
-function mirroredSubagentToolFields(
-  payload: Record<string, unknown>,
-  display: Record<string, unknown> = {},
-) {
-  const parentToolCallId =
-    optionalString(payload.parentToolCallId) ?? optionalString(display.parentToolCallId);
-  const childToolCallId =
-    optionalString(payload.childToolCallId) ?? optionalString(display.childToolCallId);
-  const agentId = optionalString(payload.agentId) ?? optionalString(display.agentId);
-  const childSessionId =
-    optionalString(payload.childSessionId) ?? optionalString(display.childSessionId);
-  return {
-    ...(parentToolCallId ? { parentToolCallId } : {}),
-    ...(childToolCallId ? { childToolCallId } : {}),
-    ...(agentId ? { agentId } : {}),
-    ...(childSessionId ? { childSessionId } : {}),
-    ...(payload.background === true ? { background: true } : {}),
-  };
-}
-
-function eventTimestamp(event: SessionEvent): number {
-  const value =
-    event.timestamp instanceof Date ? event.timestamp.getTime() : Number(event.timestamp);
-  return Number.isFinite(value) && value >= 0 ? value : 0;
-}
-
-function totalTokensOf(usage: Record<string, unknown>): number {
-  return getModelUsageTotalTokens({
-    totalTokens: nonNegative(usage.totalTokens),
-    inputTokens: nonNegative(usage.inputTokens),
-    outputTokens: nonNegative(usage.outputTokens),
-    cacheReadTokens: nonNegative(usage.cacheReadTokens) ?? nonNegative(usage.cacheTokens),
-    cacheWriteTokens: nonNegative(usage.cacheWriteTokens),
-    reasoningTokens: nonNegative(usage.reasoningTokens),
-  });
-}
-
-type ToolPerformanceFact = NonNullable<
-  Extract<ConversationTelemetryFact, { kind: "tool.lifecycle" }>["performance"]
->;
-
-function toToolPerformanceFact(
-  perf: ToolExecutionPerformance | undefined,
-): ToolPerformanceFact | undefined {
-  if (!perf) return undefined;
-  const command = perf.detail?.kind === "command" ? perf.detail.command : undefined;
-  const filesystem =
-    perf.detail?.kind === "filesystem" || perf.detail?.kind === "patch"
-      ? perf.detail.filesystem
-      : undefined;
-  const patch = perf.detail?.kind === "patch" ? perf.detail.patch : undefined;
-  const fact: ToolPerformanceFact = {
-    ...(perf.totalMs !== undefined ? { totalMs: perf.totalMs } : {}),
-    ...(perf.permissionWaitMs !== undefined ? { permissionWaitMs: perf.permissionWaitMs } : {}),
-    ...(command?.runMs !== undefined ? { commandRunMs: command.runMs } : {}),
-    ...(command?.firstOutputMs !== undefined ? { firstOutputMs: command.firstOutputMs } : {}),
-    ...(command?.noOutputMs !== undefined ? { noOutputMs: command.noOutputMs } : {}),
-    ...(command?.exitCode !== undefined ? { exitCode: command.exitCode } : {}),
-    ...(command?.timedOut !== undefined ? { timedOut: command.timedOut } : {}),
-    ...(command?.outputBytes !== undefined ? { outputBytes: command.outputBytes } : {}),
-    ...(command?.category !== undefined ? { commandCategory: command.category } : {}),
-    ...(command?.count !== undefined ? { commandCount: command.count } : {}),
-    ...(command?.status !== undefined ? { commandStatus: command.status } : {}),
-    ...(filesystem?.readMs !== undefined ? { fsReadMs: filesystem.readMs } : {}),
-    ...(filesystem?.writeMs !== undefined ? { fsWriteMs: filesystem.writeMs } : {}),
-    ...(filesystem?.fileCount !== undefined ? { fileCount: filesystem.fileCount } : {}),
-    ...(filesystem?.totalBytes !== undefined ? { totalBytes: filesystem.totalBytes } : {}),
-    ...(filesystem?.maxFileBytes !== undefined ? { maxFileBytes: filesystem.maxFileBytes } : {}),
-    ...(filesystem?.workspaceKind !== undefined ? { workspaceKind: filesystem.workspaceKind } : {}),
-    ...(patch?.matchMs !== undefined ? { patchMatchMs: patch.matchMs } : {}),
-    ...(patch?.hunkCount !== undefined ? { hunkCount: patch.hunkCount } : {}),
-    ...(patch?.matchAttempts !== undefined ? { matchAttempts: patch.matchAttempts } : {}),
-  };
-  return Object.keys(fact).length > 0 ? fact : undefined;
-}
-
-function terminalStatus(resultType: string): "success" | "interrupted" | "failed" {
-  if (resultType === "success") return "success";
-  if (resultType === "cancelled") return "interrupted";
-  return "failed";
-}
-
-function isStepUsageQuerySource(querySource: string | undefined): boolean {
-  // `workflow_child`：动态工作流子代理。
-  // 该来源必须放行，否则子代理的 token 进不了业务埋点。
-  return (
-    querySource === undefined ||
-    querySource === "main_turn" ||
-    querySource === "subagent" ||
-    querySource === "workflow_child"
-  );
-}
-
-function isStepUsageModelComplete(payload: ModelCompletePayload): boolean {
-  return (
-    isStepUsageQuerySource(payload.querySource) &&
-    (payload.querySource !== undefined || payload.stopReason !== "tool_internal")
-  );
-}
-
-function compactTerminalStatus(
-  status: CompactLifecyclePayload["status"],
-): "completed" | "failed" | "interrupted" | null {
-  switch (status) {
-    case "completed":
-    case "failed":
-    case "interrupted":
-      return status;
-    default:
-      return null;
-  }
-}
 
 /**
  * 把本进程 live SessionEvent 中的轮次起止归一成 `turn.started` / `turn.terminal` 事实，
@@ -584,21 +409,4 @@ export class ConversationTelemetryFactNormalizer {
   }
 }
 
-/** 自定义工具名可能包含用户或插件信息，只记录固定的工具类别。 */
-function diagnosticToolName(value: unknown): string {
-  switch (value) {
-    case "Bash":
-    case "Read":
-    case "Write":
-    case "Edit":
-    case "Skill":
-    case "Task":
-    case "AskUserQuestion":
-    case "CronCreate":
-    case "WebFetch":
-    case "WebSearch":
-      return value;
-    default:
-      return "other";
-  }
-}
+export { streamingParentToolCallId } from "./conversation-telemetry-fact-mappers.js";

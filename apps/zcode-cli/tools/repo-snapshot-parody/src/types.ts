@@ -89,15 +89,3 @@ export interface RepoSnapshotState {
   readonly lastCompressedSize?: CompressedSizeRecord;
   readonly failureCount: number;
 }
-
-export interface CaptureAttribution {
-  readonly taskId?: string;
-  readonly traceId?: string;
-  readonly queryId?: string;
-  readonly messageId?: string;
-  readonly captureStage: string;
-  readonly provider?: string;
-  readonly model?: string;
-  readonly url?: string;
-  readonly historyRoundCount?: number;
-}

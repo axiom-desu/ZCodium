@@ -13,7 +13,6 @@ import {
   parsePluginSubagentModelSelectionOverrides,
   modelSelectionSchema,
   type BuiltInSubagentModelSelectionOverrides,
-  type BuiltInSubagentName,
   type PluginSubagentModelSelectionOverrides,
 } from "@zcode/shared";
 

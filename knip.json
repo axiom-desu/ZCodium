@@ -41,6 +41,18 @@
         "src/browser-client.ts"
       ]
     },
+    "apps/zcode-cli/packages/pdf-plugin/skills/pdf/scripts": {
+      "entry": [
+        "html2pdf-next.js",
+        "html2poster.js",
+        "cover_validate.js"
+      ]
+    },
+    "apps/zcode-cli/packages/superpowers-plugin": {
+      "entry": [
+        "skills/brainstorming/scripts/server.cjs"
+      ]
+    },
     "packages/relay": {
       "entry": [
         "src/cli.ts"

@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile } from "node:fs/promises";
+import { cp, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";

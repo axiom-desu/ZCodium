@@ -24,6 +24,14 @@ python3 "$PDF_SKILL_DIR/scripts/pdf.py" env.fix     # Auto-install missing CORE 
 > only after asking the user** (they are large downloads / long first-run waits). See the per-route
 > preflight blocks in `briefs/creative.md`, `briefs/poster.md`, `briefs/process.md`, `briefs/academic.md`.
 
+> **Optional npm tools are external, version-unpinned interfaces.** The HTML→PDF helpers load
+> `playwright` and `pdf-lib` on demand through `scripts/html2pdf-render-support.js`: first a normal
+> `require()` from the skill process resolution (`NODE_PATH`/local `node_modules`), then the declared
+> global roots; if neither resolves they raise
+> `Playwright not found. Install: npm install -g playwright` and
+> `pdf-lib not found. Install: npm install -g pdf-lib`. `setup.sh` only reports status and offers to
+> install on demand — it does not pin a version, and the skill never installs these tools by itself.
+
 > **Local-font-first.** Inspect fonts available in the user's local environment and prefer a suitable
 > installed font. Use bundled or downloaded fonts only as fallbacks; do not install fonts without the
 > user's confirmation.

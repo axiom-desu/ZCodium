@@ -1,0 +1,13 @@
+{
+  "name": "@zcode/pdf-render-tool",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Standalone HTML→PDF / poster / cover rendering CLI for the PDF skill. Not a pnpm workspace member: the peers are the environment prerequisites users install explicitly in this directory when they choose this tool.",
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "peerDependencies": {
+    "pdf-lib": "*",
+    "playwright": "*",
+    "playwright-core": "*"
+  }
+}

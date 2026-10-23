@@ -263,7 +263,7 @@ export async function promoteSessionInput(
           await saveMessage(db, {
             ...contextMessage.info,
             metadata: {
-              ...(contextMessage.info.metadata ?? {}),
+              ...contextMessage.info.metadata,
               sharedContextStatus: "attached",
             },
           });

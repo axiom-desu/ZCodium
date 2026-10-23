@@ -1,7 +1,7 @@
 import { inside } from "../lib/path.js";
 import { brief, ok, run } from "../lib/run.js";
 import { ensureDevice } from "./avd.js";
-import { adbShell, validSerial } from "./device.js";
+import { adbShell } from "./device.js";
 import { androidEnv, requireTool } from "./sdk.js";
 
 type Target = {

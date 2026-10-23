@@ -7,7 +7,6 @@ import {
   type WorkflowArtifact,
   type WorkflowDefinition,
   type WorkflowEvent,
-  type WorkflowGraphNode,
   type WorkflowNodeStatus,
   type WorkflowPhaseDefinition,
   type WorkflowPhaseSnapshot,

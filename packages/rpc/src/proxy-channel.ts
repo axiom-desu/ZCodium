@@ -27,7 +27,7 @@
  * - toService: 利用 ES6 Proxy 拦截属性访问，自动分派到 call/listen
  */
 
-import { Event, Emitter, IDisposable, DisposableStore } from "./foundation.js";
+import { Event, Emitter, IDisposable } from "./foundation.js";
 import { IChannel, IServerChannel } from "./channels.js";
 
 // ============================================================================
@@ -43,10 +43,7 @@ export namespace ProxyChannel {
    * - 以 onDynamic + 大写字母开头的视为动态事件（方法，调用后返回事件）
    * - 其他方法视为 RPC 方法
    */
-  export function fromService<TContext>(
-    service: unknown,
-    disposables?: DisposableStore,
-  ): IServerChannel<TContext> {
+  export function fromService<TContext>(service: unknown): IServerChannel<TContext> {
     const handler = service as { [key: string]: unknown };
 
     // 预缓存所有事件并 buffer

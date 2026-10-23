@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
+import { markdownTable } from "./markdown-table.mjs";
 
 const originalEmitWarning = process.emitWarning;
 process.emitWarning = function filterSqliteExperimentalWarning(warning, ...args) {
@@ -288,20 +289,6 @@ function summarizeGroups(candidates, keyFn) {
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
 }
 
-function escapeCell(value) {
-  return String(value ?? "")
-    .replace(/\|/g, "\\|")
-    .replace(/\n/g, " ")
-    .trim();
-}
-
-function markdownTable(headers, rows) {
-  const header = `| ${headers.map(escapeCell).join(" | ")} |`;
-  const divider = `| ${headers.map(() => "---").join(" | ")} |`;
-  const body = rows.map((row) => `| ${row.map(escapeCell).join(" | ")} |`);
-  return [header, divider, ...body].join("\n");
-}
-
 function formatTime(ms) {
   if (!ms) return "";
   return new Date(ms).toISOString().replace("T", " ").replace(".000Z", "Z");
@@ -312,7 +299,15 @@ function printAgents(candidates, json) {
   if (json) return printJson(rows);
   console.log(
     markdownTable(
-      ["agent", "conversations", "workspaces", "ready", "needs-cli-db", "needs-task-index", "needs-full-import"],
+      [
+        "agent",
+        "conversations",
+        "workspaces",
+        "ready",
+        "needs-cli-db",
+        "needs-task-index",
+        "needs-full-import",
+      ],
       rows.map((row) => [
         row.key,
         row.count,
@@ -331,7 +326,15 @@ function printWorkspaces(candidates, json) {
   if (json) return printJson(rows);
   console.log(
     markdownTable(
-      ["workspace", "conversations", "ready", "needs-cli-db", "needs-task-index", "needs-full-import", "latest"],
+      [
+        "workspace",
+        "conversations",
+        "ready",
+        "needs-cli-db",
+        "needs-task-index",
+        "needs-full-import",
+        "latest",
+      ],
       rows.map((row) => [
         row.key,
         row.count,
@@ -389,7 +392,8 @@ function printSummary(candidates, invalid, json) {
 }
 
 function stripVisibleText(candidate) {
-  const { visibleText, ...rest } = candidate;
+  const rest = { ...candidate };
+  delete rest.visibleText;
   return rest;
 }
 

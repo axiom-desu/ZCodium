@@ -1,12 +1,9 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { rm } from "node:fs/promises";
-import { createServer, type Server, type Socket } from "node:net";
+import { createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type {
-  ComputerUseRuntime,
-  ComputerUseRuntimeContext,
-} from "@zcode/zcode-cua";
+import type { ComputerUseRuntime, ComputerUseRuntimeContext } from "@zcode/zcode-cua";
 import type { Logger } from "@zcode/contracts";
 import type { NodeReplCuaBrokerConnection } from "./cua-bridge.js";
 
@@ -62,7 +59,11 @@ export function createNodeReplCuaBroker(input: {
   };
 }
 
-async function handleSocket(socket: Socket, runtime: ComputerUseRuntime, token: string): Promise<void> {
+async function handleSocket(
+  socket: Socket,
+  runtime: ComputerUseRuntime,
+  token: string,
+): Promise<void> {
   const abortController = new AbortController();
   let completed = false;
   let requestId: string | undefined;
@@ -100,13 +101,16 @@ async function handleSocket(socket: Socket, runtime: ComputerUseRuntime, token: 
   } catch (error) {
     completed = true;
     if (socket.writable) {
-      socket.end(`${JSON.stringify({ id: requestId ?? null, ok: false, error: error instanceof Error ? error.message : String(error) })}\n`);
+      socket.end(
+        `${JSON.stringify({ id: requestId ?? null, ok: false, error: error instanceof Error ? error.message : String(error) })}\n`,
+      );
     }
   }
 }
 
 function assertToken(actualValue: unknown, expectedValue: string): void {
-  if (typeof actualValue !== "string") throw new Error("Computer Use broker request is not authorized");
+  if (typeof actualValue !== "string")
+    throw new Error("Computer Use broker request is not authorized");
   const actual = Buffer.from(actualValue);
   const expected = Buffer.from(expectedValue);
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
@@ -115,12 +119,14 @@ function assertToken(actualValue: unknown, expectedValue: string): void {
 }
 
 function parseContext(value: unknown): ComputerUseRuntimeContext {
-  if (!value || typeof value !== "object") throw new Error("Computer Use request context is missing");
+  if (!value || typeof value !== "object")
+    throw new Error("Computer Use request context is missing");
   const context = value as Record<string, unknown>;
   if (typeof context.sessionId !== "string" || !context.sessionId.trim()) {
     throw new Error("Computer Use request context is missing sessionId");
   }
-  const workspacePath = typeof context.workspacePath === "string" ? context.workspacePath.trim() : "";
+  const workspacePath =
+    typeof context.workspacePath === "string" ? context.workspacePath.trim() : "";
   const workspaceIdentity =
     typeof context.workspaceIdentity === "string" ? context.workspaceIdentity.trim() : "";
   const workspaceKey =
@@ -134,15 +140,21 @@ function parseContext(value: unknown): ComputerUseRuntimeContext {
     workspaceKey,
     ...(workspacePath ? { workspacePath } : {}),
     ...(workspaceIdentity ? { workspaceIdentity } : {}),
-    ...(typeof context.remoteSessionId === "string" ? { remoteSessionId: context.remoteSessionId } : {}),
+    ...(typeof context.remoteSessionId === "string"
+      ? { remoteSessionId: context.remoteSessionId }
+      : {}),
     ...(typeof context.turnId === "string" ? { turnId: context.turnId } : {}),
-    ...(context.clientMode === "web-remote-replayable" || context.clientMode === "desktop-continuous"
+    ...(context.clientMode === "web-remote-replayable" ||
+    context.clientMode === "desktop-continuous"
       ? { clientMode: context.clientMode }
       : {}),
-    ...(context.deliveryKind === "web-remote-replayable" || context.deliveryKind === "desktop-continuous"
+    ...(context.deliveryKind === "web-remote-replayable" ||
+    context.deliveryKind === "desktop-continuous"
       ? { deliveryKind: context.deliveryKind }
       : {}),
-    ...(context.trace && typeof context.trace === "object" ? { trace: context.trace as ComputerUseRuntimeContext["trace"] } : {}),
+    ...(context.trace && typeof context.trace === "object"
+      ? { trace: context.trace as ComputerUseRuntimeContext["trace"] }
+      : {}),
   };
 }
 

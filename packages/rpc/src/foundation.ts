@@ -155,7 +155,7 @@ export class Emitter<T> implements IDisposable {
     if (this.disposed) {
       return;
     }
-    for (const listener of [...this.listeners]) {
+    for (const listener of Array.from(this.listeners)) {
       listener(event);
     }
   }

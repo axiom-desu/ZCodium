@@ -40,8 +40,8 @@ export const officialSeaPlugins = [
       "skills/visualize/assets/vendor/floating-ui-core-1.7.3.min.js.LICENSE",
       "skills/visualize/assets/vendor/floating-ui-dom-1.7.4.min.js",
       "skills/visualize/assets/vendor/floating-ui-dom-1.7.4.min.js.LICENSE",
-      "skills/visualize/assets/vendor/lucide-1.17.0.js",
-      "skills/visualize/assets/vendor/lucide-1.17.0.js.LICENSE",
+      "skills/visualize/assets/vendor/lucide-1.17.0.min.js",
+      "skills/visualize/assets/vendor/lucide-1.17.0.min.js.LICENSE",
       "skills/visualize/assets/vendor/d3-7.9.0.min.js",
       "skills/visualize/assets/vendor/d3-7.9.0.min.js.LICENSE",
       "skills/visualize/widgets/calendar.md",
@@ -249,7 +249,7 @@ const modeForSeedFile = (filePath, sourceMode) => {
 
   const normalizedPath = toPosixPath(filePath);
   if (/(?:^|\/)dist\/mcp\/server\.js$/i.test(normalizedPath)) return 0o755;
-  if (/^hooks\//u.test(normalizedPath) && !/\.(json|md|txt)$/iu.test(normalizedPath)) {
+  if (normalizedPath.startsWith("hooks/") && !/\.(json|md|txt)$/iu.test(normalizedPath)) {
     return 0o755;
   }
 

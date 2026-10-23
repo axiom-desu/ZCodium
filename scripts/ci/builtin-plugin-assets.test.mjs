@@ -72,3 +72,65 @@ test("staging fails if any required asset is missing, including the shared host 
     await writeFile(file, "fixture");
   }
 });
+
+/** 静态解析技能脚本里的相对 require/import 说明符（只认静态字符串）。 */
+function collectLocalModuleSpecifiers(source) {
+  const specifiers = new Set();
+  const patterns = [
+    /require\(\s*["'](\.[^"']*)["']\s*\)/g,
+    /(?:^|\n)\s*import\s[^;]*?from\s+["'](\.[^"']*)["']/g,
+    /\bimport\(\s*["'](\.[^"']*)["']\s*\)/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) specifiers.add(match[1]);
+  }
+  return specifiers;
+}
+
+test("skill scripts keep their local dependencies inside the required seed paths", async () => {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const { posix } = await import("node:path");
+  const collect = async (directory) => {
+    const entries = await readdir(directory, { withFileTypes: true });
+    const files = [];
+    for (const entry of entries) {
+      const path = posix.join(directory, entry.name);
+      if (entry.isDirectory()) files.push(...(await collect(path)));
+      else files.push(path);
+    }
+    return files;
+  };
+
+  let checked = 0;
+  for (const plugin of BUILTIN_PLUGIN_ASSETS) {
+    if (!plugin.requiredSeedPaths.some((path) => path.startsWith("skills/"))) continue;
+    const required = new Set(plugin.requiredSeedPaths);
+    const root = new URL(`../../apps/zcode-cli/packages/${plugin.directory}/`, import.meta.url);
+    const skillsRoot = new URL("skills/", root);
+    let files = [];
+    try {
+      files = await collect(skillsRoot.pathname);
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const file of files) {
+      if (!/\.(?:js|mjs|cjs)$/.test(file) || /\.test\./u.test(file)) continue;
+      const relativeFile = posix.relative(new URL(root).pathname, file);
+      const source = await readFile(file, "utf8");
+      for (const specifier of collectLocalModuleSpecifiers(source)) {
+        const target = posix.normalize(
+          posix.join(posix.dirname(relativeFile), specifier.replace(/\.js$/u, "")),
+        );
+        const candidates = [`${target}.js`, `${target}.mjs`, `${target}.cjs`, target];
+        const declared = candidates.find((candidate) => required.has(candidate));
+        assert.ok(
+          declared,
+          `${relativeFile} depends on ${specifier}, but ${candidates.join(" / ")} is missing from requiredSeedPaths (staged plugin would break at runtime)`,
+        );
+        checked += 1;
+      }
+    }
+  }
+  assert.ok(checked > 0, "expected to scan at least one skill script dependency");
+});

@@ -14,11 +14,7 @@ import { homedir } from "node:os";
 import { ZCODE_USER_DATA_DIR_NAME } from "@zcode/shared";
 import { join } from "node:path";
 import { rm, stat } from "node:fs/promises";
-import {
-  PARODY_ENV_KEY,
-  PARODY_FLAG,
-  resolveParodyGate,
-} from "./gate.js";
+import { PARODY_ENV_KEY, PARODY_FLAG, resolveParodyGate } from "./gate.js";
 import { scanRepoSnapshot, workspaceKeyHash, workspaceKeyOf } from "./scan.js";
 import {
   buildDelta,
@@ -35,13 +31,16 @@ import { writeTarGz, type TarEntry } from "./tar.js";
 import { decryptArchive, encryptArchive, openLocalVault } from "./vault.js";
 import { uploadSnapshot } from "./upload.js";
 import { startSnapshotServer } from "./server.js";
-import type { CaptureAttribution, PendingUploadRecord, RepoSnapshotState } from "./types.js";
+import type { PendingUploadRecord, RepoSnapshotState } from "./types.js";
 
 const STATE_DIR_ENV_KEY = "ZCODE_PARODY_STATE_DIR";
 const DEFAULT_PORT = 8787;
 
 function defaultStateDir(): string {
-  return process.env[STATE_DIR_ENV_KEY]?.trim() || join(homedir(), ZCODE_USER_DATA_DIR_NAME, "repo-snapshot-parody");
+  return (
+    process.env[STATE_DIR_ENV_KEY]?.trim() ||
+    join(homedir(), ZCODE_USER_DATA_DIR_NAME, "repo-snapshot-parody")
+  );
 }
 
 function fail(message: string): never {
@@ -151,18 +150,9 @@ async function runCapture(argv: string[]): Promise<void> {
 
   console.log(`[archive] tar.gz → ${plaintextPath}`);
   const archived = await writeTarGz(entries, plaintextPath);
-  console.log(`[archive] ${archived.fileCount} 个文件，明文 ${formatBytes(archived.plaintextBytes)}`);
-
-  const attribution: CaptureAttribution = {
-    captureStage: "parody-capture",
-  };
-  const prompt = {
-    schema: "zcode-repo-snapshot-parity/prompt/v1",
-    ...attribution,
-    createdAt: Date.now(),
-    manifestHash,
-    kind,
-  };
+  console.log(
+    `[archive] ${archived.fileCount} 个文件，明文 ${formatBytes(archived.plaintextBytes)}`,
+  );
 
   console.log(`[vault] AES-256-CTR + 本地 RSA-OAEP-SHA256（keyId=${vault.keyId}）`);
   const encrypted = await encryptArchive({

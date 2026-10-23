@@ -144,7 +144,9 @@ function injectZCodeCuaBrokerMcpServers(
 function injectCuaCredentialsIntoNodeRepl(
   config: McpServerConfig,
   socketPath: string,
-  token: string | undefined,
+  // token 仅由调用点解析（凭据快照语义不变），env 注入只用到 socket/marker/authority；
+  // 保留形参以免上游重复解析凭据，按未使用参数约定命名。
+  _token: string | undefined,
 ): McpServerConfig {
   if (config.type !== "stdio") return config;
   const captured = getCapturedZCodeCuaBrokerCredentials();

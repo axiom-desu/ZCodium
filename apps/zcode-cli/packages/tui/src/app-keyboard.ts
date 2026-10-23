@@ -3,25 +3,20 @@ import type { TuiWorkflowExpansionControls } from "./app-workflow-controller.js"
 import { useKeyboard } from "@mbears/opentui-react";
 import { useCallback, useRef } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import { handleApprovalKey } from "./app-approval.js";
-import { handlePendingQuitKey } from "./app-quit.js";
-import { handleSelectionKey, isTuiQuitInput } from "./app-input.js";
+import { handleSelectionKey } from "./app-input.js";
+import { handleApprovalRoutingKey } from "./app-keyboard-approval.js";
+import { handleComposerCtrlCKey } from "./app-keyboard-ctrl-c.js";
+import { handleEscapeDismissalKey, handleTabCompletionKey } from "./app-keyboard-dismissal.js";
 import {
-  CTRL_C_EXIT_PROMPT,
-  PROMPT_DRAFT_CLEARED_STATUS,
-  completeEffortCommand,
-  completeModeCommand,
-  completeModelCommand,
-  completeSlashCommand,
   createCtrlCExitGuard,
+  PROMPT_DRAFT_CLEARED_STATUS,
   type CtrlCExitGuard,
   isModeSwitchKey,
   resetCtrlCExitGuard,
-  resolveCtrlCExitIntent,
-  shouldClearPromptDraftOnCtrlC,
   shouldHandleInputHistoryNavigation,
   workflowExpansionActionFor,
 } from "./app-keyboard-helpers.js";
+import { handleReadOnlyViewKey } from "./app-keyboard-readonly.js";
 import { handleSuggestionNavigationKey } from "./app-keyboard-suggestions.js";
 import { createSidebarShortcutState, type SidebarShortcutState } from "./app-sidebar-shortcut.js";
 import { handleSidebarShortcutKey } from "./app-sidebar-keyboard.js";
@@ -159,67 +154,34 @@ export function useTuiKeyboardControls({
         }
 
         if (readOnlyView) {
-          resetCtrlCExitGuard(ctrlCExitGuardRef.current);
-          if (
-            handleSidebarShortcutKey({
-              consumeKey,
-              key,
-              nowMs: Date.now(),
-              setStatus,
-              shortcutState: sidebarShortcutRef.current,
-              toggleSidebar,
-              toggleSidebarSection,
-            })
-          )
-            return;
-          if (key.name === "escape") {
-            consumeKey(key);
-            readOnlyView.back();
-          } else if ((key.name === "c" || key.name === "y") && key.ctrl) {
-            consumeKey(key);
-            copyCurrentSelection();
-          } else if (
-            !["up", "down", "left", "right", "pageup", "pagedown", "home", "end"].includes(key.name)
-          ) {
-            consumeKey(key);
-          }
+          handleReadOnlyViewKey({
+            consumeKey,
+            copyCurrentSelection,
+            ctrlCExitGuard: ctrlCExitGuardRef.current,
+            key,
+            readOnlyView,
+            setStatus,
+            shortcutState: sidebarShortcutRef.current,
+            toggleSidebar,
+            toggleSidebarSection,
+          });
           return;
         }
 
         const approval = getCurrentApproval();
         if (!approval) pendingQuitRef.current = undefined;
-        // 自定义问答保留真实文本（例如 /tmp/path）；只在显式提交完整 /quit 时退出。
-        if (
-          approval?.questionState?.editingOther &&
-          key.name === "return" &&
-          !key.shift &&
-          !key.option &&
-          isTuiQuitInput(approval.questionState.otherBuffer) &&
-          tryQuit(approval.questionState.otherBuffer, "approval")
-        ) {
-          consumeKey(key);
-          return;
-        }
-        if (
-          approval &&
-          !approval.questionState?.editingOther &&
-          handlePendingQuitKey({
-            key,
-            buffer: pendingQuitRef,
-            hint: quitHint,
-            setStatus,
-            submit: (value) => {
-              tryQuit(value, "approval");
-            },
-          })
-        ) {
-          consumeKey(key);
-          return;
-        }
         if (approval) {
-          resetCtrlCExitGuard(ctrlCExitGuardRef.current);
-          consumeKey(key);
-          handleApprovalKey(key, approval, setApprovalQueue, setStatus);
+          handleApprovalRoutingKey({
+            approval,
+            consumeKey,
+            ctrlCExitGuard: ctrlCExitGuardRef.current,
+            key,
+            pendingQuitRef,
+            quitHint,
+            setApprovalQueue,
+            setStatus,
+            tryQuit,
+          });
           return;
         }
 
@@ -247,31 +209,21 @@ export function useTuiKeyboardControls({
           return;
         }
 
-        if (key.name === "c" && key.ctrl) {
-          consumeKey(key);
-          if (copyCurrentSelection()) {
-            resetCtrlCExitGuard(ctrlCExitGuardRef.current);
-            return;
-          }
-
-          if (shouldClearPromptDraftOnCtrlC(draftValue)) {
-            resetCtrlCExitGuard(ctrlCExitGuardRef.current);
-            setDraftValue("");
-            setDraftAttachments([]);
-            setStatus(PROMPT_DRAFT_CLEARED_STATUS);
-            return;
-          }
-
-          // A single Ctrl-C used to exit immediately, which made long sessions easy to lose.
-          if (resolveCtrlCExitIntent(ctrlCExitGuardRef.current, Date.now()) === "confirm_exit") {
-            abortControllerRef.current?.abort();
-            onExit(0);
-            return;
-          }
-
-          setStatus(CTRL_C_EXIT_PROMPT);
+        if (
+          handleComposerCtrlCKey({
+            abortControllerRef,
+            consumeKey,
+            copyCurrentSelection,
+            ctrlCExitGuard: ctrlCExitGuardRef.current,
+            draftValue,
+            key,
+            onExit,
+            setDraftAttachments,
+            setDraftValue,
+            setStatus,
+          })
+        )
           return;
-        }
 
         resetCtrlCExitGuard(ctrlCExitGuardRef.current);
 
@@ -307,56 +259,45 @@ export function useTuiKeyboardControls({
           return;
         }
 
-        if (key.name === "tab") {
-          consumeKey(key);
-          if (completeModelCommand(filteredModelOptions, modelSelection, setDraftValue)) {
-            setModelSelection(undefined);
-            return;
-          }
-          if (completeEffortCommand(filteredEffortOptions, effortSelection, setDraftValue)) {
-            setEffortSelection(undefined);
-            return;
-          }
-          if (completeModeCommand(filteredModeOptions, modeSelection, setDraftValue)) {
-            setModeSelection(undefined);
-            return;
-          }
-          if (completeSlashCommand(filteredSlashCommands, slashSelection, setDraftValue)) {
-            setSlashSelection(undefined);
-          }
+        if (
+          handleTabCompletionKey({
+            consumeKey,
+            effortSelection,
+            filteredEffortOptions,
+            filteredModeOptions,
+            filteredModelOptions,
+            filteredSlashCommands,
+            key,
+            modelSelection,
+            modeSelection,
+            setDraftValue,
+            setEffortSelection,
+            setModelSelection,
+            setModeSelection,
+            setSlashSelection,
+            slashSelection,
+          })
+        )
           return;
-        }
 
-        if (key.name === "escape") {
-          consumeKey(key);
-          if (modelSelection) {
-            setModelSelection(undefined);
-            setStatus("Model suggestions dismissed.");
-            return;
-          }
-          if (effortSelection) {
-            setEffortSelection(undefined);
-            setStatus("Effort suggestions dismissed.");
-            return;
-          }
-          if (modeSelection) {
-            setModeSelection(undefined);
-            setStatus("Mode suggestions dismissed.");
-            return;
-          }
-          if (slashSelection) {
-            setSlashSelection(undefined);
-            setStatus("Slash suggestions dismissed.");
-            return;
-          }
-          if (busy) {
-            abortControllerRef.current?.abort();
-            setStatus("Pausing current output...");
-            return;
-          }
-          setStatus("No active output to pause. Press Ctrl-C twice to exit.");
+        if (
+          handleEscapeDismissalKey({
+            abortControllerRef,
+            busy,
+            consumeKey,
+            effortSelection,
+            key,
+            modelSelection,
+            modeSelection,
+            setEffortSelection,
+            setModelSelection,
+            setModeSelection,
+            setSlashSelection,
+            setStatus,
+            slashSelection,
+          })
+        )
           return;
-        }
 
         if (
           handleSuggestionNavigationKey({

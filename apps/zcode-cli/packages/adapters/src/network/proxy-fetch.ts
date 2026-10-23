@@ -1,6 +1,5 @@
 import http from "node:http";
 import https from "node:https";
-import { Readable } from "node:stream";
 import { ProxyAgent } from "proxy-agent";
 import {
   loadTlsCaCertificates,

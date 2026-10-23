@@ -37,7 +37,11 @@ export async function prepareTasksIndexStorage(
   report("checking");
   await mkdir(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
-  let failure: unknown;
+  // 数据库关闭失败不能覆盖迁移首因；用显式标记记录清理异常，等 finally 结束再传播。
+  let cleanupFailed = false;
+  let cleanupError: unknown;
+  let prepCleanupFailed = false;
+  let prepCleanupError: unknown;
   let migration: DatabaseMigrationFacts | undefined;
   try {
     db.exec("PRAGMA busy_timeout = 25");
@@ -77,7 +81,6 @@ export async function prepareTasksIndexStorage(
     // COMMIT 已成功，先发布事实；后续 close 失败不能把已提交误报为未提交。
     report("maintaining", migration);
   } catch (error) {
-    failure = error;
     // 失败事实随原异常交给 Worker，不倒退发布 checking/migrating，也不覆盖首因。
     if (migration && error && typeof error === "object") {
       try {
@@ -91,29 +94,29 @@ export async function prepareTasksIndexStorage(
     try {
       db.close();
     } catch (error) {
-      if (!failure) throw error;
+      cleanupFailed = true;
+      cleanupError = error;
     }
   }
+  if (cleanupFailed) throw cleanupError;
   markTasksStorageMigrated(path);
   const repos = [new TaskIndexRepo(path, LOCK_WAIT_MS), new AutomationRepo(path, LOCK_WAIT_MS)];
-  let preparationFailure: unknown;
   try {
     // 这些是原本就在初始化时执行的修复，不创建新的迁移或改变已有事务边界。
     for (const repo of repos) await repo.ensureReady();
-  } catch (error) {
-    preparationFailure = error;
-    throw error;
   } finally {
-    let closeFailure: unknown;
+    // 原准备异常天然优先（finally 内不再抛）；repo 关闭失败只在准备成功时才是首因，
+    // 否则 throw null/0/"" 这类 falsy 首因会被旧的真值判断丢掉。
     for (const repo of repos) {
       try {
         repo.close({ throwOnError: true });
       } catch (error) {
-        closeFailure ??= error;
+        prepCleanupFailed = true;
+        prepCleanupError ??= error;
       }
     }
-    if (!preparationFailure && closeFailure) throw closeFailure;
   }
+  if (prepCleanupFailed) throw prepCleanupError;
   markTasksStoragePrepared(path);
   report("ready", migration);
 }
