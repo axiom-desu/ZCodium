@@ -1,6 +1,6 @@
 use super::presentation::{ACCENT, MUTED, TEXT};
 use super::presentation_markdown::clean_terminal;
-use crate::projection::View;
+use crate::{projection::View, telemetry_render};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -35,6 +35,8 @@ pub(super) fn draw_sidebar(frame: &mut Frame<'_>, area: Rect, view: &View) {
     lines.push(Line::raw(""));
     status_section(&mut lines, view, width);
     // 与 TS 侧栏一致：分区间留一个空行，避免所有标题挤成一片。
+    lines.push(Line::raw(""));
+    mcp_section(&mut lines, view, width);
     lines.push(Line::raw(""));
     subagents_section(&mut lines, view, width);
     lines.push(Line::raw(""));
@@ -124,6 +126,11 @@ fn status_section(lines: &mut Vec<Line<'static>>, view: &View, width: usize) {
     {
         lines.push(body_line(error, DANGER, width));
     }
+}
+
+/// 真实 MCP 分区只读 `View.telemetry`：未加载/空/失败都按事实展示，不造绿色连接。
+fn mcp_section(lines: &mut Vec<Line<'static>>, view: &View, width: usize) {
+    lines.extend(telemetry_render::mcp_lines(view, width));
 }
 
 fn subagents_section(lines: &mut Vec<Line<'static>>, view: &View, width: usize) {

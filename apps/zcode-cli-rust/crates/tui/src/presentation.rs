@@ -52,6 +52,14 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
     } else {
         1
     };
+    // composer 上方的 actor queue：最多 3 项 + “更多”，paused/autoDrain 取真实快照。
+    let queue_lines =
+        crate::queue::render_lines(view, cols[0].width.saturating_sub(2).max(1) as usize);
+    let queue_height = if queue_lines.is_empty() {
+        0
+    } else {
+        (queue_lines.len().min(5) as u16).min(bounds.height.saturating_sub(2))
+    };
     let help_height = if bounds.height >= 12 && view.interaction().is_some() {
         6
     } else {
@@ -62,6 +70,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(1),
+            Constraint::Length(queue_height),
             Constraint::Length(help_height),
             Constraint::Length(editor_height),
             Constraint::Length(status_height),
@@ -95,6 +104,18 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
     if wide {
         draw_sidebar(frame, cols[1], view);
     }
+    if queue_height > 0 {
+        let lines = queue_lines
+            .into_iter()
+            .map(|line| {
+                Line::from(Span::styled(
+                    clean_terminal(&line),
+                    Style::default().fg(MUTED),
+                ))
+            })
+            .collect::<Vec<_>>();
+        frame.render_widget(Paragraph::new(lines), areas[1]);
+    }
     if help_height > 0 {
         let help = if let Some(s) = &view.selector {
             format!(
@@ -125,9 +146,9 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
                     .title(view.text(" Awaiting your decision ", " 等待您的决定 ")),
             );
         }
-        frame.render_widget(widget, areas[1]);
+        frame.render_widget(widget, areas[2]);
     }
-    let area = areas[2];
+    let area = areas[3];
     if area.width > 0 && area.height > 0 {
         let bordered = area.width > 2 && area.height > 2;
         let inset = u16::from(bordered);
@@ -144,7 +165,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(ACCENT))
-                    .title(format!(" {} ", mode_title(view))),
+                    .title(editor_title(view)),
             );
         }
         frame.render_widget(widget, area);
@@ -178,8 +199,8 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
         // 输入框下方只显示 model / provider / thought，与 TS app-input-status 同层次；
         // session/运行状态仍由侧栏 Status 与输入占位提示承担。
         frame.render_widget(
-            Paragraph::new(composer_status(view, areas[3].width)),
-            areas[3],
+            Paragraph::new(composer_status(view, areas[4].width)),
+            areas[4],
         );
     }
     if overlay_visible {
@@ -191,9 +212,16 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &View, cache: &mut RenderCache, 
     }
     // 输入补全面板画在选择器之前，由 completion 模块自己负责边界与清屏。
     crate::completion::draw(frame, bounds, &view.completion, view.zh);
+    if view.file_mentions.visible() {
+        crate::file_mentions::draw(frame, bounds, &view.file_mentions, view.zh);
+    }
     if let Some(selector) = &view.selector {
         // 选择器过滤/空结果提示跟随 view.zh，与原 typed choice 保存同一份选项。
         draw_selector_localized(frame, bounds, selector, view.zh);
+    }
+    // 队列编辑拥有独立草稿；权限/问答期间弹层暂停，不盖住审批面板。
+    if view.interaction().is_none() {
+        crate::queue::draw_edit(frame, bounds, view);
     }
     if view.no_color {
         for cell in &mut frame.buffer_mut().content {
@@ -215,6 +243,15 @@ fn mode_title(view: &View) -> String {
     match chars.next() {
         Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
         None => mode.to_owned(),
+    }
+}
+
+/// 输入框标题：permission mode + 真实草稿附件数（0 时不广告）。
+fn editor_title(view: &View) -> String {
+    let mode = mode_title(view);
+    match view.draft_attachments.len() {
+        0 => format!(" {mode} "),
+        count => format!(" {mode} · {count} {} ", view.text("attachments", "附件")),
     }
 }
 

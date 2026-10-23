@@ -5,6 +5,7 @@
 //! 与 ANSI/OSC 在进入 buffer 前清理，窄/极小终端只输出能放下的部分。
 use super::presentation::{MUTED, TEXT};
 use super::presentation_markdown::clean_terminal;
+use super::telemetry::compact_tokens;
 use crate::projection::View;
 use ratatui::{
     style::{Color, Style},
@@ -12,6 +13,7 @@ use ratatui::{
 };
 
 const SEPARATOR: &str = " | ";
+const BADGE_GAP: &str = "  ";
 const MODEL_PROVIDER_GAP: usize = 1;
 const THOUGHT: Color = Color::Rgb(251, 191, 36);
 const TRUNCATION: &str = "...";
@@ -19,7 +21,29 @@ const MAX_FIELD_CHARS: usize = 128;
 
 pub(super) fn composer_status(view: &View, width: u16) -> Line<'static> {
     let (model, provider, thought) = parts(view);
-    fitted(&model, &provider, &thought, width as usize)
+    fitted(
+        &model,
+        &provider,
+        &thought,
+        context_badge(view),
+        width as usize,
+    )
+}
+
+/// 模型上下文 badge：只用 `state.usage.contextWindow.{usedTokens,maxTokens}`，
+/// 有 used 才展示，有正 window 才计算比例；不用累计 token 顶替。
+fn context_badge(view: &View) -> Option<String> {
+    let context = &view.state["usage"]["contextWindow"];
+    let used = context["usedTokens"].as_u64()?;
+    let label = compact_tokens(used);
+    let max = context["maxTokens"].as_u64().filter(|max| *max > 0);
+    Some(match max {
+        Some(max) => {
+            let percent = (used as f64 / max as f64 * 100.0).round() as u64;
+            format!("{label} ({percent}%)")
+        }
+        None => label,
+    })
 }
 
 /// `(model, provider, thought)`，每个都保证是可进 buffer 的单行文本。
@@ -50,7 +74,13 @@ fn field(value: &serde_json::Value) -> String {
     }
 }
 
-fn fitted(model: &str, provider: &str, thought: &str, width: usize) -> Line<'static> {
+fn fitted(
+    model: &str,
+    provider: &str,
+    thought: &str,
+    badge: Option<String>,
+    width: usize,
+) -> Line<'static> {
     if width == 0 {
         return Line::default();
     }
@@ -59,6 +89,18 @@ fn fitted(model: &str, provider: &str, thought: &str, width: usize) -> Line<'sta
     let thought_width = cells(thought);
     let separator_width = cells(SEPARATOR);
     let full = model_width + MODEL_PROVIDER_GAP + provider_width + separator_width + thought_width;
+    match badge {
+        // 宽屏才展示 context badge；一旦放不下先丢 badge，优先保 model/provider/thought。
+        Some(badge) if full + cells(BADGE_GAP) + cells(&badge) <= width => {
+            let mut line = spans(model, provider, thought);
+            line.push_span(Span::styled(
+                format!("{BADGE_GAP}{badge}"),
+                Style::default().fg(MUTED),
+            ));
+            return line;
+        }
+        _ => {}
+    }
     if full <= width {
         return spans(model, provider, thought);
     }

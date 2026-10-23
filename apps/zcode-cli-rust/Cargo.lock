@@ -2994,6 +2994,7 @@ dependencies = [
  "futures-util",
  "ratatui",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-util",
  "uuid",

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "inputHashEncoding": "UTF-8 with CRLF normalized to LF; notice and source snapshot hashes remain byte-exact",
   "scope": "Production dependency union across current workspace projects, copied source/assets and native tools; not a per-installer SBOM or a certification of all licensing obligations.",
-  "noticesSha256": "cb879e362fb39067fca63540e3d7af730d71cde45ee034b785e7b3dc57fd5f50",
+  "noticesSha256": "7ac545deba619446df9c878fb48201e7c0d0b61b1c3399ee4d814fe5280fb9bd",
   "inputs": {
     ".agents/skills/agent-browser/references/authentication.md": "e2c3b0f4a1dc1368dee821f03c000d818a48421d09f3872525dddffe73f2112b",
     ".agents/skills/agent-browser/references/commands.md": "17522fc56d742663f47231ff06c4811abc87e12c7f78e11f94d253ddd540a909",
@@ -225,22 +225,22 @@
     ".agents/skills/react-best-practices/rules/server-serialization.md": "4d025c42043c56e6355196a2e885d168cdb15248d0797146c9db838a57b34946",
     ".agents/skills/react-best-practices/SKILL.md": "b7d246acb440bee224ab33614979a5b8debe5fdb13d0304967aa19358eb69d9f",
     "apps/zcode-cli/package.json": "bb6ef0301cc460b042c3af3d259f35f900fe86989b9f91581bfb353878daf258",
-    "apps/zcode-cli/packages/adapters/package.json": "0b14f586d8f773f07f7e0cfcd3579bae38a4cca4f4091da936803e70b651160f",
+    "apps/zcode-cli/packages/adapters/package.json": "64cbbb9e1ef20f0b91435cba5a503a1593b90fe08da98e62b62714b2f2ba1d3d",
     "apps/zcode-cli/packages/android-emulator-plugin/package.json": "fa4f6b5b8dc7ae870f4015a0da46df7232a7339e892068d535de6d1d2a9f038a",
-    "apps/zcode-cli/packages/bootstrap/package.json": "87cc92968ad13d76eb3e0b75b05d58312ee25b1a5f71499c5ef13f177117726a",
-    "apps/zcode-cli/packages/browser-use-plugin/package.json": "b7ecf0a222844419da9a27c66f6bcc0e17bdbb2db187183133c4fb0932b3d59a",
-    "apps/zcode-cli/packages/cli/package.json": "81a0c3dbdff4fb6598ac5b7336578de102c54eef914e06f0f3a65bc1b6e734b9",
-    "apps/zcode-cli/packages/contracts/package.json": "b9d4e38b01a8f46db290e985607bdd45035b764131b91e18873aa9d300c7101e",
-    "apps/zcode-cli/packages/core/package.json": "6ae967a9c7dd1d3bc806cdde830c24c304c20b5f9ee49e04f2b875a078736e9c",
+    "apps/zcode-cli/packages/bootstrap/package.json": "4666f8b11b7e5146fb70d3579fc5ff87617585e314bc99b0e7910eb162788d44",
+    "apps/zcode-cli/packages/browser-use-plugin/package.json": "0e2011efe6470de513c8c313cdf486462e47fa8d0dd1fcef4ba78ee6e53ccce1",
+    "apps/zcode-cli/packages/cli/package.json": "d50fd63bfb9969d2035ef6570824b567d2d47ef8b1245b23cde6f54f7dbe92ab",
+    "apps/zcode-cli/packages/contracts/package.json": "0e582dec5aa310d119677eafc6a5f002787d3e1138eaba9f0b288cb4f79000b0",
+    "apps/zcode-cli/packages/core/package.json": "e24e489f1956e90a75bcadaefdb64cd320333c9926e23c64a4aabc3ce121fcb0",
     "apps/zcode-cli/packages/core/src/tool/handlers/generated/bash-command-registry.ts": "60fa5acd9f5c357f4e51b1d1e944ee39da92680e4bc5e98dd708f1457fcf612b",
-    "apps/zcode-cli/packages/debug/package.json": "2cb75b8b09613c947aa041f479340315b2cba538738a64e9e5c84c1cfbb4a206",
+    "apps/zcode-cli/packages/debug/package.json": "3504828474c913654a8885cc24d69f04d5ca07092cce7a5b2c309e1e3dbf0ef6",
     "apps/zcode-cli/packages/documents-plugin/package.json": "5cb7af3827a389529c68ffd5f69f8cfd872f7b662d579762047e5d4aeb878289",
-    "apps/zcode-cli/packages/dynamic-workflow-runtime/package.json": "f8dab813c3b9f236b593d4d04f1b78e511e15d586cb7dcdd74147e7d1c22ec5c",
-    "apps/zcode-cli/packages/dynamic-workflow/package.json": "3e40d5cc3fc4f3620a4bc6fa1c1cfdf08d3e1a94a754d9a9700568fd668afae3",
-    "apps/zcode-cli/packages/i18n/package.json": "025e4620d80f39cac3df06249866fcaed531615b6b8a4c4a727c4557066f7b1b",
+    "apps/zcode-cli/packages/dynamic-workflow-runtime/package.json": "47a2ea84c6aae1ba52a241cbc2ad410206f419122397bf6bab2c984f436067a3",
+    "apps/zcode-cli/packages/dynamic-workflow/package.json": "6a6de0eb87abfbd3c610e1f44f768c25149aa8509747025abd506bf360d346a3",
+    "apps/zcode-cli/packages/i18n/package.json": "4df878327f4251936840b95d8cd93fe7ff36d14555ca1c35b01db6b1693b2923",
     "apps/zcode-cli/packages/image-search-plugin/package.json": "9d4d5656c6218206b8ddfbc1904600e1c5e0111f655cf464e2fdf080705991fd",
     "apps/zcode-cli/packages/ios-simulator-plugin/package.json": "cc1014f1f482401140cc4dcd135536da92de02dcd311e03c8995c417b2d9a3be",
-    "apps/zcode-cli/packages/node-repl-host/package.json": "925b951daf9934dcc82cbcfe940544c313cb50ed2d5227be6294ee6029e919bd",
+    "apps/zcode-cli/packages/node-repl-host/package.json": "4182136bc23bcc52754883baae2de3733d3c3d3ca9ed48e6a7d602f561582ce8",
     "apps/zcode-cli/packages/pdf-plugin/package.json": "2e8088d53710767673793d467bf8b3c57057071c90951d6c152ea66074da9584",
     "apps/zcode-cli/packages/plugin-creator-plugin/package.json": "17ab1504c465c165b013f983270f54868aa282538557bf6f935daac153e46ba6",
     "apps/zcode-cli/packages/presentations-plugin/package.json": "3e7bb709e7bab8d312a86405c6ef6461a5bd8d8eb5ab5ac05dd72fdb3c5c4922",
@@ -251,14 +251,14 @@
     "apps/zcode-cli/packages/superpowers-plugin/LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
     "apps/zcode-cli/packages/superpowers-plugin/package.json": "d8dc370349685d95f29c6c3bff3d2739ca1b7a38cc925b4b1574bccce03bd3f4",
     "apps/zcode-cli/packages/swift-bridge/package.json": "958674fcd44c789564ee672b0e6c687f1f900f4286174280700ddfb442d23906",
-    "apps/zcode-cli/packages/tui/package.json": "097d5896b0b37a455eafaf015f21113dfbea7b05bb3f92666f423f7753720eb1",
+    "apps/zcode-cli/packages/tui/package.json": "47ffe497105eef96d77a7a0f2ebd33055ddd20bbd1b814f31f97186667b96d3a",
     "apps/zcode-cli/packages/visualize-plugin/package.json": "f38e0334cd743a4ca15cf8884ca563aaf0b37bccbdfca63505f56f84f5576971",
     "apps/zcode-cli/packages/zcode-cua-plugin/package.json": "3202cf21f04818049610a7f1de7f5f871bb7bfbe56989c7d1cc9b396ae872eb8",
     "apps/zcode-cli/packages/zcode-guide-plugin/package.json": "b6b6c4a0097496f5bf8848ad4fecea1c2e9f8a94d4a3b962217a74a6253deacf",
     "apps/zcode-cli/tools/prompt-trajectory/package.json": "f1dff3a19f177b4732352f81b97b23f47b2f26c4487697dbf4bdba22fbd4c1bf",
     "apps/zcode-cli/tools/repo-snapshot-parody/package.json": "4a593bc9624d5bd03d6cd7834606fc999627f3c7d8397ce18788a0a3505d5f10",
     "apps/zcode-cli/tools/typescript/package.json": "23d7e50d2089d205ce3022c5bafbb6b3e31d000e41ac678a5934e0b72627cf3a",
-    "package.json": "e666c0e9bfdcc3580b83821597b4389677eb8c015fbf6d43fa17fcef9dc94067",
+    "package.json": "299abe2fba131cff963e176033e061e20b860217a8e4593932270a4f36f39fdc",
     "packages/client/package.json": "e76f441549130dc3e5e68072a36b6cb9044e19a6625f1e813f19a4def2b1b689",
     "packages/desktop/package.json": "810356e481be261a0f8039ba24b1e929ed92da3a23fa9f2a50e02dc59f096a00",
     "packages/desktop/src/renderer/public/material-icons/3d.svg": "9527b849f0fba57ca7640e2717b3a19cb5f5e046712cbbd8b75d73af338c68fb",
@@ -2682,7 +2682,7 @@
     "packages/zcode-server-cli/package.json": "6e294c4409cb90863d85b2e3d60f92766b156ccee577ebfeaffcb85e94194004",
     "patches/@ai-sdk__anthropic@3.0.81.patch": "d3a7c381eba7f5157f765a0528003af17cf84544911dfb7412c7800168e01c18",
     "patches/@ai-sdk__openai-compatible@2.0.60.patch": "9632fe9d821b3dc20939ae509cc35b968d90d018bbd1d812390718898182a38b",
-    "pnpm-lock.yaml": "bca3fa0e639f60333a7d4d04c3d61e14570d27fe7f2ade59ee1a874804bde69d",
+    "pnpm-lock.yaml": "c2a0e166095e046a9eb2df12e349b4618e3c3ae15bccb07cf14df27cf1aede4b",
     "pnpm-workspace.yaml": "f18a18233e82cda1dc40be61bf2ad1bc99de25de63ad0be64bc652761a638372",
     "scripts/license-texts/Apache-2.0.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
     "scripts/native-search-tools-config.mjs": "281d368464f61363fa2d8ab74f416962fe730dd0a0572db5564475f876bb65aa",
@@ -3342,7 +3342,7 @@
     "third-party/rust-tui/snapshots/zune-jpeg-0.5.15-0bb0de05.txt": "d201d14804d3bcd3b944147173175e4abfbd838b7c8069b6bd3452496bf13e6c",
     "third-party/rust-tui/snapshots/zune-jpeg-0.5.15-4c795c22.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "third-party/rust-tui/snapshots/zune-jpeg-0.5.15-96bbba2b.txt": "d30047bca3b516639339a3c279bb84c3483124fb5a9dafe3c75056a85090e745",
-    "third-party/rust-tui/sources.json": "b7aef06c9a5171ef37879e434dd967029f12768650fa299d3e3914b937b4ad78",
+    "third-party/rust-tui/sources.json": "7cbd11dc7ce89211bf389e9fc66c38034f21679a097f235df9e3ea30ad13e770",
     "third-party/upstream/000ffa2d773c511f4459fb31d89f841806f93bf5caf2050468ab2097c081b443.txt": "000ffa2d773c511f4459fb31d89f841806f93bf5caf2050468ab2097c081b443",
     "third-party/upstream/014bb31e83d5c2e76aea1cc6e82217346ab41362f32cb355ad0f5c10aa0aeaff.txt": "014bb31e83d5c2e76aea1cc6e82217346ab41362f32cb355ad0f5c10aa0aeaff",
     "third-party/upstream/0a7cda7d15aca7baaa3035e1f90466dde9ecc980c103cd230382d6675714bf2a.txt": "0a7cda7d15aca7baaa3035e1f90466dde9ecc980c103cd230382d6675714bf2a",
@@ -3453,6 +3453,18 @@
       ]
     },
     {
+      "name": "@ai-sdk/google",
+      "version": "3.0.135",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/vercel/ai",
+      "notices": [
+        {
+          "member": "LICENSE",
+          "sha256": "b4f9adb7c568904834d0dd6cc98d16c390d21ca32fc17ae7a267715269bd5529"
+        }
+      ]
+    },
+    {
       "name": "@ai-sdk/openai-compatible",
       "version": "2.0.60",
       "license": "Apache-2.0",
@@ -3525,6 +3537,18 @@
       ]
     },
     {
+      "name": "@ai-sdk/provider-utils",
+      "version": "4.0.61",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/vercel/ai",
+      "notices": [
+        {
+          "member": "src/to-json-schema/zod3-to-json-schema/LICENSE",
+          "sha256": "6dd0d97acd4d13f4608a0f530f0487e0ff20812888bd1803aecfaaa17ff0f849"
+        }
+      ]
+    },
+    {
       "name": "@ai-sdk/provider",
       "version": "3.0.10",
       "license": "Apache-2.0",
@@ -3539,6 +3563,18 @@
     {
       "name": "@ai-sdk/provider",
       "version": "3.0.14",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/vercel/ai",
+      "notices": [
+        {
+          "member": "LICENSE",
+          "sha256": "b4f9adb7c568904834d0dd6cc98d16c390d21ca32fc17ae7a267715269bd5529"
+        }
+      ]
+    },
+    {
+      "name": "@ai-sdk/provider",
+      "version": "3.0.19",
       "license": "Apache-2.0",
       "repository": "https://github.com/vercel/ai",
       "notices": [
@@ -17520,6 +17556,26 @@
     {
       "name": "undici",
       "version": "6.24.1",
+      "license": "MIT",
+      "repository": "git+https://github.com/nodejs/undici.git",
+      "notices": [
+        {
+          "member": "lib/web/fetch/LICENSE",
+          "sha256": "a21d6c8d3fc631198b97e57584697f7f9c37805c71c6cf9a12e4442b40394b88"
+        },
+        {
+          "member": "LICENSE",
+          "sha256": "a6db8096b2707bc0102d256917d4d33f298ba36d8c3f25de067a2b5bb379db27"
+        },
+        {
+          "member": "README.md (license section)",
+          "sha256": "daf005969aac8cb4283b3777361f0244f4cce898b9a983a60b7f0d9e96f559bf"
+        }
+      ]
+    },
+    {
+      "name": "undici",
+      "version": "6.29.1",
       "license": "MIT",
       "repository": "git+https://github.com/nodejs/undici.git",
       "notices": [

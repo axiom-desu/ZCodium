@@ -132,7 +132,7 @@ async fn rejected_compact_ack_creates_no_marker_or_state() {
 
 #[tokio::test]
 async fn misspelled_or_unknown_slash_is_local_and_never_reaches_the_actor() {
-    for text in ["/compactfoo hi", "/nope", "/effort", "/help mcp"] {
+    for text in ["/compactfoo hi", "/nope", "/effort", "/help unknown"] {
         let mut v = view();
         let (result, idle) = dispatch_no_actor(&mut v, text).await;
         assert!(result.is_err(), "{text} must be a local error");
@@ -279,7 +279,8 @@ async fn help_lists_implemented_commands_only() {
     let notice = v.notices.last().unwrap();
     assert!(notice.contains("/compact [instructions]"));
     assert!(notice.contains("/effort [list|<level>]"));
-    assert!(!notice.contains("/mcp"));
+    assert!(notice.contains("/mcp"));
+    assert!(notice.contains("/usage"));
 
     let mut v = view();
     let (result, idle) = dispatch_no_actor(&mut v, "/help compact").await;

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "scope": "All registry crates in the transitive Cargo.lock closure of zcode-cli-tui (including target-specific dependencies); not the complete Rust CLI lockfile.",
   "lockFile": "apps/zcode-cli-rust/Cargo.lock",
-  "lockSha256": "ecdf034e92145ea684c2096ed6ca745ced116714395c73c7521fc0680789f9ff",
+  "lockSha256": "a7c02fe9bf941a474d4d3d58544554cd1f8867d067188b4e08528f559dd52f7e",
   "crates": [
     {
       "name": "adler2",

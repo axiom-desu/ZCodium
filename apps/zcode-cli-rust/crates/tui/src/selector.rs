@@ -11,6 +11,8 @@ pub(crate) enum Choice {
     Model(Value),
     Mode(String),
     Session(String),
+    /// 队列菜单：typed id + 捕获的 revision/logEpoch，绝不用过滤下标代表项。
+    Queue(crate::queue::QueueChoice),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Selector {
@@ -113,6 +115,7 @@ fn searchable(choice: &Choice, label: &str) -> String {
         ),
         Choice::Mode(mode) => mode.clone(),
         Choice::Session(id) => id.clone(),
+        Choice::Queue(queue) => queue.searchable(),
     };
     format!("{label} {identity}").to_lowercase()
 }

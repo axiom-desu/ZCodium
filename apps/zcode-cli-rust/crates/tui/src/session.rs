@@ -133,8 +133,16 @@ pub(crate) async fn submit(
     text: &str,
 ) -> Result<()> {
     let mut payload = json!({"text":text});
-    if !request.attachments.is_empty() {
-        payload["attachments"] = json!(request.attachments);
+    // 附件只来自未提交草稿：已删除的 inline 占位符不发送，pinned 项由 DraftAttachments 管。
+    // busy 时显式请求 actor 的 FIFO queue，而不是在本地另存一份 accepted queue。
+    if !view.draft_attachments.is_empty() {
+        let attachments = view.draft_attachments.refs_for_text(text);
+        if !attachments.is_empty() {
+            payload["attachments"] = json!(attachments);
+        }
+    }
+    if view.busy() {
+        payload["requestedDelivery"] = "queue".into();
     }
     let tools: Vec<_> = request
         .disallowed_tools
@@ -153,20 +161,51 @@ pub(crate) async fn submit(
             command(&view.session, "sendText", payload),
         )
         .await;
-    match result.and_then(accepted) {
-        Ok(()) => Ok(()),
+    let ack = match result {
+        Ok(ack) => ack,
         Err(error) => {
             view.pending_submit = false;
-            Err(error)
+            return Err(error);
         }
+    };
+    if ack["status"] == "accepted" {
+        return Ok(());
     }
+    view.pending_submit = false;
+    // paused 队列仍有旧项时 actor 要求显式 heldQueueDisposition；TUI 不代替用户
+    // 清空/覆盖旧项，也不自动补 keepQueueAndSend，只保留草稿并给双语出路。
+    if ack["reasonCode"].as_str() == Some("heldQueueDispositionRequired") {
+        bail!(
+            "{}",
+            view.text(
+                "The queue is paused with queued input, so the draft was not submitted (heldQueueDispositionRequired). Use /queue resume to continue it, or /queue list to inspect and clean it.",
+                "队列已暂停且仍有排队输入，草稿未提交（heldQueueDispositionRequired）。请使用 /queue resume 恢复队列，或用 /queue list 查看并清理旧项。"
+            )
+        );
+    }
+    accepted(ack)
 }
 pub(crate) async fn stop(client: &mut Client<'_>, view: &mut View) -> Result<()> {
+    // 只带当前已知的前台执行 id；真实快照在 state.control.activeWorks 数组里，
+    // 不是根级 activeWorks 对象。没有真实 id 时不伪造，保留原 stale-run 防护。
+    let execution = view.state["control"]["activeWorks"]
+        .as_array()
+        .and_then(|works| {
+            works.iter().find_map(|work| {
+                work["foregroundExecutionId"]
+                    .as_str()
+                    .filter(|value| !value.is_empty())
+            })
+        });
+    let mut payload = json!({});
+    if let Some(execution) = execution {
+        payload["expectedForegroundExecutionId"] = execution.into();
+    }
     let ack = client
         .call(
             view,
             Method::Command,
-            command(&view.session, "stop", json!({})),
+            command(&view.session, "stop", payload),
         )
         .await?;
     // An already completed turn may legitimately make stop a noop.
