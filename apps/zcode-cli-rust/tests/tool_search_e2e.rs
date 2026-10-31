@@ -201,6 +201,9 @@ async fn local_wraps_targets_rejects_resident_and_promotes_after_compact() {
         "{compact:#?}"
     );
     h.wait_summary(&session).await;
+    // 摘要落盘先于 compact turn 收尾；不等到 terminal 就发后续 prompt
+    // 会被运行中守卫以 -32010 正确拒绝（负载下复现的竞态）。
+    h.wait_compact_terminal().await;
     // compact 摘要请求复用同一投影：Local 在真实结果位置展开引用，
     // 且只发送常驻 + 控制入口，不把 deferred 全量 schema 塞回去。
     let summary_request = h
