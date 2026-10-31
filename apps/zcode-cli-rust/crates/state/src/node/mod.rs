@@ -21,6 +21,7 @@ pub mod messages;
 pub mod migrations;
 pub mod open;
 mod open_error;
+pub mod reconcile;
 pub mod resume;
 pub mod sessions;
 mod sessions_write;

@@ -1,9 +1,12 @@
 //! One step's tool calls (Node batch runner): permission gate, dispatch, result
 //! commits in call order, and the turn stop a result may request.
+#[cfg(test)]
+#[path = "tool_input_guidance_tests.rs"]
+mod tests;
 use super::tool_hooks::{self, ToolCall};
 use super::tool_permission::Gate;
 use crate::{
-    contract::{Event, EventSink, ToolOutput, ToolPort},
+    contract::{Event, EventSink, InputValidationError, ToolOutput, ToolPort},
     domain::{hooks::output::RunResult, plan_mode},
 };
 use anyhow::{Context, Result, bail};
@@ -59,25 +62,27 @@ async fn execute(
         .as_str()
         .context("Tool name missing")?;
     let id: String = call["id"].as_str().context("Tool id missing")?.into();
-    let mut parsed =
-        serde_json::from_str::<Value>(call["function"]["arguments"].as_str().unwrap_or("")).ok();
+    let decoded =
+        serde_json::from_str::<Value>(call["function"]["arguments"].as_str().unwrap_or(""));
+    let mut parsed = decoded.as_ref().ok().cloned();
     let plan_tool = matches!(name, plan_mode::ENTER | plan_mode::EXIT);
     // 与 Node 一致：会话未注册的工具（allow/deny 过滤、子代理中的 plan 工具）按不存在处理，
     // ExitPlanMode 的输入校验在权限询问之前；两者都不进入 hook 与权限流程。
     let rejected = if !tool_filter.allows(name) || (plan_tool && profile.is_some()) {
-        Some(format!("Tool not found: {name}"))
+        Some(anyhow::anyhow!("Tool not found: {name}"))
     } else if name == plan_mode::EXIT {
         parsed
             .as_ref()
             .and_then(|args| plan_mode::exit_plan(args).err())
-            .map(str::to_owned)
+            .map(anyhow::Error::new)
     } else {
         None
     };
-    if let Some(message) = rejected {
+    if let Some(error) = rejected {
         // Node：未注册的工具与输入校验失败都不带前缀。
-        let mut output = ToolOutput::text(message);
+        let mut output = ToolOutput::text(crate::contract::render_failure(&error));
         output.failed = true;
+        super::tool_input_guidance::append(&mut output, Some(&error), search, name);
         return Ok((id, output, true));
     }
     // DeferredToolCall 准入失败只保存包装失败记录，不执行目标 Hook/审批/handler。
@@ -187,7 +192,8 @@ async fn execute(
                 }
                 tools.execute_scoped(name, &args, sink, cancel).await
             }
-            None => Err(anyhow::anyhow!("Invalid tool JSON arguments")),
+            None => Err(anyhow::Error::new(decoded.unwrap_err())
+                .context(InputValidationError::new("Invalid tool JSON arguments"))),
         }
     };
     if let Err(error) = &result
@@ -210,8 +216,14 @@ async fn execute(
         Ok(output) => output.content.clone(),
     };
     // Node createErrorResult：处理器失败包 <tool_use_error>，其余错误为规整后的消息。
-    let mut content =
-        result.unwrap_or_else(|error| ToolOutput::text(crate::contract::render_failure(&error)));
+    let mut content = match result {
+        Ok(output) => output,
+        Err(error) => {
+            let mut output = ToolOutput::text(crate::contract::render_failure(&error));
+            super::tool_input_guidance::append(&mut output, Some(&error), search, name);
+            output
+        }
+    };
     content.error = content.error.or(sdk);
     if !failed && crate::domain::js_string::trim(&content.content).is_empty() {
         // Node serializeOutput：空结果给出占位，避免模型误读为缺失结果。

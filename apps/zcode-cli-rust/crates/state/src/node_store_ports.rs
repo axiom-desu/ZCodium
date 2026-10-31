@@ -53,6 +53,18 @@ impl crate::contract::SessionStore for NodeStore {
         self.request(|reply| Request::List(params.clone(), reply))
             .await
     }
+    async fn session_exists(&self, id: &str) -> Result<bool> {
+        let id = id.to_owned();
+        self.read(move |conn| Ok(super::node::sessions::get(conn, &id)?.is_some()))
+            .await
+    }
+    async fn reconcile_sessions(&self, workspace_id: &str, ids: &[String]) -> Result<Value> {
+        let workspace_id = workspace_id.to_owned();
+        let ids = ids.to_vec();
+        // 只读屏障：不排入任何写入请求，也不激活或恢复会话。
+        self.read(move |conn| super::node::reconcile::sessions(conn, &workspace_id, &ids))
+            .await
+    }
     async fn load_session(&self, workspace: &str, id: &str) -> Result<Option<Session>> {
         self.request(|reply| Request::Load(workspace.into(), id.into(), reply))
             .await
@@ -68,7 +80,10 @@ impl crate::contract::SessionStore for NodeStore {
                 let Some(row) = super::node::sessions::get(conn, &id)? else {
                     return Ok(None);
                 };
-                if super::node::listing::workspace_key(&row) != workspace {
+                // 软删除是持久事实：冷读不得把已删除会话复活。
+                if row.time_deleted.is_some()
+                    || super::node::listing::workspace_key(&row) != workspace
+                {
                     return Ok(None);
                 }
                 let reader = |uri: &str| super::node::artifacts::read(&artifacts, uri);

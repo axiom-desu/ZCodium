@@ -1,6 +1,21 @@
 //! Facts a legacy `session/create` or `session/resume` gives one runtime
 //! activation. Node keeps them on the in-memory record and never persists them.
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+/// 协议 `additionalDirectories` 的只读投影；缺席/非法值按空集。
+pub fn directories(params: &Value) -> Vec<String> {
+    params["additionalDirectories"]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
 
 /// Legacy `persistence`: whether a session is visible before its first input.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -13,6 +28,8 @@ pub enum Persistence {
 
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeOptions {
+    /// 本次运行冻结的附加执行目录（Host 项目合同）；不改 cwd/identity，也不扩权。
+    pub additional_directories: Vec<String>,
     /// Set by legacy create; `None` for V4-created drafts (which behave as deferred).
     pub persistence: Option<Persistence>,
     pub tools: ToolFilter,

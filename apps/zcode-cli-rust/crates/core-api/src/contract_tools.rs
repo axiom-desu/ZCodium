@@ -54,6 +54,7 @@ pub trait ToolPort: Send + Sync {
     async fn agent_profiles(
         &self,
         _cancel: &CancellationToken,
+        _additional_directories: &[String],
     ) -> Result<Vec<zcode_cli_domain::subagent::Profile>> {
         Ok(zcode_cli_domain::subagent::builtins())
     }
@@ -159,6 +160,7 @@ pub trait ToolPort: Send + Sync {
     async fn discover_skills(
         &self,
         _cancel: &CancellationToken,
+        _additional_directories: &[String],
     ) -> Result<zcode_cli_domain::skills::SkillCatalog> {
         Ok(Default::default())
     }

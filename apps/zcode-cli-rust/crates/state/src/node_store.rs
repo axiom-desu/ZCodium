@@ -261,7 +261,8 @@ impl Worker {
         let Some(row) = sessions::get(&self.conn, id)? else {
             return Ok(None);
         };
-        if listing::workspace_key(&row) != workspace {
+        // 软删除是持久事实：冷恢复/读取不得把已删除会话复活。
+        if row.time_deleted.is_some() || listing::workspace_key(&row) != workspace {
             return Ok(None);
         }
         let root: &Path = &self.artifacts;

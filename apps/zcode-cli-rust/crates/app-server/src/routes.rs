@@ -36,9 +36,14 @@ impl Server {
         else {
             return Err(RuntimeError::InvalidParams("clientMode: invalid".into()));
         };
+        let mut open = json!({"topic":topic,"base":p["base"]});
+        // 冷恢复的项目冻结目录随订阅下传；热会话由 engine 忽略。
+        if let Some(directories) = p.get("additionalDirectories") {
+            open["additionalDirectories"] = directories.clone();
+        }
         self.forward(
             Method::TopicOpen,
-            json!({"topic":topic,"base":p["base"]}),
+            open,
             Pending::Subscribe {
                 id,
                 topic,

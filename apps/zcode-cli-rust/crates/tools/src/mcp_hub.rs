@@ -27,6 +27,8 @@ struct Binding {
     always_load: bool,
     /// `_meta["anthropic/searchHint"]`，只参与 ToolSearch 检索。
     search_hint: Option<String>,
+    /// 归一化的 `_meta.ui`（resourceUri / surface / 显示模式 / 可见性）。
+    ui: Option<Value>,
     definition: Value,
     connection: Arc<Connection>,
 }
@@ -322,10 +324,17 @@ impl Hub {
             .and_then(|bs| bs.iter().find(|b| b.name == name))
             .cloned()
             .context("MCP tool unavailable in this session")?;
-        binding
+        let (mut output, raw) = binding
             .connection
             .call(&binding.original, args, cancel)
-            .await
+            .await?;
+        // 与 TS `createMcpToolDisplayUi` 对齐：只有声明了 UI 资源（`_meta.ui.resourceUri`）的
+        // 工具才产生 mcp_tool display；资源地址、surface、结构化结果和结果 `_meta` 必须一起
+        // 到达 V4 host，否则桌面端只能看到模型文本、无法打开既有面板。
+        if let Some(ui) = &binding.ui {
+            output.display = Some(bindings::display(&binding.server, ui, &raw));
+        }
+        Ok(output)
     }
     pub async fn close_session(&self, session: &str, forget: bool) -> Result<()> {
         let _gate = self.gate.lock().await;

@@ -56,7 +56,7 @@ pub fn prefix(
     model: Option<(&str, &str)>,
     desktop: bool,
 ) -> Vec<Value> {
-    prefix_with_chars(snapshot, sources, model, desktop).0
+    prefix_with_chars(snapshot, sources, model, desktop, &[]).0
 }
 /// The request prefix and the characters of its system and meta-user context
 /// sections (Node `ContextSection.chars`, spec rust-m9-usage-logs §4.2).
@@ -65,6 +65,7 @@ pub fn prefix_with_chars(
     sources: &[InstructionSource],
     model: Option<(&str, &str)>,
     desktop: bool,
+    additional_directories: &[String],
 ) -> (Vec<Value>, SectionChars) {
     let templates = templates();
     let mut chars = SectionChars {
@@ -87,9 +88,21 @@ pub fn prefix_with_chars(
     } else {
         templates.identity.clone()
     };
+    let additional = if additional_directories.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n- Additional directories:{}",
+            additional_directories
+                .iter()
+                .map(|path| format!("\n  - {path}"))
+                .collect::<String>()
+        )
+    };
     let mut env = format!(
-        "# Environment\nYou have been invoked in the following environment:\n- Primary working directory: {}\n- Is a git repository: {}\n- Platform: {}\n- Shell: {}\n- OS Version: {}",
+        "# Environment\nYou have been invoked in the following environment:\n- Primary working directory: {}{}\n- Is a git repository: {}\n- Platform: {}\n- Shell: {}\n- OS Version: {}",
         snapshot.cwd,
+        additional,
         if snapshot.git.is_some() { "yes" } else { "no" },
         snapshot.platform,
         snapshot.shell,
@@ -179,4 +192,37 @@ pub fn prefix_with_chars(
         messages.push(json!({"role":"user","content":format!("<system-reminder>\n{escaped}\n</system-reminder>\n")}));
     }
     (messages, chars)
+}
+
+#[cfg(test)]
+mod additional_directory_tests {
+    use super::*;
+
+    #[test]
+    fn model_environment_lists_the_frozen_additional_directories() {
+        let snapshot = PromptSnapshot {
+            cwd: "/w".into(),
+            platform: "linux".into(),
+            shell: "bash".into(),
+            os_version: "linux".into(),
+            ..Default::default()
+        };
+        let (prefix, _) = prefix_with_chars(
+            &snapshot,
+            &[],
+            None,
+            false,
+            &["/shared".into(), "/other".into()],
+        );
+        let rendered = serde_json::to_string(&prefix).unwrap();
+        assert!(rendered.contains("Additional directories"));
+        assert!(rendered.contains("/shared"));
+        assert!(rendered.contains("/other"));
+        let (empty, _) = prefix_with_chars(&snapshot, &[], None, false, &[]);
+        assert!(
+            !serde_json::to_string(&empty)
+                .unwrap()
+                .contains("Additional directories")
+        );
+    }
 }

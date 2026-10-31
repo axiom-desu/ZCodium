@@ -13,16 +13,17 @@ impl Engine {
         let Some(id) = p["sessionId"].as_str() else {
             return Ok(self
                 .tools
-                .discover_skills(&CancellationToken::new())
+                .discover_skills(&CancellationToken::new(), &[])
                 .await?
                 .response("workspace"));
         };
         ensure!(!self.closed.contains(id), "Session unavailable");
         self.ensure_session(id).await?;
         if self.sessions[id].skills.is_none() {
+            let directories = self.sessions[id].runtime.additional_directories.clone();
             let catalog = self
                 .tools
-                .discover_skills(&CancellationToken::new())
+                .discover_skills(&CancellationToken::new(), &directories)
                 .await?;
             self.sessions.get_mut(id).unwrap().skills = Some(catalog);
             self.persist(id, None).await?;
@@ -47,7 +48,9 @@ pub(super) async fn initialize(
     let catalog = if let Some(catalog) = &history.skills {
         catalog.clone()
     } else {
-        tools.discover_skills(cancel).await?
+        tools
+            .discover_skills(cancel, &history.additional_directories)
+            .await?
     };
     let (reply, receipt) = tokio::sync::oneshot::channel();
     if history.prompt_snapshot.is_none() {

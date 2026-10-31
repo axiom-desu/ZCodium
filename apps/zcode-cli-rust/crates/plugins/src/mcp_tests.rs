@@ -110,3 +110,33 @@ fn failures_disable_single_servers() {
         ]
     );
 }
+
+#[test]
+fn office_plugin_manifest_keeps_mcp_args_env_and_ui_surfaces() {
+    // 真实仓库 manifest：bootstrap/SEA/desktop/remote 读取的是同一份 .zcodium-plugin/plugin.json。
+    let raw = include_str!(
+        "../../../../../apps/zcode-cli/packages/documents-plugin/.zcodium-plugin/plugin.json"
+    );
+    let manifest: Value = serde_json::from_str(raw).expect("valid office manifest");
+    assert_eq!(manifest["name"], "documents");
+    assert_eq!(manifest["version"], "0.2.0");
+    assert_eq!(manifest["ui"]["surfaces"][0]["id"], "documents");
+    assert_eq!(
+        manifest["ui"]["surfaces"][0]["resourceUri"],
+        "ui://documents/panel.html"
+    );
+    assert_eq!(manifest["ui"]["surfaces"][0]["server"], "documents");
+
+    let (servers, diagnostics) = resolve_all(manifest["mcpServers"].clone(), json!({}));
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert_eq!(servers.len(), 1);
+    let (key, config) = &servers[0];
+    assert_eq!(key, "plugin:p:documents");
+    assert_eq!(config["command"], "node");
+    // args 必须保留 manifest 自带入口，而不是被 bootstrap 重写成 dist/mcp/server.js。
+    assert_eq!(config["args"], json!(["/p/dist/server.mjs"]));
+    assert_eq!(config["cwd"], "/w");
+    assert_eq!(config["env"]["ZCODE_WORKSPACE_ROOT"], "/w");
+    assert_eq!(config["env"]["ZCODE_PROJECT_DIR"], "/w");
+    assert_eq!(config["env"]["ZCODE_PLUGIN_ROOT"], "/p");
+}

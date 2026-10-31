@@ -21,13 +21,15 @@ struct Root {
 pub(super) async fn discover(
     cwd: &Path,
     config: &serde_json::Value,
+    additional_directories: &[String],
     cancel: &CancellationToken,
 ) -> Result<SkillCatalog> {
-    tokio::select! {biased; _=cancel.cancelled()=>anyhow::bail!("Cancelled"), result=discover_inner(cwd,config,cancel)=>result}
+    tokio::select! {biased; _=cancel.cancelled()=>anyhow::bail!("Cancelled"), result=discover_inner(cwd,config,additional_directories,cancel)=>result}
 }
 async fn discover_inner(
     cwd: &Path,
     config: &serde_json::Value,
+    additional_directories: &[String],
     cancel: &CancellationToken,
 ) -> Result<SkillCatalog> {
     let mut catalog = SkillCatalog {
@@ -66,6 +68,22 @@ async fn discover_inner(
             roots.push(Root {
                 path: base.join(sub),
                 scope: scope.into(),
+                plugin_name: None,
+                plugin_root: None,
+            });
+        }
+    }
+    // 附加目录是明确的额外发现根；仍按 project scope 扫描，不改变权限或 cwd。
+    let mut seen_directories = BTreeSet::new();
+    for directory in additional_directories {
+        let directory = PathBuf::from(directory);
+        if directory == cwd || !seen_directories.insert(directory.clone()) {
+            continue;
+        }
+        for sub in [project_skills.as_str(), ".agents/skills"] {
+            roots.push(Root {
+                path: directory.join(sub),
+                scope: "project".into(),
                 plugin_name: None,
                 plugin_root: None,
             });
@@ -205,3 +223,7 @@ async fn read(path: &Path, limit: u64) -> Result<(String, bool)> {
     bytes.truncate(limit as usize);
     Ok((String::from_utf8_lossy(&bytes).into_owned(), truncated))
 }
+
+#[cfg(test)]
+#[path = "tool_skills_tests.rs"]
+mod tests;

@@ -17,7 +17,16 @@ impl Engine {
     pub(super) async fn open_topic(&mut self, p: &Value) -> Result<Value> {
         let topic = topic_param(p)?;
         if let Some(id) = topic.strip_prefix("conversation/") {
-            self.ensure_session(id).await?;
+            // V4 subscribe 可带当前项目冻结的附加目录；只有冷恢复消费，热会话不改 cwd。
+            let directories = p["additionalDirectories"].as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            });
+            self.ensure_session_with_dirs(id, directories.as_deref())
+                .await?;
         }
         // 先取快照再计数：快照失败（如 workspace 不匹配）不能留下 pin。
         let state = self.topic_snapshot_value(p)?;

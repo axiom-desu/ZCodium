@@ -341,6 +341,7 @@ impl Engine {
             Method::InputHistoryRecall => self.input_history_recall(p).await,
             Method::CommandsQuery => self.query_acks(p).await,
             Method::SessionList => self.list_sessions(p).await,
+            Method::SessionsIndexReconcile => self.reconcile_sessions(p).await,
             Method::SessionSubagents => self.subagents_query(p).await,
             Method::SessionClose => self.close_runtime_session(p).await,
             Method::SkillsReferenceCatalog => self.skill_catalog(p).await,
@@ -388,12 +389,6 @@ impl Engine {
             return Err(StorageCommitFailure.into());
         }
         self.trim_resident().await?;
-        Ok(())
-    }
-    async fn flush(&mut self, output: &RuntimeOutput) -> Result<()> {
-        if !self.outbox.is_empty() {
-            output.send(std::mem::take(&mut self.outbox)).await?;
-        }
         Ok(())
     }
 }

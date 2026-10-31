@@ -4,6 +4,26 @@ use serde_json::{Value, json};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
+/// Request-only profile description; split from the loop to keep the source-line boundary.
+pub(super) fn describe_catalog(
+    definitions: &mut [Value],
+    profiles: &[crate::domain::subagent::Profile],
+) {
+    if let Some(agent) = definitions
+        .iter_mut()
+        .find(|d| d["function"]["name"] == "Agent")
+    {
+        let descriptions = profiles
+            .iter()
+            .map(|p| format!("- {}: {}", p.name, p.description))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let base = agent["function"]["description"].as_str().unwrap_or("");
+        agent["function"]["description"] =
+            format!("{base}\n\nCurrent profile catalog (authoritative):\n{descriptions}").into();
+    }
+}
+
 pub(super) async fn execute(
     preparation: (
         &dyn crate::contract::ToolPort,

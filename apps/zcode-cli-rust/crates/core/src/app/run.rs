@@ -111,6 +111,7 @@ impl Engine {
             .clone()
             .filter(|_| continuation || kind == crate::domain::legacy_stream::RunKind::Goal);
         history.agent_profile = session.agent_profile.clone();
+        history.additional_directories = session.runtime.additional_directories.clone();
         history.tool_disallowlist = submission.tool_disallowlist;
         history.tool_filter = session.runtime.tools.clone();
         history.tool_search_mode = session.runtime.tool_search_mode;

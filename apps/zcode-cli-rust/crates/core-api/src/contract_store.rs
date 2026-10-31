@@ -37,6 +37,15 @@ pub trait SessionStore: Send + Sync {
     ) -> Result<Vec<zcode_cli_domain::session_listing::SessionListing>> {
         anyhow::bail!("Session listing unavailable")
     }
+    /// 任意身份的持久会话事实（含软删）；显式会话 ID 预留不得覆盖它。
+    async fn session_exists(&self, _id: &str) -> Result<bool> {
+        Ok(false)
+    }
+    /// `v4/sessionsIndex/reconcile`：按明确 ID 只读持久事实（含软删），不激活 runtime。
+    /// 默认显式失败，调用方不得把缺席当删除或降级为空成功。
+    async fn reconcile_sessions(&self, _workspace_id: &str, _ids: &[String]) -> Result<Value> {
+        anyhow::bail!("Sessions index reconcile unavailable")
+    }
     /// Load one persisted conversation through the recovery/activation owner.
     async fn load_session(&self, _workspace: &str, _id: &str) -> Result<Option<Session>> {
         anyhow::bail!("Single session loading unavailable")

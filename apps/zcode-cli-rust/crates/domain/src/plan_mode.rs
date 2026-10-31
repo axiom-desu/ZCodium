@@ -71,13 +71,16 @@ pub fn exit_result(plan: &str) -> String {
 }
 
 /// ExitPlanMode input validation (`plan`: 1..=20000 UTF-16 units, not blank).
-pub fn exit_plan(args: &Value) -> Result<&str, &'static str> {
+pub fn exit_plan(args: &Value) -> Result<&str, crate::input_validation::InputValidationError> {
+    use crate::input_validation::InputValidationError;
     let plan = args["plan"]
         .as_str()
-        .ok_or("plan: Invalid input: expected string")?;
+        .ok_or_else(|| InputValidationError::new("plan: Invalid input: expected string"))?;
     let units = plan.encode_utf16().count();
     if units == 0 || units > 20_000 || super::zod::js_trim(plan).is_empty() {
-        return Err("plan: String must contain at least 1 character(s)");
+        return Err(InputValidationError::new(
+            "plan: String must contain at least 1 character(s)",
+        ));
     }
     Ok(plan)
 }
