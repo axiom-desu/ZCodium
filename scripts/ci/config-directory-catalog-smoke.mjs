@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { createServer } from "node:http";
 import { build as viteBuild } from "vite";
 import { chromium } from "playwright-core";
+import { createCatalogUi } from "./fixtures/config-directory-catalog-ui.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const temp = await mkdtemp(join(tmpdir(), "s11-config-catalog-"));
@@ -155,51 +156,16 @@ try {
   });
   const url = `http://127.0.0.1:${server.address().port}`;
   await page.goto(url);
-  const trigger = page.getByTestId("plugin-settings-scope-trigger");
-  async function options() {
-    await trigger.click();
-    return page.getByRole("menuitemradio");
-  }
-  async function choose(key) {
-    await options();
-    const option = page.locator('[role="menuitemradio"]').filter({ hasText: key });
-    await option.click();
-  }
-  async function chooseIdentity(identity) {
-    await options();
-    await page.locator('[role="menuitemradio"]').evaluateAll((items, key) => {
-      const item = items.find((node) => node.getAttribute("data-testid")?.endsWith(key));
-      if (!item) throw new Error("missing directory " + key);
-      item.click();
-    }, identity);
-  }
-  async function loaded(scope) {
-    await page.waitForFunction((expected) => {
-      const state = window.__pluginState();
-      return !state.loading && state.plugins.some((plugin) => plugin.name === "Plugin " + expected);
-    }, scope);
-    await page.getByTestId("plugin-settings-enabled-switch").waitFor();
-  }
-  // setEnabled 是乐观更新：UI 状态变化不证明 Host 已记录变更。
-  // 断言 Host 侧 config 前必须等对应 scope 的 RPC 真正 settled，否则 CI 时序下会读到 undefined。
-  async function mutationSettled(scope, before) {
-    await page.waitForFunction(
-      ({ scope, before }) =>
-        window.__rpc.filter(
-          (call) => call.scope === scope && call.method === "setPluginEnabled" && call.settled,
-        ).length > before,
-      { scope, before },
-    );
-  }
-  const settledMutations = (scope) =>
-    page.evaluate(
-      (id) =>
-        window.__rpc.filter(
-          (call) => call.scope === id && call.method === "setPluginEnabled" && call.settled,
-        ).length,
-      scope,
-    );
-  const identity = (id) => `remote:server:${id}:${host.paths.samePath}`;
+  const {
+    identity,
+    trigger,
+    options,
+    choose,
+    chooseIdentity,
+    loaded,
+    mutationSettled,
+    settledMutations,
+  } = createCatalogUi(page, host.paths.samePath);
   // 未打开项目全部 roots 可见；catalog 本身不 admission 远端，不创建 tab/task/default dir。
   await options();
   await page.getByRole("menuitemradio").filter({ hasText: host.paths.localRoot }).waitFor();
