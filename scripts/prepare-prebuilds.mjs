@@ -33,7 +33,10 @@ import {
 import { runCommand } from "./spawn-command.mjs";
 import { prepareRemoteNode, REMOTE_NODE_VERSION } from "./remote-node-runtime.mjs";
 import { bundleRepositoryRemoteAssets } from "./bundle-remote-assets.mjs";
-import { validateBuiltinPluginAssets } from "./builtin-plugin-assets.mjs";
+import {
+  validateBuiltinPluginAssets,
+  validateStagedOfficeViewerAssets,
+} from "./builtin-plugin-assets.mjs";
 import { stageCuaDriverRuntime } from "./cua-driver-runtime-assets.mjs";
 import { getBuildMetadata } from "../packages/desktop/scripts/build-metadata.mjs";
 export { DEFAULT_NODE_DIST_BASE, nodeDistBase } from "./remote-node-runtime.mjs";
@@ -254,10 +257,12 @@ function buildRemoteOfficialPluginRuntimeForBootstrap(plugin) {
   // 官方插件 runtime 只在 stage 资源时需要，这里用当前 Node 执行等价构建，避免再嵌套 pnpm/tsc shim。
   // browser-use 的 MCP server 与 browser-client 必须来自同一次构建；只凭旧 server.js 判定可复用
   // 会让远端资源混入陈旧或缺失的 client，因此 bootstrap 模式下对该插件无条件重建。
-  runCommand(process.execPath, ["../../node_modules/typescript/bin/tsc"], {
-    cwd: pluginRoot,
-    env: process.env,
-  });
+  // 文档查看面板插件没有自己的 tsconfig；没有配置时跳过 tsc，直接运行 office-runtime 构建脚本。
+  if (existsSync(join(pluginRoot, "tsconfig.json")))
+    runCommand(process.execPath, ["../../node_modules/typescript/bin/tsc"], {
+      cwd: pluginRoot,
+      env: process.env,
+    });
   runCommand(process.execPath, [plugin.runtimeBuildScript], {
     cwd: pluginRoot,
     env: process.env,
@@ -306,6 +311,7 @@ async function stageRemoteOfficialPlugins(glmDir) {
         );
       }
     }
+    await validateStagedOfficeViewerAssets(targetRoot);
     console.log(`  [ok] mock-cdn glm official plugin ${plugin.stagedPath}`);
   }
   await validateBuiltinPluginAssets(join(glmDir, "packages"), { platform: "linux", arch: "x64" });

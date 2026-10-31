@@ -2,6 +2,7 @@ import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { assertNoticeOverrideVersions, collectNpmNotices, hashBytes } from "./third-party-npm.mjs";
 import { readCuaLicenseReview } from "./cua-license-review.mjs";
+import { readOfficeLicenseReview } from "./license-identifiers.mjs";
 import {
   noticesFileName,
   readNativeSearchNotices,
@@ -31,6 +32,10 @@ export async function generateThirdPartyNotices(root = repositoryRoot) {
   await readInput("third-party/native-search/sources.json");
   const cuaReview = await readCuaLicenseReview(root);
   for (const file of cuaReview.files) await readInput(file);
+  // office-runtime 依赖全部是 build-only devDependency：不进入根生产 NOTICE，
+  // 但标识登记依赖的原始材料必须计入输入哈希，篡改后声明立即失效。
+  const officeReview = await readOfficeLicenseReview(root);
+  for (const file of officeReview.files) await readInput(file);
   const { packages, notInstalled, workspaceManifests } = await collectNpmNotices(root, overrides);
   // 修复：递归扫描会把 bundled-agents/mock-cdn 的可删除缓存当作源码输入，重建立即失效。
   // workspace 边界由 pnpm 解析，同一份项目集合用于依赖图和 manifest 新鲜度检查。
