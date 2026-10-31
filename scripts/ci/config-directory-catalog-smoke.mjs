@@ -180,6 +180,25 @@ try {
     }, scope);
     await page.getByTestId("plugin-settings-enabled-switch").waitFor();
   }
+  // setEnabled 是乐观更新：UI 状态变化不证明 Host 已记录变更。
+  // 断言 Host 侧 config 前必须等对应 scope 的 RPC 真正 settled，否则 CI 时序下会读到 undefined。
+  async function mutationSettled(scope, before) {
+    await page.waitForFunction(
+      ({ scope, before }) =>
+        window.__rpc.filter(
+          (call) => call.scope === scope && call.method === "setPluginEnabled" && call.settled,
+        ).length > before,
+      { scope, before },
+    );
+  }
+  const settledMutations = (scope) =>
+    page.evaluate(
+      (id) =>
+        window.__rpc.filter(
+          (call) => call.scope === id && call.method === "setPluginEnabled" && call.settled,
+        ).length,
+      scope,
+    );
   const identity = (id) => `remote:server:${id}:${host.paths.samePath}`;
   // 未打开项目全部 roots 可见；catalog 本身不 admission 远端，不创建 tab/task/default dir。
   await options();
@@ -214,8 +233,10 @@ try {
   await host.verifyHostRouting();
   await choose(host.paths.localRoot);
   await loaded("local");
+  let mutations = await settledMutations("local");
   await page.getByTestId("plugin-settings-enabled-switch").click();
   await page.waitForFunction(() => !window.__pluginState().plugins[0].enabled);
+  await mutationSettled("local", mutations);
   assert.equal((await host.config("local"))[host.paths.localRoot], false);
   assert.equal((await host.facts()).tasks, 0);
   assert.equal((await host.facts()).files.includes("must-not-create"), false);
@@ -223,8 +244,10 @@ try {
   // 同 path 不同 Source 独立 services 与 identity；只有明确选择才申请 Source settings DI。
   await chooseIdentity(identity(sourceA));
   await loaded(sourceA);
+  mutations = await settledMutations(sourceA);
   await page.getByTestId("plugin-settings-enabled-switch").click();
   await page.waitForFunction(() => !window.__pluginState().plugins[0].enabled);
+  await mutationSettled(sourceA, mutations);
   assert.equal((await host.config(sourceA))[identity(sourceA)], false);
   assert.deepEqual(await host.config(sourceB), {});
   await chooseIdentity(identity(sourceB));
@@ -265,8 +288,10 @@ try {
       .count(),
     0,
   );
+  mutations = await settledMutations(sourceB);
   await page.getByTestId("plugin-settings-enabled-switch").click();
   await page.waitForFunction(() => !window.__pluginState().plugins[0].enabled);
+  await mutationSettled(sourceB, mutations);
   assert.equal((await host.config(sourceB))[identity(sourceB)], false);
   // 失败不伪装成功；既有乐观开关回滚。
   host.failMutation(true);
