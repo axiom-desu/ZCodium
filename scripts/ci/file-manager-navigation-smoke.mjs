@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { build } from "vite";
 import { chromium } from "playwright-core";
+import { createFileManagerPage } from "./fixtures/file-manager-page.mjs";
 
 // 文件管理器导航面板浏览器 E2E（spec：.agents/specs/file-manager-navigation-pane.md）。
 // 夹具加载生产 FileManagerPane / PreviewPane / WorkspaceFileTree；workspace 是临时目录，
@@ -171,27 +172,7 @@ try {
         document.querySelector(selector)?.getAttribute("aria-expanded") === String(expanded),
       { selector: NAV_TOGGLE, expanded },
     );
-  const readPrefs = () =>
-    page.evaluate((key) => {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : {};
-    }, PREF_KEY);
-  const setDelay = (workspacePath, delay) =>
-    page.evaluate(
-      ({ path, ms }) => {
-        window.fileManagerFixture.delayByWorkspace[path] = ms;
-      },
-      { path: workspacePath, ms: delay },
-    );
-  const setTarget = (target) =>
-    page.evaluate((next) => window.fileManagerFixture.setTarget(next), target);
-  const waitFor = async (predicate, label) => {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      if (await page.evaluate(predicate)) return;
-      await page.waitForTimeout(100);
-    }
-    throw new Error(`fixture state timeout: ${label}`);
-  };
+  const { readPrefs, setDelay, setTarget, waitFor } = createFileManagerPage(page, PREF_KEY);
 
   // ------------------------------------------------------------------ 默认展开 + 真实临时目录 + 文件预览
   await visit(`workspace=${encodeURIComponent(workspaceA)}&locale=en-US&theme=light`);
