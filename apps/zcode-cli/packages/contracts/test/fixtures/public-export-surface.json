@@ -91,6 +91,7 @@
     ["RepairRemoteSessionPathsInput", "type"],
     ["RetryPart", "type"],
     ["SESSION_ENTRY_BASH_SHELL_SELECTION", "value"],
+    ["SESSION_ENTRY_DYNAMIC_WORKFLOW_ACTIVATION", "value"],
     ["SESSION_ENTRY_EXECUTION_STATE", "value"],
     ["SESSION_ENTRY_MODEL_SELECTION", "value"],
     ["SESSION_ENTRY_TARGET_COMPLETION_VERIFICATION", "value"],
