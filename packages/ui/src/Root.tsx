@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button.js";
 import { PlatformProvider } from "@/hooks/usePlatform.js";
 import { ServiceProvider } from "@/hooks/useServices.js";
 import { useDynamicWorkflowAvailabilityLoader } from "@/hooks/useDynamicWorkflowAvailability.js";
+import { useDynamicWorkflowUserModeSync } from "@/hooks/useDynamicWorkflowAvailability.js";
 import { DirectoryBrowser } from "@/DirectoryBrowser.js";
 import { useTabPersistence } from "@/hooks/useTabPersistence.js";
 import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
@@ -33,7 +34,6 @@ import { SSHDialog } from "@/SSHDialog.js";
 import { SettingsPage } from "@/SettingsPage.js";
 import { setDefaultFileDisplayBasePath } from "@/lib/fileDisplay.js";
 
-import { countAllUnreadTasks } from "@/lib/unreadTaskCount.js";
 import {
   shouldBlockRootRender,
   shouldShowRootStartupLoading,
@@ -41,7 +41,6 @@ import {
 } from "@/lib/rootStartupGate.js";
 import { StoreProvider, useZCodeStore } from "@/store/StoreProvider.js";
 import { setMcpStorePlatform } from "@/store/mcpStore.js";
-import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { TabStoreProvider, useTabStore, useTabStoreApi } from "@/store/TabStoreProvider.js";
 import { isSettingsTab, isWorkspaceTab } from "@/store/tabStore.js";
 import { logger } from "@/logger.js";
@@ -160,6 +159,14 @@ function RootInner({
   const { intl, locale } = useZCodeIntl();
   const theme = useZCodeStore((state) => state.theme);
   const { settings: appSettings, refresh: refreshAppSettings } = useSettings();
+  // docs/dynamic-workflow/launch.md「The user's choice」：设置里的选择变化后，通知本窗口的 Host
+  // 重发 CLI 策略（并转发给在线远端 Host），再重读快照。
+  useDynamicWorkflowUserModeSync({
+    settingsLoaded: Boolean(appSettings),
+    userMode: appSettings?.dynamicWorkflowMode,
+    zcodeAgentService: services.zcodeAgentService,
+    codingPlanSubscriptionService: services.codingPlanSubscriptionService,
+  });
   const rootModelSelectionRead = useModelSelectionServiceView(services.modelSelectionService);
   const rootModelSelectionErrorNode =
     rootModelSelectionRead.state.status === "error" ? (
@@ -304,9 +311,6 @@ function RootInner({
     }
     return activeTab.workspacePath;
   });
-  const totalUnreadTaskCount = useZCodeSessionStore((state) =>
-    countAllUnreadTasks(state.workspaces),
-  );
   const addTab = useTabStore((state) => state.addTab);
   const activateTabByPath = useTabStore((state) => state.activateTabByPath);
   const tabStoreApi = useTabStoreApi();
@@ -513,7 +517,6 @@ function RootInner({
     activeWorkspaceIdentity,
     reconnectingRemoteWorkspaceKeys,
     remoteWorkspaceErrorByWorkspaceKey,
-    totalUnreadTaskCount,
     hasCompletedFullTabRestore: hasCompletedFullRestore,
     intl,
   });

@@ -533,3 +533,108 @@ describe("MobileRemoteControlClient fake WebSocket", () => {
     expect(onPayload).not.toHaveBeenCalled();
   });
 });
+
+const directoryRoot = {
+  rootIdentity: { hostId: "local", projectId: "p", rootPath: "/workspace" },
+  projectName: "P",
+  enabled: true,
+  attachmentGeneration: 1,
+  runtimeIdentity: { identity: "actor", generation: 1, workspaceKey: "/workspace" },
+};
+const directoryDisabledRoot = {
+  ...directoryRoot,
+  rootIdentity: { ...directoryRoot.rootIdentity, rootPath: "/unbound" },
+  enabled: false,
+  runtimeIdentity: undefined,
+};
+
+describe("MobileRemoteControlClient 项目目录 capability/epoch", () => {
+  it("旧 peer 未宣告 capability 时不建目录代理、不发目录 RPC", async () => {
+    const { c, socket } = client();
+    const pending = c.readProjectDirectory("A");
+    await flush();
+    const open = socket.opens()[0]!;
+    const desktop = host(socket, open.bridgeSessionId);
+    desktop.send([INITIALIZE]);
+    socket.ready(open);
+    expect(await pending).toBeNull();
+    expect(requests(socket, open.bridgeSessionId)).toEqual([]);
+  });
+
+  it("只读投影经真实 RPC；伪造/禁用 root 与换代后的创建都被拒绝", async () => {
+    const { c, socket } = client();
+    const pending = c.readProjectDirectory("A");
+    await flush();
+    const first = socket.opens()[0]!;
+    const desktop = host(socket, first.bridgeSessionId);
+    desktop.send([INITIALIZE], { mobileProjectDirectory: true });
+    socket.ready(first);
+    await flush();
+    const read = requests(socket, first.bridgeSessionId).find(
+      (request) => request.header[2] === "mobile-project-directory",
+    )!;
+    expect(read.header[3]).toBe("readProjects");
+    desktop.send([SUCCESS, Number(read.header[1])], [directoryRoot, directoryDisabledRoot]);
+    const roots = (await pending)!;
+    expect(roots).toEqual([directoryRoot, directoryDisabledRoot]);
+    // 未由本入口读取（或参数被改写）的 root 不能创建。
+    await expect(c.createProjectTask({ ...directoryRoot } as never)).rejects.toThrow(
+      "project.stale-attachment",
+    );
+    await expect(c.createProjectTask(roots[1]!)).rejects.toThrow("project.stale-attachment");
+    const created = c.createProjectTask(roots[0]!);
+    await flush();
+    const create = requests(socket, first.bridgeSessionId).find(
+      (request) => request.header[3] === "createTask",
+    )!;
+    expect(create.header[2]).toBe("mobile-project-directory");
+    expect(create.body).toEqual([directoryRoot]);
+    desktop.send([SUCCESS, Number(create.header[1])], { taskId: "t1" });
+    await expect(created).resolves.toEqual({ taskId: "t1" });
+    // 桥换代（切 workspace）后旧 root 不得再投递。
+    const switching = c.ensureWorkspaceBridge({ workspaceKey: "B" });
+    await flush();
+    const second = socket.opens()[1]!;
+    host(socket, second.bridgeSessionId).send([INITIALIZE], { mobileProjectDirectory: true });
+    socket.ready(second);
+    await switching;
+    await expect(c.createProjectTask(roots[0]!)).rejects.toThrow("project.stale-attachment");
+    expect(
+      requests(socket, second.bridgeSessionId).filter(
+        (request) => request.header[3] === "createTask",
+      ),
+    ).toEqual([]);
+  });
+
+  it("迟到的目录读取不能覆盖新入口，也不导航", async () => {
+    const { c, socket } = client();
+    const readyA = c.readProjectDirectory("A");
+    await flush();
+    const a = socket.opens()[0]!;
+    const desktop = host(socket, a.bridgeSessionId);
+    desktop.send([INITIALIZE], { mobileProjectDirectory: true });
+    socket.ready(a);
+    await flush();
+    const firstRead = requests(socket, a.bridgeSessionId).find(
+      (request) => request.header[3] === "readProjects",
+    )!;
+    desktop.send([SUCCESS, Number(firstRead.header[1])], [directoryRoot]);
+    expect(await readyA).toEqual([directoryRoot]);
+    const late = c.readProjectDirectory("A");
+    await flush();
+    const secondRead = requests(socket, a.bridgeSessionId).filter(
+      (request) => request.header[3] === "readProjects",
+    )[1]!;
+    const switching = c.ensureWorkspaceBridge({ workspaceKey: "B" });
+    await flush();
+    const b = socket.opens()[1]!;
+    host(socket, b.bridgeSessionId).send([INITIALIZE], { mobileProjectDirectory: true });
+    socket.ready(b);
+    await switching;
+    desktop.send([SUCCESS, Number(secondRead.header[1])], [directoryDisabledRoot]);
+    await expect(late).rejects.toThrow(/invalidated|superseded/u);
+    await expect(c.createProjectTask(directoryRoot as never)).rejects.toThrow(
+      "project.stale-attachment",
+    );
+  });
+});

@@ -204,6 +204,13 @@ export async function managedEnvironment(root: string, node: string, cli: string
       native.attachGuest({ guest, hostWebContents: win.webContents, sandboxId: pending.shift()! });
     });
     await win.loadFile(join(root, "managed.html"));
+    // Bugfix：隐藏窗口在 Linux/Wayland 上首次 capturePage 之后不再产生 BeginFrame，
+    // 之后 fixture 的布局等待（双 requestAnimationFrame）永不回调，20s 检查超时。
+    // E2E 证据截图和布局断言需要真实帧，这里让窗口参与合成但不抢焦点
+    // （真实桌面窗口也是可见的）；不改变任何断言、预算或产品行为。
+    win.showInactive();
+    // 修复：showInactive 不保证位于其它应用窗口之上；保持可见合成顺序，避免双 rAF 被遮挡停帧。
+    win.moveTop();
     await win.webContents.executeJavaScript("window.harnessReady");
     if (mode !== "local" && mode !== "sampling") return win;
     await evaluateGuest(

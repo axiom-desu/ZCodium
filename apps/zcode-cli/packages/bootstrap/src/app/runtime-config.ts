@@ -138,6 +138,7 @@ export function resolveAppRuntimeConfig(input: {
     language: options.runtimeConfig?.language,
     titleGeneration,
     workingDirectory,
+    additionalDirectories: options.additionalDirectories,
     userInstructions: {
       ...userInstructions,
       workingDirectory: userInstructions.workingDirectory ?? workingDirectory,

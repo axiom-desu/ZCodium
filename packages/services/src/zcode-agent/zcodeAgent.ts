@@ -1,10 +1,12 @@
 import type { SessionActivity } from "@zcode/shared/zcode-protocol-v4";
+import type { PluginUiToolResultNotification } from "@zcode/shared/mcp-apps";
 import type { BackgroundBashOutputResult, SessionDebugSnapshot } from "@zcode/shared";
 /* eslint-disable max-lines -- ZCode agent service 接口集中声明 protocol/session/workspace 方法，拆分会增加 service descriptor 迁移成本。 */
 import type { Event, IDisposable } from "@zcode/rpc";
 import { ServiceChannels } from "@zcode/shared";
 import type { AppUsageRange, AppUsageSnapshot, ZCodeTaskTokenUsageResult } from "@zcode/shared";
 import type { ZCodeAutomation, ZCodeAutomationRun } from "@zcode/shared";
+import type { DynamicWorkflowMode } from "@zcode/shared";
 import type {
   ZCodeStorageStartupState,
   ZCodeDeliveryKind,
@@ -167,6 +169,8 @@ export interface ZCodeAgentSessionTarget extends ZCodeAgentWorkspaceTarget {
 }
 
 export interface ZCodeAgentResumeSessionParams extends ZCodeAgentSessionTarget {
+  /** 冷恢复按 Host 当前项目合同冻结附加目录；热恢复忽略，不改既有 cwd。 */
+  additionalDirectories?: string[];
   model?: ModelSelection;
   thoughtLevel?: string;
   mcpServers?: ZCodeAgentMcpServer[];
@@ -197,6 +201,13 @@ export interface ZCodeAgentWorkspaceRuntimeIdentity {
   workspaceKey: string;
 }
 
+/** Host-only opaque admission. Never accepted from an RPC payload. */
+export interface ExistingRuntimeAdmission {
+  readonly runtimeIdentity: ZCodeAgentWorkspaceRuntimeIdentity;
+  assertCurrent(target?: ZCodeAgentWorkspaceTarget): void;
+  createSession(params: ZCodeAgentCreateSessionParams): Promise<ZCodeSessionStateSnapshot>;
+}
+
 export const ZCODE_AGENT_RUNTIME_UNAVAILABLE_CODE = "ZCODE_AGENT_RUNTIME_UNAVAILABLE";
 
 export type ZCodeAgentRuntimePolicy = "start-if-needed" | "existing-only";
@@ -224,6 +235,10 @@ export interface ZCodeAgentCreateSessionParams extends ZCodeAgentWorkspaceTarget
   toolAllowlist?: string[];
   toolDenylist?: string[];
   importedHistory?: ZCodeSessionImportHistory;
+  /** Host 项目组织态 id；由项目服务/UI 显式给出，不由 cwd 推断。 */
+  projectId?: string | null;
+  /** prepareSession/reserve 冻结的附加目录；S8-C runtime 消费，Host 不改 cwd。 */
+  additionalDirectories?: string[];
 }
 
 export interface ZCodeAgentListSessionsParams extends ZCodeAgentWorkspaceTarget {
@@ -470,6 +485,11 @@ export interface ZCodeAgentConversationFileRewindPreviewParams extends ZCodeAgen
 }
 
 export interface ZCodeAgentConversationCommandParams extends ZCodeAgentWorkspaceTarget {
+  /**
+   * 仅 Host 消费的项目归属（不进入 CLI v4 wire envelope）：显式 null 表示全局任务。
+   * createSession 时由 Host 通过既有 prepareSessionCreation 预占并冻结执行目录。
+   */
+  projectId?: string | null;
   envelope: CommandEnvelope;
   /** 仅 host 内部用于 Browser Use runtime 边界，不进入 v4 wire envelope。 */
   clientMode?: ZCodeTaskClientMode;
@@ -601,10 +621,23 @@ export interface IZCodeAgentService {
    * 同步 App 全局运行时偏好到所有已活动 workspace；不得为此启动空闲 Agent。
    */
   syncAppRuntimePreferences(preferences: ZCodeAgentAppRuntimePreferences): Promise<void>;
+  /**
+   * 用户改了动态工作流选择（docs/dynamic-workflow/launch.md「The user's choice」）：
+   * 重算生效模式并把策略重发给已活跃 workspace，再转发给在线远端 Host；不得为此启动 Agent。
+   */
+  syncDynamicWorkflowUserMode(params: { mode?: DynamicWorkflowMode }): Promise<void>;
+  /** Host-only: must be hidden by RPC attachment adapters. */
+  acquireExistingRuntime(
+    params: ZCodeAgentWorkspaceTarget,
+    assertAttachment?: () => void,
+  ): Promise<ExistingRuntimeAdmission>;
   getWorkspaceRuntimeIdentity(
     params: ZCodeAgentWorkspaceTarget,
   ): Promise<ZCodeAgentWorkspaceRuntimeIdentity>;
-  createSession(params: ZCodeAgentCreateSessionParams): Promise<ZCodeSessionStateSnapshot>;
+  createSession(
+    params: ZCodeAgentCreateSessionParams,
+    admission?: ExistingRuntimeAdmission,
+  ): Promise<ZCodeSessionStateSnapshot>;
   resumeSession(params: ZCodeAgentResumeSessionParams): Promise<ZCodeSessionStateSnapshot>;
   listSessions(params: ZCodeAgentListSessionsParams): Promise<ZCodeSessionInfo[]>;
   listSessionSubagents(
@@ -900,7 +933,15 @@ export interface IZCodeAgentService {
   ): Event<ConversationTelemetryFact>;
   /** 当前窗口全部本地 live task 的 CUA 权限观察；历史、远程与 replayable 不在此事件面。 */
   onDynamicCuaPermissionObservation(): Event<ZCodeAgentCuaPermissionObservation>;
+  /** 本地桌面窗口创建插件页面，不依赖 conversation 订阅。 */
+  onDynamicPluginUiToolResult(): Event<
+    PluginUiToolResultNotification & { workspacePath: string; workspaceIdentity?: string }
+  >;
   // ── sessions-index 通道（列表活性）──
+  /** 只读 CLI 持久事实；旧远端可以不提供此能力，调用方不得据此删除行。 */
+  reconcileSessionsIndexV4?(
+    params: ZCodeAgentWorkspaceTarget & { sessionIds: string[] },
+  ): Promise<import("@zcode/shared/zcode-protocol-v4").SessionsIndexReconcileResult>;
   subscribeSessionsIndexV4(
     params: ZCodeAgentSessionsIndexSubscribeParams,
   ): Promise<V4SessionsIndexSubscribeResult>;

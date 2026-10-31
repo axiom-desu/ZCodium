@@ -15,6 +15,7 @@ import {
   deliverPendingWorkspaceOpen,
 } from "./desktopOAuthDeepLink.js";
 import { openPathInDefaultApp } from "./desktopMainIpcHelpers.js";
+import { dispatchSourceSettingsAttachment } from "./sourceSettingsAttachmentRequest.js";
 
 function isAllowedExternalOpenUrl(value: string): boolean {
   try {
@@ -56,7 +57,7 @@ export function registerRemoteIpcHandlers(options: {
     target: RemoteTarget,
     requestId?: string,
     context?: { workspacePath: string; workspaceIdentity?: string },
-  ) => Promise<string>;
+  ) => Promise<import("@zcode/shared").WindowHostRemoteWorkspaceDescriptor>;
   disposeRemoteWorkspaceSession: (
     sessionId: string,
     reason: string,
@@ -76,6 +77,7 @@ export function registerRemoteIpcHandlers(options: {
     webContentsId: number,
     payload: { sessionId: string; attachmentId: string },
   ) => void;
+  attachSourceSettings: (win: BrowserWindow, sourceServerId: string) => { attachmentId: string };
   isDockerDaemonAvailable: () => Promise<boolean>;
   listAvailableWSLDistros: () => Promise<unknown[]>;
   listAvailableDockerContainers: () => Promise<unknown[]>;
@@ -139,6 +141,17 @@ export function registerRemoteIpcHandlers(options: {
     });
   });
 
+  ipcMain.handle(
+    PlatformChannels.RequestSourceSettingsAttachment,
+    async (event, rawPayload: unknown) =>
+      dispatchSourceSettingsAttachment({
+        rawPayload,
+        sender: event.sender,
+        findWindow: (sender) => BrowserWindow.fromWebContents(sender),
+        attach: options.attachSourceSettings,
+      }),
+  );
+
   ipcMain.handle(PlatformChannels.ConnectRemote, async (event, rawPayload: unknown) => {
     const wrappedPayload: {
       target: unknown;
@@ -183,13 +196,22 @@ export function registerRemoteIpcHandlers(options: {
         throw new Error("未找到当前窗口，无法创建远程 session");
       }
 
-      const sessionId = await options.createRemoteWorkspaceSession(
+      const descriptor = await options.createRemoteWorkspaceSession(
         win,
         result.data,
         requestId,
         workspacePath ? { workspacePath, workspaceIdentity } : undefined,
       );
-      return { success: true, sessionId };
+      // Host 已鉴权的 descriptor 原样转发；Main 不按 renderer 输入重算 server identity。
+      return {
+        success: true,
+        sessionId: descriptor.remoteSessionId,
+        ...(descriptor.sourceServerId ? { sourceServerId: descriptor.sourceServerId } : {}),
+        ...(descriptor.workspaceIdentity
+          ? { workspaceIdentity: descriptor.workspaceIdentity }
+          : {}),
+        target: descriptor.target,
+      };
     } catch (error) {
       const normalizedError = normalizeUnknownError(error);
       // 这里之前直接把 Error 对象交给 logger，落盘时会被 JSON.stringify 压成 `{}`。

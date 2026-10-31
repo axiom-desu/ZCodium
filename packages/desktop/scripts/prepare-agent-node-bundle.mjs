@@ -21,7 +21,10 @@ import { basename, dirname, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { runCommand } from "../../../scripts/spawn-command.mjs";
-import { validateBuiltinPluginAssets } from "../../../scripts/builtin-plugin-assets.mjs";
+import {
+  validateBuiltinPluginAssets,
+  validateStagedOfficeViewerAssets,
+} from "../../../scripts/builtin-plugin-assets.mjs";
 import { stageCuaDriverRuntime } from "../../../scripts/cua-driver-runtime-assets.mjs";
 import { stageAgentBundle } from "./stage-agent-bundle.mjs";
 import { stageDesktopCliTui } from "./stage-desktop-cli-tui.mjs";
@@ -162,10 +165,12 @@ function buildOfficialPluginRuntimeForBootstrap(plugin) {
   // 这里仅在 bootstrap 开关下用当前 Node 直接执行等价 tsc + build-mcp，不改变插件自身 build 脚本。
   // browser-use 的 server 与 browser-client 是同一发布对；即使旧 server.js 存在也必须重建，
   // 否则会把旧 server 与当前 client（或缺失 client）一起 stage 到桌面安装包。
-  runCommand(process.execPath, ["../../node_modules/typescript/bin/tsc"], {
-    cwd: pluginRoot,
-    env: process.env,
-  });
+  // 文档查看面板插件没有自己的 tsconfig；没有配置时跳过 tsc，直接运行 office-runtime 构建脚本。
+  if (existsSync(resolve(pluginRoot, "tsconfig.json")))
+    runCommand(process.execPath, ["../../node_modules/typescript/bin/tsc"], {
+      cwd: pluginRoot,
+      env: process.env,
+    });
   runCommand(process.execPath, [plugin.runtimeBuildScript], {
     cwd: pluginRoot,
     env: process.env,
@@ -218,6 +223,7 @@ async function stageOfficialPlugins() {
         );
       }
     }
+    await validateStagedOfficeViewerAssets(targetRoot);
     console.log(`[prepare:agent-bundle] staged official plugin ${plugin.stagedPath}`);
   }
   await validateBuiltinPluginAssets(resolve(glmDir, "packages"), { platform, arch });

@@ -7,6 +7,7 @@ import type {
   ConversationTopicFrame,
   QueueItem,
   RoutedTopicFrame,
+  SessionsIndexReconcileResult,
   SessionsIndexTopicFrame,
   V4AttachmentBeginResult,
   V4AttachmentChunkResult,
@@ -28,6 +29,10 @@ import type {
   V4ConversationWorkflowRunsResult,
   WorkspaceConfigState,
   WorkspaceConfigTopicFrame,
+} from "@zcode/shared/zcode-protocol-v4";
+import {
+  sessionsIndexReconcileParamsSchema,
+  sessionsIndexReconcileResultSchema,
 } from "@zcode/shared/zcode-protocol-v4";
 import type { ConversationRowTargetAction } from "./product-projection.js";
 import type { SessionEvent } from "@zcode/contracts";
@@ -127,6 +132,16 @@ export class ConversationV4Gateway {
     rawParams: unknown,
   ): Promise<V4SubscribeDispatchResult<SessionsIndexTopicFrame>> {
     return indexconfig.subscribeSessionsIndexReserved(this.state, rawParams);
+  }
+
+  /** 只读 CLI 持久会话事实；旧宿主未实现时显式拒绝，调用方不得据此推断删除。 */
+  async reconcileSessions(rawParams: unknown): Promise<SessionsIndexReconcileResult> {
+    const params = sessionsIndexReconcileParamsSchema.parse(rawParams);
+    if (!this.state.host.reconcileSessions)
+      throw new Error("sessionsIndex/reconcile is unavailable");
+    return sessionsIndexReconcileResultSchema.parse(
+      await this.state.host.reconcileSessions(params),
+    );
   }
 
   /**

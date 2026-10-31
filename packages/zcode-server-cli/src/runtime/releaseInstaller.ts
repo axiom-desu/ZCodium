@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdtemp, readdir, readFile, rename, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import type { SourceServerInstallProgress } from "@zcode/shared";
 import { releaseManifestSchema, type ReleaseManifest } from "../contracts.js";
 import { serverRuntimeManifestSchema, type ServerTarget } from "./manifest.js";
 import { extractArchiveSafely } from "./componentCache.js";
@@ -40,17 +41,20 @@ async function flattenArchiveRoot(extractDir: string): Promise<void> {
 interface InstallArchiveOptions {
   archivePath: string;
   target: ServerTarget;
-  version: string;
+  /** 在线更新由 catalog 锁定版本；本地 archive 更新以归档内 manifest 为准。 */
+  version?: string;
   archiveSha256?: string;
+  onProgress?: (phase: Exclude<SourceServerInstallProgress["phase"], "restart">) => void;
 }
 
 export class ReleaseInstaller {
   public constructor(private readonly layout: ServerLayout) {}
 
   public async installArchive(options: InstallArchiveOptions): Promise<ReleaseManifest> {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._+-]*$/u.test(options.version)) {
+    if (options.version !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/u.test(options.version)) {
       throw new Error(`Invalid release version: ${options.version}`);
     }
+    options.onProgress?.("verify-archive");
     const archiveSha256 = await sha256File(options.archivePath);
     if (
       options.archiveSha256 &&
@@ -64,6 +68,7 @@ export class ReleaseInstaller {
     await releaseManager.ensure();
     const incomingRoot = await mkdtemp(join(this.layout.releasesDir, `.incoming-${process.pid}-`));
     try {
+      options.onProgress?.("extract");
       await extractArchiveSafely(resolve(options.archivePath), incomingRoot);
       await flattenArchiveRoot(incomingRoot);
       const runtimeManifest = serverRuntimeManifestSchema.parse(
@@ -73,19 +78,25 @@ export class ReleaseInstaller {
         throw new Error(
           `Release target mismatch: expected ${options.target}, received ${runtimeManifest.target}`,
         );
-      if (runtimeManifest.appVersion !== options.version)
+      if (options.version !== undefined && runtimeManifest.appVersion !== options.version) {
         throw new Error(
           `Release version mismatch: expected ${options.version}, received ${runtimeManifest.appVersion}`,
         );
-      const releaseId = `${options.version}-${options.target}-${archiveSha256.slice(0, 12)}`;
+      }
+      const version = options.version ?? runtimeManifest.appVersion;
+      if (!/^[A-Za-z0-9][A-Za-z0-9._+-]*$/u.test(version)) {
+        throw new Error(`Invalid release version: ${version}`);
+      }
+      const releaseId = `${version}-${options.target}-${archiveSha256.slice(0, 12)}`;
       const releaseDir = join(this.layout.releasesDir, releaseId);
+      options.onProgress?.("verify");
       await promoteImmutableReleaseDirectory({
         incomingDir: incomingRoot,
         targetDir: releaseDir,
-        identity: { archiveSha256, target: options.target, version: options.version },
+        identity: { archiveSha256, target: options.target, version },
       });
       const manifest = releaseManifestSchema.parse({
-        version: options.version,
+        version,
         releaseDir,
         releaseId,
         appVersion: runtimeManifest.appVersion,

@@ -1,6 +1,14 @@
 /* eslint-disable max-lines -- Side pane 当前集中承载 tabs、browser/git/code-viewer 内容；完整拆分需按 pane 功能边界继续推进。 */
 import { ServiceProvider } from "@/hooks/useServices.js";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { IServiceAccessor } from "@zcode/services";
 import {
@@ -15,7 +23,7 @@ import {
 } from "@dnd-kit/core";
 import { horizontalListSortingStrategy, SortableContext } from "@dnd-kit/sortable";
 import type { BrowserViewScreenshotSurfacePreparePayload, GitChangeSourceId } from "@zcode/shared";
-import { PreviewPane } from "@/PreviewPane.js";
+import { FileManagerPane } from "@/WorkspaceFileTree.js";
 import { SidePaneTerminalPane } from "@/SidePaneTerminalPane.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { WorkspaceSidePaneToggleButton } from "@/WorkspaceSidePaneToggleButton.js";
@@ -40,6 +48,15 @@ import {
 import { ResizableHandle, ResizablePanel } from "@/components/ui/resizable.js";
 import { Tabs, TabsContent, TabsList } from "@/components/ui/tabs.js";
 import { SidePaneTabOverview } from "@/app-shell/SidePaneTabOverview.js";
+import {
+  SIDE_PANE_FULL_VIEW_CONVERSATION_TAB_VALUE,
+  SidePaneFullViewConversationTab,
+  SidePaneFullViewToggleButton,
+} from "@/side-pane-full-view/index.js";
+import type {
+  SidePaneFullViewPanelState,
+  SidePaneFullViewToggle,
+} from "@/side-pane-full-view/contract.js";
 import { SubagentSessionSidePane } from "@/app-shell/SubagentSessionSidePane.js";
 import { SubagentDirectorySidePane } from "@/app-shell/SubagentDirectorySidePane.js";
 import { SelectionSideChatPane } from "@/app-shell/SelectionSideChatPane.js";
@@ -307,6 +324,7 @@ export function AnimatedSidePanePanel({
   fileChangeFindQuery,
   onFileChangeFindMatchCountChange,
   onCloseCodeViewer,
+  onNavigateCodeViewer,
   onCloseGit,
   onActivateTab,
   onReorderTab,
@@ -340,6 +358,9 @@ export function AnimatedSidePanePanel({
   showWindowControls,
   onCloseSidePane,
   toggleSidePaneShortcutLabel,
+  fullViewToggle,
+  fullView = null,
+  fullViewSlotRef,
 }: {
   services: IServiceAccessor;
   frameClassName?: string;
@@ -347,6 +368,12 @@ export function AnimatedSidePanePanel({
   showWindowControls?: boolean;
   onCloseSidePane?: () => void;
   toggleSidePaneShortcutLabel?: string;
+  /** 完整视图入口（仅桌面端单 pane 可用；多 pane 时显式禁用）。 */
+  fullViewToggle?: SidePaneFullViewToggle;
+  /** 完整视图只读派生：surface、对话标题与 tab 栏留白；null / 缺省 = 普通视图。 */
+  fullView?: SidePaneFullViewPanelState | null;
+  /** 面板内容区（tab 栏下方）的槽位：宿主按它定位对话/浮窗。 */
+  fullViewSlotRef?: (element: HTMLDivElement | null) => void;
   isDesktop?: boolean;
   isWindowsDesktop?: boolean;
   isVisible: boolean;
@@ -372,6 +399,8 @@ export function AnimatedSidePanePanel({
   fileChangeFindQuery: string;
   onFileChangeFindMatchCountChange: (count: number) => void;
   onCloseCodeViewer: () => void;
+  /** 文件管理器目录行导航：只更新目标 code-viewer tab 的 source。 */
+  onNavigateCodeViewer: (tabId: string, source: CodeViewerSource) => void;
   onCloseGit: () => void;
   onActivateTab: (tabId: string) => void;
   /** "插件"分组打开面板 tab；缺省不渲染分组（web / 无宿主）。 */
@@ -809,6 +838,14 @@ export function AnimatedSidePanePanel({
   const closeSidePaneButton =
     isVisible && onCloseSidePane ? (
       <div className="flex shrink-0 items-center gap-0.5 [app-region:no-drag]">
+        {fullViewToggle ? (
+          <SidePaneFullViewToggleButton
+            active={fullViewToggle.active}
+            onToggle={fullViewToggle.onToggle}
+            shortcutLabel={fullViewToggle.shortcutLabel}
+            disabledReason={fullViewToggle.disabledReason}
+          />
+        ) : null}
         <WorkspaceSidePaneToggleButton
           isSidePaneOpen
           onToggleSidePane={onCloseSidePane}
@@ -817,6 +854,15 @@ export function AnimatedSidePanePanel({
         {showWindowControls ? <DesktopWindowControls /> : null}
       </div>
     ) : null;
+  // 面板 tab 的触发走 onActivateTab（不是 Radix value change），完整视图下必须在同一条
+  // 激活路径上切回面板 surface，否则点了 tab 仍停在对话全宽视图。
+  const activateSidePaneTab = useCallback(
+    (tabId: string) => {
+      fullView?.onSelectSurface("side-pane");
+      onActivateTab(tabId);
+    },
+    [fullView, onActivateTab],
+  );
   const openTabLauncher = (
     <div className="side-pane-open-tab-shell flex h-full min-h-0 flex-col bg-background">
       {
@@ -916,7 +962,7 @@ export function AnimatedSidePanePanel({
         workflowScriptTitle: intl.formatMessage({ id: "sidePane.workflowScript" }),
         workflowArtifactTitle: intl.formatMessage({ id: "sidePane.workflowArtifact" }),
       }}
-      onActivateTab={onActivateTab}
+      onActivateTab={activateSidePaneTab}
       onCloseTab={onCloseTab}
       onReopenClosedTab={onReopenClosedTab}
     />
@@ -933,8 +979,12 @@ export function AnimatedSidePanePanel({
         // 独立外框放在内容层：关闭仍保留 Browser Guest 和 tab 实例，不改变面板持久化边界。
         "h-full overflow-hidden bg-background",
         frameClassName,
+        // 完整视图：相对外层 PanelGroup 铺满整行，库管理的 panel 宽度保持不变。
+        // 修复原因：不改 react-resizable-panels 的 flex，否则 group 尺寸按各 panel
+        // offsetWidth 求和会得到 0，面板从收起到展开时 resize 得到 NaN。
+        fullView && "absolute inset-0 z-0",
       )}
-      style={lockedContentStyle}
+      style={fullView ? undefined : lockedContentStyle}
     >
       <ScopedErrorBoundary
         scope="workspace-side-pane"
@@ -942,9 +992,9 @@ export function AnimatedSidePanePanel({
         variant="panel"
         className="h-full"
       >
-        {hasRenderedSidePane && sidePaneState ? (
+        {hasRenderedSidePane && (sidePaneState || fullView) ? (
           <>
-            {visibleTabs.length === 0 ? openTabLauncher : null}
+            {visibleTabs.length === 0 && !fullView ? openTabLauncher : null}
             {/* sidePaneState 是 workspace 级 registry，fork/切换任务后可能只剩其他
                 任务的 session-scoped tab。此时 registry 非空但 visibleTabs 为空，渲染
                 value="" 的空 Tabs 会白屏。这里隐藏但保留 TabsContent 挂载，切回父任务时
@@ -952,18 +1002,32 @@ export function AnimatedSidePanePanel({
             <div
               className={cn(
                 "h-full min-h-0",
-                visibleTabs.length === 0 && !screenshotSurfaceRequest && "hidden",
+                visibleTabs.length === 0 && !screenshotSurfaceRequest && !fullView && "hidden",
               )}
             >
               <Tabs
-                value={visibleActiveTabId}
-                onValueChange={onActivateTab}
+                // 完整视图的对话 tab 使用保留 value；普通视图下恒取面板 tab。
+                value={
+                  fullView?.surface === "conversation"
+                    ? SIDE_PANE_FULL_VIEW_CONVERSATION_TAB_VALUE
+                    : visibleActiveTabId
+                }
+                onValueChange={(value) => {
+                  if (fullView && value === SIDE_PANE_FULL_VIEW_CONVERSATION_TAB_VALUE) {
+                    fullView.onSelectSurface("conversation");
+                    return;
+                  }
+                  // 面板 tab 被激活时切回面板 surface；普通视图下 onSelectSurface 为 noop 语义。
+                  fullView?.onSelectSurface("side-pane");
+                  onActivateTab(value);
+                }}
                 className="relative h-full gap-0"
               >
                 <TabsList
                   style={captionControlsStyle}
                   className={cn(
                     "flex justify-start w-full rounded-none p-0 border-0 border-b border-border/50 bg-transparent shadow-none !h-12 overflow-hidden",
+                    fullView?.leadingInsetClassName,
                     // 独立面板将标签栏移至窗口顶部，需补充窗口拖拽区域；标签和按钮仍处理自身交互。
                     isDesktop &&
                       "[app-region:drag] [&_button]:[app-region:no-drag] [&_[data-side-pane-tab-id]]:[app-region:no-drag]",
@@ -974,6 +1038,15 @@ export function AnimatedSidePanePanel({
                     <div className="flex h-full shrink-0 items-center p-2">
                       {sidePaneTabOverview}
                     </div>
+                    {fullView ? (
+                      // 对话 tab 固定在第一位：不能关闭、不能拖动排序、没有「⋯」菜单。
+                      <div className="flex h-full shrink-0 items-center pr-1">
+                        <SidePaneFullViewConversationTab
+                          title={fullView.conversationTitle}
+                          isActive={fullView.surface === "conversation"}
+                        />
+                      </div>
+                    ) : null}
                     <DndContext
                       sensors={tabDragSensors}
                       collisionDetection={closestCenter}
@@ -1032,7 +1105,7 @@ export function AnimatedSidePanePanel({
                                     id: "diff.title",
                                   })}
                                   isActive={tab.id === visibleActiveTabId}
-                                  onActivateTab={onActivateTab}
+                                  onActivateTab={activateSidePaneTab}
                                   onCloseTab={onCloseTab}
                                   onCloseOtherTabs={onCloseOtherTabs}
                                   onCloseAllTabs={onCloseAllTabs}
@@ -1073,7 +1146,16 @@ export function AnimatedSidePanePanel({
                 */}
                 </TabsList>
 
-                <div className="relative min-h-0 flex-1 isolate">
+                <div
+                  ref={fullViewSlotRef}
+                  data-side-pane-content-slot=""
+                  className="relative min-h-0 flex-1 isolate"
+                >
+                  {fullView && visibleTabs.length === 0 ? (
+                    // 完整视图沿用「展开后的空标签集合由 useAppPanels 补建」的启动页，
+                    // 补建前这一瞬间内容区显示同一个启动页（不新增第二个空态）。
+                    <div className="absolute inset-0 z-10">{openTabLauncher}</div>
+                  ) : null}
                   {tabs.map((tab) => {
                     if (
                       (tab.type === "browser" || tab.type === "browser-use") &&
@@ -1206,9 +1288,34 @@ export function AnimatedSidePanePanel({
                               : { onRevealFileInTree: onRevealGitFileInTree })}
                           />
                         ) : tab.type === "code-viewer" ? (
-                          <PreviewPane
+                          <FileManagerPane
                             markdownSelectionTarget={{ sessionId: activeTaskId, workspaceKey }}
                             source={tab.source}
+                            target={
+                              // 预览 source 自带 workspace 作用域时优先用它，否则落到当前 shell 的工作区。
+                              tab.source.workspacePath
+                                ? {
+                                    workspacePath: tab.source.workspacePath,
+                                    ...(tab.source.workspaceIdentity
+                                      ? { workspaceIdentity: tab.source.workspaceIdentity }
+                                      : {}),
+                                    ...(tab.source.workspaceRemoteSessionId
+                                      ? {
+                                          workspaceRemoteSessionId:
+                                            tab.source.workspaceRemoteSessionId,
+                                        }
+                                      : {}),
+                                  }
+                                : {
+                                    workspacePath: workspaceAbsPath,
+                                    ...(workspaceIdentity ? { workspaceIdentity } : {}),
+                                    ...(workspaceRemoteSessionId
+                                      ? { workspaceRemoteSessionId }
+                                      : {}),
+                                  }
+                            }
+                            canOpenLocalFileManager={Boolean(isDesktop)}
+                            onNavigate={(source) => onNavigateCodeViewer(tab.id, source)}
                             onClose={onCloseCodeViewer}
                             workspacePath={workspaceAbsPath}
                             onOpenBrowserUrl={onOpenBrowserUrl}
@@ -1360,7 +1467,7 @@ export function AnimatedSidePanePanel({
 
   return (
     <>
-      {isVisible ? (
+      {isVisible && !fullView ? (
         <ResizableHandle
           data-workspace-side-pane-resize-handle="true"
           className={cn(

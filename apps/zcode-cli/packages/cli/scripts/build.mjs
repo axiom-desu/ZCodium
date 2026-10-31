@@ -1,5 +1,8 @@
 import { chmod, readFile, rm } from "node:fs/promises";
-import { readThirdPartyNotices, stageThirdPartyNotices } from "../../../../../scripts/third-party-notices.mjs";
+import {
+  readThirdPartyNotices,
+  stageThirdPartyNotices,
+} from "../../../../../scripts/third-party-notices.mjs";
 import { basename, dirname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
@@ -203,6 +206,15 @@ export const resolveBuildAliases = ({
   "@zcode/shared/builtin-plugin-assets": resolve(
     rootDirectory,
     "../../packages/shared/src/builtinPluginAssets.ts",
+  ),
+  // Office seed 使用公开 Node 适配器与纯契约；必须先于通用 alias，否则会拼成 index.ts/<subpath>。
+  "@zcode/shared/office-viewer-assets-contract": resolve(
+    rootDirectory,
+    "../../packages/shared/src/officeViewerAssets.ts",
+  ),
+  "@zcode/shared/office-viewer-assets": resolve(
+    rootDirectory,
+    "../../packages/shared/src/officeViewerAssetsNode.ts",
   ),
   "@zcode/shared": resolve(rootDirectory, "../../packages/shared/src/index.ts"),
   "@zcode/core": resolve(cliDirectory, "../core/dist/index.js"),

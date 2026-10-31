@@ -58,10 +58,21 @@ export async function startAgent(
   const data = join(root, "agent-data");
   await mkdir(data, { recursive: true });
   // 不继承 API key、真实用户认证及 Electron Node 标志，模型测试也只通过显式传入的隔离配置访问本地 fixture。
+  // HOME/XDG/TMP 来自入口隔离环境：Agent 侧任何直接读 homedir() 的模块
+  // （日志、缓存、临时文件）也必须落在隔离根内，而不是回退到真实用户目录。
   const child = spawn(node, [cli, "app-server"], {
     cwd: data,
     env: {
       PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      USERPROFILE: process.env.USERPROFILE,
+      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+      XDG_DATA_HOME: process.env.XDG_DATA_HOME,
+      XDG_CACHE_HOME: process.env.XDG_CACHE_HOME,
+      XDG_STATE_HOME: process.env.XDG_STATE_HOME,
+      TMPDIR: process.env.TMPDIR,
+      TMP: process.env.TMP,
+      TEMP: process.env.TEMP,
       ZCODE_DATA_BASE_DIR: data,
       ZCODE_SESSION_DB: join(data, "session.sqlite"),
       ZCODE_STORAGE_DIR: data,

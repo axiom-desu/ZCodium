@@ -8,9 +8,11 @@ import {
 import { IZCodeAgentService } from "@zcode/services";
 import { ZCODE_VERSION } from "@zcode/shared";
 import { createCoreHttpServer } from "./http.js";
+import { createIngressToken } from "./ingressToken.js";
 import { installParentDisconnectHandler } from "./parentDisconnect.js";
 import { resolveCoreServerId } from "./serverIdentity.js";
 import { createTaskActivityTracker } from "./taskActivityTracker.js";
+import { resolveServerLayout } from "../runtime/paths.js";
 
 declare const __ZCODE_BUILTIN_PROVIDER_CONFIG_JSON__: string | undefined;
 
@@ -42,7 +44,14 @@ export async function runServerCore(generation: number): Promise<void> {
     serviceAuthorityMode: "standalone-server",
   });
   const taskActivityTracker = createTaskActivityTracker(services.getOptional(IZCodeAgentService));
-  const http = await createCoreHttpServer(services, { serverId: await resolveCoreServerId() });
+  // 每次 Core 启动都轮换 ingress token：旧 Supervisor/Core 退出后旧 token 不再可用，
+  // 新连接的 Host transport 必须从私有 run 目录重新读取。
+  const layout = resolveServerLayout(process.env.ZCODE_SERVER_ROOT?.trim());
+  const ingressToken = await createIngressToken(layout);
+  const http = await createCoreHttpServer(services, {
+    serverId: await resolveCoreServerId(),
+    ingressToken,
+  });
   const send = (message: unknown): Promise<void> => {
     if (typeof process.send !== "function" || process.connected === false) return Promise.resolve();
     return new Promise((resolve) => {

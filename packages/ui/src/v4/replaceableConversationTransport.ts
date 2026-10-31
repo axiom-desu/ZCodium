@@ -117,8 +117,9 @@ export class ReplaceableConversationTransport implements ConversationTransport {
 
   sendCommand(
     envelope: Parameters<ConversationTransport["sendCommand"]>[0],
+    context?: Parameters<ConversationTransport["sendCommand"]>[1],
   ): ReturnType<ConversationTransport["sendCommand"]> {
-    return this.current.sendCommand(envelope);
+    return this.current.sendCommand(envelope, context);
   }
 
   queryCommands(

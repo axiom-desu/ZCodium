@@ -1,13 +1,13 @@
-import { readdirSync } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export function* walkPluginSeedFiles(
+export async function* walkPluginSeedFiles(
   directory: string,
   allowedTopLevelPaths: ReadonlySet<string>,
   allowedSubtrees: ReadonlySet<string>,
   relativeDirectory = "",
-): Generator<string> {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+): AsyncGenerator<string> {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
     const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
     if (shouldSkipDirectory(entry.name, relativePath, allowedTopLevelPaths, allowedSubtrees))
       continue;

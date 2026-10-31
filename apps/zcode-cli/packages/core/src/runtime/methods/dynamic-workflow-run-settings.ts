@@ -25,6 +25,7 @@ import {
 import { analyzeScript } from "../../tool/handlers/workflow-script-analysis.js";
 import type { ExecutableToolCall } from "../../tool/types.js";
 import { traceContextToLogContext } from "../deps.js";
+import { activateDynamicWorkflowTools } from "./dynamic-workflow-activation.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { boundedCompileDiagnostics } from "./dynamic-workflow-run-start.js";
 import {
@@ -141,6 +142,8 @@ export async function amendWorkflowRunSettings(
       maxConcurrency: input.maxConcurrency ?? null,
     });
     if (answer.ok) {
+      // 就地调并发也算「本会话在用工作流」：设置轮之后 run 的通知会让模型去调 GetWorkflowRun。
+      await activateDynamicWorkflowTools.call(this, { source: "run_control", traceContext });
       return retunedSettings.call(this, {
         answer,
         name: displayNameOfSnapshot(snapshot),
@@ -258,6 +261,8 @@ export async function amendWorkflowRunSettings(
       traceContext,
       undefined,
     );
+    // 配置成功即激活工具面：新 run 的通知会让模型去调 GetWorkflowRun。
+    await activateDynamicWorkflowTools.call(this, { source: "run_control", traceContext });
     enqueueSettingsTurn.call(this, {
       text: buildSettingsMessageText({
         ...(name === undefined ? {} : { name }),

@@ -608,20 +608,25 @@ export function WorkspaceFileTree({
       className="flex h-full min-h-0 flex-col text-foreground"
       data-testid={TID_WORKSPACE_FILE_TREE_PANEL}
     >
-      <div className="px-2 pb-3 pt-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="lg"
-          className="w-full justify-start gap-2 rounded-xl px-2.5 text-foreground-subtle hover:bg-surface-hover hover:text-foreground"
-          onClick={onClose}
-        >
-          <ArrowLeft className="size-4 shrink-0" />
-          <span className="min-w-0 truncate">
-            {intl.formatMessage({ id: "workspaceFileTree.backToTasks" })}
-          </span>
-        </Button>
-      </div>
+      {onClose ? (
+        <div className="px-2 pb-3 pt-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            className="w-full justify-start gap-2 rounded-xl px-2.5 text-foreground-subtle hover:bg-surface-hover hover:text-foreground"
+            onClick={onClose}
+          >
+            <ArrowLeft className="size-4 shrink-0" />
+            <span className="min-w-0 truncate">
+              {intl.formatMessage({ id: "workspaceFileTree.backToTasks" })}
+            </span>
+          </Button>
+        </div>
+      ) : (
+        // 嵌入文件管理器面板时没有「返回任务」，只留与侧栏一致的顶部留白。
+        <div className="h-2 shrink-0" />
+      )}
       <div className="flex shrink-0 items-center px-2 pb-2">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-foreground-subtlest" />

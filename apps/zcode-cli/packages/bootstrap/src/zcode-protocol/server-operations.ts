@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- ZCode Protocol 的 session/workspace 方法共享同一个 server context 与 snapshot helpers，迁移期先集中维护。 */
 import { observeSessionDebug } from "./session-debug.js";
+import { resolveDynamicWorkflowRuntimeGate } from "./dynamic-workflow-policy.js";
 import {
   TASK_LIST_SESSION_TYPES,
   isTaskListSessionType,
@@ -145,6 +146,7 @@ type ZCodeSessionRecordParams = (
 ) & { taskType?: SessionTaskType };
 
 interface SessionStartupPreferences {
+  additionalDirectories?: readonly string[];
   toolSearchMode: AppToolSearchMode;
   memoryEnabled: boolean;
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;
@@ -1249,16 +1251,33 @@ async function createSessionWithProjection<T>(
   ) => Promise<{ value: T; phaseDurationsMs?: SnapshotPhaseDurationsMs; messageCount?: number }>,
 ): Promise<T> {
   const params = parseParams(zcodeSessionCreateParamsSchema, rawParams);
-  const startedAt = Date.now();
-  if (params.sessionId && !params.importedHistory) {
-    // 普通 session/create 若允许外部指定 id，会覆盖 context.sessions 里的 active record，
-    // 造成运行中会话被接管、runtime 泄漏或后续 setModel/sendPrompt 路由错位。
-    throw new ProtocolRequestError(
-      -32602,
-      "sessionId is only supported for imported history creates",
-    );
-  }
   const sessionId = (params.sessionId ?? createSessionId()) as SessionId;
+  const claims = (context.sessionCreationIds ??= new Set<string>());
+  // Host 预留只决定身份与归属，不能覆盖 CLI 已有/软删/正在创建的会话。
+  // 在任何 await 前占用 ID，防止 native 与 V4 并发 materialize 同一 runtime。
+  if (context.sessions.has(sessionId) || claims.has(sessionId))
+    throw new ProtocolRequestError(-32602, "sessionId already exists");
+  claims.add(sessionId);
+  try {
+    if (await context.deps.sessionStore?.getSession(sessionId))
+      throw new ProtocolRequestError(-32602, "sessionId already exists");
+    return await materializeCreatedSession(context, { ...params, sessionId }, trace, project);
+  } finally {
+    claims.delete(sessionId);
+  }
+}
+
+async function materializeCreatedSession<T>(
+  context: ZCodeProtocolAgentServerContext,
+  rawParams: unknown,
+  trace: ZCodeProtocolTrace | undefined,
+  project: (
+    record: ZCodeProtocolSessionRecord,
+  ) => Promise<{ value: T; phaseDurationsMs?: SnapshotPhaseDurationsMs; messageCount?: number }>,
+): Promise<T> {
+  const params = parseParams(zcodeSessionCreateParamsSchema, rawParams);
+  const startedAt = Date.now();
+  const sessionId = params.sessionId! as SessionId;
   const workspace = params.workspace;
   context.logger?.info("ZCode Protocol session/create started", {
     event: "zcode_protocol.session_create.started",
@@ -1434,7 +1453,8 @@ export async function activateSessionForResume(
     return { record: existing };
   }
   let session = await getPersistedSession(context, params.sessionId);
-  if (!session) {
+  // 软删除是 CLI 持久事实：冷恢复不得把已删除会话重新激活。
+  if (!session || session.time.deleted !== undefined) {
     // 诊断：冷恢复只有在持久化记录也不存在时才会走到这里；单凭错误文本无法和
     // readSession 的“runtime 尚未活跃”区分，因此把两层状态和等待耗时一起落盘。
     context.logger?.warn("ZCode Protocol session resume found no persisted record", {
@@ -3243,6 +3263,7 @@ async function resolveSessionStartupPreferences(
   if (source.kind === "inherit") {
     const inheritedShellSelection = source.parent.app.runtime.getSessionShellSelection();
     return {
+      additionalDirectories: source.parent.additionalDirectories,
       toolSearchMode: source.parent.toolSearchMode,
       memoryEnabled: source.parent.memoryEnabled,
       modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
@@ -3262,6 +3283,7 @@ async function resolveSessionStartupPreferences(
     runtimePreferences.askUserQuestionAutoResolutionEnabled,
   );
   return {
+    additionalDirectories: runtimePreferences.additionalDirectories,
     toolSearchMode: runtimePreferences.toolSearchMode,
     memoryEnabled: runtimePreferences.memoryEnabled,
     modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
@@ -3337,18 +3359,28 @@ async function createRecord(
     env: context.deps.env,
     eventStore,
     resume,
+    // 一次冻结：本次运行不因迟到项目修改改 cwd，也不热更新附加目录。
+    additionalDirectories: params.additionalDirectories ?? startupPreferences.additionalDirectories,
     runtimeConfig: {
       mode: "mode" in params ? params.mode : undefined,
       modelSelection: "model" in params ? toRuntimeModelSelection(initialModel) : undefined,
       parentSessionId,
       taskType,
       // 动态工作流策略：本次 create/resume 参数优先，缺席时读 Host 同步到进程的 workspace 级
-      // 结论；两者都没有就是 false（fail-closed）。这里**必须写出显式布尔**，不能省成
+      // 结论；两者都没有就是 false（fail-closed）。两个字段**必须写出显式布尔**，不能省成
       // undefined：core 把「缺席」定义为「不参与灰度、保留全部工具」（TUI / headless /
       // workflow_child 的语义），受信 Host 创建的会话不能落进那条豁免。
-      dynamicWorkflowEnabled:
-        ("dynamicWorkflowEnabled" in params && params.dynamicWorkflowEnabled === true) ||
-        context.appRuntimePreferences.dynamicWorkflowEnabled === true,
+      ...resolveDynamicWorkflowRuntimeGate(
+        "dynamicWorkflowEnabled" in params
+          ? {
+              dynamicWorkflowEnabled: params.dynamicWorkflowEnabled,
+              ...("dynamicWorkflowMode" in params && params.dynamicWorkflowMode
+                ? { dynamicWorkflowMode: params.dynamicWorkflowMode }
+                : {}),
+            }
+          : {},
+        context.appRuntimePreferences,
+      ),
       // 协议侧的工具允许/拒绝列表是 session 级安全边界，必须进入 runtimeConfig，
       // 不能只依赖 prompt 文本约束，否则内置工具和动态 MCP 工具仍可能越过调用面。
       toolAllowlist: "toolAllowlist" in params ? params.toolAllowlist : undefined,
@@ -3409,6 +3441,7 @@ async function createRecord(
     createdAt: now,
     eventStore,
     toolSearchMode: startupPreferences.toolSearchMode,
+    additionalDirectories: params.additionalDirectories ?? startupPreferences.additionalDirectories,
     memoryEnabled: startupPreferences.memoryEnabled,
     modelContextBudgetStrategy: startupPreferences.modelContextBudgetStrategy,
     nativeSearchEnhancementsEnabled: startupPreferences.nativeSearchEnhancementsEnabled,

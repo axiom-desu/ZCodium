@@ -64,9 +64,10 @@ import { RemoteSyncDialogs, shouldShowRemoteSyncActions } from "@/settings/Remot
 import { useMcpStore } from "@/store/mcpStore.js";
 import { usePluginManagementStore } from "@/store/pluginManagementStore.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
-import { useBaseWorkspaceServices, useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useConfigDirectoryServicesResolution } from "@/hooks/useConfigDirectoryServices.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
-import type { WorkspaceTabState } from "@/store/tabStore.js";
+import type { PluginWorkspaceTarget } from "@/lib/configDirectoryCatalog.js";
 import { getPluginWorkspaceKey } from "@/settings/PluginScopeMenu.js";
 import { ExternalLink, Import, Plus, UploadCloud } from "lucide-react";
 import { SettingsSegmentedTabs } from "@/settings/SettingsSegmentedTabs.js";
@@ -541,7 +542,7 @@ interface McpSettingsSectionProps {
   localWorkspacePath?: string;
   scopeFilter: "user" | "workspace";
   parentScopeKey: string;
-  workspaceTabs: WorkspaceTabState[];
+  workspaceTabs: PluginWorkspaceTarget[];
   searchQuery: string;
   onVisibleCountChange?: (count: number) => void;
   onEditorOpenChange?: (open: boolean) => void;
@@ -568,12 +569,13 @@ export function McpSettingsSection({
 }: McpSettingsSectionProps) {
   const { intl, locale } = useZCodeIntl();
   const confirmDialog = useConfirmDialog();
-  const services = useWorkspaceServices(
+  const serviceResolution = useConfigDirectoryServicesResolution(
     workspacePath,
     remoteSessionId,
     workspaceIdentity,
     remoteTarget,
   );
+  const { services } = serviceResolution;
   const platform = usePlatform();
   const baseServices = useBaseWorkspaceServices();
 
@@ -920,12 +922,16 @@ export function McpSettingsSection({
       workspaceIdentity: activeWorkspaceIdentity,
       workspacePath: activeWorkspacePath,
       configScope: scopeFilter,
+      authorityKey: serviceResolution.configAuthorityKey,
+      remoteSessionId: serviceResolution.remoteSessionId,
     });
   }, [
     activeWorkspaceIdentity,
     activeWorkspacePath,
     initializePlugins,
     scopeFilter,
+    serviceResolution.configAuthorityKey,
+    serviceResolution.remoteSessionId,
     services.pluginManagementService,
   ]);
 

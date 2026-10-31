@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { access, readFile, stat } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE } from "@zcode/contracts";
 import { candidateBaseDirs } from "./bundled-plugins.js";
@@ -57,6 +57,14 @@ export interface OfficialPluginSeedPluginSource {
 export interface OfficialPluginSeedSource {
   kind: "filesystem" | "sea";
   plugins: OfficialPluginSeedPluginSource[];
+  /**
+   * 读取单个 seed 文件字节的唯一边界：filesystem 走真实路径，SEA 走内嵌资产键。
+   * 由 resolve 函数按来源类型注入，使「SEA 内嵌资产在哪里」不再散在读取方。
+   */
+  readFileBytes?: (
+    plugin: OfficialPluginSeedPluginSource,
+    file: OfficialPluginSeedFile,
+  ) => Buffer | Promise<Buffer>;
 }
 
 interface SeaOfficialPluginManifest {
@@ -72,10 +80,20 @@ interface SeaOfficialPluginManifest {
 
 type SeaModule = typeof import("node:sea");
 
-export function resolveSeedSource(): OfficialPluginSeedSource | undefined {
+interface ResolveSeedSourceOptions {
+  /**
+   * 候选插件根目录基址。默认走 `candidateBaseDirs()`；测试用它指向临时 checkout，
+   * 避免为了覆盖查找路径去改 `process.argv`/`cwd` 这类进程全局状态。
+   */
+  baseDirs?: readonly string[];
+}
+
+export async function resolveSeedSource(
+  options: ResolveSeedSourceOptions = {},
+): Promise<OfficialPluginSeedSource | undefined> {
   const seaSource = resolveSeaSeedSource();
   if (seaSource) return seaSource;
-  return resolveFilesystemSeedSource();
+  return resolveFilesystemSeedSource(options.baseDirs ?? candidateBaseDirs());
 }
 
 function resolveSeaSeedSource(): OfficialPluginSeedSource | undefined {
@@ -84,6 +102,20 @@ function resolveSeaSeedSource(): OfficialPluginSeedSource | undefined {
 
   const manifest = readSeaManifest(sea);
   if (!manifest) return undefined;
+  return resolveSeaSeedSourceFromManifest(manifest, (assetKey) =>
+    Buffer.from(sea.getRawAsset(assetKey)),
+  );
+}
+
+/**
+ * 从 SEA 内嵌清单构造 seed 源（纯数据 + 可注入读取器）。运行时用 `sea.getRawAsset`，
+ * 验收用同一份清单形状 + 与生产一致资产键的临时资产表，证明两条 seed 变体走同一段
+ * staging/闭包校验/降级路径。
+ */
+export function resolveSeaSeedSourceFromManifest(
+  manifest: SeaOfficialPluginManifest,
+  readAsset: (assetKey: string) => Buffer,
+): OfficialPluginSeedSource | undefined {
   const plugins = OFFICIAL_PLUGIN_DEFINITIONS.flatMap((definition) => {
     const plugin = manifest.plugins.find(
       (item) =>
@@ -105,29 +137,46 @@ function resolveSeaSeedSource(): OfficialPluginSeedSource | undefined {
 
   return {
     kind: "sea",
+    // SEA 资产键与构建期（sea-official-plugin-assets.mjs）逐段一致；读取失败直接抛出，
+    // 由 seed 以「seed 内容残缺」降级，而不是启动时静默少一份资源。
+    readFileBytes: (plugin, file) => readAsset(seaSeedAssetKey(plugin.definition, file)),
     plugins,
   };
 }
 
-function resolveFilesystemSeedSource(): OfficialPluginSeedSource | undefined {
-  const plugins = OFFICIAL_PLUGIN_DEFINITIONS.flatMap((definition) => {
-    const rootPath = resolveFilesystemPluginRoot(definition);
-    if (!rootPath) return [];
-    const files = collectFilesystemPluginFiles(rootPath, definition);
-    return [
-      {
-        definition,
-        files,
-        hash: hashSeedFiles(files),
-        missingSeedPaths: findMissingOfficialPluginSeedPaths(definition, files),
-        rootPath,
-      },
-    ];
-  });
+/** SEA 内嵌官方插件资产的唯一定键规则。 */
+export function seaSeedAssetKey(
+  definition: Pick<OfficialPluginDefinition, "name" | "version">,
+  file: Pick<OfficialPluginSeedFile, "path">,
+): string {
+  return `${SEA_PLUGIN_ASSET_PREFIX}${OFFICIAL_PLUGIN_MARKETPLACE}/${definition.name}/${definition.version}/${file.path}`;
+}
+
+async function resolveFilesystemSeedSource(
+  baseDirs: readonly string[],
+): Promise<OfficialPluginSeedSource | undefined> {
+  const plugins: OfficialPluginSeedPluginSource[] = [];
+  for (const definition of OFFICIAL_PLUGIN_DEFINITIONS) {
+    const rootPath = await resolveFilesystemPluginRoot(definition, baseDirs);
+    if (!rootPath) continue;
+    const files = await collectFilesystemPluginFiles(rootPath, definition);
+    plugins.push({
+      definition,
+      files,
+      hash: hashSeedFiles(files),
+      missingSeedPaths: findMissingOfficialPluginSeedPaths(definition, files),
+      rootPath,
+    });
+  }
   if (plugins.length === 0) return undefined;
   return {
     kind: "filesystem",
     plugins,
+    readFileBytes: (_plugin, file) => {
+      if (!file.sourcePath)
+        throw new Error(`Filesystem seed file has no source path: ${file.path}`);
+      return readFile(file.sourcePath);
+    },
   };
 }
 
@@ -160,35 +209,47 @@ function readSeaManifest(sea: SeaModule): SeaOfficialPluginManifest | undefined 
   }
 }
 
-function resolveFilesystemPluginRoot(definition: OfficialPluginDefinition): string | undefined {
-  for (const baseDir of candidateBaseDirs()) {
+async function resolveFilesystemPluginRoot(
+  definition: OfficialPluginDefinition,
+  baseDirs: readonly string[],
+): Promise<string | undefined> {
+  for (const baseDir of baseDirs) {
     for (const relativePath of definition.rootCandidates) {
       const rootPath = resolve(baseDir, relativePath);
-      if (existsSync(join(rootPath, ".zcodium-plugin", "plugin.json"))) return rootPath;
+      if (
+        await access(join(rootPath, ".zcodium-plugin", "plugin.json")).then(
+          () => true,
+          (error: NodeJS.ErrnoException) => {
+            if (error.code === "ENOENT") return false;
+            throw error;
+          },
+        )
+      )
+        return rootPath;
     }
   }
   return undefined;
 }
 
-function collectFilesystemPluginFiles(
+async function collectFilesystemPluginFiles(
   rootPath: string,
   definition: OfficialPluginDefinition,
-): OfficialPluginSeedFile[] {
+): Promise<OfficialPluginSeedFile[]> {
   const files: OfficialPluginSeedFile[] = [];
   const allowedTopLevelPaths = new Set([
     ...includedTopLevelPaths,
     ...(definition.runtimeTopLevelPaths ?? []),
   ]);
-  for (const sourcePath of walkPluginSeedFiles(
+  for await (const sourcePath of walkPluginSeedFiles(
     rootPath,
     allowedTopLevelPaths,
     new Set(definition.runtimeSubtrees ?? []),
   )) {
     const relativePath = toPosixPath(sourcePath.slice(rootPath.length + 1));
     if (!shouldIncludePluginSeedFile(relativePath, allowedTopLevelPaths)) continue;
-    const bytes = readFileSync(sourcePath);
+    const bytes = await readFile(sourcePath);
     files.push({
-      mode: modeForSeedFile(relativePath, statSync(sourcePath).mode),
+      mode: modeForSeedFile(relativePath, (await stat(sourcePath)).mode),
       path: relativePath,
       sha256: hashBytes(bytes),
       sourcePath,
@@ -201,15 +262,13 @@ export function readSeedFileBytes(
   source: OfficialPluginSeedSource,
   plugin: OfficialPluginSeedPluginSource,
   file: OfficialPluginSeedFile,
-): Buffer {
-  if (source.kind === "filesystem" && file.sourcePath) return readFileSync(file.sourcePath);
+): Buffer | Promise<Buffer> {
+  if (source.readFileBytes) return source.readFileBytes(plugin, file);
+  // 兼容旧调用方：手工构造的 source 没有读取器时仍按 kind 回退到原有规则。
+  if (source.kind === "filesystem" && file.sourcePath) return readFile(file.sourcePath);
   const sea = getSeaModule();
   if (!sea?.isSea()) throw new Error("SEA plugin asset is unavailable outside SEA runtime.");
-  return Buffer.from(
-    sea.getRawAsset(
-      `${SEA_PLUGIN_ASSET_PREFIX}${OFFICIAL_PLUGIN_MARKETPLACE}/${plugin.definition.name}/${plugin.definition.version}/${file.path}`,
-    ),
-  );
+  return Buffer.from(sea.getRawAsset(seaSeedAssetKey(plugin.definition, file)));
 }
 
 export function modeForSeedFile(filePath: string, sourceMode?: number): number {

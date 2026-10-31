@@ -1,5 +1,6 @@
 import type { SessionEvent, TargetChangedPayload } from "@zcode/contracts";
 import { SessionEventType } from "@zcode/contracts";
+import { pluginUiToolResultNotificationSchema } from "@zcode/shared/mcp-apps";
 import { ProjectionPayloadTooLargeError } from "./conversation-topic-publisher.js";
 import type { GatewayState } from "./v4-gateway-state.js";
 import {
@@ -171,6 +172,26 @@ function ingestNormalizedEvent(
     return;
   }
   sequence.resolveProjectionEventCommit(ctx, sessionId, String(event.id));
+  // 原因：后台会话没有卡片/订阅时无法创建 guest。只在 live 投影提交后投递，
+  // 从同一权威工具行取输入和 UI 描述；历史 hydration 直接写 publisher，不走此入口。
+  if (event.type === SessionEventType.ToolCallResult && ctx.host.emitPluginUiToolResult) {
+    const toolCallId = (event.payload as { toolCallId: string }).toolCallId;
+    const row = publisher
+      .getSnapshot()
+      .rows.window.find((row) => row.kind === "toolCall" && row.toolCallId === toolCallId);
+    if (row?.kind === "toolCall" && row.status === "success" && row.display?.kind === "mcp_tool") {
+      const result = pluginUiToolResultNotificationSchema.safeParse({
+        sessionId,
+        toolCallId,
+        serverName: row.display.serverName,
+        ui: row.display.ui,
+        ...(row.input && typeof row.input === "object" && !Array.isArray(row.input)
+          ? { input: row.input }
+          : {}),
+      });
+      if (result.success) ctx.host.emitPluginUiToolResult(result.data);
+    }
+  }
   if (
     event.type === SessionEventType.TargetChanged &&
     (event.payload as TargetChangedPayload).target?.status === "complete"

@@ -1,6 +1,11 @@
 /* eslint-disable max-lines -- 远程连接向导的状态编排暂集中在同一组件，后续有独立拆分计划。 */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createUuid, type RemoteTarget, type RemoteWorkspaceSessionEntry } from "@zcode/shared";
+import {
+  createUuid,
+  type RemoteTarget,
+  type RemoteWorkspaceSessionEntry,
+  type SourceServerUpdateTarget,
+} from "@zcode/shared";
 import {
   TID_SSH_CONNECT_TRIGGER,
   TID_SSH_DIALOG,
@@ -14,8 +19,28 @@ import { useCancelPendingRemoteConnection } from "@/hooks/useCancelPendingRemote
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
 import { useRemoteConnectionForm } from "@/hooks/useRemoteConnectionForm.js";
 import { useRemoteConnectionLogs } from "@/hooks/useRemoteConnectionLogs.js";
+import { useSourceServerManagementSnapshot } from "@/hooks/useSourceServerManagementSnapshot.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { toast } from "@/components/ui/toast.js";
 import { getErrorMessage } from "@/lib/errorMessage.js";
+import {
+  classifySourceServerFailure,
+  type SourceInstallConfirmation,
+  type SourceProfileRow,
+} from "@/lib/sourceServerManagement.js";
+import { resolveSourceServerErrorPresentation } from "@/lib/sourceServerErrorPresentation.js";
+import { loadRemoteTargetCredentials } from "@/lib/remoteWorkspaceHistory.js";
+import {
+  createRemoteTargetFromProfile,
+  listSourceProfiles,
+  prepareSourceConnection,
+  type SourceRunningTasksConfirmation,
+} from "@/lib/sourceServerWizardFlow.js";
+import {
+  beginRemoteEntryEpoch,
+  isRemoteEntryEpochCurrent,
+  shouldAutoAdvanceRemoteCompletion,
+} from "@/lib/sourceServerManagement.js";
 import {
   buildRemoteTarget,
   getRemoteWizardStepCopy,
@@ -29,6 +54,7 @@ import {
 } from "@/lib/remoteConnectionDialogState.js";
 import { logger } from "@/logger.js";
 
+import { SourceProfileList } from "@/remote-connection/SourceProfileList.js";
 import {
   RemoteConnectionConnectingStep,
   RemoteConnectionDirectoryStep,
@@ -131,6 +157,14 @@ export function RemoteConnectionDialog({
     setWslUser,
     setDockerContainer,
     setManualDockerContainer,
+    serverUrl,
+    serverName,
+    serverToken,
+    serverWorkspacePath,
+    setServerUrl,
+    setServerName,
+    setServerToken,
+    setServerWorkspacePath,
     refreshDockerContainers,
     applySshConfigAlias,
     clearSelectedSshConfigAlias,
@@ -146,6 +180,30 @@ export function RemoteConnectionDialog({
     connectedSessionId ? (state.sessionsById[connectedSessionId]?.services ?? null) : null,
   );
   const baseServices = useBaseWorkspaceServices();
+  // Source 管理只经既有 Host 服务 accessor；server 直连不读这份快照做 profile 编排。
+  const {
+    management: sourceManagement,
+    snapshot: sourceSnapshot,
+    applySnapshot: applySourceSnapshot,
+  } = useSourceServerManagementSnapshot({
+    // 关闭且无待处理目标时不订阅目录事件，避免启动即触发 directory 迁移/读取。
+    enabled: open || Boolean(connectedSessionId) || Boolean(pendingRemoteTarget),
+  });
+  const sourceProfiles = useMemo(() => listSourceProfiles(sourceSnapshot), [sourceSnapshot]);
+  const [installConfirmation, setInstallConfirmation] = useState<SourceInstallConfirmation | null>(
+    null,
+  );
+  const [runningTasksConfirmation, setRunningTasksConfirmation] =
+    useState<SourceRunningTasksConfirmation | null>(null);
+  const [busySourceProfileId, setBusySourceProfileId] = useState<string | null>(null);
+  const entryEpochRef = useRef(0);
+  const minimizedRef = useRef(false);
+  const pendingContinueRef = useRef<{ sessionId: string; epoch: number } | null>(null);
+
+  const clearSourceApprovals = useCallback(() => {
+    setInstallConfirmation(null);
+    setRunningTasksConfirmation(null);
+  }, []);
   const flowSnapshot = useMemo(
     () => ({
       currentStep,
@@ -201,6 +259,11 @@ export function RemoteConnectionDialog({
 
   const closeDialog = useCallback(
     (options?: { preserveSession?: boolean }) => {
+      // 关闭即作废本入口所有 await 归属；迟到的连接/快照结果只能释放自身资源。
+      beginRemoteEntryEpoch(entryEpochRef);
+      minimizedRef.current = false;
+      pendingContinueRef.current = null;
+      clearSourceApprovals();
       const sessionId = connectedSessionId;
       if (!options?.preserveSession && sessionId) {
         void handleCancelSession(sessionId);
@@ -220,6 +283,7 @@ export function RemoteConnectionDialog({
     },
     [
       cancelPendingRemoteConnection,
+      clearSourceApprovals,
       connectedSessionId,
       connectingRequestId,
       currentStep,
@@ -262,37 +326,128 @@ export function RemoteConnectionDialog({
     closeDialog();
   }, [closeDialog, confirmRemoteFlowDiscard]);
 
-  const startRemoteConnection = async (target: RemoteTarget) => {
+  const startRemoteConnection = async (
+    target: RemoteTarget,
+    options?: {
+      profileId?: string;
+      profileDisplayName?: string;
+      confirmSourceServerInstall?: boolean;
+      expectedTarget?: SourceServerUpdateTarget;
+      force?: boolean;
+    },
+  ) => {
     const nextTarget = withDefaultRemoteResourcePackages(target);
 
-    if (loading) {
+    if (loading || busySourceProfileId) {
       // React 还没来得及把按钮置 disabled 时，快速重复点击会启动多个 SSH host process。
       // 这里在事件入口再做一次并发保护，避免同一个 dialog 产生多条部署流并把上传进度混在一起。
       return;
     }
+
+    // 每次新的连接尝试推进入口 epoch；关闭/收起/取消/改目标也会推进，迟到结果必须作废。
+    const epoch = beginRemoteEntryEpoch(entryEpochRef);
+    const stillCurrent = () => isRemoteEntryEpochCurrent(entryEpochRef, epoch);
 
     setPendingRemoteTarget(nextTarget);
     setLoading(true);
     const requestId = createUuid();
     updateConnectingRequestId(requestId);
     resetFeedback();
+    clearSourceApprovals();
     resetConnectionLogs();
     setCurrentStep("connecting");
 
     try {
+      if (sourceManagement && nextTarget.kind !== "server") {
+        setBusySourceProfileId(options?.profileId ?? null);
+        const prepared = await prepareSourceConnection({
+          management: sourceManagement,
+          target: nextTarget,
+          snapshot: sourceSnapshot,
+          ...(options?.profileId ? { profileId: options.profileId } : {}),
+          ...(options?.profileDisplayName
+            ? { profileDisplayName: options.profileDisplayName }
+            : {}),
+          ...(options?.confirmSourceServerInstall ? { confirmSourceServerInstall: true } : {}),
+          ...(options?.expectedTarget ? { expectedTarget: options.expectedTarget } : {}),
+          ...(options?.force ? { force: true } : {}),
+        });
+        if (!stillCurrent()) return;
+        if (prepared.kind === "failed") throw prepared.error;
+        if (prepared.kind !== "skipped") applySourceSnapshot(prepared.snapshot);
+        if (
+          prepared.kind === "install-required" ||
+          prepared.kind === "controller-upgrade-required"
+        ) {
+          setInstallConfirmation(prepared.confirmation);
+          setLoading(false);
+          setBusySourceProfileId(null);
+          return;
+        }
+        if (prepared.kind === "running-tasks") {
+          setRunningTasksConfirmation(prepared.confirmation);
+          setLoading(false);
+          setBusySourceProfileId(null);
+          return;
+        }
+      }
+
       const sessionId = await onConnect(nextTarget, requestId);
+      if (!stillCurrent()) {
+        // 关闭/取消/切目标后迟到成功只释放自己创建的 session，不导航、不写历史。
+        void handleCancelSession(sessionId);
+        return;
+      }
       const completionState = getRemoteConnectionCompletionDialogState("success");
+      if (
+        !shouldAutoAdvanceRemoteCompletion({
+          minimized: minimizedRef.current,
+          stillSameEntry: true,
+        })
+      ) {
+        // 后台成功只保留结果；显式点击「继续」才进入目录/历史。
+        setConnectedSessionId(sessionId);
+        pendingContinueRef.current = { sessionId, epoch };
+        toast(intl.formatMessage({ id: "source.backgroundReady" }), {
+          variant: "info",
+          dismissible: true,
+          dismissLabel: intl.formatMessage({ id: "common.close" }),
+          actionLabel: intl.formatMessage({ id: "source.continue" }),
+          dedupeKey: `source-background:${requestId}`,
+          onAction: () => {
+            const pending = pendingContinueRef.current;
+            if (!pending || pending.epoch !== epoch) return;
+            if (!isRemoteEntryEpochCurrent(entryEpochRef, epoch)) return;
+            pendingContinueRef.current = null;
+            minimizedRef.current = false;
+            setCurrentStep(completionState.step);
+            applyOpenState(completionState.open);
+          },
+        });
+        return;
+      }
       setConnectedSessionId(sessionId);
       setCurrentStep(completionState.step);
       applyOpenState(completionState.open);
     } catch (connectError) {
+      if (!stillCurrent()) return;
       const completionState = getRemoteConnectionCompletionDialogState("error");
+      const classification = classifySourceServerFailure(connectError);
+      const presentation = resolveSourceServerErrorPresentation(classification.code);
       const errorMessage = getErrorMessage(connectError);
-      setError(errorMessage);
+      // typed Source 失败补充既有错误分类标题；原始错误仍完整展示，便于排查。
+      setError(
+        classification.code
+          ? `${intl.formatMessage({ id: presentation.titleId })}: ${errorMessage}`
+          : errorMessage,
+      );
       setCurrentStep(completionState.step);
-      applyOpenState(completionState.open);
+      if (!minimizedRef.current) applyOpenState(completionState.open);
     } finally {
-      setLoading(false);
+      if (stillCurrent()) {
+        setLoading(false);
+        setBusySourceProfileId(null);
+      }
     }
   };
 
@@ -317,6 +472,10 @@ export function RemoteConnectionDialog({
       wslUser,
       dockerContainer,
       manualDockerContainer,
+      serverUrl,
+      serverName,
+      serverToken,
+      serverWorkspacePath,
     });
     if (!nextTarget) {
       // 必填项缺失属于表单校验，不应该和真实连接失败共用 destructive 错误样式。
@@ -339,14 +498,130 @@ export function RemoteConnectionDialog({
     void startRemoteConnection(pendingRemoteTarget);
   }, [handleConnect, pendingRemoteTarget, startRemoteConnection]);
 
+  const handleConfirmInstall = useCallback(() => {
+    const confirmation = installConfirmation;
+    const target = pendingRemoteTarget;
+    if (!confirmation || !target) return;
+    // 确认必须带 preview 时冻结的 target；Host 会拒绝 await 期间的目标变更。
+    setInstallConfirmation(null);
+    void startRemoteConnection(target, {
+      profileId: confirmation.profileId,
+      confirmSourceServerInstall: true,
+      ...(confirmation.expectedTarget ? { expectedTarget: confirmation.expectedTarget } : {}),
+    });
+  }, [installConfirmation, pendingRemoteTarget, startRemoteConnection]);
+
+  const handleCancelInstall = useCallback(() => {
+    setInstallConfirmation(null);
+    setCurrentStep("settings");
+  }, []);
+
+  const handleConfirmForce = useCallback(() => {
+    const confirmation = runningTasksConfirmation;
+    const target = pendingRemoteTarget;
+    if (!confirmation || !target) return;
+    setRunningTasksConfirmation(null);
+    void startRemoteConnection(target, {
+      profileId: confirmation.profileId,
+      force: true,
+      confirmSourceServerInstall: true,
+      ...(confirmation.expectedTarget ? { expectedTarget: confirmation.expectedTarget } : {}),
+    });
+  }, [pendingRemoteTarget, runningTasksConfirmation, startRemoteConnection]);
+
+  const handleCancelForce = useCallback(() => {
+    setRunningTasksConfirmation(null);
+    setCurrentStep("settings");
+  }, []);
+
+  const handleConnectSavedProfile = useCallback(
+    async (row: SourceProfileRow) => {
+      if (!sourceManagement || loading || busySourceProfileId) return;
+      const profile = sourceSnapshot?.profiles.find(
+        (candidate) => candidate.profileId === row.profileId,
+      );
+      if (!profile) return;
+      const epoch = beginRemoteEntryEpoch(entryEpochRef);
+      const stillCurrent = () => isRemoteEntryEpochCurrent(entryEpochRef, epoch);
+      setBusySourceProfileId(row.profileId);
+      setError("");
+      try {
+        // 凭据只从 credential port 读回；profile 快照不保存口令。
+        const credentials = await loadRemoteTargetCredentials(
+          profile.target,
+          baseServices.credentialService.load,
+        );
+        if (!stillCurrent()) return;
+        const target = createRemoteTargetFromProfile(profile, credentials);
+        await startRemoteConnection(target, { profileId: row.profileId });
+      } catch (profileError) {
+        if (!stillCurrent()) return;
+        setError(getErrorMessage(profileError));
+      } finally {
+        if (stillCurrent()) setBusySourceProfileId(null);
+      }
+    },
+    [
+      baseServices.credentialService,
+      busySourceProfileId,
+      loading,
+      sourceManagement,
+      sourceSnapshot,
+      startRemoteConnection,
+    ],
+  );
+
+  const handleDisconnectSavedProfile = useCallback(
+    async (row: SourceProfileRow) => {
+      if (!sourceManagement || !row.sourceServerId) return;
+      setBusySourceProfileId(row.profileId);
+      try {
+        applySourceSnapshot(await sourceManagement.disconnect(row.sourceServerId));
+      } catch (disconnectError) {
+        setError(getErrorMessage(disconnectError));
+      } finally {
+        setBusySourceProfileId(null);
+      }
+    },
+    [applySourceSnapshot, sourceManagement],
+  );
+
+  const handleRemoveSavedProfile = useCallback(
+    async (row: SourceProfileRow) => {
+      if (!sourceManagement) return;
+      const confirmed = await confirmDialog({
+        title: intl.formatMessage({ id: "source.removeConfirmTitle" }),
+        description: intl.formatMessage({ id: "source.removeConfirmDescription" }),
+        confirmLabel: intl.formatMessage({ id: "source.remove" }),
+        cancelLabel: intl.formatMessage({ id: "common.cancel" }),
+      });
+      if (!confirmed) return;
+      setBusySourceProfileId(row.profileId);
+      try {
+        applySourceSnapshot(
+          row.sourceServerId
+            ? await sourceManagement.removeSource(row.sourceServerId)
+            : await sourceManagement.removeProfile(row.profileId),
+        );
+      } catch (removeError) {
+        setError(getErrorMessage(removeError));
+      } finally {
+        setBusySourceProfileId(null);
+      }
+    },
+    [applySourceSnapshot, confirmDialog, intl, sourceManagement],
+  );
+
   const handleBackToConnection = useCallback(async () => {
     if (!connectedSessionId) {
       return;
     }
 
     resetFeedback();
+    const epoch = entryEpochRef.current;
     try {
       await onCancelSession(connectedSessionId);
+      if (!isRemoteEntryEpochCurrent(entryEpochRef, epoch)) return;
       setConnectedSessionId(null);
       updateConnectingRequestId(null);
       resetConnectionLogs();
@@ -367,8 +642,11 @@ export function RemoteConnectionDialog({
       selectingDirectoryRef.current = true;
       setSelectingDirectory(true);
       resetFeedback();
+      const epoch = entryEpochRef.current;
       try {
         await onSelectProject(connectedSessionId, path, localWorkspacePath);
+        // 选中目录期间关闭/收起/改目标后不得再推进导航或激活 tab。
+        if (!isRemoteEntryEpochCurrent(entryEpochRef, epoch)) return;
         resetConnectionLogs();
         setCurrentStep("kind");
         setConnectedSessionId(null);
@@ -404,6 +682,16 @@ export function RemoteConnectionDialog({
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
+      minimizedRef.current = false;
+      const pendingContinue = pendingContinueRef.current;
+      if (pendingContinue) {
+        // 后台成功后的继续入口：保留已完成 session，直接回到目录步骤。
+        pendingContinueRef.current = null;
+        setConnectedSessionId(pendingContinue.sessionId);
+        setCurrentStep(getRemoteConnectionCompletionDialogState("success").step);
+        applyOpenState(true);
+        return;
+      }
       if (shouldResetRemoteConnectionOnOpen(flowSnapshot)) {
         resetFeedback();
         resetConnectionLogs();
@@ -427,6 +715,15 @@ export function RemoteConnectionDialog({
           variant={triggerVariant}
           size={triggerSize}
           onClick={() => {
+            minimizedRef.current = false;
+            const pendingContinue = pendingContinueRef.current;
+            if (pendingContinue) {
+              pendingContinueRef.current = null;
+              setConnectedSessionId(pendingContinue.sessionId);
+              setCurrentStep(getRemoteConnectionCompletionDialogState("success").step);
+              applyOpenState(true);
+              return;
+            }
             if (shouldResetRemoteConnectionOnOpen(flowSnapshot)) {
               resetFeedback();
               resetConnectionLogs();
@@ -461,7 +758,9 @@ export function RemoteConnectionDialog({
                     flowActive
                       ? () => {
                           // 连接慢时用户只能关闭弹窗，关闭会取消 pending 连接并丢失当前步骤。
-                          // 这里把“收起”明确拆成仅隐藏 dialog，不重置状态、不取消后台连接，后续入口可恢复到当前步骤。
+                          // 这里把“收起”明确拆成仅隐藏 dialog，不重置状态、不取消后台连接；
+                          // 收起期间成功只保留结果并提示显式继续，不自动推进导航。
+                          minimizedRef.current = true;
                           applyOpenState(false);
                         }
                       : undefined
@@ -499,6 +798,22 @@ export function RemoteConnectionDialog({
                   />
                 ) : null}
 
+                {currentStep === "settings" && sourceProfiles.length > 0 ? (
+                  <SourceProfileList
+                    rows={sourceProfiles}
+                    busyProfileId={busySourceProfileId}
+                    onConnect={(row) => {
+                      void handleConnectSavedProfile(row);
+                    }}
+                    onDisconnect={(row) => {
+                      void handleDisconnectSavedProfile(row);
+                    }}
+                    onRemove={(row) => {
+                      void handleRemoveSavedProfile(row);
+                    }}
+                  />
+                ) : null}
+
                 {currentStep === "settings" ? (
                   <RemoteConnectionSettingsStep
                     kind={kind}
@@ -516,6 +831,10 @@ export function RemoteConnectionDialog({
                     manualDockerContainer={manualDockerContainer}
                     dockerContainers={dockerContainers}
                     dockerAvailable={dockerAvailable}
+                    serverUrl={serverUrl}
+                    serverName={serverName}
+                    serverToken={serverToken}
+                    serverWorkspacePath={serverWorkspacePath}
                     sshConfigAliases={sshConfigAliases}
                     sshConfigAliasesLoading={sshConfigAliasesLoading}
                     sshConfigAliasesError={sshConfigAliasesError}
@@ -540,6 +859,10 @@ export function RemoteConnectionDialog({
                     onWslUserChange={setWslUser}
                     onDockerContainerChange={setDockerContainer}
                     onManualDockerContainerChange={setManualDockerContainer}
+                    onServerUrlChange={setServerUrl}
+                    onServerNameChange={setServerName}
+                    onServerTokenChange={setServerToken}
+                    onServerWorkspacePathChange={setServerWorkspacePath}
                     onDockerContainersRefresh={refreshDockerContainers}
                     onApplySshConfigAlias={applySshConfigAlias}
                     onClearSelectedSshConfigAlias={clearSelectedSshConfigAlias}
@@ -554,6 +877,12 @@ export function RemoteConnectionDialog({
                     logs={connectionLogs}
                     errorMessage={error}
                     loading={loading}
+                    installConfirmation={installConfirmation}
+                    runningTasksConfirmation={runningTasksConfirmation}
+                    onConfirmInstall={handleConfirmInstall}
+                    onCancelInstall={handleCancelInstall}
+                    onConfirmForce={handleConfirmForce}
+                    onCancelForce={handleCancelForce}
                     onBack={() => {
                       void (async () => {
                         const confirmed = await confirmRemoteFlowDiscard();

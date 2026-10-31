@@ -8,6 +8,29 @@ modules:
   - id: shared
     roots: [packages/shared/src]
     managed: false
+  # source-server：SourceServer/R3 的纯 domain 契约（profile/更新授权/兼容/发布描述符/错误分类）。
+  - id: source-server
+    roots: [packages/shared/src/source-server]
+    managed: true
+    requires: [shared]
+    publicEntrypoints:
+      [packages/shared/src/source-server/index.ts, packages/shared/src/source-server/contract.ts]
+    layers:
+      domain: "."
+    owner: remote
+  # sqlite-migrations：SQLite 升级基础设施，Node-only 公开子路径。
+  - id: sqlite-migrations
+    roots: [packages/shared/src/sqlite-migrations]
+    managed: true
+    requires: []
+    publicEntrypoints:
+      [
+        packages/shared/src/sqlite-migrations/index.ts,
+        packages/shared/src/sqlite-migrations/contract.ts,
+      ]
+    layers:
+      adapters: "."
+    owner: persistence
   - id: provider
     roots: [packages/provider/src]
     managed: false
@@ -31,6 +54,44 @@ modules:
     layers: { domain: domain, app: app, adapters: adapters }
     layerOrder: [domain, app, adapters]
     owner: desktop-settings
+  # project-storage：Host 项目组织态（迁移 + 唯一写仓储），启动 composition 注入。
+  # domain=契约/remote policy/saved workspace 序列化；app=迁移编排/Migration SQL/身份工具；adapters=SQLite 仓储与 composition。
+  - id: project-storage
+    roots: [packages/services/src/project-storage]
+    managed: true
+    requires: [shared, sqlite-migrations]
+    publicEntrypoints:
+      [
+        packages/services/src/project-storage/index.ts,
+        packages/services/src/project-storage/contract.ts,
+      ]
+    layers: { domain: domain, app: app, adapters: "." }
+    layerOrder: [domain, app, adapters]
+    owner: conversation
+  # task-facts：CLI 会话事实摄入/命令交接应用层；存储与 CLI 来源均通过端口注入。
+  - id: task-facts
+    roots: [packages/services/src/task-facts]
+    managed: true
+    requires: [shared]
+    publicEntrypoints:
+      [packages/services/src/task-facts/index.ts, packages/services/src/task-facts/contract.ts]
+    layers: { domain: domain, app: app }
+    layerOrder: [domain, app]
+    owner: conversation
+  # project：Host 项目公开应用服务（唯一写者是 project-storage 仓储）。
+  - id: project
+    roots: [packages/services/src/project]
+    managed: true
+    requires: [project-storage, services, shared]
+    publicEntrypoints:
+      [
+        packages/services/src/project/index.ts,
+        packages/services/src/project/contract.ts,
+        packages/services/src/project/app/autoArchiveScheduler.ts,
+      ]
+    layers: { domain: domain, app: app, adapters: adapters }
+    layerOrder: [domain, app, adapters]
+    owner: conversation
   - id: client
     roots: [packages/client/src]
     managed: false
@@ -61,6 +122,22 @@ modules:
   - id: zcode-cli
     roots: [apps/zcode-cli]
     managed: false
+
+  # office-runtime：四个文档插件共用的 MCP/面板运行时。domain=锚点/文本/模型，
+  # app=DocumentOwner（唯一视图状态所有者），adapters=文件/解析/导入/MCP server，
+  # ui=面板。产物由 scripts/build.mjs 打进各插件 dist/，运行时不加载 node_modules。
+  - id: office-runtime
+    roots: [apps/zcode-cli/packages/office-runtime]
+    managed: true
+    requires: []
+    publicEntrypoints:
+      [
+        apps/zcode-cli/packages/office-runtime/index.ts,
+        apps/zcode-cli/packages/office-runtime/contract.ts,
+      ]
+    layers: { domain: src/domain, app: src/app, adapters: src/adapters, ui: ui }
+    layerOrder: [domain, app, adapters, ui]
+    owner: plugin
 
   - id: gen-ui-protocol
     roots: [packages/shared/src/gen-ui]
@@ -175,6 +252,32 @@ modules:
       ui: components
     layerOrder: [domain, app, adapters, ui]
     owner: plugin
+
+  # project-sidebar：Host readTree 的项目行/任务行投影与本地项目编辑器；
+  # 外壳仍持 footer/automations/plugin store/文件树/分屏与 legacy workspace 行。
+  - id: project-sidebar
+    roots: [packages/ui/src/project-sidebar]
+    managed: true
+    requires: [services, shared, ui]
+    publicEntrypoints:
+      [packages/ui/src/project-sidebar/index.ts, packages/ui/src/project-sidebar/contract.ts]
+    layers:
+      ui: "."
+    owner: conversation
+  # Side Pane 完整视图（docs/specs/side-pane-full-view.md）：浮窗外壳与状态派生，
+  # 只通过 contract/index 暴露给 shell 与面板。
+  - id: side-pane-full-view
+    roots: [packages/ui/src/side-pane-full-view]
+    managed: true
+    requires: [shared, ui]
+    publicEntrypoints:
+      [
+        packages/ui/src/side-pane-full-view/index.ts,
+        packages/ui/src/side-pane-full-view/contract.ts,
+      ]
+    layers:
+      ui: "."
+    owner: conversation
 
 global:
   maxFileLines: 400

@@ -131,6 +131,7 @@ export async function subscribeReserved(
           sessionId,
           params.resumeThoughtLevel,
           params.workspace,
+          params.additionalDirectories,
         )
       : await hydration.hydratePublisher(ctx, sessionId);
   const cliSessionRestoreMs = !isLiveConversation

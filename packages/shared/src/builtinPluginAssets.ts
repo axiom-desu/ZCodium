@@ -35,6 +35,20 @@ export function cuaRuntimeRequiredPaths(platform: string, arch: string): string[
   ];
 }
 
+/**
+ * office-runtime 为四个文档插件构建的查看面板产物（插件根目录相对路径）。
+ * 唯一定义仍是 office-runtime `contract.ts` 的 `OFFICE_RUNTIME_OUTPUTS`；这里复制的是
+ * seed/SEA/desktop/remote 共用的必需资产清单，缺任一项即视为残缺插件（fail closed）。
+ * 三个入口之外还包含完整 NOTICE 与 LICENSE：它们随 dist 一起分发，缺失时不能只校验入口文件。
+ */
+export const OFFICE_VIEWER_RUNTIME_PATHS = [
+  "dist/server.mjs",
+  "dist/ui/assets.json",
+  "dist/ui/panel.html",
+  "dist/THIRD_PARTY_NOTICES.txt",
+  "dist/LICENSE",
+] as const;
+
 /** Immutable asset contract shared by bootstrap, desktop staging and remote deployment. */
 export const BUILTIN_PLUGIN_SEED_PATHS = {
   "browser-use-plugin": [
@@ -102,6 +116,8 @@ export const BUILTIN_PLUGIN_SEED_PATHS = {
     "agents/visual-judge.md",
     "skills/pptx/LICENSE.txt",
     "skills/pptx/SKILL.md",
+    "skills/pptx-viewer/SKILL.md",
+    ...OFFICE_VIEWER_RUNTIME_PATHS,
   ],
   "documents-plugin": [
     "agents/visual-judge.md",
@@ -146,6 +162,8 @@ export const BUILTIN_PLUGIN_SEED_PATHS = {
     "skills/docx/scripts/templates/people.xml",
     "skills/docx/scripts/utilities.py",
     "skills/docx/setup.sh",
+    "skills/docx-viewer/SKILL.md",
+    ...OFFICE_VIEWER_RUNTIME_PATHS,
   ],
   "pdf-plugin": [
     "agents/visual-judge.md",
@@ -193,6 +211,8 @@ export const BUILTIN_PLUGIN_SEED_PATHS = {
     "skills/pdf/typesetting/pagination.md",
     "skills/pdf/typesetting/palette.md",
     "skills/pdf/typesetting/typography.md",
+    "skills/pdf-viewer/SKILL.md",
+    ...OFFICE_VIEWER_RUNTIME_PATHS,
   ],
   "spreadsheets-plugin": [
     "agents/visual-judge.md",
@@ -222,6 +242,8 @@ export const BUILTIN_PLUGIN_SEED_PATHS = {
     "skills/xlsx/templates/base.py",
     "skills/xlsx/templates/palettes.py",
     "skills/xlsx/xlsx.py",
+    "skills/xlsx-viewer/SKILL.md",
+    ...OFFICE_VIEWER_RUNTIME_PATHS,
   ],
   "skill-creator-plugin": [],
   "plugin-creator-plugin": [
@@ -287,6 +309,12 @@ const RUNTIME_BUILD_SCRIPTS: Partial<Record<keyof typeof BUILTIN_PLUGIN_SEED_PAT
   "node-repl-host": "scripts/build.mjs",
   "android-emulator-plugin": "scripts/build-mcp.mjs",
   "ios-simulator-plugin": "scripts/build-mcp.mjs",
+  // 四个查看面板插件没有自己的 tsconfig：bootstrap 路径只在插件根存在 tsconfig.json
+  // 时才运行 tsc，随后统一执行这份 office-runtime 构建脚本产出 dist/。
+  "documents-plugin": "../office-runtime/scripts/build.mjs",
+  "pdf-plugin": "../office-runtime/scripts/build.mjs",
+  "presentations-plugin": "../office-runtime/scripts/build.mjs",
+  "spreadsheets-plugin": "../office-runtime/scripts/build.mjs",
 };
 
 export const BUILTIN_PLUGIN_ASSETS: readonly BuiltinPluginAsset[] = (
@@ -309,7 +337,12 @@ export const BUILTIN_PLUGIN_ASSETS: readonly BuiltinPluginAsset[] = (
 export const BUILTIN_PLUGIN_TOP_LEVEL_PATHS = [
   ".mcp.json",
   ".zcodium-plugin",
+  "LICENSE",
+  "LICENSE.md",
+  "NOTICE",
+  "NOTICE.md",
   "README.md",
+  "THIRD_PARTY_NOTICES.txt",
   "agents",
   "commands",
   "dist",

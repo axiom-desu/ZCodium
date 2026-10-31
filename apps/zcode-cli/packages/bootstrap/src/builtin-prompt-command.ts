@@ -18,10 +18,16 @@ interface ResolveZCodeBuiltinPromptCommandOptions {
   workingDirectory?: string;
 }
 
-export function resolveZCodeBuiltinPromptCommand(
+interface ResolvedZCodeBuiltinPromptCommand {
+  /** 命中的内置命令名（`init` / `workflow`），调用方据此挂命令特有的副作用（如 onDemand 激活）。 */
+  name: string;
+  prompt: string;
+}
+
+export function resolveZCodeBuiltinPromptCommandInvocation(
   input: string,
   options: ResolveZCodeBuiltinPromptCommandOptions = {},
-): string | undefined {
+): ResolvedZCodeBuiltinPromptCommand | undefined {
   const invocation = parseBuiltinPromptCommandInvocation(input);
   if (!invocation) {
     return undefined;
@@ -29,18 +35,24 @@ export function resolveZCodeBuiltinPromptCommand(
 
   if (invocation.name === INIT_COMMAND_NAME) {
     const workingDirectory = options.workingDirectory ?? process.cwd();
-    return buildInitAgentsPrompt({
-      args: invocation.args,
-      targetPath: join(workingDirectory, "AGENTS.md"),
-      workingDirectory,
-    });
+    return {
+      name: INIT_COMMAND_NAME,
+      prompt: buildInitAgentsPrompt({
+        args: invocation.args,
+        targetPath: join(workingDirectory, "AGENTS.md"),
+        workingDirectory,
+      }),
+    };
   }
 
   if (invocation.name === BUILTIN_WORKFLOW_COMMAND_NAME) {
     if (options.dynamicWorkflowEnabled === false) {
       return undefined;
     }
-    return expandBuiltinWorkflowCommandPrompt(invocation.args);
+    return {
+      name: BUILTIN_WORKFLOW_COMMAND_NAME,
+      prompt: expandBuiltinWorkflowCommandPrompt(invocation.args),
+    };
   }
 
   return undefined;

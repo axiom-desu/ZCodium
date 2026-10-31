@@ -159,7 +159,7 @@ test("first-start seed carries native dependencies, excludes workspace modules a
   process.argv[1] = join(root, "zcode.cjs");
   try {
     const storageRoot = join(root, "storage");
-    resolveOfficialPluginRoots({ storageRoot });
+    await resolveOfficialPluginRoots({ storageRoot });
     const cache = join(
       storageRoot,
       `cache/zcode-plugins-official/node-repl-host/${definition.version}`,
@@ -172,7 +172,7 @@ test("first-start seed carries native dependencies, excludes workspace modules a
     });
     const nativePath = cuaRuntimeRequiredPaths(process.platform, process.arch).at(-2);
     await rm(join(cache, nativePath));
-    resolveOfficialPluginRoots({ storageRoot });
+    await resolveOfficialPluginRoots({ storageRoot });
     assert.deepEqual(
       await readFile(join(cache, nativePath)),
       await readFile(join(source, nativePath)),

@@ -59,7 +59,13 @@ export interface Page {
   visible: boolean;
   snapshot(): UsePluginUiHostResult;
   subscribe(listener: () => void): () => void;
+  /** admission 后立即启动，不等待展示锚点。 */
+  start(): void;
   update(input: UsePluginUiHostInput): void;
+  /** 后台结果只投喂工具数据，不改变展示锚点/尺寸/交互上下文。 */
+  updateToolFeed(
+    input: Pick<UsePluginUiHostInput, "toolCallId" | "toolInput" | "toolResult" | "toolCancelled">,
+  ): void;
   bind(node: HTMLElement, sidebar: boolean): () => void;
   busy(): boolean;
   running(): boolean;

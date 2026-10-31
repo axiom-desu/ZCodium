@@ -42,6 +42,7 @@ import type {
 } from "@/store/zcodeSessionStoreTypes.js";
 import type { TaskFindDialogProps } from "@/quickpick/TaskFindDialog.js";
 import type { AutomationsNavigationTab, OpenAutomationsMain } from "@/lib/taskNavigationHistory.js";
+import type { SidePaneFullViewController } from "@/side-pane-full-view/contract.js";
 
 export interface WorkspaceShellZCodeState {
   activeTaskId: WorkspaceZCodeUIState["activeTaskId"];
@@ -66,7 +67,16 @@ export interface CreateTaskOptions {
   /** 与 initialPrompt canonical 前缀对应的结构化 mention；仅用于编辑器展示。 */
   initialPromptMention?: ComposerMentionPrefill;
   /** 新任务落在哪个 workspace；缺省取活动 workspace。 */
-  targetWorkspace?: { workspacePath: string; workspaceIdentity?: string };
+  targetWorkspace?: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    projectId?: string | null;
+  };
+  /**
+   * 新任务的项目归属（冻结的 UI 意图）。只交给 Host 的预占入口；显式 null = 全局任务，
+   * undefined = 未表态，由入口按活动任务/既有草稿继承。
+   */
+  projectId?: string | null;
 }
 
 export type CreateTaskRequest = ZCodeProvider | CreateTaskOptions;
@@ -87,7 +97,8 @@ export interface AppProps {
   remoteConnectionLogs?: RemoteConnectionLogEntry[];
   onCreateTask: (request?: CreateTaskRequest) => void;
   onCreateConversationTask?: () => void;
-  onResolveConversationWorkspace?: () => Promise<string>;
+  /** 调用 pane 的当前资格；Root 在本地 IO 前后消费，普通独立对话调用可省略。 */
+  onResolveConversationWorkspace?: (isCurrent?: () => boolean) => Promise<string>;
   onOpenWorkspace: () => void;
   onOpenFolderFromWorkspaceMenu: () => void;
   onOpenRemoteWorkspace?: () => void;
@@ -139,6 +150,10 @@ export interface WorkspaceShellLayoutProps extends AppProps {
   goBackShortcutLabel: string;
   goForwardShortcutLabel: string;
   toggleSidePaneShortcutLabel: string;
+  /** 完整视图快捷键展示 label；未注册处理器（Web/手机）时缺省。 */
+  toggleSidePaneFullViewShortcutLabel?: string;
+  /** Side Pane 完整视图 controller（spec：docs/specs/side-pane-full-view.md）；仅桌面端下发。 */
+  sidePaneFullView?: SidePaneFullViewController;
   canGoBack: boolean;
   canGoForward: boolean;
   canTaskNavBack: boolean;
@@ -257,6 +272,8 @@ export interface WorkspaceShellLayoutProps extends AppProps {
   handleOpenWorkflowWorkspace: (request: OpenScopedWorkflowWorkspaceSideTabRequest) => void;
   handleOpenWorkflowArtifact: (request: OpenScopedWorkflowArtifactSideTabRequest) => void;
   handleCloseCodeViewer: () => void;
+  /** 文件管理器目录行导航：只更新目标 code-viewer tab 的 source。 */
+  handleNavigateCodeViewer: (tabId: string, source: CodeViewerSource) => void;
   handleCloseGit: () => void;
   handleActivateSidePaneTab: (tabId: string) => void;
   handleReorderSidePaneTab: (activeTabId: string, overTabId: string) => void;

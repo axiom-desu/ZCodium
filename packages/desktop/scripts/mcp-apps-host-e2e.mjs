@@ -1,12 +1,71 @@
-import { verifySamplingDatabase } from "./mcp-apps-host-fixture/sampling-database.mjs";
-import { build } from "esbuild";
-import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+/**
+ * MCP Apps host E2E 入口：只允许 Node builtins 的薄启动器 + 同一文件内的 runner。
+ *
+ * 为什么必须两段式：`packages/services/src/paths.ts` 在 import 时就把
+ * `ZCODE_DATA_BASE_DIR`/`HOME` 固化成模块级变量。ESM 静态 import 先于正文执行，
+ * 所以本文件在建立临时隔离环境并 spawn 自己之前不能加载任何业务模块（esbuild、
+ * fixture、service）。子进程带着同一份 env 重入本文件后，才动态加载业务模块。
+ * 隔离规则见 e2e-isolation.mjs。
+ */
+import { spawn } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { DatabaseSync } from "node:sqlite";
+import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import {
+  E2E_ISOLATION_PATH_ENV_KEYS,
+  E2E_ISOLATION_ROOT_ENV,
+  assertIsolatedEnv,
+  createE2EIsolation,
+  spawnIsolated,
+} from "./e2e-isolation.mjs";
+
+const entry = fileURLToPath(import.meta.url);
+
+if (!process.env[E2E_ISOLATION_ROOT_ENV]) {
+  const isolation = await createE2EIsolation();
+  assertIsolatedEnv(isolation.env);
+  process.stderr.write(`[mcp-apps-host-e2e] isolation root: ${isolation.resolvedRoot}\n`);
+  // 证据核对用：打印启动器解析出的实际路径，不读取真实日志、不运行 fixture。
+  if (process.argv.includes("--print-isolation")) {
+    process.stdout.write(
+      JSON.stringify(
+        {
+          root: isolation.root,
+          resolvedRoot: isolation.resolvedRoot,
+          argv: process.argv.slice(2),
+          paths: Object.fromEntries(
+            E2E_ISOLATION_PATH_ENV_KEYS.map((key) => [key, isolation.env[key]]),
+          ),
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    process.exit(0);
+  }
+  // 用同一份隔离 env 与原 argv 重入本文件；runner 分支在 env 建立后才加载业务模块。
+  const child = spawnIsolated([entry, ...process.argv.slice(2)], { env: isolation.env });
+  // Ctrl-C / 外部超时杀启动器时，把信号原样转给 runner，保持原有生命周期语义。
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.on(signal, () => child.kill(signal));
+  }
+  const code = await new Promise((accept) => {
+    child.on("error", (error) => {
+      process.stderr.write(`[mcp-apps-host-e2e] runner 启动失败: ${error.stack ?? error}\n`);
+      accept(1);
+    });
+    child.on("exit", (exitCode, signal) => accept(exitCode ?? (signal ? 1 : 0)));
+  });
+  process.exit(code);
+}
+
+// 从这里开始 env 已隔离；业务模块只能动态加载。
+assertIsolatedEnv();
+const { build } = await import("esbuild");
+const { verifySamplingDatabase } = await import("./mcp-apps-host-fixture/sampling-database.mjs");
 const require = createRequire(import.meta.url);
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(desktop, "../..");

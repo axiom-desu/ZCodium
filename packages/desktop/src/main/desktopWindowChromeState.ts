@@ -16,6 +16,7 @@ function resolveMacOSMajorVersion(
   return darwinMajor >= 25 ? darwinMajor + 1 : darwinMajor - 9;
 }
 
+// 仅本文件消费：窗口圆角判定不是跨模块能力，收回 export 避免被当成公开入口。
 function supportsNativeWindowsRoundedCorners(
   platform: NodeJS.Platform,
   platformRelease: string,

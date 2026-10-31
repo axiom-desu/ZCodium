@@ -1,4 +1,4 @@
-import type { DatabaseMigrationFacts } from "@zcode/shared";
+import type { AppSettings, DatabaseMigrationFacts } from "@zcode/shared";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { createRequire } from "node:module";
@@ -26,11 +26,21 @@ type TasksStoragePhase =
   | "ready";
 const LOCK_WAIT_MS = 60 * 60_000;
 
-/** 由 Host Worker 调用，SQL 和迁移后修复与旧 Repo 共用，只有获取写锁异步等待。 */
+/** 真实准备结果；迁移与迁移后修复与旧 Repo 共用，只有获取写锁异步等待。 */
+interface TasksStoragePreparationResult {
+  /** tasks 原始迁移与项目迁移两阶段合并的真实结果。 */
+  backupSkipped: boolean;
+  /** 只写阶段名，不写路径/用户信息。 */
+  backupSkippedPhases: string[];
+}
+
+/** 由 Host Worker 调用；真实返回备份跳过结果，调用方必须提示而不是静默。 */
 export async function prepareTasksIndexStorage(
   path: string,
   onProgress: (phase: TasksStoragePhase, migration?: DatabaseMigrationFacts) => void,
-): Promise<void> {
+  settings: Pick<AppSettings, "lastWorkspaceSession" | "recentProjects">,
+  hostId?: string,
+): Promise<TasksStoragePreparationResult> {
   // 回调拿到的是当时事实，不共享后续执行会继续递增的内部对象。
   const report = (phase: TasksStoragePhase, migration?: DatabaseMigrationFacts) =>
     onProgress(phase, migration ? { ...migration } : undefined);
@@ -43,6 +53,7 @@ export async function prepareTasksIndexStorage(
   let prepCleanupFailed = false;
   let prepCleanupError: unknown;
   let migration: DatabaseMigrationFacts | undefined;
+  let tasksBackupSkipped = false;
   try {
     db.exec("PRAGMA busy_timeout = 25");
     db.exec("PRAGMA foreign_keys = ON");
@@ -77,7 +88,13 @@ export async function prepareTasksIndexStorage(
     });
     report("checking", migration);
     await acquire("BEGIN IMMEDIATE");
-    runTasksDatabaseMigrations(db, { transactionOpen: true, migration, onProgress: report });
+    const tasksMigration = await runTasksDatabaseMigrations(db, {
+      transactionOpen: true,
+      migration,
+      onProgress: report,
+      dbPath: path,
+    });
+    tasksBackupSkipped = tasksMigration.backupSkipped;
     // COMMIT 已成功，先发布事实；后续 close 失败不能把已提交误报为未提交。
     report("maintaining", migration);
   } catch (error) {
@@ -100,7 +117,11 @@ export async function prepareTasksIndexStorage(
   }
   if (cleanupFailed) throw cleanupError;
   markTasksStorageMigrated(path);
-  const repos = [new TaskIndexRepo(path, LOCK_WAIT_MS), new AutomationRepo(path, LOCK_WAIT_MS)];
+  const taskIndexRepo = new TaskIndexRepo(path, LOCK_WAIT_MS, {
+    settings,
+    ...(hostId ? { hostId } : {}),
+  });
+  const repos = [taskIndexRepo, new AutomationRepo(path, LOCK_WAIT_MS)];
   try {
     // 这些是原本就在初始化时执行的修复，不创建新的迁移或改变已有事务边界。
     for (const repo of repos) await repo.ensureReady();
@@ -119,4 +140,8 @@ export async function prepareTasksIndexStorage(
   if (prepCleanupFailed) throw prepCleanupError;
   markTasksStoragePrepared(path);
   report("ready", migration);
+  const backupSkippedPhases: string[] = [];
+  if (tasksBackupSkipped) backupSkippedPhases.push("tasks_schema");
+  if (taskIndexRepo.migrationBackupSkipped) backupSkippedPhases.push("projects");
+  return { backupSkipped: backupSkippedPhases.length > 0, backupSkippedPhases };
 }

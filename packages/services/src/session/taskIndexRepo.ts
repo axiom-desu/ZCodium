@@ -2,6 +2,11 @@ import {
   isTasksStorageMigrated,
   isTasksStoragePrepared,
 } from "#src/session/tasksDatabase/prepared.js";
+import type { AppSettings } from "@zcode/shared";
+import { projectStorage, ungroupTaskGroup } from "#src/project-storage/index.js";
+import { ensureTaskFactColumns } from "#src/project-storage/app/schema.js";
+import { forgetTaskReservationReceipt } from "#src/project-storage/app/task-reservations.js";
+import type { ProjectMigrationContext } from "#src/project-storage/contract.js";
 /* eslint-disable max-lines -- task 索引仓库集中维护 sqlite schema、查询和状态写入，迁移稳定后再按读写职责拆分。 */
 import { mkdir } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
@@ -37,7 +42,14 @@ import type {
 } from "#src/session/zcodeTaskListTypes.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import { getTasksIndexDatabasePath } from "#src/paths.js";
-import { runTasksDatabaseMigrations } from "#src/session/tasksDatabase/migrations.js";
+import {
+  runTasksDatabaseMigrations,
+  tasksBackupDirectories,
+} from "#src/session/tasksDatabase/migrations.js";
+import {
+  applyTaskGroupFacts,
+  type TaskGroupAdmissionPlacement,
+} from "#src/session/taskGroupAdmissions.js";
 
 const require = createRequire(import.meta.url);
 const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
@@ -52,6 +64,16 @@ function appendZCodeAgentIndexedProviderFilter(
   args.push(provider);
 }
 type DatabaseSyncInstance = InstanceType<typeof DatabaseSync>;
+
+/** 回滚失败不能覆盖业务首因；只在仍持有事务时静默尝试。 */
+function safeRollback(db: DatabaseSyncInstance): void {
+  if (!db.isTransaction) return;
+  try {
+    db.exec("ROLLBACK");
+  } catch {
+    /* 保留首因 */
+  }
+}
 
 interface TaskIndexRow {
   workspace_key: string;
@@ -77,6 +99,22 @@ interface TaskIndexRow {
   title_overridden: number;
   searchable_text: string;
   meta_json: string;
+  /** CLI 权威事实镜像；只由 TaskFactStore 方法写入，Host 时钟不得合成。 */
+  cli_title: string | null;
+  cli_title_source: string | null;
+  cli_created_at: number | null;
+  cli_updated_at: number | null;
+  cli_last_outcome: string | null;
+  cli_deleted: number | null;
+  handoff_pending: number | null;
+}
+
+/** CLI 会话事实写入端口的最小输入；由 task-facts 应用层注入。 */
+export interface CliTaskFactsInput {
+  meta: ZCodeTaskMeta;
+  titleSource?: string;
+  lastOutcome?: "completed" | "interrupted" | "error";
+  deleted?: boolean;
 }
 
 interface TaskGroupRow {
@@ -482,7 +520,17 @@ export class TaskIndexRepo {
   constructor(
     private readonly startupDbPath?: string,
     private readonly startupBusyTimeoutMs = 5000,
+    private readonly projectMigration?: {
+      settings?: Pick<AppSettings, "lastWorkspaceSession" | "recentProjects">;
+      /** Host 设置服务异步装载；与 settings 至少提供一个真实来源。 */
+      settingsLoader?: () => Promise<Pick<AppSettings, "lastWorkspaceSession" | "recentProjects">>;
+      hostId?: string;
+    },
   ) {}
+  /** 项目迁移备份被跳过（tasks+project 合并结果由启动准备读取，不靠隐藏字段）。 */
+  migrationBackupSkipped = false;
+  /** 缺少 Host 旧设置时只延期，不写 0005 账本；之后的 Host 仍可完成首次 seed。 */
+  projectMigrationDeferred = false;
   private db: DatabaseSyncInstance | null = null;
   private dbPath: string | null = null;
   private initializePromise: Promise<void> | null = null;
@@ -530,11 +578,64 @@ export class TaskIndexRepo {
       this.db.exec("PRAGMA synchronous = NORMAL");
     }
     // Worker 已完成该路径的原始准备，业务连接不再重复全表修复。
+    if (!isTasksStorageMigrated(path, this.db))
+      await runTasksDatabaseMigrations(this.db, { dbPath: path });
+    ensureTaskFactColumns(this.db);
     if (isTasksStoragePrepared(path, this.db)) return;
-    if (!isTasksStorageMigrated(path, this.db)) runTasksDatabaseMigrations(this.db);
+    // 项目组织态与任务索引同库同 owner；只在原始准备阶段执行一次版本化迁移。
+    const settings =
+      this.projectMigration?.settings ?? (await this.projectMigration?.settingsLoader?.());
+    if (!settings && !this.projectLedgerApplied()) {
+      // 明确延期：不写 0005 账本，避免“已 seed 空项目”永久丢掉旧列表导入机会。
+      // Host worker 与 node 装配都注入 settings；缺失只可能是非 Host 的旧调用面。
+      this.projectMigrationDeferred = true;
+      createServiceLogger("project-migration").warn(
+        "缺少 Host 旧设置，项目组织迁移延期；本次不写项目账本",
+        { stage: "0005_projects", code: "project.settings-required" },
+      );
+      return;
+    }
+    if (settings) {
+      const context: ProjectMigrationContext = {
+        backupDirectories: tasksBackupDirectories(path),
+        settings,
+        ...(this.projectMigration?.hostId ? { hostId: this.projectMigration.hostId } : {}),
+        warn: (message, details) => createServiceLogger("project-migration").warn(message, details),
+      };
+      const migration = await projectStorage.migrate(this.getDatabase(), context);
+      this.migrationBackupSkipped = migration.backupSkipped;
+    }
     this.backfillOffPeakTaskMarkers();
     this.backfillOffPeakGroupMemberships();
     this.cleanupDeletedTaskGroupingReferences();
+  }
+
+  private projectLedgerApplied(): boolean {
+    try {
+      return (
+        Boolean(
+          this.getDatabase()
+            .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migration'")
+            .get(),
+        ) &&
+        Boolean(
+          this.getDatabase()
+            .prepare(
+              "SELECT 1 FROM schema_migration WHERE id IN ('0001_projects','0005_projects') LIMIT 1",
+            )
+            .get(),
+        )
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /** Host 装配层共用迁移后的组织库；UI 只能通过服务公开入口访问。 */
+  async getProjectRepository() {
+    await this.ensureReady();
+    if (this.projectMigrationDeferred) throw new Error("project.migration-deferred");
+    return projectStorage.repository(this.getDatabase(), this.projectMigration?.hostId);
   }
 
   /**
@@ -638,7 +739,7 @@ export class TaskIndexRepo {
       }
       database.exec("COMMIT");
     } catch (error) {
-      database.exec("ROLLBACK");
+      safeRollback(database);
       throw error;
     }
   }
@@ -708,7 +809,14 @@ export class TaskIndexRepo {
           deleted,
           title_overridden,
           searchable_text,
-          meta_json
+          meta_json,
+          cli_title,
+          cli_title_source,
+          cli_created_at,
+          cli_updated_at,
+          cli_last_outcome,
+          cli_deleted,
+          handoff_pending
         FROM tasks
         WHERE workspace_key = ? AND task_id = ?`,
       )
@@ -802,7 +910,7 @@ export class TaskIndexRepo {
       }
       this.getDatabase().exec("COMMIT");
     } catch (error) {
-      this.getDatabase().exec("ROLLBACK");
+      safeRollback(this.getDatabase());
       throw error;
     }
   }
@@ -859,7 +967,7 @@ export class TaskIndexRepo {
       }
       this.getDatabase().exec("COMMIT");
     } catch (error) {
-      this.getDatabase().exec("ROLLBACK");
+      safeRollback(this.getDatabase());
       throw error;
     }
   }
@@ -878,14 +986,16 @@ export class TaskIndexRepo {
     await this.ensureReady();
     const normalizedDays = Math.max(1, Math.floor(params.olderThanDays));
     const cutoff = Date.now() - normalizedDays * 24 * 60 * 60 * 1000;
+    // 只按 CLI 持久事实判断；Host 收帧时间、未读和展示状态不是归档依据。
     const where = [
       "workspace_key = ?",
       "deleted = 0",
       "archived = 0",
       "pinned = 0",
-      "unread_at IS NULL",
-      "updated_at < ?",
-      "task_status = 'completed'",
+      "coalesce(cli_deleted,0) = 0",
+      "cli_created_at IS NOT NULL",
+      "coalesce(cli_updated_at,0) < ?",
+      "coalesce(task_status,'') NOT IN ('running','interrupted')",
     ];
     const args: Array<string | number> = [workspaceKey(params), cutoff];
     if (params.provider) {
@@ -916,7 +1026,14 @@ export class TaskIndexRepo {
           deleted,
           title_overridden,
           searchable_text,
-          meta_json
+          meta_json,
+          cli_title,
+          cli_title_source,
+          cli_created_at,
+          cli_updated_at,
+          cli_last_outcome,
+          cli_deleted,
+          handoff_pending
         FROM tasks
         WHERE ${where.join(" AND ")}
         ORDER BY updated_at DESC, created_at DESC, task_id DESC`,
@@ -938,7 +1055,7 @@ export class TaskIndexRepo {
       }
       this.getDatabase().exec("COMMIT");
     } catch (error) {
-      this.getDatabase().exec("ROLLBACK");
+      safeRollback(this.getDatabase());
       throw error;
     }
     return rows.map(rowToMeta);
@@ -1133,12 +1250,44 @@ export class TaskIndexRepo {
       deleteDanglingGroupOrders.run();
       database.exec("COMMIT");
     } catch (error) {
-      database.exec("ROLLBACK");
+      safeRollback(database);
       throw error;
     }
   }
 
   private writeRecord(record: TaskIndexWriteRecord): ZCodeTaskMeta {
+    const database = this.getDatabase();
+    const ownTransaction = !database.isTransaction;
+    if (ownTransaction) database.exec("BEGIN IMMEDIATE");
+    try {
+      this.writeRecordUncommitted(record);
+      // 身份与首次项目归属必须与行写入同事务；CLI 事实不在这里合成。
+      projectStorage.admitTaskIdentity(database, record.meta, this.projectMigration?.hostId);
+      if (record.titleOverridden)
+        database
+          .prepare(
+            "UPDATE tasks SET handoff_pending=coalesce(handoff_pending,0) | 2 WHERE workspace_key=? AND task_id=? AND cli_title_source IS NULL",
+          )
+          .run(workspaceKey(record.meta), record.meta.taskId);
+      const row = this.getTaskRow(record.meta);
+      if (!row) throw new Error(`task index 写入后缺少 task: ${record.meta.taskId}`);
+      const admitted = rowToMeta(row);
+      if (ownTransaction) database.exec("COMMIT");
+      return admitted;
+    } catch (error) {
+      // 回滚失败不能覆盖写入首因（ENOSPC/EIO 会同时让 rollback 失败）。
+      if (ownTransaction && database.isTransaction) {
+        try {
+          safeRollback(database);
+        } catch {
+          /* 保留首因 */
+        }
+      }
+      throw error;
+    }
+  }
+
+  private writeRecordUncommitted(record: TaskIndexWriteRecord): ZCodeTaskMeta {
     // searchable_text 传 undefined 表示"不动现有值"。读一次 row 拿到当前值，
     // 否则 ON CONFLICT 时 excluded.searchable_text 会被赋成空字符串，把已索引正文清空。
     const existing =
@@ -1278,6 +1427,10 @@ export class TaskIndexRepo {
     // 调用方可以从 snapshot.messages 计算正文，传进来同步刷新 searchable_text。
     // 不传则保留 sqlite 已有的 searchable_text（在 writeRecord 里兜底）。
     searchableText?: string;
+    /** 创建回执：与 task 行、系统分组登记同一写事务，迟到回包不能覆盖用户整理。 */
+    admission?: TaskGroupAdmissionPlacement;
+    /** 真实 CLI 帧事实；与展示列同一事务写入，不能靠第二次写入或重启回填。 */
+    cliFacts?: CliTaskFactsInput;
   }): Promise<ZCodeTaskMeta> {
     const result = await this.syncTaskMetaWithGroupedAdmission(params, false);
     return result.meta;
@@ -1303,13 +1456,18 @@ export class TaskIndexRepo {
       deleted?: boolean;
       titleOverridden?: boolean;
       searchableText?: string;
+      admission?: TaskGroupAdmissionPlacement;
+      cliFacts?: CliTaskFactsInput;
     },
     initializeGroupedAtTop: boolean,
   ): Promise<{ meta: ZCodeTaskMeta; initializedGroupedOrder: boolean }> {
     await this.ensureReady();
     return this.enqueueWrite(params.meta, () => {
       const database = this.getDatabase();
-      if (initializeGroupedAtTop) database.exec("BEGIN IMMEDIATE");
+      // 所有 syncTaskMeta 路径都显式持有写事务：task 行、系统分组登记 (admission)、
+      // grouped order 与 CLI 事实必须同生共死；旧实现只在 AtGroupedTop 路径开事务，
+      // 普通同步会把 admission 提前提交成孤儿。
+      database.exec("BEGIN IMMEDIATE");
       try {
         const existing = this.getTaskRow(params.meta);
         const existingMeta = existing ? rowToMeta(existing) : null;
@@ -1359,6 +1517,7 @@ export class TaskIndexRepo {
           titleOverridden,
           searchableText: params.searchableText,
         });
+        if (params.cliFacts) this.applyCliFactsUncommitted(params.cliFacts);
         // cron session 首次获得 cronAutomationId 时归入固定 cron 分组。
         // 会话内 CronCreate 是给已有 task 补 cron 标记，不能只判断 !existing，否则左侧列表不会归入定时任务分组。
         // INSERT OR IGNORE 不覆盖已有成员关系——用户后续把它拖出 cron 组后不会被自动拖回。
@@ -1371,13 +1530,25 @@ export class TaskIndexRepo {
         }
         // root draft 首发过去先提交 task row，再另一次写 sort_order；
         // sessions-index 在两次写之间公开 task 时，Renderer 会把缺序节点补到末尾。
+        if (params.admission) applyTaskGroupFacts(database, [{ ...meta }], params.admission);
         const initializedGroupedOrder = initializeGroupedAtTop
           ? this.initializeGroupedTaskAtTopReady(meta)
           : false;
-        if (initializeGroupedAtTop) database.exec("COMMIT");
-        return { meta: persistedMeta, initializedGroupedOrder };
+        database.exec("COMMIT");
+        const finalRow = this.getTaskRow(persistedMeta);
+        return {
+          meta: finalRow ? rowToMeta(finalRow) : persistedMeta,
+          initializedGroupedOrder,
+        };
       } catch (error) {
-        if (initializeGroupedAtTop) database.exec("ROLLBACK");
+        // 回滚失败不能覆盖首因；整笔组织/事实写入由调用方或这里统一回滚。
+        if (database.isTransaction) {
+          try {
+            safeRollback(database);
+          } catch {
+            /* 保留首因 */
+          }
+        }
         throw error;
       }
     });
@@ -1393,6 +1564,7 @@ export class TaskIndexRepo {
       groupId: CRON_DEFAULT_GROUP_ID,
       title: "cron",
       color: "blue",
+      systemKind: "cron",
     });
   }
 
@@ -1412,15 +1584,18 @@ export class TaskIndexRepo {
       groupId: OFF_PEAK_DEFAULT_GROUP_ID,
       title: "off-peak",
       color: "purple",
+      systemKind: "off-peak",
     });
   }
 
   private ensureSystemGroupMembership(
     meta: Pick<ZCodeTaskMeta, "workspacePath" | "workspaceIdentity" | "taskId">,
-    params: { groupId: string; title: string; color: string },
+    params: { groupId: string; title: string; color: string; systemKind: "cron" | "off-peak" },
   ): void {
     const database = this.getDatabase();
     const now = Date.now();
+    // 调用方（syncTaskMeta）已持有写事务；这里只登记，不自行提交。
+    applyTaskGroupFacts(database, [{ ...meta, systemKind: params.systemKind }]);
     database
       .prepare(
         `INSERT OR IGNORE INTO task_groups (group_id, title, color, created_at, updated_at)
@@ -1459,6 +1634,179 @@ export class TaskIndexRepo {
         now,
         now,
       );
+  }
+
+  /** Host 装配层共用迁移后的组织库（项目/分组仓库同一连接）；UI 只能经服务入口访问。 */
+  async getOrganizationDatabase(): Promise<DatabaseSyncInstance> {
+    await this.ensureReady();
+    if (this.projectMigrationDeferred) throw new Error("project.migration-deferred");
+    return this.getDatabase();
+  }
+
+  /** CLI 权威事实镜像：只写 cli_* 与对应展示列，不触碰 pin/archive/read/project。 */
+  async applyCliFacts(params: CliTaskFactsInput): Promise<ZCodeTaskMeta> {
+    await this.ensureReady();
+    return this.enqueueWrite(params.meta, () => {
+      const db = this.getDatabase();
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const meta = this.applyCliFactsUncommitted(params);
+        db.exec("COMMIT");
+        return meta;
+      } catch (error) {
+        if (db.isTransaction) {
+          try {
+            safeRollback(db);
+          } catch {
+            /* 保留首因 */
+          }
+        }
+        throw error;
+      }
+    });
+  }
+
+  private applyCliFactsUncommitted(params: CliTaskFactsInput): ZCodeTaskMeta {
+    const db = this.getDatabase();
+    const existing = this.getTaskRow(params.meta);
+    // CLI 事实到达 = 这一行不再是空预占：顺手丢弃 receipt（同一事务），
+    // 避免旧 create 路径（不经过 Host 删除回执）留下永远不可释放的 receipt。
+    forgetTaskReservationReceipt(db, {
+      workspaceKey: workspaceKey(params.meta),
+      taskId: params.meta.taskId,
+    });
+    // 预留行尚无 CLI 事实（created_at=0）。首条真实 CLI 事实补齐展示基线，
+    // 保留 reserve 后发生的项目归属、pin/archive 与用户标题。
+    if (!existing || (existing.cli_created_at == null && existing.created_at === 0))
+      this.writeRecord({
+        meta: {
+          ...params.meta,
+          ...(existing?.title_overridden === 1 ? { title: existing.title } : {}),
+        },
+        pinned: existing?.pinned === 1,
+        archived: existing?.archived === 1,
+        deleted: existing?.deleted === 1,
+        titleOverridden: existing?.title_overridden === 1,
+      });
+    const source = params.titleSource ?? "default";
+    db.prepare(`UPDATE tasks SET
+      cli_title=CASE WHEN cli_title_source='custom' AND ?<>'custom' THEN cli_title ELSE ? END,
+      cli_title_source=CASE WHEN cli_title_source='custom' AND ?<>'custom' THEN cli_title_source ELSE ? END,
+      cli_created_at=?,cli_updated_at=max(coalesce(cli_updated_at,0),?),
+      cli_last_outcome=coalesce(?,cli_last_outcome),cli_deleted=max(coalesce(cli_deleted,0),?),
+      title=CASE WHEN (coalesce(handoff_pending,0) & 2)<>0 THEN title WHEN cli_title_source='custom' AND ?<>'custom' THEN cli_title WHEN ?='custom' THEN ? ELSE title END,
+      title_overridden=CASE WHEN (coalesce(handoff_pending,0) & 2)<>0 THEN title_overridden WHEN ?='custom' OR cli_title_source='custom' THEN 1 WHEN coalesce(?,0)=1 THEN 1 ELSE 0 END,
+      updated_at=?,created_at=?,task_status=coalesce(?,task_status),deleted=max(deleted,?),
+      handoff_pending=(coalesce(handoff_pending,0) & ~4) & CASE WHEN ?=1 THEN ~1 ELSE -1 END & CASE WHEN ?=title AND ?='custom' THEN ~2 ELSE -1 END
+      WHERE workspace_key=? AND task_id=?`).run(
+      source,
+      params.meta.title,
+      source,
+      source,
+      params.meta.createdAt,
+      params.meta.updatedAt,
+      params.lastOutcome ?? null,
+      params.deleted ? 1 : 0,
+      source,
+      source,
+      params.meta.title,
+      source,
+      existing?.title_overridden === 1 ? 1 : 0,
+      params.meta.updatedAt,
+      params.meta.createdAt,
+      params.lastOutcome ?? null,
+      params.deleted ? 1 : 0,
+      params.deleted ? 1 : 0,
+      params.meta.title,
+      source,
+      workspaceKey(params.meta),
+      params.meta.taskId,
+    );
+    const persisted = this.getTaskRow(params.meta)!;
+    // CLI 明确删除是唯一删除证据；缺失/分页不能走到这里。
+    applyTaskGroupFacts(db, [
+      {
+        ...rowToMeta(persisted),
+        archived: persisted.archived === 1,
+        deleted: persisted.deleted === 1,
+      },
+    ]);
+    return rowToMeta(persisted);
+  }
+
+  /** 仅 syncer 消费 CLI 明确删除；不以列表缺席推断删除。 */
+  async applyCliDeletion(target: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    taskId: string;
+  }): Promise<void> {
+    await this.ensureReady();
+    return this.enqueueWrite(target, () => {
+      const db = this.getDatabase();
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.prepare(
+          "UPDATE tasks SET cli_deleted=1,deleted=1,handoff_pending=coalesce(handoff_pending,0) & ~1 WHERE workspace_key=? AND task_id=?",
+        ).run(workspaceKey(target), target.taskId);
+        const row = this.getTaskRow(target);
+        if (row)
+          applyTaskGroupFacts(db, [
+            { ...rowToMeta(row), archived: row.archived === 1, deleted: true },
+          ]);
+        db.exec("COMMIT");
+      } catch (error) {
+        if (db.isTransaction) {
+          try {
+            safeRollback(db);
+          } catch {
+            /* 保留首因 */
+          }
+        }
+        throw error;
+      }
+    });
+  }
+
+  /** CLI 快照缺席/不存在 → orphan 位；保留行，不隐式删除。 */
+  async markCliOrphan(target: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    taskId: string;
+  }): Promise<void> {
+    await this.ensureReady();
+    return this.enqueueWrite(target, () => {
+      this.getDatabase()
+        .prepare(
+          "UPDATE tasks SET handoff_pending=coalesce(handoff_pending,0) | 4 WHERE workspace_key=? AND task_id=?",
+        )
+        .run(workspaceKey(target), target.taskId);
+    });
+  }
+
+  /** 对账候选：当前 workspace 下全部行 + 交接位；只查不写。 */
+  async listReconciliationRows(target: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+  }): Promise<Array<{ meta: ZCodeTaskMeta; handoffPending: number }>> {
+    await this.ensureReady();
+    const rows = this.getDatabase()
+      .prepare("SELECT * FROM tasks WHERE workspace_key=?")
+      .all(workspaceKey(target)) as unknown as TaskIndexRow[];
+    return rows.map((row) => ({ meta: rowToMeta(row), handoffPending: row.handoff_pending ?? 0 }));
+  }
+
+  /** 冷恢复 child 修复：只删 CLI 已确认的派生隐藏行，不修改正文或删除事实。 */
+  async removeSubagentIndexRow(target: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    taskId: string;
+  }): Promise<void> {
+    await this.ensureReady();
+    return this.enqueueWrite(target, () => {
+      this.getDatabase()
+        .prepare("DELETE FROM tasks WHERE workspace_key=? AND task_id=?")
+        .run(workspaceKey(target), target.taskId);
+    });
   }
 
   /**
@@ -1523,7 +1871,7 @@ export class TaskIndexRepo {
         database.exec("COMMIT");
         return { meta: persistedMeta, cleared: true };
       } catch (error) {
-        database.exec("ROLLBACK");
+        safeRollback(database);
         throw error;
       }
     });
@@ -1557,7 +1905,7 @@ export class TaskIndexRepo {
         database.exec("COMMIT");
         return meta;
       } catch (error) {
-        database.exec("ROLLBACK");
+        safeRollback(database);
         throw error;
       }
     });
@@ -1626,7 +1974,7 @@ export class TaskIndexRepo {
         if (transactional) database.exec("COMMIT");
         return persistedMeta;
       } catch (error) {
-        if (transactional) database.exec("ROLLBACK");
+        if (transactional) safeRollback(database);
         throw error;
       }
     });
@@ -2006,21 +2354,12 @@ export class TaskIndexRepo {
     const database = this.getDatabase();
     database.exec("BEGIN IMMEDIATE");
     try {
-      const result = database
-        .prepare("DELETE FROM task_groups WHERE group_id = ?")
-        .run(params.groupId);
-      if (result.changes === 0) {
-        throw new Error("Task group 不存在，无法删除");
-      }
-      database
-        .prepare(
-          `DELETE FROM task_group_view_node_orders
-          WHERE node_type = 'group' AND node_key = ?`,
-        )
-        .run(params.groupId);
+      // 取消分组必须把成员（含其它项目/被过滤/归档的不可见成员）按原组块位置放回顶层；
+      // 旧实现只删 group 行，会把成员留在无主 membership 中从 grouped 视图消失。
+      ungroupTaskGroup(database, params.groupId);
       database.exec("COMMIT");
     } catch (error) {
-      database.exec("ROLLBACK");
+      safeRollback(database);
       throw error;
     }
   }
@@ -2542,7 +2881,7 @@ export class TaskIndexRepo {
       });
       database.exec("COMMIT");
     } catch (error) {
-      database.exec("ROLLBACK");
+      safeRollback(database);
       throw error;
     }
 

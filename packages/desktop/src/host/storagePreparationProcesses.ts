@@ -34,7 +34,13 @@ const workerMessageSchema = z.discriminatedUnion("type", [
       ]),
     })
     .strict(),
-  z.object({ type: z.literal("done") }).strict(),
+  z
+    .object({
+      type: z.literal("done"),
+      backupSkipped: z.boolean().optional(),
+      backupSkippedPhases: z.array(z.string()).max(8).optional(),
+    })
+    .strict(),
   z
     .object({
       type: z.literal("failed"),
@@ -63,16 +69,26 @@ const statusError = (
       databaseId && details?.migration ? { databaseId, migration: details.migration } : undefined,
   });
 
+interface HostStoragePreparationResult {
+  backupSkipped: boolean;
+  backupSkippedPhases: string[];
+}
+
 export function prepareHostStorage(
   path: string,
   report: (phase: Phase, migration?: DatabaseMigrationFacts) => void,
   signal: AbortSignal,
-): Promise<void> {
+  hostId?: string,
+): Promise<HostStoragePreparationResult> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./tasksStorageWorker.js", import.meta.url), {
-      workerData: { path },
+      workerData: { path, ...(hostId ? { hostId } : {}) },
     });
     let done = false;
+    let storageResult: HostStoragePreparationResult = {
+      backupSkipped: false,
+      backupSkippedPhases: [],
+    };
     let failure: unknown;
     let firstState = false;
     const firstStateTimer = setTimeout(() => {
@@ -95,8 +111,13 @@ export function prepareHostStorage(
       clearTimeout(firstStateTimer);
       const message = result.data;
       if (message.type === "progress") report(message.phase, message.migration);
-      else if (message.type === "done") done = true;
-      else failure = statusError(message.errorCode, message, "tasks-index");
+      else if (message.type === "done") {
+        done = true;
+        storageResult = {
+          backupSkipped: message.backupSkipped ?? false,
+          backupSkippedPhases: message.backupSkippedPhases ?? [],
+        };
+      } else failure = statusError(message.errorCode, message, "tasks-index");
     });
     worker.once("error", (error) => {
       failure = error;
@@ -104,7 +125,7 @@ export function prepareHostStorage(
     worker.once("exit", (code) => {
       clearTimeout(firstStateTimer);
       signal.removeEventListener("abort", abort);
-      if (done && code === 0 && !failure && firstState) resolve();
+      if (done && code === 0 && !failure && firstState) resolve(storageResult);
       else reject(failure ?? statusError("transport_closed"));
     });
     if (signal.aborted) abort();

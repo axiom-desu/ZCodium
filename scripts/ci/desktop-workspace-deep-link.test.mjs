@@ -249,6 +249,11 @@ test("real IPC registration retains renderer-ready and close handling without lo
     "./desktopOAuthDeepLink.js": h.router,
     "./desktopNotifications.js": {},
     "./desktopMainIpcHelpers.js": {},
+    // 既定 3.16 行为（upstream-3.16-source-server.md「source-settings attachment 的 Main 入口」）：
+    // registerRemoteIpcHandlers 通过 ./sourceSettingsAttachmentRequest.js 注册
+    // RequestSourceSettingsAttachment handler，同目录既有依赖一致补登记 stub；
+    // 本测试不触发该通道，stub 仅充当前端依赖。
+    "./sourceSettingsAttachmentRequest.js": { dispatchSourceSettingsAttachment: () => {} },
     "./desktopProviderConfig.js": {
       getBuiltinProviderConfigFileInfo: () => ({ path: null, exists: false }),
     },

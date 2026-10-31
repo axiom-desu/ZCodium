@@ -6,6 +6,16 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { build } from "esbuild";
+import { tsImport } from "tsx/esm/api";
+
+// 既定 3.16 行为（upstream-3.16-source-server.md「server-info 能力」）：createHttpServer 在
+// 创建期用 services.getOptional 探测真实注册的 ProjectService/TaskService 来声明
+// capabilities.virtualProjects / existingRuntimeAdmission，因此必须传入真实 ServiceCollection，
+// 不能再传裸对象。本测试未注册任何服务，能力字段自然为 false，不影响被测的 bundle 路径语义。
+const { ServiceCollection } = await tsImport(
+  "../../packages/services/src/index.ts",
+  import.meta.url,
+);
 
 test("Web remote connection uses the server-owned bundle path and strips client overrides", async (t) => {
   const temporary = await mkdtemp(join(tmpdir(), "zcodium-http-assets-"));
@@ -44,7 +54,7 @@ test("Web remote connection uses the server-owned bundle path and strips client 
     ],
   });
   const { createHttpServer, capturedRemoteRequests } = createRequire(import.meta.url)(bundle);
-  const server = createHttpServer({}, 0, {
+  const server = createHttpServer(new ServiceCollection(), 0, {
     host: "127.0.0.1",
     bundledRemoteAssetsDir: "/fixture/server-owned-bundle",
   });

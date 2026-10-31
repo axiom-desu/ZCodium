@@ -98,7 +98,7 @@ async function createSkillDiscovery(options: ListZCodeSkillsOptions): Promise<
       workingDirectory,
     };
   }
-  const pluginOutcome = resolveZCodePlugins({
+  const pluginOutcome = await resolveZCodePlugins({
     configResult,
     env: options.env,
     logger: options.logger,

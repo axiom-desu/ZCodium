@@ -228,6 +228,8 @@ export interface V4CommandCoreHost {
    * 语义决策（draft persistence / firstInput 提交）留在原生 handler，不进钩子。
    */
   createSessionRecord?(params: {
+    sessionId?: string;
+    additionalDirectories?: string[];
     workspaceId: string;
     mcpServers?: CommandPayloadMap["createSession"]["mcpServers"];
     /**
@@ -235,6 +237,8 @@ export interface V4CommandCoreHost {
      * 缺省回落到进程级 workspace 结论，仍是 fail-closed。
      */
     dynamicWorkflowEnabled?: boolean;
+    /** 与布尔同行的灰度 mode；缺席 = alwaysOn。 */
+    dynamicWorkflowMode?: import("@zcode/shared").DynamicWorkflowMode;
   }): Promise<{ sessionId: string }>;
   /** 从父会话稳定落盘边界创建隐藏 selection_side_chat child。 */
   createSelectionSideSession?(

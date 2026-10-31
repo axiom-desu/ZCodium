@@ -1,4 +1,10 @@
 import { safeLogArgs } from "@zcode/shared";
+import { guardReplayableTaskCreation } from "./mobileProjectDirectoryAttachment.js";
+import {
+  createMobileProjectDirectoryAttachmentAssertion,
+  createMobileProjectDirectoryOwners,
+  resolveMobileProjectDirectoryAvailability,
+} from "./mobileProjectDirectoryOwners.js";
 /* eslint-disable max-lines -- Host 入口集中编排 local/remote service wiring，本次退出保护需要在同一处桥接 host 上报。 */
 /* eslint-disable max-lines -- host process 入口集中维护 local/remote 初始化和资源回收，realtime bridge 接入后先保持同文件收口。 */
 /**
@@ -15,11 +21,12 @@ import { safeLogArgs } from "@zcode/shared";
  * 3. 后续远端 connect / scoped attachment 都由同一 Host 处理
  */
 import { createHostDatabaseStartup } from "./hostDatabaseStartup.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createPluginSandboxRegistrationBridge } from "./pluginSandbox/index.js";
 import {
   MessagePortProtocol,
   ChannelServer,
+  ProxyChannel,
   type IDisposable,
   type IChannelServer,
   LoggingChannelServer,
@@ -44,12 +51,17 @@ import {
   IZCodeTaskService,
   IZCodeSessionService,
   ICredentialService,
+  IProjectService,
+  IMobileProjectDirectoryService,
+  ISourceServerManagementService,
+  ISystemService,
   createZCodeAgentConnectionScope,
   type ZCodeAgentV4ClientMode,
   collectServiceMemoryDiagnostics,
 } from "@zcode/services";
 import {
   createLocalServices,
+  createMobileProjectDirectoryService,
   disposeServiceResources,
   disposeServiceResourcesAndWait,
   AutomationRepo,
@@ -59,7 +71,7 @@ import {
   getAstrBotBridgeProvider,
   getAppConfigDir,
 } from "@zcode/services/node";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHostResourceUsageResponder } from "./hostResourceUsage.js";
 import { startBotsBridgeServer, type BotsBridgeServerHandle } from "./botsBridgeServer.js";
@@ -72,9 +84,14 @@ import {
   formatLogPrefix,
   formatZCodeHostProcessName,
   formatZodError,
-  buildRemoteWorkspaceIdentity,
+  ZCODE_COMPATIBILITY_MANIFEST,
+  evaluateSourceServerCompatibility,
+  type SourceServerArtifactPolicy,
+  buildRemoteHostWorkspaceIdentity,
   buildRemoteEnvironmentKey,
   isRemoteWorkspaceIdentity,
+  parseRemoteWorkspaceIdentity,
+  type CompatibilityManifest,
   resolveWorkspaceKey,
   formatModelPickerValue,
   type ZCodePromptAttachment,
@@ -88,6 +105,8 @@ import {
   type ZCodeAutomationRun,
   type ZCodeAutomationRunOutcome,
   type ModelSelection,
+  normalizeDynamicWorkflowMode,
+  type DynamicWorkflowMode,
 } from "@zcode/shared";
 import {
   parseHostIncomingMessageEvent,
@@ -114,7 +133,16 @@ import {
 } from "./remoteMediaPreviewProxy.js";
 import { watchCronRunBotDelivery } from "./cronBotDelivery.js";
 import { createHostRemoteWorkspaceProxyState } from "./hostRemoteWorkspaceProxyState.js";
-import { createRemoteWorkspaceServiceCollection } from "./remoteWorkspaceServiceCollection.js";
+import {
+  createRemoteWorkspaceServiceCollection,
+  resolveServerProjectService,
+} from "./remoteWorkspaceServiceCollection.js";
+import {
+  connectServerRemote,
+  connectServerRemoteOverDuplex,
+  type ServerRemoteConnection,
+} from "./serverRemoteConnection.js";
+import { pushDynamicWorkflowUserModeToRemoteHosts } from "./remoteDynamicWorkflowUserMode.js";
 import { getRemoteProviderProvisioningExecutor } from "./remoteProviderProvisioningService.js";
 import { createRemotePromptAttachmentTransferService } from "./promptAttachmentTransferService.js";
 import { shouldReportHostConsoleError, stringifyHostLogArg } from "./hostLog.js";
@@ -144,11 +172,26 @@ import { createWindowHostControllerRuntime } from "./windowHostControllerService
 import { resolveAutomationSubmissionModelSelection } from "./automationModelSelection.js";
 import { createRemoteConnectionProgressContext } from "@zcode/server/remote/remoteConnectionProgressContext.js";
 import { startHostSelfResourceTelemetry } from "./hostSelfResourceTelemetry.js";
+import { SourceServerDirectory } from "./sourceServerDirectory.js";
+import { createSourceServerManagementService } from "./sourceServerManagementService.js";
+import {
+  resolveSourceServerReleaseAsset,
+  type SourceServerReleaseResolverOptions,
+} from "./sourceServerReleaseResolver.js";
 type RemoteBackendHostConnection = RemoteConnection & {
   backend: IRemoteBackend;
 };
-type HostRemoteConnection = RemoteBackendHostConnection;
+/**
+ * 直连 Source 没有本机 backend：服务全部来自远端 daemon，关闭只释放 WS/HTTP。
+ * 不伪造 `backend`，需要文件上传的路径必须显式判断能力缺失。
+ */
+type SourceServerHostConnection = ServerRemoteConnection & {
+  /** 仅用于 window registry owner claim 的临时摘要；不持久化、不写日志。 */
+  sourceServerAuthProofDigest?: string;
+};
+type HostRemoteConnection = RemoteBackendHostConnection | SourceServerHostConnection;
 interface HostRemoteConnectionCapabilities {
+  existingRuntimeAdmission?: boolean;
   browserRecordingUploader?: Pick<IRemoteBackend, "upload">;
   remoteMediaPreviewFactory?: (
     scope: Extract<WindowHostAttachmentScope, { kind: "remote" }>,
@@ -170,7 +213,12 @@ const hostRemoteMediaRequestLimiter = {
 const remoteMediaRangePreviewEnabled =
   process.env["ZCODE_REMOTE_MEDIA_RANGE_PREVIEW_ENABLED"] !== "0";
 
-type RemoteAssetDirs = Pick<ConnectOptions, "bundledRemoteAssetsDir">;
+type RemoteAssetDirs = Pick<ConnectOptions, "bundledRemoteAssetsDir"> & {
+  /** UI/Host 显式声明的制品策略；缺失时按 fork CDN/本地 staging 推断。 */
+  sourceServerArtifactPolicy?: SourceServerArtifactPolicy;
+};
+
+declare const __ZCODE_CDN_BASE_URL__: string | undefined;
 
 const { parentPort } = process;
 
@@ -1175,6 +1223,17 @@ function formatRemoteTargetForLog(target: RemoteTarget): string {
     }
     case "docker":
       return `docker:${target.container}`;
+    case "server":
+      // 日志身份只用 serverId/去噪 host，绝不打印 token。
+      return `server:${target.serverId?.trim() || formatServerRemoteLogHost(target.url)}`;
+  }
+}
+
+function formatServerRemoteLogHost(url: string): string {
+  try {
+    return new URL(url.trim()).host;
+  } catch {
+    return url.trim();
   }
 }
 
@@ -1243,13 +1302,55 @@ async function resolveDesktopRemoteRuntimeNetwork(
 }
 
 async function disposeHostRemoteConnection(connection: HostRemoteConnection): Promise<void> {
-  await connection.disposeAndWait({ timeoutMs: 5_000 });
+  if ("disposeAndWait" in connection) {
+    await connection.disposeAndWait({ timeoutMs: 5_000 });
+    return;
+  }
+  connection.dispose();
+}
+
+/**
+ * 动态工作流的用户选择以桌面设置为唯一权威（docs/dynamic-workflow/launch.md「The user's choice」）。
+ * 读失败按「跟随服务端默认」处理：不能因为读设置失败就阻断远程连接，也不能把失败当成关闭写下去。
+ */
+async function readLocalDynamicWorkflowUserMode(): Promise<DynamicWorkflowMode | undefined> {
+  try {
+    const settings = await activeServices?.getOptional(ISettingService)?.get();
+    return normalizeDynamicWorkflowMode(settings?.dynamicWorkflowMode);
+  } catch (error) {
+    logger.warn("read dynamic workflow user mode failed", error);
+    return undefined;
+  }
+}
+
+/**
+ * 本机 Host 收到选择变化后推给本窗口所有在线远端 Host。
+ * 远端 Host 读不到桌面设置，不推就会让「已开启」只做在本机。
+ */
+function forwardDynamicWorkflowUserModeToOnlineRemotes(
+  mode: DynamicWorkflowMode | undefined,
+): void {
+  const targets = windowRemoteConnectionRegistry
+    .listOnlineSources()
+    .map(({ sourceServerId, services }) => ({
+      sourceServerId,
+      zcodeAgentService: services.getOptional(IZCodeAgentService),
+    }))
+    .filter(
+      (target): target is { sourceServerId: string; zcodeAgentService: IZCodeAgentService } =>
+        target.zcodeAgentService !== undefined,
+    );
+  void pushDynamicWorkflowUserModeToRemoteHosts(targets, mode, (error) =>
+    logger.warn("remote dynamic workflow user mode push failed", error),
+  );
 }
 
 async function createWindowRemoteConnectionHandle(params: {
   target: RemoteTarget;
   remoteAssets: RemoteAssetDirs;
   signal: AbortSignal;
+  confirmSourceServerInstall?: boolean;
+  existingSourceServerId?: string;
 }): Promise<WindowRemoteConnectionHandle<ServiceCollection, HostRemoteConnectionCapabilities>> {
   if (!activeServices) throw new Error("Local Host services are not initialized.");
   const clientConfigService = activeServices.get(IClientConfigService);
@@ -1269,6 +1370,13 @@ async function createWindowRemoteConnectionHandle(params: {
     (exitCode) => notifyClose({ exitCode, signal: null }),
     params.target.kind === "ssh" ? "caller-serialized" : "remote",
     params.target.kind === "ssh" ? params.signal : undefined,
+    {
+      ...(params.confirmSourceServerInstall ? { confirmSourceServerInstall: true } : {}),
+      ...(params.existingSourceServerId
+        ? { existingSourceServerId: params.existingSourceServerId }
+        : {}),
+      signal: params.signal,
+    },
   );
 
   if (params.signal.aborted) {
@@ -1277,29 +1385,39 @@ async function createWindowRemoteConnectionHandle(params: {
   }
 
   const backendConnection = connection;
+  // 直连 Source 的附件物化与上传由远端 Host 自己的 prompt-attachment 通道完成；
+  // 本机没有 backend 时不得伪造一个，也不包一层依赖本机 cwd 的物化。
+  const backend = "backend" in backendConnection ? backendConnection.backend : undefined;
   const materializePromptAttachments = async (request: {
     taskId: string;
     traceId: TraceId | string;
     content: string;
     attachments?: ZCodePromptAttachment[];
   }) => {
-    const result = await materializeRemotePromptAttachments(request, {
-      backend: backendConnection.backend,
-    });
+    if (!backend) {
+      return { content: request.content, attachments: request.attachments };
+    }
+    const result = await materializeRemotePromptAttachments(request, { backend });
     return { content: result.content, attachments: result.attachments };
   };
-  const promptAttachmentTransferService = createRemotePromptAttachmentTransferService(
-    backendConnection.backend,
-    {
-      onJanitorError: (error: unknown) =>
-        logger.warn("remote prompt attachment janitor failed", error),
-    },
-  );
+  const promptAttachmentTransferService = backend
+    ? createRemotePromptAttachmentTransferService(backend, {
+        onJanitorError: (error: unknown) =>
+          logger.warn("remote prompt attachment janitor failed", error),
+      })
+    : backendConnection.services.promptAttachmentTransferService;
+  const sourceServerId =
+    "serverInfo" in backendConnection ? backendConnection.serverInfo.serverId : undefined;
   const services = createRemoteWorkspaceServiceCollection({
     clientConfigService,
     connectionServices: backendConnection.services,
     sourceServices: activeServices ?? undefined,
     parentPort,
+    ...(sourceServerId ? { sourceServerId } : {}),
+    ...(sourceServerId && "serverInfo" in backendConnection
+      ? { virtualProjects: backendConnection.serverInfo.capabilities.virtualProjects === true }
+      : {}),
+    promptAttachmentTransferService,
     createRemotePromptAttachmentSessionService: (service) =>
       createRemotePromptAttachmentSessionService(service, {
         materializePromptAttachments,
@@ -1312,7 +1430,6 @@ async function createWindowRemoteConnectionHandle(params: {
       createReportingRemoteZCodeTaskService(service, {
         taskRealtimePort: activeSessionRealtimePort ?? undefined,
       }),
-    promptAttachmentTransferService,
     runtimePreferencesBridge: {
       onError: (error: unknown) => logger.warn("remote runtime preferences bridge failed", error),
     },
@@ -1326,6 +1443,14 @@ async function createWindowRemoteConnectionHandle(params: {
     services,
     postMessage: (message) => parentPort?.postMessage(message),
     runtimeSurface: "remote",
+    // 只有握手声明 processResourceTelemetry 的 Source 才订阅新增事件；旧远端缺能力时
+    // 对端未知事件会在其异步读循环里异常，本地 try/catch 无法保护。
+    ...("serverInfo" in backendConnection
+      ? {
+          telemetrySupported:
+            backendConnection.serverInfo.capabilities.processResourceTelemetry === true,
+        }
+      : {}),
     environmentKey: resolveResourceTelemetryEnvironmentKey(params.target),
     onError: (error) => logger.warn("remote resource telemetry subscription failed", error),
   });
@@ -1343,15 +1468,38 @@ async function createWindowRemoteConnectionHandle(params: {
           scope,
           requestLimiter: hostRemoteMediaRequestLimiter,
         });
+  const sourceServerVersion =
+    "serverInfo" in backendConnection ? backendConnection.serverInfo.version : undefined;
+  const sourceServerAuthProofDigest =
+    "sourceServerAuthProofDigest" in backendConnection
+      ? backendConnection.sourceServerAuthProofDigest
+      : undefined;
+  // 动态工作流用户选择（launch.md「The user's choice」）：远端 Host 读不到桌面设置，
+  // 必须在每一代物理连接发布前推一次；旧 Source 不认识该方法时保持可连接。
+  await pushDynamicWorkflowUserModeToRemoteHosts(
+    [{ zcodeAgentService: services.get(IZCodeAgentService) }],
+    await readLocalDynamicWorkflowUserMode(),
+    (error) => logger.warn("remote dynamic workflow user mode push failed", error),
+  );
   return {
     services,
-    capabilities:
-      "backend" in connection
-        ? {
-            browserRecordingUploader: connection.backend,
-            ...(remoteMediaPreviewFactory ? { remoteMediaPreviewFactory } : {}),
-          }
-        : {},
+    ...(sourceServerId ? { sourceServerId } : {}),
+    ...(sourceServerVersion ? { serverVersion: sourceServerVersion } : {}),
+    ...(sourceServerAuthProofDigest ? { sourceServerAuthProofDigest } : {}),
+    ...(sourceServerId
+      ? {
+          virtualProjects:
+            "serverInfo" in backendConnection &&
+            backendConnection.serverInfo.capabilities.virtualProjects === true,
+        }
+      : {}),
+    capabilities: {
+      existingRuntimeAdmission:
+        "serverInfo" in backendConnection &&
+        backendConnection.serverInfo.capabilities.existingRuntimeAdmission === true,
+      ...(backend ? { browserRecordingUploader: backend } : {}),
+      ...(remoteMediaPreviewFactory ? { remoteMediaPreviewFactory } : {}),
+    },
     onDidClose(listener) {
       closeListeners.add(listener);
       return { dispose: () => closeListeners.delete(listener) };
@@ -1464,6 +1612,86 @@ const windowHostControllerRuntime = createWindowHostControllerRuntime({
     };
   },
 });
+
+function registerSourceServerManagementService(services: ServiceCollection): void {
+  const settingService = services.get(ISettingService);
+  const credentialService = services.get(ICredentialService);
+  const directory = new SourceServerDirectory({ settingService, credentialService });
+  const runtime: Parameters<typeof createSourceServerManagementService>[0]["runtime"] = {
+    async connect(input) {
+      const descriptor = await windowRemoteConnectionRegistry.connect({
+        requestId: randomUUID(),
+        target: input.target,
+        remoteAssets: {},
+        ...(input.profile.sourceServerId && !input.confirmIdentityChange
+          ? { existingSourceServerId: input.profile.sourceServerId }
+          : {}),
+        ...(input.confirmSourceServerInstall ? { confirmSourceServerInstall: true } : {}),
+      });
+      const sourceServerId = descriptor.sourceServerId;
+      const version = sourceServerId
+        ? windowRemoteConnectionRegistry.getOnlineSource(sourceServerId)?.serverVersion
+        : undefined;
+      return {
+        ...(sourceServerId ? { sourceServerId } : {}),
+        ...(version ? { version } : {}),
+      };
+    },
+    async update(input) {
+      const { createSourceServerTransportAdapter } =
+        await import("@zcode/server/source-server/transportAdapter.js");
+      const adapter = createSourceServerTransportAdapter(input.target.kind);
+      try {
+        const probe = await adapter.probe(input.target, input.context);
+        const release = await resolveSourceServerReleaseAsset(
+          probe,
+          input.target,
+          await resolveSourceServerReleaseRuntimeOptions(),
+        );
+        await adapter.installOrUpdate(
+          input.target,
+          release,
+          input.context,
+          input.force ? { force: true } : {},
+        );
+      } finally {
+        adapter.dispose?.();
+      }
+      const descriptor = await windowRemoteConnectionRegistry.connect({
+        requestId: randomUUID(),
+        target: input.target,
+        remoteAssets: {},
+        confirmSourceServerInstall: true,
+      });
+      const sourceServerId = descriptor.sourceServerId;
+      const version = sourceServerId
+        ? windowRemoteConnectionRegistry.getOnlineSource(sourceServerId)?.serverVersion
+        : undefined;
+      return {
+        ...(sourceServerId ? { sourceServerId } : {}),
+        ...(version ? { version } : {}),
+      };
+    },
+    async disconnect(sourceServerId) {
+      await windowRemoteConnectionRegistry.disposeSource(sourceServerId);
+    },
+    isOnline(sourceServerId) {
+      return windowRemoteConnectionRegistry.getOnlineSource(sourceServerId) !== null;
+    },
+    currentVersion(sourceServerId) {
+      return windowRemoteConnectionRegistry.getOnlineSource(sourceServerId)?.serverVersion;
+    },
+  };
+  const management = createSourceServerManagementService({
+    directory,
+    runtime,
+    onBeforeSourceRemoved: async (sourceServerId) => {
+      // Source 删除只释放该 Source 的 Host attachment；不创建/启动 Agent 或第二个 Host。
+      windowHostAttachmentRegistry.detachSourceAttachments(sourceServerId);
+    },
+  });
+  services.register(ISourceServerManagementService, management);
+}
 
 function wireLocalResourceTelemetry(services: ServiceCollection): void {
   activeLocalResourceTelemetry?.dispose();
@@ -1736,6 +1964,7 @@ function exposeServicesOnMessagePort(
   clientMode: ZCodeAgentV4ClientMode = "desktop-continuous",
   attachmentScope: WindowHostAttachmentScope = { kind: "local" },
   capabilities?: HostRemoteConnectionCapabilities,
+  attachmentGeneration = 1,
 ): ExposedServicePortHandle {
   const wrappedPort = wrapElectronPort(port);
   const protocol = new MessagePortProtocol(wrappedPort);
@@ -1743,7 +1972,29 @@ function exposeServicesOnMessagePort(
   // renderer 会立即发请求但 channel 还没注册，导致 "Unknown channel" 超时错误。
   // attach 模式复用已就绪服务，必须立即初始化新的 RPC MessagePort。
   logger.info(`creating ChannelServer (deferInit=${deferInit})`);
-  const rawServer = new ChannelServer(protocol, "host", 1000, deferInit);
+  let disposed = false;
+  const assertAttachment = createMobileProjectDirectoryAttachmentAssertion({
+    registry: windowRemoteConnectionRegistry,
+    getActiveServices: () => activeServices,
+    services,
+    attachmentScope,
+    attachmentGeneration,
+    isDisposed: () => disposed,
+  });
+  // 只以本次 attachment 的 scoped services + 握手 capabilities 判断；不读取本地 activeServices。
+  const directoryAvailable = resolveMobileProjectDirectoryAvailability({
+    clientMode,
+    attachmentScope,
+    services,
+    capabilities,
+  });
+  const rawServer = new ChannelServer(
+    protocol,
+    "host",
+    1000,
+    deferInit,
+    directoryAvailable ? { mobileProjectDirectory: true } : {},
+  );
   const loggedServer = new LoggingChannelServer(rawServer, logRpc);
   const server = new NetworkTelemetryChannelServer(loggedServer);
   const agentService = services.getOptional(IZCodeAgentService);
@@ -1770,11 +2021,50 @@ function exposeServicesOnMessagePort(
   if (taskService) {
     overrides.set(
       IZCodeTaskService.channelName,
-      createControllerRoutedTaskService(taskService, attachmentScope),
+      clientMode === "web-remote-replayable" && agentService
+        ? guardReplayableTaskCreation({
+            tasks: createControllerRoutedTaskService(taskService, attachmentScope),
+            agent: agentService,
+            supported:
+              attachmentScope.kind === "local" || capabilities?.existingRuntimeAdmission === true,
+            localAdmission: attachmentScope.kind === "local",
+            inProcess: attachmentScope.kind === "local",
+            assertTarget: (target) => {
+              assertAttachment();
+              if (
+                attachmentScope.kind === "remote" &&
+                (target.workspaceIdentity !== attachmentScope.workspaceIdentity ||
+                  target.workspacePath !== attachmentScope.workspacePath ||
+                  target.remoteSessionId !== attachmentScope.remoteSessionId)
+              )
+                throw new Error("project.stale-attachment");
+              if (
+                attachmentScope.kind === "local" &&
+                (target.remoteSessionId ||
+                  (target.workspaceIdentity && isRemoteWorkspaceIdentity(target.workspaceIdentity)))
+              )
+                throw new Error("project.invalid-attachment");
+            },
+          })
+        : createControllerRoutedTaskService(taskService, attachmentScope),
     );
   }
   if (connectionScope) {
-    overrides.set(IZCodeAgentService.channelName, connectionScope.service);
+    overrides.set(
+      IZCodeAgentService.channelName,
+      clientMode === "web-remote-replayable"
+        ? new Proxy(connectionScope.service, {
+            get(target, property, receiver) {
+              if (property === "acquireExistingRuntime" || property === "createSession")
+                return () => {
+                  throw new Error("project.host-only-admission");
+                };
+              const value = Reflect.get(target, property, receiver) as unknown;
+              return typeof value === "function" ? value.bind(target) : value;
+            },
+          })
+        : connectionScope.service,
+    );
   }
   const conversationShareService = services.getOptional(IConversationShareService);
   if (conversationShareService) {
@@ -1790,7 +2080,26 @@ function exposeServicesOnMessagePort(
     );
   }
   services.exposeOnChannelServer(server, overrides);
-  let disposed = false;
+  if (directoryAvailable) {
+    server.registerChannel(
+      IMobileProjectDirectoryService.channelName,
+      ProxyChannel.fromService(
+        createMobileProjectDirectoryService({
+          assertCurrent: assertAttachment,
+          owners: () =>
+            createMobileProjectDirectoryOwners({
+              assertAttachment,
+              attachmentScope,
+              attachmentGeneration,
+              attachmentServices: services,
+              attachmentCapabilities: capabilities,
+              localServices: activeServices,
+              registry: windowRemoteConnectionRegistry,
+            }),
+        }),
+      ),
+    );
+  }
   let flowUpdateChain = Promise.resolve();
   const forwardFlowState = (state: "saturated" | "drained" | "closed") => {
     if (!connectionScope) return Promise.resolve();
@@ -1845,6 +2154,13 @@ const windowHostAttachmentRegistry = createWindowHostAttachmentRegistry<
       }
       return { services: activeServices, generation: 1 };
     }
+    if (scope.kind === "source-settings") {
+      // Source 级设置只需已在线 Source 的既有连接；没有 workspace session 时不创建 Host。
+      return {
+        services: windowRemoteConnectionRegistry.resolveSourceScopedServices(scope.sourceServerId),
+        generation: 1,
+      };
+    }
     const session = windowRemoteConnectionRegistry.getSession(scope.remoteSessionId);
     if (!session) {
       throw new Error(`未找到远程 logical session，remoteSessionId=${scope.remoteSessionId}`);
@@ -1855,8 +2171,8 @@ const windowHostAttachmentRegistry = createWindowHostAttachmentRegistry<
       capabilities: windowRemoteConnectionRegistry.resolveScopedCapabilities(scope),
     };
   },
-  expose: ({ port, services, clientMode, scope, capabilities }) =>
-    exposeServicesOnMessagePort(port, services, false, clientMode, scope, capabilities),
+  expose: ({ port, services, clientMode, scope, capabilities, generation }) =>
+    exposeServicesOnMessagePort(port, services, false, clientMode, scope, capabilities, generation),
 });
 
 function logWindowHostTopology(reason: string): void {
@@ -2238,8 +2554,9 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
 
   if (msg.type === HostMessageTypes.ConnectRemoteWorkspace) {
     const workspacePath = msg.workspacePath ?? "/";
-    const workspaceIdentity =
-      msg.workspaceIdentity ?? buildRemoteWorkspaceIdentity(workspacePath, msg.target);
+    // Bug 原因：入口预造 transport identity 会把全新 Source context 误当成旧绑定。
+    // 只转发显式旧 hint；registry 在真实握手后决定 legacy 主 key 或新 canonical，旧 Server 仍按 transport 派生。
+    const workspaceIdentity = msg.workspaceIdentity;
     logger.info(
       `connecting window-scoped remote source, requestId=${msg.requestId}, target=${formatRemoteTargetForLog(msg.target)}`,
     );
@@ -2251,6 +2568,7 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
           remoteAssets: msg.remoteAssets,
           workspacePath,
           workspaceIdentity,
+          ...(msg.confirmSourceServerInstall ? { confirmSourceServerInstall: true } : {}),
         }),
       )
       .then(async (descriptor) => {
@@ -2330,6 +2648,8 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
         remoteSessionId: msg.remoteSessionId,
         workspacePath: msg.workspacePath,
         workspaceIdentity: msg.workspaceIdentity,
+        ...(msg.workspacePurpose ? { workspacePurpose: msg.workspacePurpose } : {}),
+        ...(msg.legacyRouteHint ? { legacyRouteHint: msg.legacyRouteHint } : {}),
       });
     } catch (error) {
       logger.warn(
@@ -2473,6 +2793,8 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
     });
     databaseStartup = createHostDatabaseStartup({
       startupId: msg.databaseStartupId,
+      // 本地桌面持库 Host 的稳定身份；远程 Host 由它自己的 composition 注入。
+      hostId: "local",
       cwd: msg.agentSpawnFallbackCwd ?? process.cwd(),
       workingDirectories:
         msg.agentWarmupTargets?.map((target) => target.workspacePath) ??
@@ -2496,6 +2818,7 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
           `local database startup failed attempt=${databaseStartup?.coordinator.snapshot.attemptId}`,
           error,
         ),
+      onStorageWarning: (warning) => logger.warn("database migration backup skipped", warning),
       initializeServices: async () => {
         logger.info("initializing local services");
         activeSessionRealtimePort = createTaskRealtimeBridgeForHostInit(msg, parentPort);
@@ -2534,6 +2857,8 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
                 });
               },
               onAutomationManualRunRequested: dispatchManualAutomationRun,
+              // 动态工作流用户选择：本机设置是唯一权威，变化后推给本窗口在线远端 Host。
+              forwardDynamicWorkflowUserMode: forwardDynamicWorkflowUserModeToOnlineRemotes,
               onProviderProvisioningSourceChanged: (trigger) => {
                 parentPort?.postMessage({
                   type: HostResponseTypes.ProviderProvisioningSourceChanged,
@@ -2546,8 +2871,37 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               // CUA 顶部提示属于物理 Windows 桌面投影；非 Windows 和远端 authority 都不得上报。
               cuaOperationStateReporter:
                 process.platform === "win32" ? cuaOperationStateReporter : undefined,
+              // 本机 Host 只转接到已在线 Source 的既有 attachment：远端 Host 拥有项目 DB，
+              // 这里不创建第二个 Remote Host，也不为读树启动 Agent。
+              resolveProjectHostService: async (hostId) => {
+                const serverId = parseRemoteWorkspaceIdentity(
+                  buildRemoteHostWorkspaceIdentity(hostId, "/"),
+                )?.sourceServerId;
+                const registered = serverId
+                  ? windowRemoteConnectionRegistry.getOnlineSource(serverId)
+                  : null;
+                if (!serverId || !registered) {
+                  // 缺失即拒绝：路由到未连接/已断开的 Source 不能伪造离线项目树。
+                  throw new Error("project.host-offline");
+                }
+                const remoteServices = registered.services;
+                return resolveServerProjectService({
+                  serverId,
+                  virtualProjects: registered.virtualProjects,
+                  services: {
+                    ...(remoteServices.getOptional(IProjectService)
+                      ? { project: remoteServices.get(IProjectService) }
+                      : {}),
+                    system: remoteServices.get(ISystemService),
+                    file: remoteServices.get(IFileService),
+                    settings: remoteServices.get(ISettingService),
+                    tasks: remoteServices.get(IZCodeTaskService),
+                  },
+                });
+              },
             });
             activeServices = initializedServices;
+            registerSourceServerManagementService(initializedServices);
             return initializedServices;
           },
         });
@@ -2604,6 +2958,210 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
   }
 });
 
+interface SetupRemoteConnectionSourceOptions {
+  confirmSourceServerInstall?: boolean;
+  existingSourceServerId?: string;
+  /** 仅用户显式确认更新时传给 adapter；默认 false。 */
+  forceUpdate?: boolean;
+  signal?: AbortSignal;
+  compatibilityManifest?: CompatibilityManifest;
+  /** 连接/安装进度；管理服务与 UI 日志共用，不进入 RPC 数据流。 */
+  onLog?: (event: {
+    phase: string;
+    message: string;
+    progress?: number;
+    level?: "info" | "warn" | "error";
+  }) => void;
+  /** 测试/管理入口显式注入；生产默认按构建版本与 fork CDN 配置解析。 */
+  releaseOptions?: SourceServerReleaseResolverOptions;
+}
+
+/**
+ * 发布来源必须是本仓 fork 的制品：版本取自构建信息，base URL 只来自显式 env/define。
+ * 不把上游固定地址当权威；两者都缺失时 resolver 会显式失败，绝不静默回退。
+ */
+async function resolveSourceServerReleaseRuntimeOptions(
+  requestedArtifactPolicy?: SourceServerArtifactPolicy,
+): Promise<SourceServerReleaseResolverOptions> {
+  const expectedVersion = ZCODE_VERSION;
+  const localCandidates = [
+    process.env["ZCODE_SOURCE_SERVER_RELEASE_DIR"]?.trim(),
+    join(process.cwd(), "packages", "desktop", "mock-cdn", "releases", expectedVersion),
+    join(process.cwd(), "mock-cdn", "releases", expectedVersion),
+    join(
+      process.cwd(),
+      "packages",
+      "desktop",
+      "bundled-remote-assets",
+      "releases",
+      expectedVersion,
+    ),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  let localReleaseDir: string | undefined;
+  for (const candidate of localCandidates) {
+    if (
+      await access(join(candidate, "source-server-release.json")).then(
+        () => true,
+        () => false,
+      )
+    ) {
+      localReleaseDir = candidate;
+      break;
+    }
+  }
+  const envBases = (process.env["ZCODE_SOURCE_SERVER_RELEASE_BASE_URL"] ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const cdnBase =
+    typeof __ZCODE_CDN_BASE_URL__ !== "undefined" ? __ZCODE_CDN_BASE_URL__.trim() : "";
+  const releaseBaseUrls =
+    envBases.length > 0
+      ? envBases
+      : cdnBase
+        ? [`${cdnBase.replace(/\/+$/u, "")}/releases/${expectedVersion}`]
+        : [];
+  const requestedPolicy =
+    requestedArtifactPolicy ?? process.env["ZCODE_SOURCE_SERVER_ARTIFACT_POLICY"];
+  const artifactPolicy =
+    requestedPolicy === "development-content-addressed" || requestedPolicy === "release-versioned"
+      ? requestedPolicy
+      : releaseBaseUrls.length > 0
+        ? "release-versioned"
+        : localReleaseDir
+          ? "development-content-addressed"
+          : "release-versioned";
+  return {
+    expectedVersion,
+    artifactPolicy,
+    ...(localReleaseDir ? { localReleaseDir } : {}),
+    ...(releaseBaseUrls.length > 0 ? { releaseBaseUrls } : {}),
+    cacheRoot: join(getAppConfigDir(), "cache", "source-server"),
+  };
+}
+
+function sourceServerAuthProofDigest(secret: string): string | undefined {
+  const trimmed = secret.trim();
+  if (!trimmed) return undefined;
+  // 只在内存中比较已鉴权证明；摘要不进 identity/snapshot/日志/持久化。
+  return createHash("sha256").update(trimmed).digest("hex");
+}
+
+/**
+ * 直连 Source Server：HTTP Bearer info/capability + WS RPC。
+ *
+ * 只连接已运行的 server；未确认安装/升级时由 transport 层返回 typed 错误，
+ * 不会上传 archive 或执行安装命令（本片不新增 Desktop Remote Host）。
+ */
+async function setupServerRemoteConnection(
+  target: Extract<RemoteTarget, { kind: "server" }>,
+  options: SetupRemoteConnectionSourceOptions,
+): Promise<HostRemoteConnection> {
+  const { assertSourceServerHandshakeCompatible } =
+    await import("@zcode/server/source-server/connectSourceServer.js");
+  const connectionOptions = options.signal ? { signal: options.signal } : {};
+  const connection = await connectServerRemote(target, connectionOptions);
+  try {
+    // 兼容判定必须在发布连接前完成：不兼容即关闭，不把旧 Source 挂进 registry。
+    assertSourceServerHandshakeCompatible(
+      options.compatibilityManifest ?? ZCODE_COMPATIBILITY_MANIFEST,
+      connection.serverInfo,
+    );
+    const authProof = target.token ? sourceServerAuthProofDigest(target.token) : undefined;
+    return {
+      ...connection,
+      ...(authProof ? { sourceServerAuthProofDigest: authProof } : {}),
+    };
+  } catch (error) {
+    connection.dispose();
+    throw error;
+  }
+}
+
+/**
+ * SSH/WSL/Docker 的生产路径：probe → 显式安装门 → 单 Duplex 握手。
+ *
+ * 未在向导确认安装/升级时，transport 只返回 typed required（零上传/零安装命令）；
+ * 确认后才解析本仓 fork 的 release 并交给 adapter 安装。
+ */
+async function setupTransportSourceConnection(
+  target: Exclude<RemoteTarget, { kind: "server" }>,
+  onDidRemoteClose: (exitCode: number) => void,
+  sourceOptions: SetupRemoteConnectionSourceOptions,
+): Promise<HostRemoteConnection> {
+  const [{ createSourceServerTransportAdapter }, connectModule] = await Promise.all([
+    import("@zcode/server/source-server/transportAdapter.js"),
+    import("@zcode/server/source-server/connectSourceServer.js"),
+  ]);
+  const { connectSourceServerTransport, assertSourceServerHandshakeCompatible } = connectModule;
+  const manifest = sourceOptions.compatibilityManifest ?? ZCODE_COMPATIBILITY_MANIFEST;
+  const adapter = createSourceServerTransportAdapter(target.kind);
+  const context = {
+    ...(sourceOptions.signal ? { signal: sourceOptions.signal } : {}),
+    ...(sourceOptions.onLog ? { onLog: sourceOptions.onLog } : {}),
+  };
+  let duplex: import("node:stream").Duplex | undefined;
+  try {
+    const probe = await adapter.probe(target, context);
+    let release;
+    const needsInstall = !probe.installed;
+    const needsUpgrade =
+      probe.installed && probe.installedVersion
+        ? (() => {
+            const result = evaluateSourceServerCompatibility(manifest, {
+              schemaVersion: 1,
+              productVersion: probe.installedVersion!,
+              minCompatibleVersion: probe.installedVersion!,
+            });
+            return !result.compatible && result.newerEndpoint === "controller";
+          })()
+        : false;
+    if ((needsInstall || needsUpgrade) && sourceOptions.confirmSourceServerInstall === true) {
+      release = await resolveSourceServerReleaseAsset(
+        probe,
+        target,
+        sourceOptions.releaseOptions ?? (await resolveSourceServerReleaseRuntimeOptions()),
+      );
+    }
+    const prepared = await connectSourceServerTransport({
+      adapter,
+      target,
+      context,
+      compatibilityManifest: manifest,
+      ...(sourceOptions.confirmSourceServerInstall ? { confirmSourceServerInstall: true } : {}),
+      ...(sourceOptions.forceUpdate ? { forceUpdate: true } : {}),
+      ...(release ? { release } : {}),
+    });
+    duplex = await prepared.openDuplex();
+    const authProof = sourceServerAuthProofDigest(prepared.ingress.ingressToken);
+    const connection = await connectServerRemoteOverDuplex({
+      ingressToken: prepared.ingress.ingressToken,
+      createConnection: () => duplex!,
+      onClose: () => onDidRemoteClose(0),
+    });
+    try {
+      assertSourceServerHandshakeCompatible(manifest, connection.serverInfo);
+    } catch (error) {
+      connection.dispose();
+      throw error;
+    }
+    // adapter 的 backend 仍持有 SSH/WSL/Docker tunnel，必须跟随连接生命周期释放；
+    // 提前 dispose 会拆掉 proxy-stdio 通道，导致已发布的 RPC 立即失效。
+    const disposeConnection = connection.dispose.bind(connection);
+    return Object.assign(connection, {
+      ...(authProof ? { sourceServerAuthProofDigest: authProof } : {}),
+      dispose() {
+        disposeConnection();
+        adapter.dispose?.();
+      },
+    });
+  } catch (error) {
+    duplex?.destroy();
+    adapter.dispose?.();
+    throw error;
+  }
+}
+
 async function setupRemoteConnection(
   target: RemoteTarget,
   remoteAssets: RemoteAssetDirs,
@@ -2611,26 +3169,24 @@ async function setupRemoteConnection(
   onDidRemoteClose: (exitCode: number) => void,
   deployLockMode: DeployLockMode = "remote",
   signal?: AbortSignal,
+  sourceOptions: SetupRemoteConnectionSourceOptions = {},
 ): Promise<HostRemoteConnection> {
-  // 延迟加载 remote backend，避免 local 模式下因 ssh2 依赖链进入 asar 后崩溃
-  const { createRemoteBackend, connectRemote, pickRemoteRuntimeEnv } =
-    await import("@zcode/server/remote");
-  const backend = await createRemoteBackend(target);
-  const connection = await connectRemote(backend, {
-    ...remoteAssets,
-    remoteRuntimeNetwork,
-    signal,
-    // SSH/Docker 远端 server 由 host process 单独启动，不能依赖桌面 main 的环境继承。
-    // 这里显式透传编译期版本，避免漏导入后生成裸 ZCODE_VERSION 引用导致 SSH 初始化直接 ReferenceError。
-    appVersion: ZCODE_VERSION,
-    // 远端 zcode-server/agent 是独立进程，不能继承 host 里的测试/生产 endpoint 选择。
-    // 这里只透传 server 侧白名单允许的公开环境变量，避免把 credential/token 带到远端机器。
-    remoteRuntimeEnv: pickRemoteRuntimeEnv(process.env),
-    // SSH 由窗口级 registry 串行复用，其余 transport 仍保留远端 connector 自身锁。
-    deployLockMode,
-    onDidRemoteClose: ({ code }) => {
-      onDidRemoteClose(code);
-    },
+  if (target.kind === "server") {
+    return await setupServerRemoteConnection(target, {
+      ...sourceOptions,
+      ...(signal ? { signal } : {}),
+    });
+  }
+  // SSH/WSL/Docker 走 R3 transport adapter：安装/升级必须先经显式确认，
+  // 不能再沿用旧的静默 deploy/connectRemote 路径。
+  void remoteRuntimeNetwork;
+  void deployLockMode;
+  const releaseOptions =
+    sourceOptions.releaseOptions ??
+    (await resolveSourceServerReleaseRuntimeOptions(remoteAssets.sourceServerArtifactPolicy));
+  return await setupTransportSourceConnection(target, onDidRemoteClose, {
+    ...sourceOptions,
+    releaseOptions,
+    ...(signal ? { signal } : {}),
   });
-  return { ...connection, backend };
 }

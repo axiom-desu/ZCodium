@@ -55,6 +55,8 @@ import {
   placeWorkbenchSessionInSplit,
   type WorkbenchSessionTarget,
 } from "@/v4/workbenchSessionPlacement.js";
+import { useV4SplitPaneEntry } from "@/v4/splitPaneEntryContext.js";
+import { canCreateWorkbenchSplit } from "@/v4/workbenchSplitAvailability.js";
 
 function dragPayloadSessionTarget(payload: WorkbenchSessionDragPayload): WorkbenchSessionTarget {
   return {
@@ -244,7 +246,18 @@ export function V4WorkspaceChatArea({
 
   const paneCount = layout.leaves.length;
   const showFocusIndicator = paneCount > 1;
-  const canSplit = paneCount < MAX_WORKBENCH_PANES;
+  // 分屏新建的唯一裁决：入口可用性由 shell 从现有完整视图 controller 派生，
+  // 本组件不再另设开关；拖拽 offer/drop 提交与 pane 头按钮都读同一个派生值。
+  const splitEntry = useV4SplitPaneEntry();
+  const canCreateSplit = canCreateWorkbenchSplit({
+    splitEntryEnabled: splitEntry.enabled,
+    paneCount,
+    maxPanes: MAX_WORKBENCH_PANES,
+  });
+  // 拖拽中途进入完整视图时，事件处理器可能仍持有上一帧回调；提交时必须重验当前派生值。
+  const canCreateSplitRef = useRef(canCreateSplit);
+  canCreateSplitRef.current = canCreateSplit;
+  const canSplit = canCreateSplit;
 
   const shellScope = useMemo<PaneWorkspaceScope>(
     () => ({
@@ -526,6 +539,7 @@ export function V4WorkspaceChatArea({
 
   const canDropSession = useCallback(
     (payload: WorkbenchSessionDragPayload) => {
+      if (!canCreateSplitRef.current) return false;
       return canPlaceWorkbenchSessionInSplit(
         placementShellBinding,
         dragPayloadSessionTarget(payload),
@@ -537,6 +551,8 @@ export function V4WorkspaceChatArea({
 
   const handleDropSession = useCallback(
     (paneId: string, side: PaneSplitSide, payload: WorkbenchSessionDragPayload) => {
+      // drop 提交再验一次：拖拽起点合法不代表提交时仍合法（例如中途进了完整视图）。
+      if (!canCreateSplitRef.current) return;
       placeWorkbenchSessionInSplit(placementShellBinding, dragPayloadSessionTarget(payload), {
         anchorPaneId: paneId,
         mode: "drag",
@@ -566,7 +582,7 @@ export function V4WorkspaceChatArea({
           }
           shell={shell}
           onFocusRequest={handleFocusRequest}
-          onSplit={activeGroup ? undefined : splitPaneAction}
+          onSplit={activeGroup || !canSplit ? undefined : splitPaneAction}
           onClosePane={handleClosePane}
           onConfirmRestoredSession={handleConfirmRestoredSession}
           onBindSession={handleBindSession}

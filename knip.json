@@ -11,7 +11,37 @@
         "scripts/check-workspace-freshness.mjs",
         "scripts/mise-run.mjs",
         "scripts/zcode-cli-rust-workbench-smoke.mjs",
-        "scripts/ci/fixtures/mcp-workbench.mjs"
+        "scripts/ci/fixtures/mcp-workbench.mjs",
+        "scripts/ci/plugin-ui-recommendations-smoke.mjs",
+        "scripts/ci/workbench-split-guard-smoke.mjs"
+      ]
+    },
+    "packages/ui": {
+      "entry": [
+        "src/index.ts",
+        "src/useTheme.ts",
+        "src/v4/ConversationShareReadonlyTimeline.tsx",
+        "src/lib/oauthProviderIcon.tsx",
+        "src/components/ai-elements/message.tsx",
+        "src/lib/e2eStoreBridgeBootstrap.ts",
+        "src/store/remoteWorkspaceSessionStore.ts",
+        "src/styles.css",
+        "src/replay.ts",
+        "test/fixtures/side-pane-full-view.jsx",
+        "test/fixtures/file-manager-pane.jsx",
+        "test/fixtures/app-shell-full-view.jsx",
+        "test/fixtures/app-shell-leaves.jsx",
+        "test/fixtures/app-shell-side-pane-panel.jsx",
+        "test/fixtures/workbench-split-guard.jsx",
+        "test/fixtures/workbench-split-guard-leaves.jsx",
+        "test/fixtures/project-sidebar.jsx",
+        "test/fixtures/plugin-ui-recommendations.jsx",
+        "test/fixtures/conversation-detach.jsx",
+        "src/project-sidebar/index.ts",
+        "src/project-sidebar/contract.ts",
+        "src/project-sidebar/module.ts",
+        "src/project-sidebar/contract.example.ts",
+        "test/projectSidebarView.test.ts"
       ]
     },
     "packages/desktop": {
@@ -33,7 +63,26 @@
     "packages/services": {
       "entry": [
         "src/index.ts",
-        "src/storage/module.ts"
+        "src/storage/module.ts",
+        "src/project-storage/module.ts",
+        "src/project-storage/contract.example.ts",
+        "src/project/index.ts",
+        "src/project/contract.ts",
+        "src/project/module.ts",
+        "src/project/contract.example.ts",
+        "src/project/adapters/legacy-single-root.ts",
+        "src/task-facts/index.ts",
+        "src/task-facts/contract.ts",
+        "src/task-facts/module.ts",
+        "src/task-facts/contract.example.ts"
+      ]
+    },
+    "packages/shared": {
+      "entry": [
+        "src/sqlite-migrations/module.ts",
+        "src/sqlite-migrations/contract.example.ts",
+        "src/source-server/module.ts",
+        "src/source-server/contract.example.ts"
       ]
     },
     "apps/zcode-cli/packages/browser-use-plugin": {
@@ -56,6 +105,35 @@
     "packages/relay": {
       "entry": [
         "src/cli.ts"
+      ]
+    },
+    "apps/zcode-cli/packages/office-runtime": {
+      "entry": [
+        "index.ts",
+        "contract.ts",
+        "contract.example.ts",
+        "src/adapters/main.ts",
+        "ui/bootstrap.ts",
+        "ui/main.tsx",
+        "scripts/*.mjs",
+        "ui/cjkFontRuntime.ts"
+      ],
+      "project": [
+        "**/*.{ts,tsx,mjs}"
+      ],
+      "paths": {
+        "#office/*": [
+          "src/*"
+        ],
+        "#ui/*": [
+          "ui/*"
+        ]
+      }
+    },
+    "apps/zcode-cli/packages/cli": {
+      "entry": [
+        "src/main.ts",
+        "src/index.ts"
       ]
     }
   },

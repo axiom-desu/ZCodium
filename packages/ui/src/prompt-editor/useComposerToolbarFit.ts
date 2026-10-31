@@ -44,12 +44,23 @@ function fitComposerToolbar(root: HTMLElement) {
   root.dataset.composerModelIcon = "true";
 }
 
-export function useComposerToolbarFit() {
+export function useComposerToolbarFit({ iconOnly = false } = {}) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const root = ref.current;
     if (!root) return;
     const update = () => {
+      // 单行输入框没有固定的工具栏宽度可测：按同一顺序直接收到最后一级（只留图标）。
+      if (iconOnly) {
+        delete root.dataset.composerProviderCompact;
+        for (const control of root.querySelectorAll<HTMLElement>(
+          "[data-composer-collapse-priority]",
+        )) {
+          control.dataset.composerCompact = "true";
+        }
+        root.dataset.composerModelIcon = "true";
+        return;
+      }
       if (!root.parentElement || root.getBoundingClientRect().width <= 0) return;
       // 在不可见副本上尝试展开，避免真实按钮测量时来回移动、丢失 hover 或关闭 Tooltip。
       const probe = root.cloneNode(true) as HTMLElement;
@@ -99,6 +110,6 @@ export function useComposerToolbarFit() {
       resize?.disconnect();
       mutations.disconnect();
     };
-  }, []);
+  }, [iconOnly]);
   return ref;
 }

@@ -90,6 +90,8 @@ export const ServiceChannels = {
   ZCodeAgent: "zcode-agent",
   /** ZCode session 应用服务 */
   ZCodeSession: "zcode-session",
+  /** Host 项目组织态唯一写者（项目/roots/任务归属/自动归档） */
+  Project: "project",
   /** 会话分享发布、预览与 continuation API 编排 */
   ConversationShare: "conversation-share",
   /** 文件系统监视服务 */
@@ -142,6 +144,8 @@ export const ServiceChannels = {
   PromptAttachmentTransfer: "prompt-attachment-transfer",
   /** Onboarding 完成记录服务（本地持久化，后续上传服务器） */
   OnboardingRecord: "onboarding-record",
+  /** Source Server 管理（profile/连接/更新/删除）；只操作既有 window registry */
+  SourceServerManagement: "source-server-management",
 } as const;
 
 export type ServiceChannelName = (typeof ServiceChannels)[keyof typeof ServiceChannels];
@@ -181,6 +185,8 @@ export const PlatformChannels = {
   ActivateOrSetWorkspace: "zcode:activate-or-set-workspace",
   /** 建立 SSH 远程连接 */
   ConnectRemote: "zcode:connect-remote",
+  /** Renderer → Main：为已在线 Source 创建配置专用 attachment（不创建 Agent 会话） */
+  RequestSourceSettingsAttachment: "zcode:request-source-settings-attachment",
   /** 取消当前窗口正在进行中的远程连接 */
   CancelPendingRemoteConnection: "zcode:cancel-pending-remote-connection",
   /** Renderer → Main：绑定远程 logical session 的 canonical workspace context */
@@ -493,6 +499,8 @@ export const InternalChannels = {
   ScopedServicePort: "zcode:scoped-service-port",
   /** renderer → main：scoped MessagePort 已注册，可安全切换 attachment */
   ScopedServicePortReady: "zcode:scoped-service-port-ready",
+  /** main → renderer 转发 source-settings attachment 的 MessagePort */
+  SourceSettingsServicePort: "zcode:source-settings-service-port",
   /** preload → renderer：主进程已确认系统通知展示，renderer 可播放提示音 */
   TaskNotificationSound: "zcode:task-notification-sound",
   /** main → 宿主 renderer：插件 UI 沙箱的 MessagePort 组（port2[]），payload { sandboxId, initId, names } */

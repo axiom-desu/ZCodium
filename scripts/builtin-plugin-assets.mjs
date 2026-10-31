@@ -4,6 +4,7 @@ import {
   BUILTIN_PLUGIN_REQUIRED_PATHS,
   cuaRuntimeRequiredPaths,
 } from "@zcode/shared/builtin-plugin-assets";
+export { validateStagedOfficeViewerAssets } from "@zcode/shared/office-viewer-assets";
 
 /** Validate complete executable/skill inputs before producing an installable release. */
 export async function validateBuiltinPluginAssets(

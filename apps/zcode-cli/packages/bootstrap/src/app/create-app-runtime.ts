@@ -16,7 +16,8 @@ import { createSessionFacade } from "./session-facade.js";
 import { createScriptWorkflowBridge } from "./script-workflow-methods.js";
 import { getWorkflowConcurrencyGovernor } from "./workflow-concurrency-governor.js";
 import { resolveZCodeCustomCommandPrompt } from "../custom-command-prompt.js";
-import { resolveZCodeBuiltinPromptCommand } from "../builtin-prompt-command.js";
+import { resolveZCodeBuiltinPromptCommandInvocation } from "../builtin-prompt-command.js";
+import { BUILTIN_WORKFLOW_COMMAND_NAME } from "../builtin-workflow-command.js";
 import { createRuntimeAiSdkModelExecutionConfig } from "../model-config.js";
 import { ApiProviderModelRuntime } from "./provider-registry-model-runtime.js";
 import { completeAppStartup, markRuntimeConstructed } from "./startup-marks.js";
@@ -212,7 +213,7 @@ export function createAppRuntime(
   const inputFacade = createInputFacade({
     artifactStore,
     customCommandPromptResolver: async (text, resolverOptions) => {
-      const builtinPrompt = resolveZCodeBuiltinPromptCommand(text, {
+      const builtinPrompt = resolveZCodeBuiltinPromptCommandInvocation(text, {
         // 动态工作流关闭时内置 `/workflow` 不得展开。目录侧已经把它从 `/` 面板
         // 剔除，但用户仍可手打命令名，两条路径必须给出同一个结论。TUI 缺席时不设门禁；
         // headless 按 --enable-workflow 显式取值，见 runtimeConfig 字段注释。
@@ -220,9 +221,19 @@ export function createAppRuntime(
         workingDirectory,
       });
       if (builtinPrompt !== undefined) {
-        return builtinPrompt;
+        if (builtinPrompt.name === BUILTIN_WORKFLOW_COMMAND_NAME) {
+          // `/workflow` 的展开处就是 onDemand 会话的激活点（launch.md「On demand: activation」）：
+          // 它先于 executeTurn，本轮首个模型请求就带着十个工具。alwaysOn / 已激活会话里是 no-op。
+          // 问的是 runtime 而不是闭包里的 runtimeConfig——构造时 config 被拷贝，闭包看不到翻转。
+          await runtime?.activateDynamicWorkflowTools({
+            source: "command",
+            traceContext: resolverOptions?.traceContext ?? traceContext,
+          });
+        }
+        return builtinPrompt.prompt;
       }
       return await resolveZCodeCustomCommandPrompt(text, {
+        additionalDirectories: options.additionalDirectories,
         env: options.env,
         executionPort,
         logger,

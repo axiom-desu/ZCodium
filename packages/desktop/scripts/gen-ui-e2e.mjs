@@ -1,12 +1,66 @@
-import { build } from "esbuild";
-import { mkdtemp, mkdir, readFile, writeFile, readdir, copyFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+/**
+ * Gen UI E2E 入口：只允许 Node builtins 的薄启动器 + 同一文件内的 runner。
+ *
+ * Electron fixture 会加载桌面业务模块，它们在 import 时就固定 `HOME`/`ZCODE_DATA_BASE_DIR`。
+ * 先建临时隔离环境、再用同一份 env 重入本文件，业务模块（esbuild、runtime assets）才加载。
+ * 隔离规则见 e2e-isolation.mjs。
+ */
+import { spawn, execFile } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { copyGenUiRuntimeAssets } from "./gen-ui-runtime-assets.mjs";
+import { mkdtemp, mkdir, readFile, writeFile, readdir, copyFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import {
+  E2E_ISOLATION_PATH_ENV_KEYS,
+  E2E_ISOLATION_ROOT_ENV,
+  assertIsolatedEnv,
+  createE2EIsolation,
+  spawnIsolated,
+} from "./e2e-isolation.mjs";
+
+const entry = fileURLToPath(import.meta.url);
+
+if (!process.env[E2E_ISOLATION_ROOT_ENV]) {
+  const isolation = await createE2EIsolation();
+  assertIsolatedEnv(isolation.env);
+  process.stderr.write(`[gen-ui-e2e] isolation root: ${isolation.resolvedRoot}\n`);
+  if (process.argv.includes("--print-isolation")) {
+    process.stdout.write(
+      JSON.stringify(
+        {
+          root: isolation.root,
+          resolvedRoot: isolation.resolvedRoot,
+          argv: process.argv.slice(2),
+          paths: Object.fromEntries(
+            E2E_ISOLATION_PATH_ENV_KEYS.map((key) => [key, isolation.env[key]]),
+          ),
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    process.exit(0);
+  }
+  const child = spawnIsolated([entry, ...process.argv.slice(2)], { env: isolation.env });
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.on(signal, () => child.kill(signal));
+  }
+  const code = await new Promise((accept) => {
+    child.on("error", (error) => {
+      process.stderr.write(`[gen-ui-e2e] runner 启动失败: ${error.stack ?? error}\n`);
+      accept(1);
+    });
+    child.on("exit", (exitCode, signal) => accept(exitCode ?? (signal ? 1 : 0)));
+  });
+  process.exit(code);
+}
+
+// 从这里开始 env 已隔离；业务模块只能动态加载。
+assertIsolatedEnv();
+const { build } = await import("esbuild");
+const { copyGenUiRuntimeAssets } = await import("./gen-ui-runtime-assets.mjs");
 const require = createRequire(import.meta.url);
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(desktop, "../..");

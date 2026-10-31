@@ -1,7 +1,9 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { writeBundledOfficialMarketplacePartitionSync } from "@zcode/adapters";
 import type { Logger } from "@zcode/contracts";
+import { validateStagedOfficeViewerAssets } from "@zcode/shared/office-viewer-assets";
 import {
   getOfficialPluginCacheRetryAttempts,
   removeOfficialPluginCacheDirectory,
@@ -17,31 +19,34 @@ import {
   readSeedFileBytes,
 } from "./bundled-plugin-seed-source.js";
 
-export function writeOfficialMarketplace(
+export async function writeOfficialMarketplace(
   storageRoot: string,
   source: OfficialPluginSeedSource,
-): void {
+): Promise<void> {
+  const plugins = await Promise.all(
+    source.plugins.map(async (plugin) => {
+      // 商店信息（listing）与描述随本地目录条目下发，
+      // 由 adapter 的同一套 parseEntryStoreListing 解析，UI 才能给内置插件渲染
+      // 显示名/分类/作者/示例提示词。描述取自插件包内 plugin.json（单一事实源）。
+      const description = await readSeedPluginDescription(source, plugin);
+      return {
+        cachePath: officialPluginCacheRoot(storageRoot, plugin.definition),
+        // 未安装/已卸载时商店读目录条目的 componentTypes 判断「UI 插件」；缺失会掉进分类分组。
+        ...(plugin.definition.componentTypes
+          ? { componentTypes: [...plugin.definition.componentTypes] }
+          : {}),
+        ...(description ? { description } : {}),
+        name: plugin.definition.name,
+        source: source.kind,
+        version: plugin.definition.version,
+        ...plugin.definition.listing,
+      };
+    }),
+  );
   writeBundledOfficialMarketplacePartitionSync({
     manifest: {
       name: OFFICIAL_PLUGIN_MARKETPLACE,
-      plugins: source.plugins.map((plugin) => {
-        // 商店信息（listing）与描述随本地目录条目下发，
-        // 由 adapter 的同一套 parseEntryStoreListing 解析，UI 才能给内置插件渲染
-        // 显示名/分类/作者/示例提示词。描述取自插件包内 plugin.json（单一事实源）。
-        const description = readSeedPluginDescription(source, plugin);
-        return {
-          cachePath: officialPluginCacheRoot(storageRoot, plugin.definition),
-          // 未安装/已卸载时商店读目录条目的 componentTypes 判断「UI 插件」；缺失会掉进分类分组。
-          ...(plugin.definition.componentTypes
-            ? { componentTypes: [...plugin.definition.componentTypes] }
-            : {}),
-          ...(description ? { description } : {}),
-          name: plugin.definition.name,
-          source: source.kind,
-          version: plugin.definition.version,
-          ...plugin.definition.listing,
-        };
-      }),
+      plugins,
       version: 1,
     },
     storageRoot,
@@ -49,14 +54,16 @@ export function writeOfficialMarketplace(
 }
 
 /** 从 seed 文件集中读插件 plugin.json 的 description；读取/解析失败按 undefined 降级。 */
-function readSeedPluginDescription(
+async function readSeedPluginDescription(
   source: OfficialPluginSeedSource,
   plugin: OfficialPluginSeedPluginSource,
-): string | undefined {
+): Promise<string | undefined> {
   const manifestFile = plugin.files.find((file) => file.path === ".zcodium-plugin/plugin.json");
   if (!manifestFile) return undefined;
   try {
-    const parsed = JSON.parse(readSeedFileBytes(source, plugin, manifestFile).toString("utf8")) as {
+    const parsed = JSON.parse(
+      (await readSeedFileBytes(source, plugin, manifestFile)).toString("utf8"),
+    ) as {
       description?: unknown;
     };
     return typeof parsed.description === "string" && parsed.description.trim().length > 0
@@ -67,13 +74,16 @@ function readSeedPluginDescription(
   }
 }
 
-export function isSeedCurrent(targetRoot: string, plugin: OfficialPluginSeedPluginSource): boolean {
+export async function isSeedCurrent(
+  targetRoot: string,
+  plugin: OfficialPluginSeedPluginSource,
+): Promise<boolean> {
   // 修复：标记只证明曾发布过这个版本，磁盘清理或损坏丢失必需库时仍需重新 seed。
-  if (!isSeedUsable(targetRoot, plugin.definition)) return false;
+  if (!(await isSeedUsable(targetRoot, plugin.definition))) return false;
   const markerPath = join(targetRoot, SEED_MARKER_FILE);
   if (!existsSync(markerPath)) return false;
   try {
-    const marker = JSON.parse(readFileSync(markerPath, "utf8")) as ReturnType<typeof seedMarker>;
+    const marker = JSON.parse(await readFile(markerPath, "utf8")) as ReturnType<typeof seedMarker>;
     return marker.hash === plugin.hash && marker.pluginVersion === plugin.definition.version;
   } catch {
     return false;
@@ -84,12 +94,22 @@ export function isSeedCurrent(targetRoot: string, plugin: OfficialPluginSeedPlug
  * 旧版本缓存只要插件清单和运行所需文件完整，就可以继续服务当前会话。
  * marker hash 不匹配只表示需要升级，不能把一个可用的旧缓存当成启动失败。
  */
-function isSeedUsable(targetRoot: string, definition: OfficialPluginDefinition): boolean {
+async function isSeedUsable(
+  targetRoot: string,
+  definition: OfficialPluginDefinition,
+): Promise<boolean> {
   try {
     const manifest = JSON.parse(
-      readFileSync(join(targetRoot, ".zcodium-plugin", "plugin.json"), "utf8"),
+      await readFile(join(targetRoot, ".zcodium-plugin", "plugin.json"), "utf8"),
     ) as { name?: unknown };
     if (manifest.name !== definition.name) return false;
+  } catch {
+    return false;
+  }
+
+  // 修复：缓存复用与新 seed 必须等待同一闭包/哈希校验，不能维护只验大小的第二份规则。
+  try {
+    await validateStagedOfficeViewerAssets(targetRoot);
   } catch {
     return false;
   }
@@ -99,22 +119,22 @@ function isSeedUsable(targetRoot: string, definition: OfficialPluginDefinition):
   );
 }
 
-export function findUsableOfficialPluginFallback(
+export async function findUsableOfficialPluginFallback(
   storageRoot: string,
   definition: OfficialPluginDefinition,
-): string | undefined {
+): Promise<string | undefined> {
   const targetRoot = officialPluginCacheRoot(storageRoot, definition);
-  if (isSeedUsable(targetRoot, definition)) return undefined;
+  if (await isSeedUsable(targetRoot, definition)) return undefined;
 
   let entries;
   try {
-    entries = readdirSync(dirname(targetRoot), { withFileTypes: true });
+    entries = await readdir(dirname(targetRoot), { withFileTypes: true });
   } catch (error) {
     if (isNotFoundFsError(error)) return undefined;
     throw error;
   }
 
-  return entries
+  const candidates = entries
     .filter(
       (entry) =>
         entry.isDirectory() &&
@@ -128,16 +148,19 @@ export function findUsableOfficialPluginFallback(
     .sort((left, right) =>
       right.name.localeCompare(left.name, undefined, { numeric: true, sensitivity: "base" }),
     )
-    .map((entry) => join(dirname(targetRoot), entry.name))
-    .find((rootPath) => isSeedUsable(rootPath, definition));
+    .map((entry) => join(dirname(targetRoot), entry.name));
+  for (const rootPath of candidates) {
+    if (await isSeedUsable(rootPath, definition)) return rootPath;
+  }
+  return undefined;
 }
 
-export function replaceSeedRoot(
+export async function replaceSeedRoot(
   temporaryRoot: string,
   targetRoot: string,
   plugin: OfficialPluginSeedPluginSource,
   retryBudget: OfficialPluginCacheRetryBudget,
-): void {
+): Promise<void> {
   const backupRoot = createSeedBackupRoot(targetRoot);
   let movedTargetToBackup = false;
   mkdirSync(dirname(targetRoot), { recursive: true });
@@ -156,7 +179,7 @@ export function replaceSeedRoot(
   try {
     renameOfficialPluginCachePath(temporaryRoot, targetRoot, retryBudget);
   } catch (error) {
-    if (isSeedCurrent(targetRoot, plugin)) {
+    if (await isSeedCurrent(targetRoot, plugin)) {
       removeOfficialPluginCacheDirectory(temporaryRoot, retryBudget);
       if (movedTargetToBackup) {
         removeOfficialPluginCacheDirectory(backupRoot, retryBudget);
@@ -209,6 +232,7 @@ export function warnCacheDegraded(
     missingSeedPaths?: readonly string[];
     operation: "remove_suppressed_plugin" | "seed_plugin";
     pluginId: string;
+    reason?: string;
     targetRoot: string;
   },
 ): void {
@@ -217,6 +241,7 @@ export function warnCacheDegraded(
     degraded: true,
     errorCode: input.error.code,
     ...(input.missingSeedPaths ? { missingSeedPaths: input.missingSeedPaths } : {}),
+    ...(input.reason ? { reason: input.reason } : {}),
     module: "bootstrap.official_plugin_cache",
     operation: input.operation,
     pluginId: input.pluginId,

@@ -43,7 +43,11 @@ import type { AttachmentUploadOptions } from "@/v4/attachmentUploadTransaction.j
 
 export interface V4ConversationContextValue {
   layer: SessionDataLayer;
-  sendCommand(envelope: CommandEnvelope): Promise<CommandAck>;
+  /** context.projectId 仅 Host 消费；CLI wire 只有既有 createSession 字段。 */
+  sendCommand(
+    envelope: CommandEnvelope,
+    context?: { projectId?: string | null },
+  ): Promise<CommandAck>;
   fileChanges(params: V4ConversationFileChangesParams): Promise<V4ConversationFileChangesResult>;
   fileRewindPreview(
     params: V4ConversationFileRewindPreviewParams,
@@ -192,7 +196,8 @@ function ReadyV4PaneConversationProvider({
       lease,
       value: {
         layer: lease.layer,
-        sendCommand: (envelope: CommandEnvelope) => lease.transport.sendCommand(envelope),
+        sendCommand: (envelope: CommandEnvelope, context?: { projectId?: string | null }) =>
+          lease.transport.sendCommand(envelope, context),
         fileChanges: (params: V4ConversationFileChangesParams) =>
           lease.transport.fileChanges(params),
         fileRewindPreview: (params: V4ConversationFileRewindPreviewParams) =>

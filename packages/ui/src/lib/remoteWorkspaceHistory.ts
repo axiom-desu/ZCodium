@@ -1,10 +1,13 @@
 /* eslint-disable max-lines -- 远端 workspace 历史集中维护持久化、凭据和 MCP 路径映射元数据，拆分会扩大恢复链路回归面。 */
-import type {
-  AppSettings,
-  PersistedWorkspaceSessionEntry,
-  RemoteTarget,
-  RemoteTargetSnapshot,
-  RemoteWorkspaceSessionEntry,
+import {
+  buildServerRemoteWorkspaceIdentity,
+  buildRemoteWorkspaceIdentity as buildSharedRemoteWorkspaceIdentity,
+  parseRemoteWorkspaceIdentity,
+  type AppSettings,
+  type PersistedWorkspaceSessionEntry,
+  type RemoteTarget,
+  type RemoteTargetSnapshot,
+  type RemoteWorkspaceSessionEntry,
 } from "@zcode/shared";
 import type { WindowTabState } from "@/store/tabStore.js";
 import { isWorkspaceTab } from "@/store/tabStore.js";
@@ -34,6 +37,10 @@ function buildRemoteWorkspacePrivateKeyPassphraseCredentialKey(workspaceKey: str
   return `remote-workspace:${workspaceKey}:private-key-passphrase`;
 }
 
+function buildRemoteWorkspaceServerTokenCredentialKey(workspaceKey: string): string {
+  return `remote-workspace:${workspaceKey}:server-token`;
+}
+
 function collectRemoteWorkspaceCredentialKeys(snapshot: RemoteTargetSnapshot): string[] {
   if (snapshot.kind === "ssh") {
     return [snapshot.passwordCredentialKey, snapshot.privateKeyPassphraseCredentialKey].filter(
@@ -41,7 +48,43 @@ function collectRemoteWorkspaceCredentialKeys(snapshot: RemoteTargetSnapshot): s
     );
   }
 
+  if (snapshot.kind === "server") {
+    return [snapshot.tokenCredentialKey].filter(
+      (key): key is string => typeof key === "string" && key.length > 0,
+    );
+  }
+
   return [];
+}
+
+/** Host descriptor 转发结果：target 已带握手 serverId，token 仍只在本次连接流程内。 */
+export interface ConnectedRemoteWorkspaceTarget {
+  sessionId: string;
+  target: RemoteTarget;
+  sourceServerId?: string;
+  workspaceIdentity?: string;
+}
+
+/** reconnect/选目录/历史使用同一 Host actual key；realpath 改变只沿已验证身份种类生成候选。 */
+export function resolveConnectedRemoteWorkspaceIdentity(params: {
+  connected: ConnectedRemoteWorkspaceTarget;
+  connectedWorkspacePath?: string;
+  workspacePath: string;
+}): string {
+  const { connected, workspacePath } = params;
+  const identity = connected.workspaceIdentity?.trim();
+  const parsed = identity ? parseRemoteWorkspaceIdentity(identity) : null;
+  if (identity && (params.connectedWorkspacePath ?? parsed?.workspacePath) === workspacePath)
+    return identity;
+  // Bug 原因：只看 target 会把 Source canonical 降为 transport key，反过来只看 sourceId 又会合并 legacy。
+  // Host actual descriptor 决定身份种类；无旧绑定的新 Source 才默认 canonical。
+  if (connected.sourceServerId && (!identity || parsed?.kind === "server")) {
+    return buildServerRemoteWorkspaceIdentity({
+      serverId: connected.sourceServerId,
+      workspacePath,
+    });
+  }
+  return buildRemoteWorkspaceIdentity(workspacePath, connected.target);
 }
 
 export function hasRemoteWorkspaceIdentity(entry: {
@@ -56,6 +99,35 @@ type WslRemoteTargetLike = Extract<RemoteTarget | RemoteTargetSnapshot, { kind: 
 
 function getWslRemoteTargetUser(target: WslRemoteTargetLike): string | undefined {
   return target.user?.trim() || undefined;
+}
+
+type ServerRemoteTargetLike = Extract<RemoteTarget | RemoteTargetSnapshot, { kind: "server" }>;
+
+function formatServerRemoteTargetHost(target: ServerRemoteTargetLike): string {
+  try {
+    return new URL(target.url.trim()).host;
+  } catch {
+    return target.url.trim();
+  }
+}
+
+/** 已鉴权 Source 目标：serverId 只来自握手，name/URL host 仅用于展示，绝不能参与身份。 */
+export function withAuthenticatedServerTarget(
+  target: RemoteTarget,
+  sourceServerId: string | undefined,
+): RemoteTarget {
+  if (target.kind !== "server") {
+    return target;
+  }
+  const serverId = sourceServerId?.trim();
+  if (!serverId) {
+    throw new Error("server workspaceIdentity requires the authenticated handshake sourceServerId");
+  }
+  return { ...target, serverId };
+}
+
+function getServerRemoteTargetDisplayName(target: ServerRemoteTargetLike): string {
+  return target.name?.trim() || target.serverId?.trim() || formatServerRemoteTargetHost(target);
 }
 
 function formatWslRemoteTargetAuthority(target: WslRemoteTargetLike): string {
@@ -79,6 +151,8 @@ export function formatRemoteWorkspaceTargetSubtitle(
     }
     case "docker":
       return `Docker · ${target.container}`;
+    case "server":
+      return `Server · ${getServerRemoteTargetDisplayName(target)}`;
   }
 }
 
@@ -92,6 +166,8 @@ export function formatRemoteWorkspaceHeaderHostLabel(
       return formatWslRemoteTargetAuthority(target);
     case "docker":
       return `docker:${target.container}`;
+    case "server":
+      return formatServerRemoteTargetHost(target);
   }
 }
 
@@ -107,40 +183,12 @@ export function formatRemoteWorkspaceDisplayLabel(
   return sshConfigAlias ? `${label} [SSH: ${sshConfigAlias}]` : label;
 }
 
-function normalizeWorkspacePathForIdentity(path: string): string {
-  // 远程目录可能出现符号链接别名（例如 /dev 与 /home/dev）。
-  // 身份计算前统一做分隔符归一化与收尾斜杠清理，避免同一路径文本噪声导致身份漂移。
-  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
-  return normalized.length > 0 ? normalized : "/";
-}
-
-function getRemoteWorkspaceAuthorityKey(target: RemoteTarget | RemoteTargetSnapshot): string {
-  switch (target.kind) {
-    case "ssh": {
-      const normalizedHost = target.host.trim().toLowerCase();
-      const normalizedUsername = target.username.trim();
-      const normalizedPort = target.port ?? 22;
-      return ["ssh", normalizedHost, normalizedPort, normalizedUsername].join(":");
-    }
-    case "wsl": {
-      // WSL 默认用户与 root/其他显式用户的文件权限边界不同，
-      // workspace identity 必须区分显式 user，避免 session、缓存和队列串用。
-      const user = getWslRemoteTargetUser(target);
-      const base = ["wsl", target.distro ?? "default"];
-      return user ? [...base, user].join(":") : base.join(":");
-    }
-    case "docker":
-      return ["docker", target.container].join(":");
-  }
-}
-
 export function buildRemoteWorkspaceIdentity(
   workspacePath: string,
   target: RemoteTarget | RemoteTargetSnapshot,
 ): string {
-  const authority = getRemoteWorkspaceAuthorityKey(target);
-  const normalizedPath = normalizeWorkspacePathForIdentity(workspacePath);
-  return `remote:${authority}:${normalizedPath}`;
+  // Bug 原因：UI 自建 authority/path 归一化与 Host 校验器不同，重连后可能产生第二条 execution/history key。
+  return buildSharedRemoteWorkspaceIdentity(workspacePath, target);
 }
 
 export function resolveRemoteWorkspaceSessionIdentity(
@@ -159,18 +207,6 @@ export function buildWorkspaceSessionKey(entry: {
 function normalizeOptionalPath(path: string | undefined): string | undefined {
   const trimmed = path?.trim();
   return trimmed ? trimmed : undefined;
-}
-
-function findMatchingRemoteWorkspaceSessionEntry(
-  sessions: RemoteWorkspaceSessionEntry[],
-  workspacePath: string,
-  target: RemoteTarget | RemoteTargetSnapshot,
-): RemoteWorkspaceSessionEntry | null {
-  const workspaceIdentity = buildRemoteWorkspaceIdentity(workspacePath, target);
-  return (
-    sessions.find((entry) => resolveRemoteWorkspaceSessionIdentity(entry) === workspaceIdentity) ??
-    null
-  );
 }
 
 function createRemoteTargetSnapshot(
@@ -213,15 +249,55 @@ function createRemoteTargetSnapshot(
         kind: "docker",
         container: target.container,
       };
+    case "server":
+      return {
+        kind: "server",
+        url: target.url,
+        ...(target.name?.trim() ? { name: target.name.trim() } : {}),
+        ...(target.workspacePath?.trim() ? { workspacePath: target.workspacePath.trim() } : {}),
+        ...(target.serverId?.trim() ? { serverId: target.serverId.trim() } : {}),
+        // token 永不进快照；只在持久化侧转换成 credential key 引用。
+        tokenCredentialKey:
+          target.token && target.token.length > 0
+            ? previousSnapshot?.kind === "server" && previousSnapshot.tokenCredentialKey
+              ? previousSnapshot.tokenCredentialKey
+              : buildRemoteWorkspaceServerTokenCredentialKey(workspaceKey)
+            : undefined,
+      };
   }
+}
+
+export interface RemoteTargetCredentials {
+  password: string | null;
+  privateKeyPassphrase: string | null;
+  /** 由 credential port 读取的 Source token；缺失时不伪造匿名凭据。 */
+  token: string | null;
+}
+
+/**
+ * 重连前的唯一凭据读取点：只按快照里的 credential key 读，不把凭据写进历史。
+ * server 直连与 SSH 走同一个 credential port，缺失值保持 null。
+ */
+export async function loadRemoteTargetCredentials(
+  snapshot: RemoteTargetSnapshot,
+  loadCredential: (key: string) => Promise<string | null>,
+): Promise<RemoteTargetCredentials> {
+  const passwordKey = snapshot.kind === "ssh" ? snapshot.passwordCredentialKey : undefined;
+  // 与旧重连行为一致：只要快照里存在 passphrase key 就读取，避免老记录缺 privateKeyPath 时丢凭据。
+  const passphraseKey =
+    snapshot.kind === "ssh" ? snapshot.privateKeyPassphraseCredentialKey : undefined;
+  const tokenKey = snapshot.kind === "server" ? snapshot.tokenCredentialKey : undefined;
+  const [password, privateKeyPassphrase, token] = await Promise.all([
+    passwordKey ? loadCredential(passwordKey) : Promise.resolve(null),
+    passphraseKey ? loadCredential(passphraseKey) : Promise.resolve(null),
+    tokenKey ? loadCredential(tokenKey) : Promise.resolve(null),
+  ]);
+  return { password, privateKeyPassphrase, token };
 }
 
 export function createRemoteTargetFromSnapshot(
   snapshot: RemoteTargetSnapshot,
-  credentials: {
-    password: string | null;
-    privateKeyPassphrase: string | null;
-  },
+  credentials: RemoteTargetCredentials,
 ): RemoteTarget {
   switch (snapshot.kind) {
     case "ssh":
@@ -247,6 +323,15 @@ export function createRemoteTargetFromSnapshot(
       return {
         kind: "docker",
         container: snapshot.container,
+      };
+    case "server":
+      return {
+        kind: "server",
+        url: snapshot.url,
+        ...(snapshot.name ? { name: snapshot.name } : {}),
+        ...(snapshot.workspacePath ? { workspacePath: snapshot.workspacePath } : {}),
+        ...(snapshot.serverId ? { serverId: snapshot.serverId } : {}),
+        ...(credentials.token ? { token: credentials.token } : {}),
       };
   }
 }
@@ -302,16 +387,14 @@ export function buildRemoteWorkspaceSessionMutation(params: {
   lastConnectionError?: string;
   touchOpenedAt: boolean;
 }): RemoteWorkspaceSessionMutation {
+  const providedWorkspaceIdentity = params.workspaceIdentity?.trim();
+  const lookupIdentity =
+    providedWorkspaceIdentity ?? buildRemoteWorkspaceIdentity(params.workspacePath, params.target);
   const currentEntry =
-    findMatchingRemoteWorkspaceSessionEntry(
-      params.remoteSessions,
-      params.workspacePath,
-      params.target,
+    params.remoteSessions.find(
+      (entry) => resolveRemoteWorkspaceSessionIdentity(entry) === lookupIdentity,
     ) ?? null;
-  const resolvedWorkspaceIdentity =
-    params.workspaceIdentity ??
-    currentEntry?.workspaceIdentity ??
-    buildRemoteWorkspaceIdentity(params.workspacePath, params.target);
+  const resolvedWorkspaceIdentity = providedWorkspaceIdentity ?? lookupIdentity;
   const workspaceKey = resolvedWorkspaceIdentity?.trim() || params.workspacePath;
   const nextSnapshot =
     params.lastConnectionStatus === "failed" && currentEntry
@@ -384,6 +467,19 @@ export function buildRemoteWorkspaceSessionMutation(params: {
     credentialsToSave.push({
       key: nextSnapshot.privateKeyPassphraseCredentialKey,
       value: params.target.privateKeyPassphrase,
+    });
+  }
+
+  if (
+    params.target.kind === "server" &&
+    nextSnapshot.kind === "server" &&
+    params.target.token &&
+    nextSnapshot.tokenCredentialKey
+  ) {
+    // server 直连 token 与 SSH 口令一样只经 credential port 保存；历史/快照只留 key 引用。
+    credentialsToSave.push({
+      key: nextSnapshot.tokenCredentialKey,
+      value: params.target.token,
     });
   }
 

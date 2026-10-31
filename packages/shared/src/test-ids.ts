@@ -17,6 +17,23 @@ export const TID_THEME_TOGGLE = "theme-toggle";
 /** 终端显隐切换按钮 */
 export const TID_TERMINAL_TOGGLE = "terminal-toggle";
 export const TID_SIDE_PANE_TOGGLE = "side-pane-toggle";
+/** Side Pane 完整视图：进入/退出按钮、对话 tab、对话宿主与浮窗各部件 */
+export const TID_SIDE_PANE_FULL_VIEW_TOGGLE = "side-pane-full-view-toggle";
+export const TID_SIDE_PANE_FULL_VIEW_CONVERSATION_TAB = "side-pane-full-view-conversation-tab";
+export const TID_SIDE_PANE_FULL_VIEW_HOST = "side-pane-full-view-host";
+export const TID_SIDE_PANE_FULL_VIEW_HEADER = "side-pane-full-view-floating-header";
+export const TID_SIDE_PANE_FULL_VIEW_DRAWER = "side-pane-full-view-floating-drawer";
+export const TID_SIDE_PANE_FULL_VIEW_EXPAND = "side-pane-full-view-floating-expand";
+export const TID_SIDE_PANE_FULL_VIEW_RUNNING = "side-pane-full-view-floating-running";
+export const TID_SIDE_PANE_FULL_VIEW_MINIMIZE = "side-pane-full-view-floating-minimize";
+export const TID_SIDE_PANE_FULL_VIEW_HANDLE = "side-pane-full-view-floating-handle";
+export const TID_SIDE_PANE_FULL_VIEW_BUBBLE = "side-pane-full-view-floating-bubble";
+export const TID_SIDE_PANE_FULL_VIEW_ANSWER_BUBBLE = "side-pane-full-view-answer-bubble";
+export const TID_SIDE_PANE_FULL_VIEW_ANSWER_BUBBLE_CLOSE =
+  "side-pane-full-view-answer-bubble-close";
+export const TID_SIDE_PANE_FULL_VIEW_MENU_OPEN_CONVERSATION =
+  "side-pane-full-view-menu-open-conversation";
+export const TID_SIDE_PANE_FULL_VIEW_MENU_MINIMIZE = "side-pane-full-view-menu-minimize";
 /** 终端面板关闭按钮 */
 export const TID_TERMINAL_CLOSE_BUTTON = "terminal-close-button";
 /** 浏览器显隐切换按钮 */
@@ -154,6 +171,28 @@ export const TID_WSL_USER_INPUT = "wsl-user-input";
 export const TID_DOCKER_CONTAINER_SELECT = "docker-container-select";
 /** Docker 容器名称/ID 输入框 */
 export const TID_DOCKER_CONTAINER_INPUT = "docker-container-input";
+/** 远程连接方式选择 Server 直连 */
+export const TID_REMOTE_KIND_SERVER = "remote-kind-server";
+/** Server 直连 URL 输入框 */
+export const TID_SERVER_URL_INPUT = "server-url-input";
+/** Server 直连展示名输入框 */
+export const TID_SERVER_NAME_INPUT = "server-name-input";
+/** Server 直连 token 输入框（内容只进 credential port） */
+export const TID_SERVER_TOKEN_INPUT = "server-token-input";
+/** Server 直连默认目录输入框 */
+export const TID_SERVER_WORKSPACE_PATH_INPUT = "server-workspace-path-input";
+/** 向导里的 Source profile 列表容器 */
+export const TID_SOURCE_PROFILE_LIST = "source-profile-list";
+/** 向导里选择已保存 Source profile 的条目前缀 */
+export const TID_SOURCE_PROFILE_ITEM_PREFIX = "source-profile-item-";
+/** 安装/升级确认按钮 */
+export const TID_SOURCE_INSTALL_CONFIRM = "source-install-confirm";
+/** 安装/升级取消按钮 */
+export const TID_SOURCE_INSTALL_CANCEL = "source-install-cancel";
+/** running-task busy 时 force 更新确认按钮 */
+export const TID_SOURCE_FORCE_CONFIRM = "source-force-confirm";
+/** 后台连接成功后的显式继续按钮 */
+export const TID_SOURCE_CONTINUE = "source-continue";
 /** SSH 连接确认按钮 */
 export const TID_SSH_CONNECT_BUTTON = "ssh-connect-button";
 /** SSH 弹窗取消按钮 */
@@ -296,6 +335,14 @@ export const TID_SETTINGS_BACK_BUTTON = "settings-back-button";
 export const TID_SETTINGS_SECTION_NAV = "settings-section-nav";
 /** 常规设置中的增强 Find/Grep 开关 */
 export const TID_SETTINGS_NATIVE_SEARCH_SWITCH = "settings-native-search-switch";
+/** 常规设置中的工具搜索模式下拉触发器（off/auto/local；native 仅 CLI 内部使用） */
+export const TID_SETTINGS_TOOL_SEARCH_SELECT = "settings-tool-search-select";
+/** 常规设置中的工具搜索模式下拉项（动态后缀为模式名） */
+export const TID_SETTINGS_TOOL_SEARCH_OPTION = "settings-tool-search-option";
+/** 常规设置中的动态工作流模式下拉触发器 */
+export const TID_SETTINGS_DYNAMIC_WORKFLOW_MODE_TRIGGER = "settings-dynamic-workflow-mode-trigger";
+/** 常规设置中的动态工作流模式下拉项（动态后缀为模式名或跟随默认哨兵） */
+export const TID_SETTINGS_DYNAMIC_WORKFLOW_MODE_ITEM = "settings-dynamic-workflow-mode-item";
 /** 常规设置中的数据存储路径只读输入框 */
 export const TID_SETTINGS_DATA_BASE_DIR_INPUT = "settings-data-base-dir-input";
 /** 常规设置中的数据存储路径目录选择按钮 */
@@ -480,6 +527,8 @@ export const TID_WORKSPACE_FILE_TREE_PANEL = "workspace-file-tree-panel";
 export const TID_WORKSPACE_FILE_TREE_REFRESH_BUTTON = "workspace-file-tree-refresh-button";
 /** 工作区文件树条目（动态后缀为文件绝对路径） */
 export const TID_WORKSPACE_FILE_TREE_ROW = "workspace-file-tree-row";
+/** 文件管理器面板的目录导航开关 */
+export const TID_FILE_MANAGER_NAVIGATION_TOGGLE = "file-manager-navigation-toggle";
 // SSH 错误提示
 /** SSH 连接错误信息 */
 export const TID_SSH_ERROR = "ssh-error";

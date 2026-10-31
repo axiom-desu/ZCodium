@@ -87,6 +87,8 @@ export type RevokeWorkspaceHookTrustInput =
 export type ZCodeAppRuntimeConfigInput = AgentRuntimeConfig;
 
 export interface ZCodeAppOptions {
+  /** Host 在运行实例创建时传入，运行中不刷新；不改 cwd/identity。 */
+  additionalDirectories?: readonly string[];
   sessionId?: SessionId;
   resume?: boolean;
   version?: string;

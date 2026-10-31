@@ -5,9 +5,13 @@ import type { IServiceAccessor } from "@zcode/services";
 import { toast } from "@/components/ui/toast.js";
 import {
   buildRemoteWorkspaceSessionMutation,
-  buildRemoteWorkspaceIdentity,
+  resolveConnectedRemoteWorkspaceIdentity,
   createRemoteTargetFromSnapshot,
+  loadRemoteTargetCredentials,
   resolveRemoteWorkspaceSessionIdentity,
+  withAuthenticatedServerTarget,
+  type ConnectedRemoteWorkspaceTarget,
+  type RemoteTargetCredentials,
 } from "@/lib/remoteWorkspaceHistory.js";
 import { logger } from "@/logger.js";
 import {
@@ -33,7 +37,7 @@ type ManualReconnectRemoteWorkspaceParams = {
     target: Parameters<IPlatformService["connectRemote"]>[0],
     requestId?: string,
     context?: Parameters<IPlatformService["connectRemote"]>[2],
-  ) => Promise<string>;
+  ) => Promise<ConnectedRemoteWorkspaceTarget>;
   resolveRemoteWorkspaceCanonicalPath: (
     sessionId: string,
     workspacePath: string,
@@ -114,26 +118,33 @@ export async function reconnectRemoteWorkspaceHistoryEntry({
   let reconnectTarget = createRemoteTargetFromSnapshot(sessionEntry.target, {
     password: null,
     privateKeyPassphrase: null,
+    token: null,
   });
   let resolvedWorkspacePath = sessionEntry.workspacePath;
   let resolvedWorkspaceIdentity = fallbackWorkspaceIdentity;
   try {
-    const sshCredentials = options?.sshCredentialsOverride ?? {
-      password:
-        sessionEntry.target.kind === "ssh" && sessionEntry.target.passwordCredentialKey
-          ? await loadCredential(sessionEntry.target.passwordCredentialKey)
-          : null,
-      privateKeyPassphrase:
-        sessionEntry.target.kind === "ssh" && sessionEntry.target.privateKeyPassphraseCredentialKey
-          ? await loadCredential(sessionEntry.target.privateKeyPassphraseCredentialKey)
-          : null,
+    const credentials: RemoteTargetCredentials = options?.sshCredentialsOverride
+      ? {
+          password: options.sshCredentialsOverride.password,
+          privateKeyPassphrase: options.sshCredentialsOverride.privateKeyPassphrase,
+          token: null,
+        }
+      : await loadRemoteTargetCredentials(sessionEntry.target, loadCredential);
+    const sshCredentials = {
+      password: credentials.password,
+      privateKeyPassphrase: credentials.privateKeyPassphrase,
     };
-    reconnectTarget = createRemoteTargetFromSnapshot(sessionEntry.target, sshCredentials);
-    const sessionId = await connectRemoteWorkspaceTarget(reconnectTarget, options?.requestId, {
+    reconnectTarget = createRemoteTargetFromSnapshot(sessionEntry.target, credentials);
+    const connected = await connectRemoteWorkspaceTarget(reconnectTarget, options?.requestId, {
       workspacePath: sessionEntry.workspacePath,
       workspaceIdentity: fallbackWorkspaceIdentity,
       connectTrigger: "reconnect",
     });
+    const sessionId = connected.sessionId;
+    if (reconnectTarget.kind === "server") {
+      // target 里的旧 serverId/name 只作历史展示；重连后的授权范围只认 Host 握手返回的 id。
+      reconnectTarget = withAuthenticatedServerTarget(reconnectTarget, connected.sourceServerId);
+    }
     if (reconnectTarget.kind === "ssh") {
       // Host ready 与 provider/task 等 workspace 初始化必须分阶段通知。
       // sibling 从此刻即可复用 initiator credential 创建 attachment，无需等待或重复读取凭据。
@@ -143,10 +154,13 @@ export async function reconnectRemoteWorkspaceHistoryEntry({
       sessionId,
       sessionEntry.workspacePath,
     );
-    resolvedWorkspaceIdentity = buildRemoteWorkspaceIdentity(
-      resolvedWorkspacePath,
-      reconnectTarget,
-    );
+    // Bug 原因：重算 target 身份会丢失 Host 的 actual key，导致 history/tab 与 Main/mobile scope 分叉。
+    // 未证明的旧 hint 已由 Host typed 拒绝；成功后只消费同一权威 descriptor。
+    resolvedWorkspaceIdentity = resolveConnectedRemoteWorkspaceIdentity({
+      connected,
+      connectedWorkspacePath: sessionEntry.workspacePath,
+      workspacePath: resolvedWorkspacePath,
+    });
 
     if (
       resolvedWorkspacePath !== sessionEntry.workspacePath ||

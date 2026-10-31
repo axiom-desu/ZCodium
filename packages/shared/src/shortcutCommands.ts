@@ -21,6 +21,7 @@ export type ShortcutCommandId =
   | "switchTheme"
   | "toggleTerminal"
   | "toggleSidePane"
+  | "toggleSidePaneFullView"
   | "previousConversation"
   | "nextConversation"
   | "navigateBack"
@@ -71,6 +72,9 @@ export const SHORTCUT_COMMANDS: readonly ShortcutCommandEntry[] = [
   { id: "switchTheme", channel: "window", defaultBindings: ["CmdOrCtrl+Shift+l"] },
   { id: "toggleTerminal", channel: "window", defaultBindings: ["CmdOrCtrl+j"] },
   { id: "toggleSidePane", channel: "window", defaultBindings: ["CmdOrCtrl+Alt+b"] },
+  // Side Pane 完整视图（仅桌面端注册处理器，见 docs/specs/side-pane-full-view.md）：
+  // mac ⇧⌘F / win·linux Ctrl+Shift+F。findInTask 占 CmdOrCtrl+f（无 Shift），不冲突。
+  { id: "toggleSidePaneFullView", channel: "window", defaultBindings: ["CmdOrCtrl+Shift+f"] },
   { id: "previousConversation", channel: "window", defaultBindings: ["CmdOrCtrl+Shift+["] },
   { id: "nextConversation", channel: "window", defaultBindings: ["CmdOrCtrl+Shift+]"] },
   { id: "navigateBack", channel: "window", defaultBindings: ["CmdOrCtrl+["] },

@@ -40,6 +40,8 @@ import type { IPromptAttachmentTransferService } from "./prompt-attachment-trans
 import type { IWindowControllerService } from "./window-controller/windowController.js";
 import type { IOnboardingRecordService } from "./onboarding/onboardingRecord.js";
 import type { IConversationShareService } from "./conversation-share/conversationShare.js";
+import type { IProjectService } from "./project/contract.js";
+import type { ISourceServerManagementService } from "./source-server-management/sourceServerManagement.js";
 
 /** UI 层消费的统一服务接口 */
 export interface IServiceAccessor {
@@ -62,6 +64,8 @@ export interface IServiceAccessor {
   // CUA 是 opt-in 内测特性：local macOS host 提供，远端 等 host 没有。可选避免连锁必填。
   readonly cuaPermissionService?: ICuaPermissionService;
   readonly conversationShareService: IConversationShareService;
+  /** Host 项目组织态；旧 Host/测试 double 可不提供，UI 据此隐藏项目入口而不是伪造行。 */
+  readonly projectService?: IProjectService;
   readonly botsService: IBotsService;
   readonly fileWatcherService: IFileWatcherService;
   /** 当前 Environment 的 Provider 配置与设置视图。 */
@@ -93,4 +97,6 @@ export interface IServiceAccessor {
   readonly memoryService: IMemoryService;
   readonly settingsSyncService: ISettingsSyncService;
   readonly promptAttachmentTransferService: IPromptAttachmentTransferService;
+  /** Source Server 目录/连接管理；旧 Host 或测试 double 可不提供。 */
+  readonly sourceServerManagementService?: ISourceServerManagementService;
 }

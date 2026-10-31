@@ -514,6 +514,8 @@ export function createWorkspaceSlice(set: SetFn) {
       options?: {
         groupedDraftPlacement?: GroupedDraftTaskPlacement;
         createSource?: SessionCreateSource;
+        /** 项目归属意图；缺省/null 都是全局任务，避免旧草稿把上一项目带进新入口。 */
+        projectId?: string | null;
       },
     ) => {
       const normalizedProvider = provider
@@ -593,6 +595,7 @@ export function createWorkspaceSlice(set: SetFn) {
               groupedDraftTask: nextGroupedDraftTask,
               draftCreateSource:
                 options?.createSource ?? (options?.groupedDraftPlacement ? "group" : "session"),
+              draftProjectId: options?.projectId ?? null,
               draftRuntime: { status: "idle", error: null },
               // 从已有 task 点 New Task 时，草稿输入框必须继承当前 task 的完整配置。
               // 否则后续 workspace prepare 会按 Team Plan / 默认模型重建草稿，把 deepseek 回弹成 GLM。

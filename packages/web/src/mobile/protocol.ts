@@ -2,7 +2,8 @@
 import { hmac } from "@noble/hashes/hmac";
 import { sha256 } from "@noble/hashes/sha256";
 import { RemoteServiceAccess } from "@zcode/client";
-import { ChannelClient, VSBuffer } from "@zcode/rpc";
+import { ChannelClient, VSBuffer, ProxyChannel } from "@zcode/rpc";
+import { IMobileProjectDirectoryService, type MobileProjectRoot } from "@zcode/client";
 import { WorkspaceBridgeLifecycle } from "./workspaceBridgeLifecycle.js";
 import {
   encodeWebRemoteControlRpcFrames,
@@ -331,6 +332,44 @@ export class MobileRemoteControlClient {
     };
     this.taskStreamSubscriptions.add(subscription);
     return subscription;
+  }
+
+  private readonly directoryEpochs = new WeakMap<
+    MobileProjectRoot,
+    { generation: number; workspaceKey: string }
+  >();
+
+  async readProjectDirectory(workspaceKey: string): Promise<MobileProjectRoot[] | null> {
+    await this.ensureWorkspaceBridge({ workspaceKey });
+    const generation = this.bridge.version;
+    const channel = this.channelClient!;
+    const capabilities = await channel.getCapabilities();
+    this.bridge.assertCurrent(generation);
+    if (!capabilities.mobileProjectDirectory) return null;
+    const service = ProxyChannel.toService<IMobileProjectDirectoryService>(
+      channel.getChannel(IMobileProjectDirectoryService.channelName),
+    );
+    const roots = await service.readProjects();
+    this.bridge.assertCurrent(generation);
+    for (const root of roots) this.directoryEpochs.set(root, { generation, workspaceKey });
+    return roots;
+  }
+
+  async createProjectTask(root: MobileProjectRoot) {
+    const epoch = this.directoryEpochs.get(root);
+    if (
+      !epoch ||
+      !root.enabled ||
+      !this.bridge.isCurrent(epoch.generation) ||
+      !this.bridge.isReady(epoch.workspaceKey)
+    )
+      throw new Error("project.stale-attachment");
+    const service = ProxyChannel.toService<IMobileProjectDirectoryService>(
+      this.channelClient!.getChannel(IMobileProjectDirectoryService.channelName),
+    );
+    const result = await service.createTask(root);
+    this.bridge.assertCurrent(epoch.generation);
+    return result;
   }
 
   /** 读一次 task 权威快照；先握手 bridge，避免服务调用挂起。 */

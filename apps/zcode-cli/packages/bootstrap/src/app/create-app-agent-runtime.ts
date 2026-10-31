@@ -100,6 +100,7 @@ export function createAppAgentRuntime(input: AppAgentRuntimeInput): AgentRuntime
       configResult.config.features.skill && configResult.config.skills.enabled
         ? (options.skillPort ??
           createNodeSkillAdapter({
+            additionalDirectories: options.additionalDirectories,
             extraRoots: configResult.config.skills.roots,
             extraResolvedRoots: [...pluginOutcome.skillRoots, ...bundledSkillRoots],
             disabledPaths: [

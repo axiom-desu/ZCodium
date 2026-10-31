@@ -191,6 +191,11 @@ export interface WorkspaceZCodeUIState {
   groupedDraftTask: GroupedDraftTaskState | null;
   /** 用户发起当前草稿的入口；预热不改变来源。 */
   draftCreateSource: SessionCreateSource;
+  /**
+   * 未提交草稿的项目归属（UI 意图，不是服务端事实）：只供 createSession 交给 Host
+   * 预占；已提交归属只读取 Host readTree。
+   */
+  draftProjectId: string | null;
   /** 首发创建后、grouped sqlite order 落地前，真实 task 继承草稿锚点的本地定位。 */
   promotedGroupedDraftTaskByTaskId: Record<string, GroupedDraftTaskState>;
   /** 当前 workspace 选中的 ZCode Agent provider */
@@ -267,6 +272,8 @@ export interface ZCodeSessionStoreState {
     options?: {
       groupedDraftPlacement?: GroupedDraftTaskPlacement;
       createSource?: SessionCreateSource;
+      /** 项目归属意图；缺省/null 都是全局任务。 */
+      projectId?: string | null;
     },
   ) => void;
   clearGroupedDraftTask: (workspacePath: string, workspaceIdentity?: string) => void;
@@ -535,6 +542,7 @@ export function createDefaultWorkspaceState(
     optimisticTaskListByTaskId: {},
     groupedDraftTask: null,
     draftCreateSource: "session",
+    draftProjectId: null,
     promotedGroupedDraftTaskByTaskId: {},
     selectedProvider,
     selectedSupplierKey: buildNativeSupplierKey(selectedProvider),

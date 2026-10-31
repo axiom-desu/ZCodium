@@ -128,7 +128,7 @@ import type {
   SessionMessageDeliveryResult,
   SessionMessageSendRequested,
 } from "#src/session/sessionMailbox.js";
-import { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
+import { TaskIndexRepo, type CliTaskFactsInput } from "#src/session/taskIndexRepo.js";
 import type {
   IZCodeAgentService,
   ZCodeAgentServiceEvent,
@@ -180,6 +180,13 @@ interface CreateZCodeTaskServiceAdapterOptions {
   // syncer 现在持有 workspace emitter 和 broadcast 入口，adapter 必须共用同一实例，
   // 否则 desktop-continuous 路径和 task adapter 路径的事件订阅会分裂成两份，UI 收不全。
   taskIndexSyncer: ZCodeTaskIndexSyncer;
+  /** 项目创建前原子预占；与 agent service 共用同一实现，避免两套写路径。 */
+  prepareSessionCreation?: (
+    target: import("./zcodeAgent.js").ZCodeAgentCreateSessionParams & {
+      sessionId: string;
+      projectId: string | null;
+    },
+  ) => Promise<string[]>;
   settingService?: Pick<ISettingService, "get">;
   cuaProductMcpServerResolver?: CuaProductMcpServerResolver;
 }
@@ -1066,67 +1073,6 @@ export function createZCodeTaskServiceAdapter(
     });
   }
 
-  async function readTaskAutoArchiveConfig(): Promise<{
-    olderThanDays: number;
-  } | null> {
-    if (!options.settingService) {
-      return null;
-    }
-    try {
-      const settings = await options.settingService.get();
-      if (!settings.taskAutoArchiveEnabled) {
-        return null;
-      }
-      return {
-        olderThanDays: settings.taskAutoArchiveOlderThanDays ?? 7,
-      };
-    } catch (error) {
-      logger.warn(undefined, "读取 task 自动归档设置失败，跳过本轮自动归档", error);
-      return null;
-    }
-  }
-
-  async function runWorkspaceTaskAutoArchive(
-    scopes: Array<{ workspacePath: string; workspaceIdentity?: string }>,
-  ): Promise<void> {
-    if (scopes.length === 0) {
-      return;
-    }
-    const config = await readTaskAutoArchiveConfig();
-    if (!config) {
-      return;
-    }
-    const seenWorkspaceKeys = new Set<string>();
-    let archivedCount = 0;
-    for (const scope of scopes) {
-      const key = resolveWorkspaceKey(scope);
-      if (seenWorkspaceKeys.has(key)) {
-        continue;
-      }
-      seenWorkspaceKeys.add(key);
-      // 自动归档按工作区、过期时间和完成状态处理所有存量任务，包括列表隐藏的历史记录。
-      const archivedTasks = await taskIndexRepo.archiveStaleTasks({
-        workspacePath: scope.workspacePath,
-        workspaceIdentity: scope.workspaceIdentity,
-        olderThanDays: config.olderThanDays,
-      });
-      archivedCount += archivedTasks.length;
-      for (const task of archivedTasks) {
-        setOverlay(task, { archived: true });
-        rememberIndexedTaskMeta(task);
-        // 归属变更（自动归档）：沿用 task_meta_changed 走 membership 重拉收敛；
-        // 先保持现状行为。
-        emitWorkspaceTaskListChanged(task, task, "task_meta_changed");
-      }
-    }
-    if (archivedCount > 0) {
-      logger.info(
-        undefined,
-        `按设置自动归档旧 task 数量=${archivedCount} olderThanDays=${config.olderThanDays}`,
-      );
-    }
-  }
-
   async function resumeSnapshot(
     params: TaskTargetWithMcpServers,
   ): Promise<ZCodeSessionStateSnapshot> {
@@ -1264,6 +1210,33 @@ export function createZCodeTaskServiceAdapter(
     return repairEmptyImportedClaudeSnapshot(params, snapshot);
   }
 
+  /** 真实 CLI snapshot 的会话事实；只取 CLI owner 字段，不合成 Host 时间/标题。 */
+  function cliFactsFromSnapshot(snapshot: ZCodeSessionStateSnapshot): CliTaskFactsInput {
+    return {
+      meta: {
+        taskId: snapshot.session.sessionId,
+        traceId: snapshot.session.traceId ?? generateTraceId(snapshot.session.sessionId),
+        title: snapshot.session.title,
+        workspacePath: snapshot.session.workspace.workspacePath,
+        workspaceIdentity: snapshot.session.workspace.workspaceIdentity,
+        createdAt: snapshot.session.createdAt,
+        updatedAt: snapshot.session.updatedAt,
+        mode: "build",
+        provider: ZCODE_AGENT_PROVIDER,
+      },
+      ...(snapshot.session.titleSource
+        ? {
+            titleSource:
+              snapshot.session.titleSource === "custom"
+                ? "custom"
+                : snapshot.session.titleSource === "default"
+                  ? "default"
+                  : "generated",
+          }
+        : {}),
+    };
+  }
+
   function snapshotToMeta(snapshot: ZCodeSessionStateSnapshot): ZCodeTaskMeta {
     const target = {
       taskId: snapshot.session.sessionId,
@@ -1355,8 +1328,15 @@ export function createZCodeTaskServiceAdapter(
     };
   }
 
-  async function syncTaskIndexMeta(meta: ZCodeTaskMeta): Promise<ZCodeTaskMeta> {
-    const indexedMeta = await taskIndexRepo.syncTaskMeta({ meta });
+  async function syncTaskIndexMeta(
+    meta: ZCodeTaskMeta,
+    cliFacts?: CliTaskFactsInput,
+  ): Promise<ZCodeTaskMeta> {
+    // CLI 事实与展示列同一事务；不得再靠重启 reconcile 把新任务补进项目树。
+    const indexedMeta = await taskIndexRepo.syncTaskMeta({
+      meta,
+      ...(cliFacts ? { cliFacts } : {}),
+    });
     return rememberIndexedTaskMeta(indexedMeta);
   }
 
@@ -1366,7 +1346,7 @@ export function createZCodeTaskServiceAdapter(
     const meta = snapshotToMeta(snapshot);
     // 旧污染标签页的显式恢复不能把只读 child 再次写进主任务索引。
     if (snapshot.session.sessionKind === "subagent_child") return meta;
-    return syncTaskIndexMeta(meta);
+    return syncTaskIndexMeta(meta, cliFactsFromSnapshot(snapshot));
   }
 
   async function updateIndexedTaskState(
@@ -1758,9 +1738,35 @@ export function createZCodeTaskServiceAdapter(
       await options.zcodeAgentService.disposeWorkspace(normalizeWorkspaceParams(params));
     },
 
-    async createTask(params): Promise<ZCodeTaskCreateResult> {
+    async createTaskExistingRuntime(params, expectedRuntime, assertAttachment) {
+      assertAttachment?.();
+      if (
+        !expectedRuntime ||
+        typeof expectedRuntime.identity !== "string" ||
+        !Number.isInteger(expectedRuntime.generation)
+      )
+        throw new Error("project.invalid-runtime-admission");
+      const admission = await options.zcodeAgentService.acquireExistingRuntime(
+        normalizeWorkspaceParams(params),
+        assertAttachment,
+      );
+      const actual = admission.runtimeIdentity;
+      if (
+        actual.identity !== expectedRuntime.identity ||
+        actual.generation !== expectedRuntime.generation ||
+        actual.workspaceKey !== expectedRuntime.workspaceKey
+      )
+        throw new Error("project.stale-runtime");
+      return service.createTask(params, admission);
+    },
+
+    async createTask(params, admission): Promise<ZCodeTaskCreateResult> {
       assertNoRetiredIdleExecution(params);
       const target = normalizeWorkspaceParams(params);
+      admission?.assertCurrent(target);
+      // guarded mobile 创建不消费可能需要恢复的 draft，也不进入启动型 v4 command 分支。
+      if (admission && (params.draftSessionId || params.v4Create))
+        throw new Error("project.existing-runtime-only");
       const requestedSelection =
         params.modelSelection ??
         (params.model
@@ -1771,6 +1777,20 @@ export function createZCodeTaskServiceAdapter(
           : undefined);
       const draftSessionId = params.draftSessionId?.trim();
       const mcpServers = await resolveProductMcpServers(params.mcpServers);
+      admission?.assertCurrent(target);
+      // 预热草稿不会走 createSession；项目归属必须在这次 createTask 内原子预占。
+      const draftDirectories =
+        params.projectId !== undefined && draftSessionId && options.prepareSessionCreation
+          ? await options.prepareSessionCreation({
+              ...target,
+              sessionId: draftSessionId,
+              projectId: params.projectId,
+              ...(params.additionalDirectories
+                ? { additionalDirectories: params.additionalDirectories }
+                : {}),
+            })
+          : undefined;
+      const additionalDirectories = params.additionalDirectories ?? draftDirectories;
       let snapshot: ZCodeSessionStateSnapshot | null = null;
       if (draftSessionId && !mcpServers) {
         try {
@@ -1820,25 +1840,59 @@ export function createZCodeTaskServiceAdapter(
         // 载荷与 snapshot 返回值（task index 同步依赖），v4 命令面均未建模；
         if (params.v4Create === true) {
           const model = requestedSelection;
+          const basePayload = {
+            workspaceId: target.workspaceIdentity?.trim() || target.workspacePath,
+            config: {
+              ...(model ? { provider: model.providerId, model: model.modelId } : {}),
+              ...(model?.options?.reasoningLevel ? { thought: model.options.reasoningLevel } : {}),
+              ...(params.mode ? { mode: toZCodeMode(params.mode) } : {}),
+            },
+            ...(mcpServers ? { mcpServers } : {}),
+          };
+          let envelope = createHostCommandEnvelope({
+            type: "createSession",
+            sessionId: null,
+            payload: basePayload,
+          });
+          let frozenDirectories = additionalDirectories;
+          if (params.projectId !== undefined) {
+            if (!options.prepareSessionCreation) throw new Error("project.creation-unavailable");
+            // 稳定 ID：同一 commandId 重试命中同一预占行，不与 CLI 自建会话抢夺身份。
+            const sessionId = `session_${createHash("sha256")
+              .update(
+                JSON.stringify([
+                  resolveWorkspaceKey(target),
+                  envelope.clientId,
+                  envelope.commandId,
+                ]),
+              )
+              .digest("hex")
+              .slice(0, 32)}`;
+            frozenDirectories = await options.prepareSessionCreation({
+              ...target,
+              sessionId,
+              projectId: params.projectId,
+              ...(additionalDirectories ? { additionalDirectories } : {}),
+            });
+            envelope = {
+              ...envelope,
+              payload: {
+                ...basePayload,
+                sessionId,
+                ...(frozenDirectories.length ? { additionalDirectories: frozenDirectories } : {}),
+              },
+            };
+          } else if (frozenDirectories?.length) {
+            envelope = {
+              ...envelope,
+              payload: { ...basePayload, additionalDirectories: frozenDirectories },
+            };
+          }
           const ack = assertV4CommandAckOk(
             "createSession",
             await options.zcodeAgentService.sendConversationCommandV4({
               ...target,
-              envelope: createHostCommandEnvelope({
-                type: "createSession",
-                sessionId: null,
-                payload: {
-                  workspaceId: target.workspaceIdentity?.trim() || target.workspacePath,
-                  config: {
-                    ...(model ? { provider: model.providerId, model: model.modelId } : {}),
-                    ...(model?.options?.reasoningLevel
-                      ? { thought: model.options.reasoningLevel }
-                      : {}),
-                    ...(params.mode ? { mode: toZCodeMode(params.mode) } : {}),
-                  },
-                  ...(mcpServers ? { mcpServers } : {}),
-                },
-              }),
+              envelope,
             }),
             `workspace=${target.workspacePath}`,
           );
@@ -1851,7 +1905,11 @@ export function createZCodeTaskServiceAdapter(
             sessionId,
           });
         } else {
-          snapshot = await options.zcodeAgentService.createSession({
+          snapshot = await (
+            admission
+              ? admission.createSession
+              : options.zcodeAgentService.createSession.bind(options.zcodeAgentService)
+          )({
             ...target,
             sessionTraceId: createSessionTraceId(),
             mode: toZCodeMode(params.mode),
@@ -1870,22 +1928,30 @@ export function createZCodeTaskServiceAdapter(
                   titleGenerationEnabled: false,
                 }
               : {}),
+            ...(params.projectId !== undefined ? { projectId: params.projectId } : {}),
+            ...(additionalDirectories ? { additionalDirectories } : {}),
             // Bugfix: replayable task facade 创建 session 时同样会启动 runtime；
             // 之前这里丢掉 mcpServers，导致手机远控路径和 desktop-continuous 的 MCP 行为不一致。
             mcpServers,
           });
         }
       }
+      admission?.assertCurrent(target);
       const baseMeta = snapshotToMeta(snapshot);
-      const meta = await syncTaskIndexMeta({
-        ...baseMeta,
-        ...(params.automationId ? { cronAutomationId: params.automationId } : {}),
-      });
+      const meta = await syncTaskIndexMeta(
+        {
+          ...baseMeta,
+          ...(params.automationId ? { cronAutomationId: params.automationId } : {}),
+        },
+        cliFactsFromSnapshot(snapshot),
+      );
+      admission?.assertCurrent(target);
       await taskIndexRepo.initializeGroupedTaskAtTop({
         workspacePath: meta.workspacePath,
         workspaceIdentity: meta.workspaceIdentity,
         taskId: meta.taskId,
       });
+      admission?.assertCurrent(target);
       notifySyncerSession({
         taskId: meta.taskId,
         workspacePath: meta.workspacePath,
@@ -2401,8 +2467,7 @@ export function createZCodeTaskServiceAdapter(
 
     async listGroupedTaskViewStructure(params) {
       // grouped 原始结构（不 join tasks 表）；任务内容由 sessions-index 提供，客户端 join。
-      // 与 listGroupedTaskView 同口径保留 auto-archive 触发（进入 grouped 视图时清理超期任务）。
-      await runWorkspaceTaskAutoArchive(params.workspaceScopes);
+      // 自动归档只由 Host project scheduler 触发，读取/进入视图不得顺手归档。
       return taskIndexRepo.queryGroupedTaskViewStructure(params);
     },
 
@@ -3135,10 +3200,12 @@ export function createZCodeTaskServiceAdapter(
 function normalizeWorkspaceParams(params: {
   workspacePath: string;
   workspaceIdentity?: string;
+  remoteSessionId?: string;
 }): ZCodeAgentWorkspaceTarget {
   return {
     workspacePath: params.workspacePath,
     workspaceIdentity: params.workspaceIdentity,
+    ...(params.remoteSessionId ? { remoteSessionId: params.remoteSessionId } : {}),
   };
 }
 

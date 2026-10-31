@@ -113,6 +113,13 @@ function createSharedDefines() {
   };
 }
 
+// tsup 默认 removeNodeProtocol:true，其 nodeProtocolPlugin 把所有 `node:*` import 改写成裸模块名。
+// 对 fs/path/crypto 无害，但 `node:sqlite` 是「只能带 node: 前缀」的内置模块：改写成裸
+// `sqlite` 后没有同名 npm 包，Electron 主进程在 ESM import 期就
+// `Cannot find package 'sqlite'` 退出，窗口不会出现。这里在所有 node 侧产物保留前缀。
+// 详见 .agents/specs/desktop-bundle-node-builtins.md。
+export const desktopTsupNodeProtocolOptions = { removeNodeProtocol: false };
+
 const desktopNodeRuntimeExternals = [
   "electron",
   "node-pty",
@@ -178,6 +185,7 @@ export default defineConfig([
     },
     onSuccess: createDevReadyMarkerHook("main"),
     ...desktopTsupBundleSecurityOptions,
+    ...desktopTsupNodeProtocolOptions,
   },
   {
     name: "preload",
@@ -202,6 +210,7 @@ export default defineConfig([
     },
     onSuccess: createDevReadyMarkerHook("preload"),
     ...desktopTsupBundleSecurityOptions,
+    ...desktopTsupNodeProtocolOptions,
   },
   {
     // 插件 iframe 内的 window.zcode / window.openai 别名脚本（官方 ext-apps `App` 上的薄封装）：IIFE、浏览器平台，
@@ -258,6 +267,7 @@ export default defineConfig([
     },
     onSuccess: createDevReadyMarkerHook("host"),
     ...desktopTsupBundleSecurityOptions,
+    ...desktopTsupNodeProtocolOptions,
   },
   {
     name: "scheduler",
@@ -286,5 +296,6 @@ export default defineConfig([
     },
     onSuccess: createDevReadyMarkerHook("scheduler"),
     ...desktopTsupBundleSecurityOptions,
+    ...desktopTsupNodeProtocolOptions,
   },
 ]);

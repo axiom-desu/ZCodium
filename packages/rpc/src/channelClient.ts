@@ -18,6 +18,12 @@ enum State {
 
 export class ChannelClient implements IChannelClient, IDisposable {
   private state = State.Uninitialized;
+  private initializedCapabilities: Readonly<Record<string, true>> = {};
+
+  async getCapabilities(): Promise<Readonly<Record<string, true>>> {
+    await this.whenInitialized();
+    return this.initializedCapabilities;
+  }
   private isDisposed = false;
   private activeRequests = new Set<IDisposable>();
   private handlers = new Map<number, IHandler>();
@@ -214,6 +220,13 @@ export class ChannelClient implements IChannelClient, IDisposable {
 
     switch (type) {
       case ResponseType.Initialize:
+        // 老 peer 的 Initialize 无 body；只接受显式 true，不探测不存在的 channel。
+        this.initializedCapabilities =
+          body && typeof body === "object"
+            ? (Object.fromEntries(
+                Object.entries(body).filter(([, value]) => value === true),
+              ) as Record<string, true>)
+            : {};
         this.onResponse({ type: ResponseType.Initialize });
         return;
       case ResponseType.PromiseSuccess:

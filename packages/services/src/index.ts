@@ -19,6 +19,12 @@ export {
   registerMemoryDiagnosticsProvider,
 } from "./memoryDiagnostics.js";
 
+export { IMobileProjectDirectoryService } from "./mobile-project-directory/contract.js";
+export type {
+  MobileProjectRoot,
+  MobileProjectRootIdentity,
+} from "./mobile-project-directory/contract.js";
+
 // Accessor
 export type { IServiceAccessor } from "./accessor.js";
 export {
@@ -71,6 +77,13 @@ export { ISettingService } from "./setting/setting.js";
 // Credential service — ICredentialService is both a type (interface) and value (descriptor)
 export { ICredentialService } from "./credential/credential.js";
 
+// Source Server 管理服务 — 只导出 descriptor/类型；实现位于 desktop Host。
+export {
+  ISourceServerManagementService,
+  type CreateConnectionProfileInput,
+  type UpdateConnectionProfileInput,
+} from "./source-server-management/sourceServerManagement.js";
+
 // Broadcast service — IBroadcastService is both a type (interface) and value (descriptor)
 export { IBroadcastService } from "./broadcast/broadcast.js";
 
@@ -118,6 +131,26 @@ export type {
 export type { ZCodeTaskListItem } from "./session/zcodeTaskListTypes.js";
 
 export { IWindowControllerService } from "./window-controller/windowController.js";
+// 根入口必须保持 browser-safe：project/contract.js 只导出描述符与类型。
+// createProjectService / legacy-single-root 等 Node 工厂依赖 node:crypto/node:fs，
+// 只能从 @zcode/services/node 取，否则 renderer 打包会把 node:* 带进来。
+export { IProjectService } from "./project/contract.js";
+export type {
+  ProjectDirectories,
+  ProjectRoot,
+  ProjectTask,
+  ProjectTaskGroup,
+  ProjectTaskGroupColor,
+  ProjectTaskGroupMember,
+  ProjectTaskGroupMoveInput,
+  ProjectTaskGroupNode,
+  ProjectTaskGroupStructure,
+  ProjectTaskGroupTopOrder,
+  ProjectTaskRef,
+  ProjectTree,
+  SaveProjectInput,
+  VirtualProject,
+} from "./project/contract.js";
 export type {
   WindowHostControllerFrame,
   WindowHostControllerMutation,
@@ -131,6 +164,8 @@ export {
   type ZCodeAgentLocalRuntimeChildProcesses,
   ZCODE_AGENT_RUNTIME_UNAVAILABLE_CODE,
 } from "./zcode-agent/zcodeAgent.js";
+// Host 会话偏好（本地/远端 Host 同一构造点）；纯函数，renderer 可安全导入。
+export { buildHostSessionRuntimePreferences } from "./zcode-agent/hostSessionRuntimePreferences.js";
 export {
   isZCodeAgentMcpStatusModeUnsupportedError,
   ZCODE_AGENT_MCP_STATUS_MODE_UNSUPPORTED_ERROR_CODE,

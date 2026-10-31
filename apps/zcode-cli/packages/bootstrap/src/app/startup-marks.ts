@@ -8,7 +8,7 @@ import { DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS } from "./official-plugin-definitio
 import { getPluginStorageRoot } from "./paths.js";
 import type { ZCodeAppOptions } from "./types.js";
 
-export function resolveStartupPlugins(input: {
+export async function resolveStartupPlugins(input: {
   cliStorageRoot: string;
   configResult: ConfigResult;
   env?: NodeJS.ProcessEnv;
@@ -16,13 +16,13 @@ export function resolveStartupPlugins(input: {
   options: Pick<ZCodeAppOptions, "officialPluginRoots" | "pluginStorageRoot">;
   startupTimer: StartupTimer;
   workingDirectory: string;
-}): PluginLoadOutcome {
+}): Promise<PluginLoadOutcome> {
   const pluginStorageRoot =
     input.options.pluginStorageRoot ?? getPluginStorageRoot(input.cliStorageRoot);
   const pluginOutcome = discoverNodePluginsSync({
     config: input.configResult.config.plugins,
     env: input.env ?? process.env,
-    officialPluginRoots: resolveOfficialPluginRoots({
+    officialPluginRoots: await resolveOfficialPluginRoots({
       extraRoots: input.options.officialPluginRoots,
       logger: input.logger,
       storageRoot: pluginStorageRoot,

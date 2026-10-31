@@ -26,11 +26,14 @@ import spreadsheetsIconUrl from "@/assets/document-skill-icons/spreadsheets@2x.p
 import {
   PluginStoreInstallButton,
   PluginStoreItemMenu,
+  PluginStoreOpenUiButton,
   PluginStorePaidPlanBadge,
   type PluginStoreActions,
 } from "@/settings/PluginStoreCard.js";
 import {
+  isItemBusy,
   isTrustedImageUrl,
+  isUiPluginItem,
   KNOWN_CATEGORY_LABEL_IDS,
   resolveItemDescription,
   resolveStoreCategory,
@@ -44,6 +47,7 @@ import {
 } from "@/settings/pluginManagedResourceGroups.js";
 import type { PluginComponentDisplayGroup } from "@/settings/PluginComponentGroups.js";
 import type { PluginDescribeEntry } from "@/store/pluginManagementStore.js";
+import { resolvePluginUiSurfaceTitle } from "@/plugin-ui/adapters/usePluginUiSurfaces.js";
 
 // 组件分区顺序与截图一致：MCP 服务器 → 技能 → 命令 → 子智能体 → Hooks。
 const SECTION_ORDER: ZCodePluginComponentKind[] = ["mcp", "skill", "command", "agent", "hook"];
@@ -145,18 +149,22 @@ export function PluginStoreDetailView({
                   triggerVariant="outline"
                   triggerSize="icon-lg"
                 />
-                {/* 顶部试用与示例提示词共用同一 canonical 构造；空 prompt 表示只预填 Plugin mention。 */}
-                <Button
-                  type="button"
-                  variant="default"
-                  size="lg"
-                  data-testid="plugin-store-try-now"
-                  data-plugin-id={item.id}
-                  onClick={() => onUsePrompt(item, "")}
-                >
-                  <MessagesSquare className="size-3.5" aria-hidden="true" />
-                  {intl.formatMessage({ id: "settings.plugins.store.tryNow" })}
-                </Button>
+                {/* 有会话市场时 UI 插件直接打开面板；普通插件保留「立即试用」预填。 */}
+                {isUiPluginItem(item) && actions.onOpenUi ? (
+                  <PluginStoreOpenUiButton item={item} actions={actions} />
+                ) : (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="lg"
+                    data-testid="plugin-store-try-now"
+                    data-plugin-id={item.id}
+                    onClick={() => onUsePrompt(item, "")}
+                  >
+                    <MessagesSquare className="size-3.5" aria-hidden="true" />
+                    {intl.formatMessage({ id: "settings.plugins.store.tryNow" })}
+                  </Button>
+                )}
               </>
             ) : (
               <>
@@ -235,6 +243,30 @@ export function PluginStoreDetailView({
 
       {/* 信息区：listing 优先，manifest（运行时/describe）回退；无值整行省略。 */}
       <InfoSection item={item} describeMetadata={describeMetadata} />
+
+      {isUiPluginItem(item) ? (
+        <section data-testid="plugin-store-ui-capability" className="space-y-2">
+          <h2 className="text-ui-lg font-semibold">
+            {intl.formatMessage({ id: "settings.plugins.store.ui.capability" })}
+          </h2>
+          {item.info?.uiSurfaces?.map((surface) => (
+            <p key={surface.id} className="text-ui-base text-foreground-subtle">
+              {resolvePluginUiSurfaceTitle(surface.title, locale)}
+            </p>
+          ))}
+        </section>
+      ) : null}
+
+      {actions.onResetConfig ? (
+        <Button
+          variant="outline"
+          data-testid="plugin-store-reset-config"
+          disabled={isItemBusy(item, actions)}
+          onClick={() => actions.onResetConfig?.(item.id)}
+        >
+          {intl.formatMessage({ id: "settings.plugins.store.menu.resetConfig" })}
+        </Button>
+      ) : null}
 
       {advanced}
     </div>

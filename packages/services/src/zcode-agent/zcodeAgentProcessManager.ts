@@ -437,7 +437,19 @@ function resolveElectronRuntimeZCodeAgentCommand(
  * 解析 `ZCODE_AGENT_SERVER_RUNTIME`：未设置/空/`ts` → TS，`zcode-cli-rust` → Rust。
  * 未知值明确失败，不静默按 TS 处理（避免把拼写错误当成回退）。
  */
-function resolveZCodeAgentRuntimeSelection(raw: string | undefined): "ts" | "zcode-cli-rust" {
+export type ZCodeAgentRuntimeKind = "ts" | "zcode-cli-rust";
+
+/** 公开的 runtime 选择解析：引擎能力等只读事实也从这里取，不各自复制一份 env 判断。 */
+export function resolveZCodeAgentRuntimeKind(
+  env: Record<string, string | undefined> = process.env,
+): ZCodeAgentRuntimeKind {
+  // 显式自定义命令沿用「这是 ZCode CLI」的既有假设；过去也按 TS 语义工作，
+  // 收窄会静默关掉现存部署的功能。
+  if (env.ZCODE_AGENT_SERVER_COMMAND?.trim()) return "ts";
+  return resolveZCodeAgentRuntimeSelection(env.ZCODE_AGENT_SERVER_RUNTIME);
+}
+
+function resolveZCodeAgentRuntimeSelection(raw: string | undefined): ZCodeAgentRuntimeKind {
   const normalized = raw?.trim().toLowerCase();
   if (!normalized || normalized === "ts") {
     return "ts";
@@ -467,7 +479,7 @@ export function resolveDefaultZCodeAgentCommand(
     );
   }
 
-  const runtime = resolveZCodeAgentRuntimeSelection(process.env.ZCODE_AGENT_SERVER_RUNTIME);
+  const runtime = resolveZCodeAgentRuntimeKind();
   if (runtime === "zcode-cli-rust") {
     // 显式 Rust 分支：不再走 TS bundle，缺 binary 由 resolveRust... 抛错。
     return applyPresentationSurfaceToCommand(

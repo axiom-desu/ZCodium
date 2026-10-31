@@ -28,11 +28,8 @@ import type { CreateTaskRequest } from "@/app-shell/types.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { toast } from "@/components/ui/toast.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
-import { useZCodeSessionService } from "@/hooks/useZCodeSessionService.js";
-import {
-  useBaseWorkspaceServices,
-  useWorkspaceServicesResolution,
-} from "@/hooks/useWorkspaceServices.js";
+import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useConfigDirectoryServicesResolution as useWorkspaceServicesResolution } from "@/hooks/useConfigDirectoryServices.js";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
 import { buildSkillMentionMarkdown } from "@/mentions/mentionMarkdown.js";
 import { filterSkillsForProvider } from "@/lib/skillSourceFilter.js";
@@ -200,11 +197,7 @@ export function SkillsSection({
   // 取服务，导致跨远程 host 误路由。技能读写和远端同步都改用同一 target 解析结果。
   const { pluginManagementService, skillSyncService, skillsService } =
     targetServiceResolution.services;
-  const zcodeSessionService = useZCodeSessionService(
-    activeWorkspacePath ?? undefined,
-    undefined,
-    activeWorkspaceIdentity,
-  );
+  const { zcodeSessionService } = targetServiceResolution.services;
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [capability, setCapability] = useState<SkillsCapability | null>(null);
   const [loadedSkillTargetKey, setLoadedSkillTargetKey] = useState("");
@@ -231,6 +224,8 @@ export function SkillsSection({
       workspaceIdentity: activeWorkspaceIdentity,
       configScope: scopeFilter,
       pluginService: pluginManagementService,
+      authorityKey: targetServiceResolution.configAuthorityKey,
+      remoteSessionId: targetServiceResolution.remoteSessionId,
     });
   }, [
     activeWorkspaceIdentity,
@@ -239,6 +234,8 @@ export function SkillsSection({
     pluginManagementService,
     scopeFilter,
     targetServiceResolution.rpcReady,
+    targetServiceResolution.configAuthorityKey,
+    targetServiceResolution.remoteSessionId,
   ]);
 
   const workspaceLabel = getWorkspaceBasename(activeWorkspacePath);
@@ -520,6 +517,9 @@ export function SkillsSection({
     // store，只剩返回聊天页的导航，skill-creator 文本没有进入新 Composer。统一委托
     // Root 的新任务入口，让草稿持久化、workspaceIdentity 隔离和 Composer 插入保持单一路径。
     onCreateTask({
+      targetWorkspace: activeWorkspacePath
+        ? { workspacePath: activeWorkspacePath, workspaceIdentity: activeWorkspaceIdentity }
+        : undefined,
       provider: effectiveProvider,
       initialPrompt: `${markdown} `,
       initialPromptMention: {

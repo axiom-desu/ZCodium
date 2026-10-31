@@ -27,6 +27,8 @@ import { resolveWorkspaceSwitchDraftProvider } from "@/lib/workspaceDraftProvide
 import { useTestActions } from "@/test-actions.js";
 import type { TestActions } from "@/test-actions.js";
 import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
+import { useSidePaneFullView } from "@/side-pane-full-view/index.js";
+import { useWorkbenchPaneCount } from "@/app-shell/useWorkbenchPaneCount.js";
 import type { TaskFindDialogProps } from "@/quickpick/TaskFindDialog.js";
 import {
   changeTaskFindSelection,
@@ -124,6 +126,7 @@ export function App({
   const goForwardShortcutLabel = useShortcutCommandLabel("navigateForward");
   const toggleTerminalShortcutLabel = useShortcutCommandLabel("toggleTerminal");
   const toggleSidePaneShortcutLabel = useShortcutCommandLabel("toggleSidePane");
+  const toggleSidePaneFullViewShortcutLabel = useShortcutCommandLabel("toggleSidePaneFullView");
   const openWorkspaceShortcutLabel = useShortcutCommandLabel("openWorkspace");
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const supportsEmbeddedBrowser = explicitSupportsEmbeddedBrowser ?? Boolean(isDesktop);
@@ -237,6 +240,7 @@ export function App({
     handleToggleSidebar,
     handleToggleSidePaneCollapse,
     handleCloseCodeViewer,
+    handleNavigateCodeViewer,
     handleCloseGit,
     handleActivateSidePaneTab,
     handleReorderSidePaneTab,
@@ -517,6 +521,26 @@ export function App({
     // 却得到一个新 Browser 或 Review。现在空内容统一交给 Open tab 空态承接。
     handleToggleSidePaneCollapse();
   }, [handleToggleSidePaneCollapse]);
+  // Side Pane 完整视图只在桌面端单 pane 提供（spec：docs/specs/side-pane-full-view.md）；
+  // Web / 手机远控既不渲染入口，也不注册快捷键处理器；多 pane 分屏时显式禁用入口。
+  const workbenchPaneCount = useWorkbenchPaneCount();
+  const supportsSidePaneFullView = Boolean(isDesktop) && workbenchPaneCount <= 1;
+  const sidePaneFullView = useSidePaneFullView({
+    workspacePath: workspaceAbsPath,
+    workspaceIdentity,
+    ownerId: sidePaneOwnerId,
+    isSidePaneOpen,
+    enabled: supportsSidePaneFullView,
+  });
+  const handleToggleSidePaneFullView = useCallback(() => {
+    // 面板关闭时快捷键先落记录再打开面板；面板展开后记录即生效。
+    if (!sidePaneFullView.fullView && !isSidePaneOpen) {
+      sidePaneFullView.enter();
+      handleToggleSidePaneCollapse();
+      return;
+    }
+    sidePaneFullView.toggle();
+  }, [handleToggleSidePaneCollapse, isSidePaneOpen, sidePaneFullView]);
   const runVisibleWorkspaceCommand = useCallback(
     (run: () => void) => {
       runWorkspaceVisibleCommand({
@@ -926,6 +950,9 @@ export function App({
     // ⌥⌘B 与 header 最右侧按钮共用同一条 toggle 入口，
     // 避免快捷键和按钮行为漂移；空面板的展示统一由 Open tab 空态承接。
     toggleSidePane: () => runVisibleWorkspaceCommand(handleToggleSidePane),
+    toggleSidePaneFullView: supportsSidePaneFullView
+      ? () => runVisibleWorkspaceCommand(handleToggleSidePaneFullView)
+      : null,
     previousConversation: handleSelectPreviousConversation,
     nextConversation: handleSelectNextConversation,
     navigateBack: canPrimaryNavigationBack
@@ -1134,6 +1161,12 @@ export function App({
           goBackShortcutLabel={goBackShortcutLabel}
           goForwardShortcutLabel={goForwardShortcutLabel}
           toggleSidePaneShortcutLabel={toggleSidePaneShortcutLabel}
+          toggleSidePaneFullViewShortcutLabel={
+            isDesktop ? toggleSidePaneFullViewShortcutLabel : undefined
+          }
+          // 多 pane 时仍下发 controller，只让 WorkspaceShellLayout 显式禁用入口；
+          // 入口直接消失会让用户看不到「分屏下不可用」的原因。
+          sidePaneFullView={isDesktop ? sidePaneFullView : undefined}
           canGoBack={canGoBack}
           canGoForward={canGoForward}
           canTaskNavBack={canTaskNavBack}
@@ -1217,6 +1250,7 @@ export function App({
           handleOpenWorkflowWorkspace={handleOpenWorkflowWorkspace}
           handleOpenWorkflowArtifact={handleOpenWorkflowArtifact}
           handleCloseCodeViewer={handleCloseCodeViewer}
+          handleNavigateCodeViewer={handleNavigateCodeViewer}
           handleCloseGit={handleCloseGit}
           handleActivateSidePaneTab={handleActivateSidePaneTab}
           handleReorderSidePaneTab={handleReorderSidePaneTab}

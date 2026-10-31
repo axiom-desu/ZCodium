@@ -35,7 +35,7 @@ export async function getPluginReferenceCatalog(
   const params = parseParams(zcodePluginsReferenceCatalogParamsSchema, rawParams);
   if (params.sessionId) {
     const record = requireSession(context, params.sessionId);
-    const displayByPluginId = resolveReferenceListingDisplayByPluginId(
+    const displayByPluginId = await resolveReferenceListingDisplayByPluginId(
       params.workspace.workspacePath,
     );
     return {
@@ -45,10 +45,10 @@ export async function getPluginReferenceCatalog(
         .plugins.map((entry) => toReferenceCatalogEntry(entry, displayByPluginId, includeCategory)),
     };
   }
-  const outcome = resolveZCodePlugins({
+  const outcome = await resolveZCodePlugins({
     workingDirectory: params.workspace.workspacePath,
   });
-  const displayByPluginId = resolveReferenceListingDisplayByPluginId(
+  const displayByPluginId = await resolveReferenceListingDisplayByPluginId(
     params.workspace.workspacePath,
   );
   return {
@@ -97,22 +97,22 @@ export async function resolveSuggestedPluginReference(
   }
 
   const workingDirectory = params.workspace.workspacePath;
-  const readState = () => {
-    const outcome = resolveZCodePlugins({ logger: context.logger, workingDirectory });
+  const readState = async () => {
+    const outcome = await resolveZCodePlugins({ logger: context.logger, workingDirectory });
     const entry = buildPluginReferenceCatalog(outcome.plugins).plugins.find(
       (candidate) => candidate.pluginId === stableId,
     );
     return { outcome, entry };
   };
   let displayByPluginId: Map<string, PluginReferenceListingDisplay> | undefined;
-  const resolveIcon = () => {
+  const resolveIcon = async () => {
     // 图标只来自目标 Host 已缓存的官方 listing，并随可信解析一次返回；UI 不再为它读取
     // workspace referenceCatalog。overview 不等待网络，缺失时按无图标降级。
-    displayByPluginId ??= resolveReferenceListingDisplayByPluginId(workingDirectory);
+    displayByPluginId ??= await resolveReferenceListingDisplayByPluginId(workingDirectory);
     return displayByPluginId.get(stableId)?.icon;
   };
-  const toResult = (entry: PluginReferenceCatalogEntry) => {
-    const icon = resolveIcon();
+  const toResult = async (entry: PluginReferenceCatalogEntry) => {
+    const icon = await resolveIcon();
     return {
       stableId,
       status: (entry.conflictingPluginIds.length > 0
@@ -136,7 +136,7 @@ export async function resolveSuggestedPluginReference(
     };
   };
 
-  const initial = readState();
+  const initial = await readState();
   if (initial.entry) return toResult(initial.entry);
 
   // 旧流程只有官方 Marketplace 刷新完成后才把 missing 结果返回 UI，网络等待期间
@@ -194,9 +194,9 @@ export async function resolveSuggestedPluginReference(
     signal?.removeEventListener("abort", abortRefresh);
   }
 
-  const afterRefresh = readState();
+  const afterRefresh = await readState();
   if (afterRefresh.entry) return toResult(afterRefresh.entry);
-  const overview = getZCodePluginsOverview({ logger: context.logger, workingDirectory });
+  const overview = await getZCodePluginsOverview({ logger: context.logger, workingDirectory });
   const candidate = overview.availablePlugins.find((item) => item.id === stableId);
   if (
     !candidate ||
@@ -234,10 +234,10 @@ interface PluginReferenceListingDisplay {
   descriptionI18n?: Record<string, string>;
 }
 
-function resolveReferenceListingDisplayByPluginId(
+async function resolveReferenceListingDisplayByPluginId(
   workspacePath: string,
-): Map<string, PluginReferenceListingDisplay> {
-  const overview = getZCodePluginsOverview({ workingDirectory: workspacePath });
+): Promise<Map<string, PluginReferenceListingDisplay>> {
+  const overview = await getZCodePluginsOverview({ workingDirectory: workspacePath });
   const displayByPluginId = new Map<string, PluginReferenceListingDisplay>();
   for (const plugin of [
     ...overview.availablePlugins,

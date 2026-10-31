@@ -76,9 +76,10 @@ jobs:
         # workspace 包的 exports 指向 src，套件不依赖构建产物，因此放在构建步骤之后、Release tests 之前。
         # UI 留白套件依赖 @ alias 与 SSR JSX，单独使用受控配置；任一命令失败即门禁失败。
         run: |
-          pnpm vitest run packages/shared/src/webRemoteControl packages/shared/src/mcp-apps packages/ui/src/lib/webRemoteControlTarget.test.ts packages/desktop/src/main/webRemoteControl/servicePipe.test.ts packages/desktop/src/main/desktopAgentRuntimeEnv.test.ts apps/zcode-cli/packages/adapters/src/network packages/web/src/mobile packages/shared/src/zcode-protocol-v4
+          pnpm vitest run packages/shared/src/webRemoteControl packages/shared/src/mcp-apps packages/ui/src/lib/webRemoteControlTarget.test.ts packages/desktop/src/main/webRemoteControl/servicePipe.test.ts packages/desktop/src/main/desktopAgentRuntimeEnv.test.ts apps/zcode-cli/packages/adapters/src/network packages/web/src/mobile packages/shared/src/zcode-protocol-v4 packages/shared/src/conversation-share-content.test.ts packages/shared/src/conversation-share-artifact.test.ts packages/web/src/share
           pnpm vitest run --config packages/ui/vitest.holes.config.ts
-          pnpm vitest run --config packages/ui/vitest.config.ts packages/ui/src/v4/conversationTurnRenderUnits.test.ts
+          pnpm vitest run --config packages/desktop/vitest.config.ts packages/desktop/test/sourceAuthorityLoopback.test.ts
+          pnpm vitest run --config packages/ui/vitest.config.ts packages/ui/src/v4/conversationTurnRenderUnits.test.ts packages/ui/test/conversationSharePreflight.test.ts packages/ui/test/conversationShareContentClaims.test.ts packages/ui/test/conversationShareArtifactReader.test.ts packages/ui/test/shareExternalUrlPolicy.test.ts
       - name: Release tests
         if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
         run: node --test --test-isolation=none scripts/ci/*.test.mjs
@@ -123,6 +124,10 @@ jobs:
         run: node scripts/ci/web-remote-control-dialog-smoke.mjs
       - name: Imported conversation browser checks
         run: node scripts/ci/local-share-context-smoke.mjs
+      - name: Config directory catalog browser checks
+        # S11：生产 PluginsSection + 真实 ProjectService/SQLite + scoped loopback 配置 IO。
+        # 通过根 npm 入口执行，保证脚本本身是真实 CLI 入口（不是只留在 knip 配置里的文件）。
+        run: pnpm test:config-directory-catalog
       - name: Self-managed model settings
         run: |
           pnpm --filter @zcode/desktop build:no-runtime-assets
@@ -135,6 +140,17 @@ jobs:
           node scripts/ci/local-context-smoke.mjs
           node scripts/ci/session-local-errors-smoke.mjs
           node scripts/ci/local-onboarding-smoke.mjs
+      - name: Side pane full view browser checks
+        run: node scripts/ci/side-pane-full-view-smoke.mjs
+      - name: File manager navigation browser checks
+        run: node scripts/ci/file-manager-navigation-smoke.mjs
+      - name: App shell full view guard
+        run: node scripts/ci/app-shell-full-view-smoke.mjs
+      - name: Workbench split guard
+        run: node scripts/ci/workbench-split-guard-smoke.mjs
+      - name: Conversation workspace detach guard
+        # 生产 App/Shell/menu + Root actions 的 detach 资格回归；依赖上一步产出的 renderer assets。
+        run: pnpm test:conversation-detach
       - name: Bundled catalog browser checks
         run: |
           node scripts/ci/client-catalog-smoke.mjs
@@ -154,6 +170,10 @@ jobs:
         run: |
           node scripts/ci/conversation-export-smoke.mjs
           node scripts/ci/conversation-import-smoke.mjs
+
+      - name: Conversation share landing page checks
+        # 真实 packages/web 入口 + @zcode/ui 只读渲染器，分享 API 只走 127.0.0.1 loopback。
+        run: node scripts/ci/conversation-share-web-smoke.mjs
 
   remote-assets:
     name: Bundled Linux remote runtime

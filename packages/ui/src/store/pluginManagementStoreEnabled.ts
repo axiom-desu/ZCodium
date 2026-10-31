@@ -1,7 +1,7 @@
 import type { IPluginManagementService } from "@zcode/services";
 import type { ZCodePluginScope } from "@zcode/shared";
 import { logger } from "@/logger.js";
-import { loadInto } from "@/store/pluginManagementStoreLoading.js";
+import { buildWorkspaceKey, loadInto } from "@/store/pluginManagementStoreLoading.js";
 import type { PluginManagementState } from "@/store/pluginManagementStore.js";
 
 function toMessage(error: unknown): string {
@@ -9,15 +9,22 @@ function toMessage(error: unknown): string {
 }
 
 let nextToggleRequestId = 0;
-const activeToggleRequests = new Map<string, number>();
+const requestsByStore = new WeakMap<() => PluginManagementState, Map<string, number>>();
 
 function buildToggleRequestKey(input: {
   workspacePath: string;
   workspaceIdentity: string | null;
+  remoteSessionId: string | null;
+  authorityKey: string | null;
   configScope: ZCodePluginScope | null;
   pluginId: string;
 }): string {
-  const workspaceKey = input.workspaceIdentity?.trim() || input.workspacePath;
+  const workspaceKey = buildWorkspaceKey(
+    input.workspacePath,
+    input.workspaceIdentity,
+    input.authorityKey,
+    input.remoteSessionId,
+  );
   return `${workspaceKey}\u0000${input.configScope ?? "effective"}\u0000${input.pluginId}`;
 }
 
@@ -29,12 +36,19 @@ export async function setPluginEnabledOptimistically(
   pluginService: IPluginManagementService,
   scope: ZCodePluginScope = "user",
 ): Promise<boolean> {
-  const { workspacePath, workspaceIdentity, configScope } = get();
+  const { workspacePath, workspaceIdentity, remoteSessionId, authorityKey, configScope } = get();
   if (!workspacePath) return false;
+  let activeToggleRequests = requestsByStore.get(get);
+  if (!activeToggleRequests) {
+    activeToggleRequests = new Map();
+    requestsByStore.set(get, activeToggleRequests);
+  }
 
   const requestKey = buildToggleRequestKey({
     workspacePath,
     workspaceIdentity,
+    remoteSessionId,
+    authorityKey,
     configScope,
     pluginId,
   });
@@ -46,6 +60,8 @@ export async function setPluginEnabledOptimistically(
       activeToggleRequests.get(requestKey) === requestId &&
       current.workspacePath === workspacePath &&
       current.workspaceIdentity === workspaceIdentity &&
+      current.remoteSessionId === remoteSessionId &&
+      current.authorityKey === authorityKey &&
       current.configScope === configScope &&
       current.togglingPluginId === pluginId
     );
@@ -84,8 +100,11 @@ export async function setPluginEnabledOptimistically(
     await loadInto(set, get, {
       workspacePath,
       workspaceIdentity,
+      remoteSessionId,
+      authorityKey,
       configScope,
       pluginService,
+      fresh: true,
     });
     return isCurrentRequest();
   } catch (error) {

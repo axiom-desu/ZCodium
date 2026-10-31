@@ -2,11 +2,8 @@ import { formatJson } from "@zcode/core";
 import type { GlobalOptions, RunContext } from "@zcode/shared-types";
 import type { SetZCodePluginEnabledResult, ZCodePluginInstallData } from "@zcode/bootstrap";
 import {
-  formatAvailablePluginJson,
   formatDiagnosticJson,
   formatDiagnosticLines,
-  formatHumanAvailableList,
-  formatHumanPluginList,
   formatHumanPluginSet,
   formatHumanPluginUninstall,
   formatInstalledPluginJson,
@@ -31,6 +28,7 @@ import {
   type PluginsCommandFlags,
 } from "./plugins-command-shared.js";
 import { runMarketplaceCommand } from "./plugins-marketplace-command.js";
+import { runPluginsListCommand, runPluginsValidateCommand } from "./plugins-read-command.js";
 
 export type {
   PluginsCommandDependencies,
@@ -96,47 +94,6 @@ export async function runPluginsCommand(
   }
 }
 
-async function runPluginsListCommand(
-  ctx: RunContext,
-  options: GlobalOptions,
-  deps: PluginsCommandDependencies,
-  flags: PluginsCommandFlags,
-): Promise<number> {
-  const base = baseOptions(deps);
-  const outcome = (await resolveDep(deps, "listPlugins"))(base);
-  const installed = outcome.plugins.map((plugin) => formatPluginJson(plugin, outcome.diagnostics));
-  if (!flags.available) {
-
-    ctx.stdout.write(
-      options.json ? formatJson(installed) : formatHumanPluginList(outcome, options),
-    );
-    // 市场刷新失败这类诊断的 pluginId 是市场 id 或为空，归不到任何条目；error 级不能静默丢掉。
-    const knownIds = new Set(outcome.plugins.map((plugin) => plugin.id));
-    const orphaned = outcome.diagnostics.filter(
-      (diagnostic) =>
-        diagnostic.severity === "error" && !(diagnostic.pluginId && knownIds.has(diagnostic.pluginId)),
-    );
-    if (orphaned.length === 0) return 0;
-    ctx.stderr.write(formatDiagnosticLines(orphaned));
-    return 1;
-  }
-  const overview = (await resolveDep(deps, "getPluginsOverview"))(base);
-  if (options.json) {
-    ctx.stdout.write(
-      formatJson({
-        installed,
-        available: overview.availablePlugins.map(formatAvailablePluginJson),
-        diagnostics: [...outcome.diagnostics, ...overview.diagnostics].map(formatDiagnosticJson),
-      }),
-    );
-    return 0;
-  }
-  ctx.stdout.write(
-    `${formatHumanPluginList(outcome, options)}\n${formatHumanAvailableList(overview.availablePlugins)}`,
-  );
-  return 0;
-}
-
 async function runPluginsInstallCommand(
   ctx: RunContext,
   options: GlobalOptions,
@@ -149,7 +106,7 @@ async function runPluginsInstallCommand(
   const { name } = splitPluginIdentifier(identifier);
   let { marketplace } = splitPluginIdentifier(identifier);
   if (!marketplace) {
-    const overview = (await resolveDep(deps, "getPluginsOverview"))(base);
+    const overview = await (await resolveDep(deps, "getPluginsOverview"))(base);
     const matches = overview.availablePlugins.filter((plugin) => plugin.name === name);
     if (matches.length > 1) throw ambiguousPluginError(matches.map((plugin) => plugin.id));
     if (matches.length === 0 || !matches[0]) {
@@ -157,7 +114,9 @@ async function runPluginsInstallCommand(
     }
     marketplace = matches[0].marketplace;
   }
-  const result = await (await resolveDep(deps, "installPlugin"))({
+  const result = await (
+    await resolveDep(deps, "installPlugin")
+  )({
     ...base,
     marketplace,
     pluginName: name,
@@ -175,7 +134,8 @@ async function runPluginsUpdateCommand(
 ): Promise<number> {
   resolveScope(flags.scope);
   const pluginId = await resolveLoadedPluginId(deps, identifier);
-  const result = await (await resolveDep(deps, "updatePlugin"))({
+  const updatePlugin = await resolveDep(deps, "updatePlugin");
+  const result = await updatePlugin({
     ...baseOptions(deps),
     pluginId,
   });
@@ -254,7 +214,9 @@ async function runPluginsSetCommand(
   enabled: boolean,
 ): Promise<number> {
   const scope = resolveScope(flags.scope);
-  const result = await (await resolveDep(deps, "setPluginEnabled"))({
+  const result = await (
+    await resolveDep(deps, "setPluginEnabled")
+  )({
     ...baseOptions(deps),
     enabled,
     plugin,
@@ -286,17 +248,26 @@ async function runPluginsDisableCommand(
   const base = baseOptions(deps);
   const listPlugins = await resolveDep(deps, "listPlugins");
   const setPluginEnabled = await resolveDep(deps, "setPluginEnabled");
-  const entries: Array<{ plugin: PluginListItem; result?: SetZCodePluginEnabledResult; error?: string }> = [];
-  for (const plugin of listPlugins(base).plugins) {
+  const entries: Array<{
+    plugin: PluginListItem;
+    result?: SetZCodePluginEnabledResult;
+    error?: string;
+  }> = [];
+  for (const plugin of (await listPlugins(base)).plugins) {
     if (!plugin.enabled) continue;
     try {
-      entries.push({ plugin, result: await setPluginEnabled({ ...base, enabled: false, plugin: plugin.id }) });
+      entries.push({
+        plugin,
+        result: await setPluginEnabled({ ...base, enabled: false, plugin: plugin.id }),
+      });
     } catch (error) {
       entries.push({ plugin, error: error instanceof Error ? error.message : String(error) });
     }
   }
   // 写的是 user 层；workspace/project 层的 enabledPlugins=true 优先级更高、盖不掉，所以按 effective 态复查。
-  const stillEnabled = new Set(listPlugins(base).plugins.filter((p) => p.enabled).map((p) => p.id));
+  const stillEnabled = new Set(
+    (await listPlugins(base)).plugins.filter((p) => p.enabled).map((p) => p.id),
+  );
   const failed = entries.filter((entry) => entry.error || stillEnabled.has(entry.plugin.id));
   if (options.json) {
     ctx.stdout.write(
@@ -317,7 +288,8 @@ async function runPluginsDisableCommand(
     return 0;
   }
   for (const entry of entries) {
-    if (entry.result && !failed.includes(entry)) ctx.stdout.write(formatHumanPluginSet(entry.result));
+    if (entry.result && !failed.includes(entry))
+      ctx.stdout.write(formatHumanPluginSet(entry.result));
   }
   for (const entry of failed) {
     ctx.stderr.write(
@@ -336,7 +308,6 @@ async function runPluginsUninstallCommand(
   flags: PluginsCommandFlags,
   identifier: string,
 ): Promise<number> {
-
   resolveScope(flags.scope);
   const target = await resolveLoadedPluginId(deps, identifier);
   // 卸载是破坏性的彻底清除：交互终端下询问确认；非交互(管道/CI)且未带 --force 时拒绝执行，不静默卸载。
@@ -354,7 +325,9 @@ async function runPluginsUninstallCommand(
     }
   }
 
-  const removed = await (await resolveDep(deps, "uninstallPlugin"))({
+  const removed = await (
+    await resolveDep(deps, "uninstallPlugin")
+  )({
     ...baseOptions(deps),
     pluginId: target,
     ...(flags.keepData ? { keepData: true } : {}),
@@ -371,30 +344,4 @@ async function runPluginsUninstallCommand(
       : formatHumanPluginUninstall(removed, target),
   );
   return removed ? 0 : 1;
-}
-
-async function runPluginsValidateCommand(
-  ctx: RunContext,
-  options: GlobalOptions,
-  deps: PluginsCommandDependencies,
-  path: string,
-): Promise<number> {
-  const diagnostics = await (await resolveDep(deps, "validatePluginPath"))({
-    ...baseOptions(deps),
-    path,
-  });
-  const failed = hasErrors(diagnostics);
-  if (options.json) {
-    ctx.stdout.write(
-      formatJson({ path, ok: !failed, diagnostics: diagnostics.map(formatDiagnosticJson) }),
-    );
-    return failed ? 1 : 0;
-  }
-  if (failed) {
-    ctx.stderr.write(`Plugin manifest is invalid: ${path}\n${formatDiagnosticLines(diagnostics)}`);
-    return 1;
-  }
-  ctx.stdout.write(`Plugin manifest is valid: ${path}\n`);
-  writeWarnings(ctx, diagnostics);
-  return 0;
 }

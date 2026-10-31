@@ -347,7 +347,10 @@ export function createAgentConversationTransport(
         throw error;
       }
     },
-    async sendCommand(envelope: CommandEnvelope): Promise<CommandAck> {
+    async sendCommand(
+      envelope: CommandEnvelope,
+      context?: { projectId?: string | null },
+    ): Promise<CommandAck> {
       const hello = await ensureHandshake();
       const payload = envelope.payload as {
         planEnabled?: boolean;
@@ -362,7 +365,11 @@ export function createAgentConversationTransport(
         throw new Error("proto.independentPlanUnsupported");
       }
       return sendWithConversationDelayE2E(() =>
-        agentService.sendConversationCommandV4({ ...workspace, envelope }),
+        agentService.sendConversationCommandV4({
+          ...workspace,
+          ...(context?.projectId !== undefined ? { projectId: context.projectId } : {}),
+          envelope,
+        }),
       );
     },
     async queryCommands(params: CommandsQueryParams): Promise<CommandsQueryResult> {

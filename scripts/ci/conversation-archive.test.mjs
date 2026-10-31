@@ -339,8 +339,11 @@ test("file operations snapshot mutable inputs before asynchronous compression an
 test("unsupported versions and logical size limits have actionable, content-free errors", async () => {
   const input = fixture(false);
   const content = manifest(input);
-  content.version = 2;
+  // 归档 v2 已支持内容块；未来版本才是「请升级」。
+  content.version = 3;
   await rejects(await zip([["manifest.json", manifestBytes(content)]]), "unsupported_version");
+  const missingBlocks = { ...manifest(input), version: 2 };
+  await rejects(await zip([["manifest.json", manifestBytes(missingBlocks)]]), "invalid_archive");
   const large = fixture();
   const original = large.artifacts[0];
   for (let i = 0; i < 5; i++) {

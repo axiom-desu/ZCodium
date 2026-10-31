@@ -150,6 +150,10 @@ export async function checkCombinations(context: {
       structuredContent: { key, source: "source-a" },
       _meta: { fixture: true },
     });
+    // Bugfix：`executed` 事件走独立 control socket，工具结果走 stdio，两者没有全序。
+    // 之前只断言计数，结果先到时事件还在路上，executions(key) 会是 0（本机稳定复现）。
+    // 先等事件落盘再计数，与本文件其它用例「先 await event 再断言」保持一致。
+    await event("executed", key);
     assert.equal(executions(key), 1);
   });
   await check(

@@ -41,7 +41,6 @@ import {
   TID_COMPOSER_REMOTE_CONNECTION,
   TID_COMPOSER_WORK_OUTSIDE_PROJECT,
   TID_COMPOSER_WORKSPACE_TRIGGER,
-  resolveWorkspaceKey,
   type RemoteTarget,
   type RemoteWorkspaceSessionEntry,
   type WorkspacePurpose,
@@ -104,7 +103,11 @@ function isWorkspaceMenuTabSelected(
   workspaceTab: ChatEmptyWorkspaceMenuTab,
   current: { workspacePath: string; workspaceIdentity?: string },
 ): boolean {
-  return resolveWorkspaceKey(workspaceTab) === resolveWorkspaceKey(current);
+  // 空 identity 只能命中同路径本地项，不可通配另一个执行设备。
+  return (
+    workspaceTab.workspacePath === current.workspacePath &&
+    (workspaceTab.workspaceIdentity?.trim() || "") === (current.workspaceIdentity?.trim() || "")
+  );
 }
 
 function getRemoteWorkspaceSearchText(workspaceTab: ChatEmptyWorkspaceMenuTab) {
@@ -169,6 +172,8 @@ function filterVisibleWorkspaceMenuTabs({
 export function ChatEmptyWorkspacePreviewMenu({
   workspacePath,
   workspaceIdentity,
+  remoteTarget,
+  remoteSessionId,
   isWindowsDesktop = false,
   workspaceTabs,
   allowConversationWorkspaceSelection = true,
@@ -188,6 +193,8 @@ export function ChatEmptyWorkspacePreviewMenu({
 }: {
   workspacePath: string;
   workspaceIdentity?: string;
+  remoteTarget?: RemoteTarget;
+  remoteSessionId?: string;
   isWindowsDesktop?: boolean;
   workspaceTabs: ReadonlyArray<ChatEmptyWorkspaceMenuTab>;
   allowConversationWorkspaceSelection?: boolean;
@@ -228,10 +235,20 @@ export function ChatEmptyWorkspacePreviewMenu({
       }),
     ) ?? null;
   const isConversationWorkspace = currentWorkspaceTab?.workspacePurpose === "conversation";
+  // 源端规则禁止远端项目脱离到本机；缺 tab 时仍消费 pane 的远端身份。
+  const isCurrentRemoteWorkspace = Boolean(
+    workspaceIdentity?.trim() ||
+    remoteTarget ||
+    remoteSessionId ||
+    currentWorkspaceTab?.workspaceIdentity?.trim() ||
+    currentWorkspaceTab?.remoteTarget ||
+    currentWorkspaceTab?.remoteSessionId,
+  );
   const canDetachProject =
     allowConversationWorkspaceSelection &&
     allowConversationWorkspaceDetach &&
-    !isConversationWorkspace;
+    !isConversationWorkspace &&
+    !isCurrentRemoteWorkspace;
   const localWorkspacePathForRemoteConnection =
     isConversationWorkspace ||
     currentWorkspaceTab?.remoteSessionId ||
@@ -241,7 +258,6 @@ export function ChatEmptyWorkspacePreviewMenu({
       : workspacePath;
   const homeWorkspacePath = inferWorkspaceHomePath(workspacePath);
   const homeWorkspaceLabel = intl.formatMessage({ id: "chat.empty.home" });
-  const isCurrentRemoteWorkspace = hasRemoteWorkspaceIdentity(currentWorkspaceTab ?? {});
   const visibleWorkspaceTabs = useMemo(
     () =>
       filterVisibleWorkspaceMenuTabs({
@@ -392,7 +408,7 @@ export function ChatEmptyWorkspacePreviewMenu({
               <span>{intl.formatMessage({ id: "remote.trigger" })}</span>
             </DropdownMenuItem>
           ) : null}
-          {allowConversationWorkspaceSelection ? (
+          {allowConversationWorkspaceSelection && !isCurrentRemoteWorkspace ? (
             <DropdownMenuCheckboxItem
               data-testid={TID_COMPOSER_WORK_OUTSIDE_PROJECT}
               checked={isConversationWorkspace}

@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { migrateUserSubagentMarkdown, migrateSubagentStateFile } from "@zcode/shared/node";
 import {
   parseAgentProfileFromMarkdown,
@@ -20,6 +20,7 @@ interface LoadZCodeAgentProfilesInput {
   logger?: Logger;
   storageRoot: string;
   workingDirectory: string;
+  additionalDirectories?: readonly string[];
 }
 
 interface LoadZCodeAgentProfilesResult {
@@ -50,10 +51,21 @@ export async function loadZCodeAgentProfiles(
 ): Promise<LoadZCodeAgentProfilesResult> {
   const migration = await migrateUserSubagentMarkdown(join(input.storageRoot, "agents"));
   await migrateSubagentStateFile(join(input.storageRoot, "v2", "agents-state.json"));
-  const roots = [
+  const roots: Array<{ path: string; source: "user" | "project"; namespace?: string }> = [
     { path: join(input.storageRoot, "agents"), source: "user" as const },
     { path: join(input.workingDirectory, ".zcodium", "agents"), source: "project" as const },
   ];
+  // 附加目录显式加入发现范围；命名空间防同名覆盖，仍按 project scope 安全检查。
+  for (const directory of new Set(
+    (input.additionalDirectories ?? []).map((path) => resolve(path)),
+  )) {
+    if (directory === resolve(input.workingDirectory)) continue;
+    roots.push({
+      path: join(directory, ".zcodium", "agents"),
+      source: "project",
+      namespace: basename(directory),
+    });
+  }
   const diagnostics: AgentProfileParseDiagnostic[] = [];
   for (const failure of migration.failures) {
     diagnostics.push({
@@ -88,7 +100,11 @@ export async function loadZCodeAgentProfiles(
         });
       }
       if (result.profile) {
-        const profile = sanitizeProjectAgentProfile(result.profile);
+        // 与上游 runtime-subagents 同名规则：附加目录的 profile 用 `<目录>/<name>` 限定。
+        const scopedProfile = root.namespace
+          ? { ...result.profile, name: `${root.namespace}/${result.profile.name}` }
+          : result.profile;
+        const profile = sanitizeProjectAgentProfile(scopedProfile);
         if (isDisabledUserProfile(profile, agentState.disabledAgentIds)) {
           continue;
         }

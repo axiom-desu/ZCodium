@@ -58,6 +58,11 @@ const requiredDevPluginRuntimeBuilds = [
     packageName: "@zcode/browser-use-plugin",
     artifactPath: "browser-use-plugin/scripts/browser-client.mjs",
   },
+  // 文档插件的查看面板 server 由 office-runtime 构建；dev 若不构建，面板入口可见但 MCP 启动失败。
+  ...["documents", "pdf", "presentations", "spreadsheets"].map((name) => ({
+    packageName: `@zcode/${name}-plugin`,
+    artifactPath: `${name}-plugin/dist/server.mjs`,
+  })),
 ];
 const defaultBuildFilters = [
   ...cliWorkspaceBuilds.map(({ packageName }) => packageName),

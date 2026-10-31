@@ -1,8 +1,27 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@zcode/documents-plugin",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "private": true,
+  "description": "DOCX document production skills and a Word viewer panel, published as an official ZCode plugin.",
   "license": "Apache-2.0",
-  "description": "DOCX document production skills, published as an official ZCode plugin."
+  "type": "module",
+  "scripts": {
+    "build": "zcode-office-build",
+    "clean": "node ../../scripts/clean-dist.mjs",
+    "smoke": "zcode-office-smoke",
+    "test:e2e": "zcode-office-e2e"
+  },
+  "devDependencies": {
+    "@zcode/office-runtime": "workspace:*"
+  },
+  "office": {
+    "title": {
+      "en": "Documents",
+      "zh-CN": "Word 文档"
+    },
+    "kinds": [
+      "docx"
+    ]
+  }
 }

@@ -21,6 +21,10 @@ interface RemoteConnectionFormSnapshot {
   wslUser?: string;
   dockerContainer: string;
   manualDockerContainer?: string;
+  serverUrl?: string;
+  serverName?: string;
+  serverToken?: string;
+  serverWorkspacePath?: string;
 }
 
 export function getRemoteWizardStepCopy(
@@ -136,6 +140,30 @@ export function buildRemoteTarget(
           kind: "wsl",
           distro: snapshot.wslDistro || undefined,
           ...(wslUser ? { user: wslUser } : {}),
+        },
+      };
+    }
+    case "server": {
+      // 已运行的 zcode-server 是真实用户入口：URL 必填并做 URL 解析；token 只随本次连接进入 credential port。
+      const url = snapshot.serverUrl?.trim() ?? "";
+      if (!url) {
+        return { errorMessage: intl.formatMessage({ id: "server.validation.urlRequired" }) };
+      }
+      try {
+        new URL(url);
+      } catch {
+        return { errorMessage: intl.formatMessage({ id: "server.validation.invalidUrl" }) };
+      }
+      const name = snapshot.serverName?.trim();
+      const token = snapshot.serverToken?.trim();
+      const workspacePath = snapshot.serverWorkspacePath?.trim();
+      return {
+        target: {
+          kind: "server",
+          url,
+          ...(name ? { name } : {}),
+          ...(token ? { token } : {}),
+          ...(workspacePath ? { workspacePath } : {}),
         },
       };
     }

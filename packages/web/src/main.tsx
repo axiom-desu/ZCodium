@@ -11,6 +11,12 @@ import {
 } from "@zcode/ui";
 import "@zcode/ui/styles.css";
 import { connectViaWebSocket } from "@zcode/client";
+import { ConversationShareLandingLoader } from "./share/ConversationShareLandingPage.js";
+import {
+  isConversationSharePath,
+  parseConversationShareRoute,
+  resolveConversationShareRouteLocale,
+} from "./share/conversationSharePreviewClient.js";
 import { resolveWebCommunityUrl, resolveWebHelpConfig } from "./communityUrl.js";
 import type { IPlatformService, RemoteTarget, ServerRemoteInfo } from "@zcode/shared";
 import { WEB_DEFAULT_THEME, resolveWebInitialTheme } from "./webThemeSeed.js";
@@ -300,8 +306,28 @@ function renderWebBootstrapError(error: unknown): void {
   );
 }
 
+/** 分享页是独立公开入口：不连接本机 server，也不要求 workspace/登录态。 */
+function renderConversationShareLanding(): boolean {
+  const pathname = window.location.pathname;
+  if (!isConversationSharePath(pathname)) return false;
+  // 只接受显式配置的分享 API base 或同源 /api/v1；不内置任何生产站点地址。
+  const endpointOrigin =
+    import.meta.env.VITE_ZCODE_BASE_URL?.trim().replace(/\/+$/u, "") || window.location.origin;
+  root.render(
+    <AppErrorBoundary>
+      <ConversationShareLandingLoader
+        shareCode={parseConversationShareRoute(pathname)}
+        locale={resolveConversationShareRouteLocale(pathname)}
+        baseUrl={`${endpointOrigin}/api/v1`}
+      />
+    </AppErrorBoundary>,
+  );
+  return true;
+}
+
 async function bootstrapWebApp() {
   clearRetiredLoginCallback();
+  if (renderConversationShareLanding()) return;
 
   let bootstrap: WebBootstrapResult;
   try {

@@ -11,6 +11,7 @@ import {
 } from "react";
 import type {
   AppSettings,
+  AppToolSearchMode,
   IntegratedTerminalShellOption,
   IntegratedTerminalShellSelection,
   Locale,
@@ -281,6 +282,8 @@ export function SettingsPage({
   }, [sharedSettings?.recentProjects, workspaceTabs]);
   const memoryEnabled = sharedSettings?.memoryEnabled === true;
   const nativeSearchEnhancementsEnabled = sharedSettings?.nativeSearchEnhancementsEnabled !== false;
+  // 缺省 Off 不覆盖用户已保存的 Auto/Local；旧设置缺字段即 Off。
+  const toolSearchMode = sharedSettings?.toolSearchMode ?? "off";
   const askUserQuestionAutoResolutionEnabled =
     sharedSettings?.askUserQuestionAutoResolutionEnabled !== false;
   const [dataBaseDir, setDataBaseDir] = useState("");
@@ -297,7 +300,7 @@ export function SettingsPage({
   const [embeddedBrowserAllowInsecureCertificates, setEmbeddedBrowserAllowInsecureCertificates] =
     useState(false);
   const [taskAutoArchiveEnabled, setTaskAutoArchiveEnabled] = useState(false);
-  const [taskAutoArchiveOlderThanDays, setTaskAutoArchiveOlderThanDays] = useState(7);
+  const [taskAutoArchiveOlderThanDays, setTaskAutoArchiveOlderThanDays] = useState(30);
   const [closeToTrayOnWindows, setCloseToTrayOnWindows] = useState(true);
   const [
     desktopChromiumHardwareAccelerationEnabled,
@@ -355,7 +358,7 @@ export function SettingsPage({
           settings.embeddedBrowserAllowInsecureCertificates ?? false,
         );
         setTaskAutoArchiveEnabled(settings.taskAutoArchiveEnabled ?? false);
-        setTaskAutoArchiveOlderThanDays(settings.taskAutoArchiveOlderThanDays ?? 7);
+        setTaskAutoArchiveOlderThanDays(settings.taskAutoArchiveOlderThanDays ?? 30);
         setCloseToTrayOnWindows(settings.closeToTrayOnWindows ?? true);
         setDesktopChromiumHardwareAccelerationEnabled(
           settings.desktopChromiumHardwareAccelerationEnabled ?? true,
@@ -435,6 +438,14 @@ export function SettingsPage({
   const handleAskUserQuestionAutoResolutionEnabledChange = useCallback(
     async (enabled: boolean) => {
       await updateSharedSettings({ askUserQuestionAutoResolutionEnabled: enabled });
+    },
+    [updateSharedSettings],
+  );
+  // 工具搜索模式写共享设置（单一 owner）；Host 只在新建或冷恢复的 materialization 阶段读取，
+  // 不假装热会话已换模式，也不建第二条写路径。
+  const handleToolSearchModeChange = useCallback(
+    async (mode: AppToolSearchMode) => {
+      await updateSharedSettings({ toolSearchMode: mode });
     },
     [updateSharedSettings],
   );
@@ -944,6 +955,7 @@ export function SettingsPage({
                             integratedTerminalShell={integratedTerminalShell}
                             integratedTerminalShellOptions={integratedTerminalShellOptions}
                             nativeSearchEnhancementsEnabled={nativeSearchEnhancementsEnabled}
+                            toolSearchMode={toolSearchMode}
                             httpProxy={httpProxy}
                             httpProxyNoProxy={httpProxyNoProxy}
                             httpProxyCaCertPath={httpProxyCaCertPath}
@@ -975,6 +987,7 @@ export function SettingsPage({
                             onNativeSearchEnhancementsEnabledChange={
                               handleNativeSearchEnhancementsEnabledChange
                             }
+                            onToolSearchModeChange={handleToolSearchModeChange}
                             onHttpProxyChange={handleHttpProxyChange}
                             onHttpProxyNoProxyChange={handleHttpProxyNoProxyChange}
                             onHttpProxyCaCertPathChange={handleHttpProxyCaCertPathChange}

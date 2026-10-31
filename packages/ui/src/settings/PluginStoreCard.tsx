@@ -20,6 +20,8 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { PluginStoreAvatar } from "@/settings/PluginStoreAvatar.js";
 import {
   canUpdatePluginItem,
+  isItemBusy,
+  isUiPluginItem,
   resolveItemDescription,
   resolveItemDisplayName,
   type StorePluginItem,
@@ -28,6 +30,8 @@ import {
 /** 商店条目的通用动作集：列表卡片、详情页共用同一套回调与进行中态判定。 */
 export interface PluginStoreActions {
   onOpenDetail: (pluginId: string) => void;
+  /** 仅会话内市场/详情可用；没有会话时按钮不出现。 */
+  onOpenUi?: (item: StorePluginItem) => void;
   /** 安装或恢复（restorable 内置插件走 restoreBuiltin，其余走 install）。 */
   onInstall: (item: StorePluginItem) => void;
   onUninstall: (pluginId: string) => void;
@@ -35,19 +39,10 @@ export interface PluginStoreActions {
   /** 删除当前 Workspace scope 的显式配置，使其回退到 User。 */
   onResetConfig?: (pluginId: string) => void;
   onUpdate: (pluginId: string) => void;
+  /** 兼容未迁移的调用方；忙碌判定统一 reads activeOperations。 */
   operationId: string | null;
+  activeOperations: ReadonlyArray<{ id: string }>;
   togglingPluginId: string | null;
-}
-
-function isItemBusy(item: StorePluginItem, actions: PluginStoreActions): boolean {
-  return (
-    actions.operationId === `plugin:install:${item.name}@${item.marketplace}` ||
-    actions.operationId === `plugin:restore:${item.id}` ||
-    actions.operationId === `plugin:uninstall:${item.id}` ||
-    actions.operationId === `plugin:update:${item.id}` ||
-    actions.operationId === `plugin:reset-config:${item.id}` ||
-    actions.togglingPluginId === item.id
-  );
 }
 
 /**
@@ -195,9 +190,7 @@ export function PluginStoreInstallButton({
   size?: "sm" | "default" | "lg";
 }) {
   const { intl } = useZCodeIntl();
-  const installing =
-    actions.operationId === `plugin:install:${item.name}@${item.marketplace}` ||
-    actions.operationId === `plugin:restore:${item.id}`;
+  const installing = isItemBusy(item, actions);
   return (
     <Button
       type="button"
@@ -254,7 +247,7 @@ export function PluginStoreUpdateButton({
 }) {
   const { intl } = useZCodeIntl();
   if (!item || !canUpdatePluginItem(item)) return null;
-  const updating = actions.operationId === `plugin:update:${item.id}`;
+  const updating = isItemBusy(item, actions);
   return (
     <Button
       type="button"
@@ -304,6 +297,7 @@ export function PluginStoreCard({
       className="group/card flex min-w-0 cursor-pointer items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focused"
       onClick={() => actions.onOpenDetail(item.id)}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           actions.onOpenDetail(item.id);
@@ -338,6 +332,7 @@ export function PluginStoreCard({
       <div className="flex shrink-0 items-center gap-1.5">
         {item.installed ? (
           <>
+            <PluginStoreOpenUiButton item={item} actions={actions} />
             <PluginStoreUpdateButton item={item} actions={actions} />
             {/* 旧版误写 suppression 后可能只剩安装记录、没有运行时 info；
                 此时仍须保留卸载菜单，让用户能清理安装记录与脏 suppression。 */}
@@ -348,5 +343,38 @@ export function PluginStoreCard({
         )}
       </div>
     </div>
+  );
+}
+
+/** 已安装 UI 插件在卡片/详情上的显式打开入口；禁用时先启用，不自动创建会话。 */
+export function PluginStoreOpenUiButton({
+  item,
+  actions,
+}: {
+  item: StorePluginItem;
+  actions: PluginStoreActions;
+}) {
+  const { intl } = useZCodeIntl();
+  if (!item.installed || !isUiPluginItem(item) || !actions.onOpenUi) return null;
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="secondary"
+      data-testid="plugin-store-open-ui"
+      data-plugin-id={item.id}
+      disabled={isItemBusy(item, actions)}
+      onClick={(event) => {
+        event.stopPropagation();
+        actions.onOpenUi?.(item);
+      }}
+    >
+      {intl.formatMessage({
+        id:
+          (item.info?.enabled ?? item.installedMeta?.enabled)
+            ? "settings.plugins.store.ui.open"
+            : "settings.plugins.store.menu.enable",
+      })}
+    </Button>
   );
 }

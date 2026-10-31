@@ -7,7 +7,14 @@ import type {
   SSHConfigAliasOption,
   WSLDistro,
 } from "@zcode/shared";
-import { TID_REMOTE_KIND_DOCKER, TID_REMOTE_KIND_SSH, TID_REMOTE_KIND_WSL } from "@zcode/shared";
+import {
+  TID_REMOTE_KIND_DOCKER,
+  TID_REMOTE_KIND_SERVER,
+  TID_REMOTE_KIND_SSH,
+  TID_REMOTE_KIND_WSL,
+  TID_SSH_CANCEL_BUTTON,
+  TID_SSH_CONNECT_BUTTON,
+} from "@zcode/shared";
 import type {
   IMcpSyncService,
   IPluginSyncService,
@@ -44,6 +51,9 @@ function getKindIcon(kind: RemoteTarget["kind"]) {
       return MonitorCogIcon;
     case "wsl":
       return TerminalIcon;
+    case "server":
+      // 已运行的 zcode-server 直连入口；表单见 RemoteConnectionFields 的 server 分支。
+      return ServerIcon;
   }
 }
 
@@ -79,7 +89,9 @@ export function RemoteConnectionKindStep({
                   ? TID_REMOTE_KIND_SSH
                   : value === "wsl"
                     ? TID_REMOTE_KIND_WSL
-                    : TID_REMOTE_KIND_DOCKER
+                    : value === "server"
+                      ? TID_REMOTE_KIND_SERVER
+                      : TID_REMOTE_KIND_DOCKER
               }
               className={cn(
                 "flex min-h-32 flex-col items-start gap-4 rounded-2xl border p-4 text-left transition-colors",
@@ -120,6 +132,7 @@ export function RemoteConnectionKindStep({
           size="lg"
           className="h-10 min-w-0 px-5"
           onClick={onCancel}
+          data-testid={TID_SSH_CANCEL_BUTTON}
         >
           {intl.formatMessage({ id: "common.cancel" })}
         </Button>
@@ -148,6 +161,10 @@ export function RemoteConnectionSettingsStep({
   manualDockerContainer,
   dockerContainers,
   dockerAvailable,
+  serverUrl = "",
+  serverName = "",
+  serverToken = "",
+  serverWorkspacePath = "",
   sshConfigAliases,
   sshConfigAliasesLoading,
   sshConfigAliasesError,
@@ -170,6 +187,10 @@ export function RemoteConnectionSettingsStep({
   onDockerContainerChange,
   onManualDockerContainerChange,
   onDockerContainersRefresh,
+  onServerUrlChange,
+  onServerNameChange,
+  onServerTokenChange,
+  onServerWorkspacePathChange,
   onApplySshConfigAlias,
   onClearSelectedSshConfigAlias,
   onConnect,
@@ -189,6 +210,10 @@ export function RemoteConnectionSettingsStep({
   manualDockerContainer: string;
   dockerContainers: DockerContainerInfo[];
   dockerAvailable: boolean | null;
+  serverUrl?: string;
+  serverName?: string;
+  serverToken?: string;
+  serverWorkspacePath?: string;
   sshConfigAliases: SSHConfigAliasOption[];
   sshConfigAliasesLoading: boolean;
   sshConfigAliasesError: string;
@@ -211,6 +236,10 @@ export function RemoteConnectionSettingsStep({
   onDockerContainerChange: (value: string) => void;
   onManualDockerContainerChange: (value: string) => void;
   onDockerContainersRefresh?: () => void;
+  onServerUrlChange?: (value: string) => void;
+  onServerNameChange?: (value: string) => void;
+  onServerTokenChange?: (value: string) => void;
+  onServerWorkspacePathChange?: (value: string) => void;
   onApplySshConfigAlias: (value: SSHConfigAliasOption) => void;
   onClearSelectedSshConfigAlias: () => void;
   onConnect: () => void;
@@ -248,6 +277,10 @@ export function RemoteConnectionSettingsStep({
           manualDockerContainer={manualDockerContainer}
           dockerContainers={dockerContainers}
           dockerAvailable={dockerAvailable}
+          serverUrl={serverUrl}
+          serverName={serverName}
+          serverToken={serverToken}
+          serverWorkspacePath={serverWorkspacePath}
           sshConfigAliases={sshConfigAliases}
           sshConfigAliasesLoading={sshConfigAliasesLoading}
           sshConfigAliasesError={sshConfigAliasesError}
@@ -267,6 +300,10 @@ export function RemoteConnectionSettingsStep({
           setWslUser={onWslUserChange}
           setDockerContainer={onDockerContainerChange}
           setManualDockerContainer={onManualDockerContainerChange}
+          setServerUrl={onServerUrlChange}
+          setServerName={onServerNameChange}
+          setServerToken={onServerTokenChange}
+          setServerWorkspacePath={onServerWorkspacePathChange}
           refreshDockerContainers={onDockerContainersRefresh}
         />
       </div>
@@ -295,6 +332,7 @@ export function RemoteConnectionSettingsStep({
             className="h-10 min-w-0 px-5"
             onClick={onConnect}
             disabled={loading}
+            data-testid={TID_SSH_CONNECT_BUTTON}
           >
             {loading ? (
               <>

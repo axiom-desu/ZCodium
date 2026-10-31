@@ -50,6 +50,7 @@ export type {
   DockerConnectOptions,
   RemoteTarget,
   SSHConnectOptions,
+  ServerConnectOptions,
   WSLConnectOptions,
 } from "./remoteTarget.js";
 export type { RemoteWorkspaceConnectTrigger } from "./remoteTarget.js";
@@ -99,9 +100,14 @@ export * from "./zcode-session-visible-content.js";
 export * from "./official-mcp-tool-error.js";
 export * from "./conversation-message-projection-policy.js";
 export * from "./conversation-share.js";
+export * from "./conversation-share-content.js";
+export * from "./conversation-share-preview.js";
+export * from "./conversation-share-artifact.js";
+export * from "./bounded-response-body.js";
 export * from "./conversation-archive.js";
 export * from "./webRemoteControl/index.js";
 export * from "./conversation-preview-artifacts.js";
+export * from "./conversation-share-tool-presentation.js";
 export * from "./zcode-session-task-status.js";
 export * from "./zcode-tool-projection-memory.js";
 export * from "./zcode-slash-command-help.js";
@@ -116,6 +122,8 @@ export * from "./dynamic-workflow-feature.js";
 export * from "./markdown-artifact-images.js";
 export * from "./serviceAuthority.js";
 export * from "./server-remote.js";
+export * from "./source-server/index.js";
+export * from "./remoteAssetInstallMode.js";
 
 export interface ICredentialStore {
   get(key: string): Promise<string | null>;

@@ -89,5 +89,14 @@ export function normalizeSettingsPatch(patch: Partial<AppSettings>): Partial<App
       trimmedProviderFamilyDomain.length > 0 ? normalizedPatch.providerFamilyDomain : undefined;
   }
 
+  if (
+    "dynamicWorkflowMode" in normalizedPatch &&
+    (normalizedPatch.dynamicWorkflowMode as string | undefined) === ""
+  ) {
+    // docs/dynamic-workflow/launch.md「The user's choice」：选择「跟随服务端默认」等于删除选择，
+    // 安装才能继续跟随服务端翻转。RPC 会吞掉 undefined，这里把空串哨兵归一成删除。
+    normalizedPatch.dynamicWorkflowMode = undefined;
+  }
+
   return normalizedPatch;
 }

@@ -5,13 +5,15 @@ import type { PluginLoadOutcome } from "@zcode/contracts";
 import { DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS } from "./app/official-plugin-definitions.js";
 import { resolvePluginContext } from "./plugin-context.js";
 
-export function resolveZCodePlugins(options: ResolveZCodePluginsOptions = {}): PluginLoadOutcome {
+export async function resolveZCodePlugins(
+  options: ResolveZCodePluginsOptions = {},
+): Promise<PluginLoadOutcome> {
   const { configResult, pluginStorageRoot, workingDirectory } = resolvePluginContext(options);
 
   return discoverNodePluginsSync({
     config: configResult.config.plugins,
     env: options.env ?? process.env,
-    officialPluginRoots: resolveOfficialPluginRoots({
+    officialPluginRoots: await resolveOfficialPluginRoots({
       extraRoots: options.officialPluginRoots,
       // cache 锁冲突已从 fatal 改为 degraded，普通插件入口也必须保留诊断日志。
       logger: options.logger,

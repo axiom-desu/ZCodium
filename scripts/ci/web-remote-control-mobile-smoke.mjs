@@ -14,7 +14,7 @@ const mobileDir = resolve(temp, "mobile");
 const endpointBundle = resolve(temp, "endpoint.mjs");
 const endpointSource = resolve(root, "packages/desktop/src/main/webRemoteControl/lanEndpoint.ts");
 const originalMobileDir = process.env.ZCODE_WEB_REMOTE_MOBILE_DIR;
-let browser;
+let context;
 let endpoint;
 try {
   const browserBundle = await build({
@@ -93,13 +93,15 @@ try {
     },
   );
   const info = await endpoint.start();
-  browser = await chromium.launch({
+  const profileDir = resolve(temp, "browser-profile");
+  await mkdir(profileDir, { recursive: true });
+  context = await chromium.launchPersistentContext(profileDir, {
     channel: "chromium",
     headless: true,
     executablePath: process.env.ZCODE_TEST_CHROMIUM_EXECUTABLE || undefined,
     args: ["--no-proxy-server", "--host-resolver-rules=MAP mobile.fixture.test 127.0.0.1"],
+    ...devicesForMobile(),
   });
-  const context = await browser.newContext({ ...devicesForMobile() });
   await context.addInitScript(() => {
     window.__mobileWsCount = 0;
     const NativeWebSocket = window.WebSocket;
@@ -115,6 +117,13 @@ try {
   const pageErrors = [];
   context.on("page", (page) => page.on("pageerror", (error) => pageErrors.push(error)));
   const first = await context.newPage();
+  const externalRequests = [];
+  context.on("request", (request) => {
+    const host = new URL(request.url()).hostname;
+    if (!["127.0.0.1", "localhost", "mobile.fixture.test"].includes(host)) {
+      externalRequests.push(request.url());
+    }
+  });
   await first.goto(url);
   assert.deepEqual(
     await first.evaluate(() => ({ secure: isSecureContext, subtle: Boolean(crypto.subtle) })),
@@ -122,6 +131,21 @@ try {
   );
   await first.getByText("已连接到当前桌面窗口").waitFor();
   await first.getByText("1 个工作区 · 0 个任务").waitFor();
+  // known-device 只展示 pairing URL 的公开 name；同时确认临时 profile 没有落 passHash。
+  await first.getByTestId("mobile-known-device-name").getByText("smoke").waitFor();
+  const persistedDisplay = await first.evaluate(() => {
+    const entries = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key) entries.push([key, localStorage.getItem(key)]);
+    }
+    return JSON.stringify(entries);
+  });
+  assert.match(persistedDisplay, /smoke/u);
+  assert.ok(
+    !persistedDisplay.includes(passHash),
+    "known-device display cache must never persist the pairing secret",
+  );
   assert.ok(
     endpointEvents.includes("bootstrap-request"),
     "real mobile client must request bootstrap",
@@ -191,13 +215,14 @@ try {
     [],
     "mobile pages must not emit uncaught browser errors",
   );
+  assert.deepEqual(externalRequests, [], "mobile smoke must not request external network");
   console.log(
     "PASS real Chromium mobile entry + LAN endpoint: insecure-context HMAC pairing/bootstrap; bad hash terminal/no reconnect; second page kicks first; offline close auto-reconnect",
   );
   console.log("Rerun: node scripts/ci/web-remote-control-mobile-smoke.mjs");
 } finally {
   try {
-    await browser?.close();
+    await context?.close();
   } finally {
     try {
       await endpoint?.stop();

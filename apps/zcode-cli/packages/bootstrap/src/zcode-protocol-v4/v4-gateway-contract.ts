@@ -97,6 +97,7 @@ export interface V4GatewayHost {
     sessionId: string,
     resumeThoughtLevel?: string,
     workspace?: ZCodeWorkspaceRef,
+    additionalDirectories?: string[],
   ): Promise<ColdSessionResumeOutcome>;
   /**
    * 下行物理帧出口（宿主负责投递：stdio notification / MessagePort / ws）。
@@ -111,11 +112,23 @@ export interface V4GatewayHost {
   emitLocalTtftFacts?(facts: import("@zcode/shared").LocalTtftFacts): void;
   /** 当前进程 live request_access 权限事实；不缓存、不进入 topic replay。 */
   emitCuaPermissionObservation?(observation: CuaPermissionObservation): void;
+  /** 成功 UI 工具结果的窗口副作用；与 conversation 订阅、历史 hydration 无关。 */
+  emitPluginUiToolResult?(
+    result: import("@zcode/shared/mcp-apps").PluginUiToolResultNotification,
+  ): void;
   /**
    * sessions-index：会话 → 所属 workspaceId（列表 topic 的分桶键）。
    * 未实现（旧宿主）→ sessions-index 路径整体不激活（no-op），不影响 conversation。
    */
   getSessionWorkspaceId?(sessionId: string): string | null;
+  /**
+   * sessions-index 事实只读查询：按明确 ID 读 CLI 持久 store；不创建/恢复运行实例。
+   * snapshot 缺席不是删除，只有这里返回 deleted=true 才是删除事实。
+   */
+  reconcileSessions?(params: {
+    workspaceId: string;
+    sessionIds: string[];
+  }): Promise<import("@zcode/shared/zcode-protocol-v4").SessionsIndexReconcileResult>;
   /** sessions-index：会话的列表用元信息（createdAt/父会话/最后活动时刻）。 */
   getSessionIndexMeta?(sessionId: string): {
     createdAt: number;

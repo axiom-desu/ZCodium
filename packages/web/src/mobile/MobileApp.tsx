@@ -14,7 +14,11 @@ import {
   initialConversationState,
   type ConversationScope,
 } from "./conversationReducer.js";
+// 手机首页目录 hook 走 @zcode/ui 公开子入口；不再跨包深引 ui/src 文件路径。
+import { useMobileProjectDirectory } from "@zcode/ui/mobile-project-directory";
+import { Button } from "../../../ui/src/components/ui/button.js";
 import { TaskConversationLifecycle } from "./taskConversationLifecycle.js";
+import { findKnownDeviceDisplay, rememberKnownDeviceDisplay } from "./knownDeviceDisplayCache.js";
 import { logger } from "../../../ui/src/logger.js";
 import type {
   WebRemoteControlBootstrapResult,
@@ -50,6 +54,8 @@ export function MobileApp() {
     null,
   );
   const [paramsError, setParamsError] = useState<string | null>(null);
+  // 仅用于首页展示的桌面名；权威值来自本次 pairing URL，URL 缺省时才读有界显示缓存。
+  const [knownDeviceName, setKnownDeviceName] = useState<string | null>(null);
   const clientRef = useRef<MobileRemoteControlClient | null>(null);
   const [connectionSnapshot, setConnectionSnapshot] = useState<MobileConnectionSnapshot>({
     state: "connecting",
@@ -66,6 +72,12 @@ export function MobileApp() {
   );
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const directory = useMobileProjectDirectory(
+    clientRef.current,
+    bootstrap?.workspaces.find((w) => w.connectionState !== "disconnected")?.workspaceKey,
+    connection === "paired" && view.kind === "home",
+    bootstrap ?? undefined,
+  );
   // 传输降级回调由「订阅 effect」注册：`onPayload` 在 client 构造时绑定，
   // 之后通过 ref 把 bridge-degraded 路由到当前 task 的完整桥恢复。
   const onTransportDegradedRef = useRef<() => void>(() => {});
@@ -77,7 +89,17 @@ export function MobileApp() {
 
   useEffect(() => {
     try {
-      setParams(readPairingParamsFromLocation());
+      const parsed = readPairingParamsFromLocation();
+      const pairingName = parsed.deviceName?.trim() || null;
+      setParams(parsed);
+      setKnownDeviceName(pairingName ?? findKnownDeviceDisplay(parsed.deviceMid)?.name ?? null);
+      if (parsed.deviceMid && pairingName) {
+        rememberKnownDeviceDisplay({
+          deviceMid: parsed.deviceMid,
+          name: pairingName,
+          appVersion: parsed.appVersion,
+        });
+      }
     } catch (error) {
       setParamsError(describeError(error));
     }
@@ -290,6 +312,11 @@ export function MobileApp() {
     >
       <section className="space-y-1">
         <h1 className="text-ui-lg font-medium text-foreground">ZCode 远程控制</h1>
+        {knownDeviceName ? (
+          <p data-testid="mobile-known-device-name" className="text-ui-base text-foreground-subtle">
+            桌面设备：{knownDeviceName}
+          </p>
+        ) : null}
         <p className="text-ui-base/relaxed text-foreground-subtle">
           本次连接可以查看当前设备上已打开的项目、任务和会话；二维码失效后需要回到桌面端重新连接。
         </p>
@@ -308,6 +335,68 @@ export function MobileApp() {
           {bootstrap?.workspaces.length ?? 0} 个工作区 · {bootstrap?.tasks.length ?? 0} 个任务
         </span>
       </section>
+      {directory.roots ? (
+        <section aria-label="项目目录 / Project directory" className="space-y-2">
+          <h2 className="text-ui-base font-medium">项目目录 / Project directory</h2>
+          <ul className="space-y-2">
+            {directory.roots.map((root) => {
+              const workspace = bootstrap?.workspaces.find(
+                (w) =>
+                  w.workspacePath === root.rootIdentity.rootPath &&
+                  w.workspaceIdentity === root.workspaceIdentity &&
+                  w.remoteSessionId === root.remoteSessionId &&
+                  w.connectionState !== "disconnected",
+              );
+              const enabled = root.enabled && Boolean(workspace);
+              return (
+                <li
+                  key={JSON.stringify(root.rootIdentity)}
+                  className="rounded-xl border border-border bg-card p-3"
+                >
+                  <p className="text-ui-base">{root.projectName}</p>
+                  <p className="break-all font-mono text-ui-sm text-foreground-subtle">
+                    {root.rootIdentity.hostId} · {root.rootIdentity.rootPath}
+                  </p>
+                  <Button
+                    variant="outline"
+                    disabled={!enabled || directory.pending}
+                    onClick={() => {
+                      if (!enabled || !workspace) return;
+                      void directory.create(root).then((task) => {
+                        if (!task) return;
+                        setView({
+                          kind: "task",
+                          task: {
+                            workspaceKey: workspace.workspaceKey,
+                            taskId: task.taskId,
+                            title: task.title,
+                            remoteSessionId: root.remoteSessionId,
+                          },
+                        });
+                        void refreshBootstrap().catch((error) =>
+                          reportError("[mobile] 刷新工作区失败", error),
+                        );
+                      });
+                    }}
+                  >
+                    新建任务 / New task
+                  </Button>
+                  {!enabled ? (
+                    <p className="text-ui-sm text-foreground-subtle">
+                      请在桌面端打开 / Open on desktop
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {directory.error ? (
+            <p role="alert" className="text-ui-sm text-destructive">
+              {directory.error}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
       <section className="flex flex-wrap gap-2">
         <button
           type="button"

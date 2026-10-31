@@ -6,13 +6,7 @@ import { Button } from "./components/ui/button.js";
 import { Input } from "./components/ui/input.js";
 import { useZCodeIntl } from "./i18n/IntlProvider.js";
 import { logger } from "./logger.js";
-
-function createDirectoryBrowserReadParams(
-  path: string,
-  showHiddenDirectories: boolean,
-): { path: string; includeHidden?: boolean } {
-  return showHiddenDirectories ? { path, includeHidden: true } : { path };
-}
+import { readProjectDirectoryEntries } from "./lib/projectDirectoryRead.js";
 
 function filterDirectoryBrowserEntries(entries: FileEntry[]): FileEntry[] {
   return entries.filter((e) => e.type === "directory");
@@ -92,13 +86,14 @@ export function DirectoryBrowser({
     setLoading(true);
     setError("");
     try {
-      const result = await services.fileService.readdir(
-        createDirectoryBrowserReadParams(path, nextShowHiddenDirectories),
-      );
+      const entries = await readProjectDirectoryEntries(services, {
+        path,
+        ...(nextShowHiddenDirectories ? { includeHidden: true } : {}),
+      });
       if (!requestGuardRef.current.isCurrent(requestId)) {
         return;
       }
-      const dirs = filterDirectoryBrowserEntries(result);
+      const dirs = filterDirectoryBrowserEntries(entries);
       setEntries(dirs);
       setCurrentPath(path);
       setInputPath(path);
