@@ -5,6 +5,8 @@ mod fixture;
 mod goal;
 #[path = "tool_search_e2e/harness.rs"]
 mod harness;
+#[path = "tool_input_guidance/e2e.rs"]
+mod input_guidance;
 
 use fixture::{Fixture, text_reply, tool_reply, tools};
 use serde_json::{Value, json};

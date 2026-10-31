@@ -191,6 +191,7 @@ impl Engine {
         session.mode = state.mode;
         session.plan_enabled = state.plan_enabled;
         session.runtime = RuntimeOptions {
+            additional_directories: crate::domain::session_runtime::directories(p),
             persistence: Some(if p["persistence"] == "deferred" {
                 Persistence::Deferred
             } else {
@@ -241,6 +242,7 @@ impl Engine {
         let tool_search_mode = self.session_tool_search_mode(&p);
         let s = self.sessions.get_mut(&id).unwrap();
         s.runtime = RuntimeOptions {
+            additional_directories: crate::domain::session_runtime::directories(&p),
             persistence: Some(Persistence::Immediate),
             tools: tool_filter(&p),
             workspace: Some(p.get("workspace").cloned().unwrap_or(rebuilt)),

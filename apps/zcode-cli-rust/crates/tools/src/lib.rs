@@ -17,6 +17,7 @@ mod git_safety;
 mod hook_process;
 mod mcp_config;
 mod mcp_connection;
+mod mcp_error;
 mod mcp_hub;
 mod mcp_official;
 mod mcp_official_http;
@@ -39,6 +40,8 @@ mod read_state;
 mod result_file;
 mod shell_background;
 mod tool_args;
+#[cfg(test)]
+mod tool_args_tests;
 mod tool_definitions;
 mod tool_edit;
 mod tool_files;

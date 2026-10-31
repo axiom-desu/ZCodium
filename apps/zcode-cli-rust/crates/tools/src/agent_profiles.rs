@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 pub(super) async fn discover(
     cwd: &Path,
     config: &serde_json::Value,
+    additional_directories: &[String],
     cancel: &CancellationToken,
 ) -> Result<Vec<Profile>> {
     let root = std::env::var("ZCODE_STORAGE_DIR")
@@ -49,6 +50,29 @@ pub(super) async fn discover(
                 if !disabled {
                     result.insert(profile.name.clone(), profile);
                 }
+            }
+        }
+    }
+    // 附加目录按 project scope 发现，`<目录>/<name>` 防同名覆盖；不扩权限。
+    let mut seen_directories = std::collections::BTreeSet::new();
+    for directory in additional_directories {
+        let directory = PathBuf::from(directory);
+        if directory == cwd || !seen_directories.insert(directory.clone()) {
+            continue;
+        }
+        let namespace = directory
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let dir = directory
+            .join(crate::domain::path_names::ZCODE_WORKSPACE_CONFIG_DIR_NAME)
+            .join("agents");
+        for path in markdown(&dir, cancel).await? {
+            if let Some(mut profile) = read(&path, "project", cancel).await? {
+                if !namespace.is_empty() {
+                    profile.name = format!("{namespace}/{}", profile.name);
+                }
+                result.insert(profile.name.clone(), profile);
             }
         }
     }

@@ -1,3 +1,4 @@
+use crate::input_validation::InputValidationError;
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -32,17 +33,17 @@ struct Write {
 }
 pub fn parse(name: &str, args: Value) -> Result<Option<Vec<TodoItem>>> {
     if name == "TodoRead" {
-        serde_json::from_value::<Read>(args)?;
+        serde_json::from_value::<Read>(args).map_err(InputValidationError::caused_by)?;
         return Ok(None);
     }
-    let Write { todos } = serde_json::from_value(args)?;
+    let Write { todos } = serde_json::from_value(args).map_err(InputValidationError::caused_by)?;
     validate(&todos)?;
     Ok(Some(todos))
 }
 pub fn validate(todos: &[TodoItem]) -> Result<()> {
     ensure!(
         todos.iter().all(|t| !t.content.is_empty()),
-        "Todo content must not be empty"
+        InputValidationError::new("Todo content must not be empty")
     );
     Ok(())
 }

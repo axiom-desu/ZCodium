@@ -69,6 +69,7 @@ impl Engine {
         }
         session.updated_at = now;
         session.runtime = RuntimeOptions {
+            additional_directories: crate::domain::session_runtime::directories(p),
             persistence: Some(Persistence::Immediate),
             tools: super::legacy_session::tool_filter(p),
             title_generation_disabled: p["titleGenerationEnabled"] == false,

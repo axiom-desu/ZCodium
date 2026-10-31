@@ -11,6 +11,14 @@ impl Engine {
         }
         let config = self.select(&c.payload["config"], None)?;
         self.validate_selection(&c.payload["config"])?;
+        // Host 项目预留的稳定 ID：只拒绝覆盖已有/软删/活跃会话，不接管既有 runtime。
+        let explicit_id = c.payload["sessionId"].as_str().map(str::to_owned);
+        if let Some(id) = &explicit_id
+            && (self.sessions.contains_key(id) || self.store.session_exists(id).await?)
+        {
+            bail!("sessionId already exists");
+        }
+        let additional_directories = crate::domain::session_runtime::directories(&c.payload);
         let mut first = c.payload.get("firstInput").cloned();
         if let Some(input) = &first {
             self.validate_input(input)?;
@@ -21,7 +29,7 @@ impl Engine {
             self.select(input, Some(config.clone()))?;
         }
         let mut session = Session::new(
-            self.new_session_id(),
+            explicit_id.unwrap_or_else(|| self.new_session_id()),
             self.workspace.clone(),
             config.provider_id.clone(),
             config.model_id.clone(),
@@ -35,6 +43,8 @@ impl Engine {
         let state = self.initial_execution_state(&c.payload["config"]);
         session.mode = state.mode;
         session.plan_enabled = state.plan_enabled;
+        // 本次运行冻结；cwd/workspace identity 不变，也不扩权。
+        session.runtime.additional_directories = additional_directories;
         if let Some(mode) = c.payload["config"]["followupMode"].as_str() {
             session.followup_mode = mode.into();
         }

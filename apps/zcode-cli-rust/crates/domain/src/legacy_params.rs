@@ -190,6 +190,7 @@ fn create_schema() -> &'static Schema {
     SCHEMA.get_or_init(|| {
         let mut fields = vec![
             optional("sessionId", non_empty()),
+            optional("additionalDirectories", strings()),
             required("workspace", workspace()),
             optional("parentSessionId", non_empty()),
             optional("mode", Schema::Enum(MODES)),
@@ -202,6 +203,10 @@ fn create_schema() -> &'static Schema {
         fields.push(optional("importedHistory", imported_history()));
         fields.push(optional("offPeakToolEnabled", Schema::Bool));
         fields.push(optional("dynamicWorkflowEnabled", Schema::Bool));
+        fields.push(optional(
+            "dynamicWorkflowMode",
+            Schema::Enum(&["disabled", "onDemand", "alwaysOn"]),
+        ));
         Schema::Object(fields)
     })
 }
@@ -211,12 +216,17 @@ fn resume_schema() -> &'static Schema {
     SCHEMA.get_or_init(|| {
         let mut fields = vec![
             required("sessionId", non_empty()),
+            optional("additionalDirectories", strings()),
             optional("workspace", workspace()),
             optional("thoughtLevel", non_empty()),
         ];
         fields.extend(tail());
         fields.push(optional("offPeakToolEnabled", Schema::Bool));
         fields.push(optional("dynamicWorkflowEnabled", Schema::Bool));
+        fields.push(optional(
+            "dynamicWorkflowMode",
+            Schema::Enum(&["disabled", "onDemand", "alwaysOn"]),
+        ));
         Schema::Object(fields)
     })
 }

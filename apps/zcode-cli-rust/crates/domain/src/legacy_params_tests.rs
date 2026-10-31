@@ -117,3 +117,23 @@ fn runtime_config_tool_search_mode_is_strict() {
     unknown["runtimeConfig"] = serde_json::json!({"toolSearch": {"mode": "off"}, "other": 1});
     assert!(create(&unknown).is_err());
 }
+
+/// launch.md「On demand: activation」：mode 与布尔同行进入 create / resume，旧 Host 可缺席。
+/// Rust strict validator 必须与 Node schema 一样接受三档、拒绝未知值。
+#[test]
+fn dynamic_workflow_mode_is_optional_and_strict() {
+    let base = serde_json::json!({
+        "workspace": {"workspacePath": "/w", "workspaceKey": "/w"}
+    });
+    for mode in ["disabled", "onDemand", "alwaysOn"] {
+        let mut params = base.clone();
+        params["dynamicWorkflowEnabled"] = serde_json::json!(true);
+        params["dynamicWorkflowMode"] = serde_json::json!(mode);
+        assert_eq!(create(&params).unwrap()["dynamicWorkflowMode"], mode);
+        params["sessionId"] = serde_json::json!("s-1");
+        assert_eq!(resume(&params).unwrap()["dynamicWorkflowMode"], mode);
+    }
+    let mut invalid = base;
+    invalid["dynamicWorkflowMode"] = serde_json::json!("sometimes");
+    assert!(create(&invalid).is_err());
+}

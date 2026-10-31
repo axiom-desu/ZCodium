@@ -46,7 +46,10 @@ pub(super) async fn inject(
             Some((s.qualified_name(), plugin, root))
         })
         .collect();
-    let profiles = tools.agent_profiles(cancel).await.unwrap_or_default();
+    let profiles = tools
+        .agent_profiles(cancel, &history.additional_directories)
+        .await
+        .unwrap_or_default();
     let live = Live {
         skills: plugin_skills
             .iter()

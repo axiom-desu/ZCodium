@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
         std::env::vars().collect(),
     );
     let start = Instant::now();
-    let _ = tools.discover_skills(&cancel).await?;
+    let _ = tools.discover_skills(&cancel, &[]).await?;
     stage("skills", start);
     let start = Instant::now();
     let _ = context.snapshot(&cancel).await?;
@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
     let _ = tools.scoped_definitions("profile", &cancel).await?;
     stage("tools.definitions", start);
     let start = Instant::now();
-    let _ = tools.agent_profiles(&cancel).await?;
+    let _ = tools.agent_profiles(&cancel, &[]).await?;
     stage("profiles", start);
     let start = Instant::now();
     let _ = context.instructions(&cancel).await?;

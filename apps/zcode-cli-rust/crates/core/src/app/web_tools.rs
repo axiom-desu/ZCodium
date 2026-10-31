@@ -1,6 +1,8 @@
 //! WebFetch as a core built-in: the page comes from the tool port, the answer
 //! from the run's model (Node passes `context.model`). Spec rust-m5-tools §3.
-use crate::contract::{EventSink, ModelPort, ToolError, ToolOutput, ToolPort};
+use crate::contract::{
+    EventSink, InputValidationError, ModelPort, ToolError, ToolOutput, ToolPort,
+};
 use crate::domain::web::{self, FetchRequest, Fetched, Page};
 use crate::domain::{js_string, permission::webfetch_preapproved};
 use anyhow::{Result, bail};
@@ -12,14 +14,16 @@ const INVALID_URL: &str = r#"[ { "validation": "url", "code": "invalid_string", 
 
 /// Schema check (Node InputValidationError), then zod `.url()` in the handler.
 fn input(args: &Value) -> Result<(&str, &str)> {
-    web::fetch_validation(args).map_err(ToolError::Rendered)?;
+    web::fetch_validation(args)
+        .map_err(ToolError::Rendered)
+        .map_err(InputValidationError::caused_by)?;
     let (url, prompt) = (
         args["url"].as_str().unwrap(),
         args["prompt"].as_str().unwrap(),
     );
     if !web::url::zod_url(url) {
         // 处理器内的 zod 解析失败：模型读到折叠空白后的 ZodError JSON。
-        return Err(anyhow::Error::msg(INVALID_URL));
+        return Err(InputValidationError::new(INVALID_URL).into());
     }
     Ok((url, prompt))
 }
@@ -194,7 +198,9 @@ pub(super) async fn web_search(
     sink: &EventSink,
     cancel: &CancellationToken,
 ) -> Result<ToolOutput> {
-    web::search::validate(args).map_err(ToolError::Rendered)?;
+    web::search::validate(args)
+        .map_err(ToolError::Rendered)
+        .map_err(InputValidationError::caused_by)?;
     if !model.supports_native_web_search() {
         bail!(web::search::UNSUPPORTED);
     }

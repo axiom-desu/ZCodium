@@ -1,9 +1,8 @@
-use super::{
-    tool_files::{FileState, FileTools},
-    tool_shell::ShellTasks,
-};
+use super::{tool_files::FileState, tool_shell::ShellTasks};
 use crate::contract::{EventSink, ToolOutput, ToolPort};
-use anyhow::{Result, bail};
+use anyhow::Result;
+#[path = "tools_dispatch.rs"]
+mod dispatch;
 use serde_json::Value;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
@@ -78,68 +77,6 @@ impl WorkspaceTools {
     ) -> Result<ToolOutput> {
         self.call_inner(session, name, args, None, cancel).await
     }
-    async fn call_inner(
-        &self,
-        session: &str,
-        name: &str,
-        args: &Value,
-        sink: Option<&EventSink>,
-        cancel: &CancellationToken,
-    ) -> Result<ToolOutput> {
-        // Bash 的取消由 shell 层分类为 Node `createStoppedResult` 的 cancelled 结果。
-        if name != "Bash" {
-            check_cancel(cancel)?;
-        }
-        if !args.is_object() {
-            bail!("Tool arguments must be an object");
-        }
-        let artifacts = self.session_artifacts(session);
-        match name {
-            name if name.starts_with("mcp__") => self.mcp.call(session, name, args, cancel).await,
-            "Read" | "Write" | "Edit" => {
-                let state = self
-                    .reads
-                    .lock()
-                    .await
-                    .entry(session.to_owned())
-                    .or_default()
-                    .clone();
-                let files = FileTools {
-                    sink,
-                    checkpoint_root: &self.artifacts,
-                    cwd: &self.cwd,
-                    artifacts: &artifacts,
-                    env: &self.env,
-                    state: &state,
-                    writes: &self.writes,
-                };
-                files.call(name, args, cancel).await
-            }
-            "Glob" | "Grep" => super::tool_search::search(&self.cwd, name, args, cancel).await,
-            // Kept for existing native transcripts, but no longer advertised to the model.
-            "List" => {
-                let path = resolve(&self.cwd, string(args, "path")?)?;
-                let mut dir = tokio::fs::read_dir(path).await?;
-                let mut entries = vec![];
-                while let Some(entry) = dir.next_entry().await? {
-                    check_cancel(cancel)?;
-                    entries.push(entry.file_name().to_string_lossy().into_owned());
-                    if entries.len() >= 1000 {
-                        break;
-                    }
-                }
-                entries.sort();
-                Ok(ToolOutput::text(entries.join("\n")))
-            }
-            "Bash" | "TaskOutput" | "TaskStop" => {
-                self.shell
-                    .call((&self.cwd, &artifacts), session, name, args, sink, cancel)
-                    .await
-            }
-            // Node：未注册的工具以 `Tool not found: {name}` 失败。
-            _ => bail!("Tool not found: {name}"),
-        }
-    }
 }
 #[async_trait::async_trait]
 impl ToolPort for WorkspaceTools {
@@ -203,9 +140,11 @@ impl ToolPort for WorkspaceTools {
     async fn agent_profiles(
         &self,
         cancel: &CancellationToken,
+        additional_directories: &[String],
     ) -> Result<Vec<crate::domain::subagent::Profile>> {
         let config = self.config.load().await?;
-        super::agent_profiles::discover(&self.cwd, &config.config, cancel).await
+        super::agent_profiles::discover(&self.cwd, &config.config, additional_directories, cancel)
+            .await
     }
     async fn inherit_session(&self, parent: &str, child: &str) -> Result<()> {
         self.mcp.inherit(parent, child);
@@ -294,9 +233,11 @@ impl ToolPort for WorkspaceTools {
     async fn discover_skills(
         &self,
         cancel: &CancellationToken,
+        additional_directories: &[String],
     ) -> Result<crate::domain::skills::SkillCatalog> {
         let config = self.config.load().await?;
-        super::tool_skills::discover(&self.cwd, &config.config, cancel).await
+        super::tool_skills::discover(&self.cwd, &config.config, additional_directories, cancel)
+            .await
     }
     async fn load_skill(
         &self,

@@ -67,6 +67,7 @@ pub use crate::contract_tool_error::{ToolError, render_failure};
 pub use crate::contract_tools::{
     HookProcess, ToolOutput, ToolPermission, ToolPort, TrustLoad, TrustStorePort,
 };
+pub use zcode_cli_domain::input_validation::InputValidationError;
 #[async_trait]
 pub trait ModelPort: Send + Sync {
     fn identity(&self) -> Option<ModelIdentity> {

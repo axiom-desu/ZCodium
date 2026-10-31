@@ -257,3 +257,127 @@ mod branch;
 mod compaction;
 #[path = "node_storage/subagents.rs"]
 mod subagents;
+
+#[tokio::test]
+async fn reserved_session_id_freezes_additional_directories_and_reconciles_after_delete() {
+    let mut h = harness::start(None, None).await;
+    let workspace = h.workspace.clone();
+    // Host 预留 ID + prepareSession 冻结目录同批到达。
+    let ack = h
+        .command(
+            1,
+            json!({"commandId":"create-reserved","clientId":"cli","sessionId":null,
+            "type":"createSession","issuedAt":1,"payload":{
+                "sessionId":"sess_reserved",
+                "additionalDirectories":["/shared"],
+                "workspaceId":workspace,
+                "config":{"mode":"yolo"},
+                "firstInput":{"text":"Fix it"}}}),
+        )
+        .await;
+    assert_eq!(ack["result"]["sessionId"], "sess_reserved");
+    let first = h.requests.recv().await.unwrap();
+    // 模型可见环境必须带上本次冻结的附加目录。
+    assert!(first.iter().any(
+        |message| message["content"].as_str().is_some_and(|content| {
+            content.contains("Additional directories") && content.contains("/shared")
+        })
+    ));
+    h.settled("sess_reserved", 1).await;
+
+    let reconcile = h
+        .request(
+            2,
+            "v4/sessionsIndex/reconcile",
+            json!({"workspaceId":workspace,"sessionIds":["sess_reserved","missing"]}),
+        )
+        .await;
+    assert_eq!(reconcile["sessions"][0]["exists"], true);
+    assert_eq!(reconcile["sessions"][0]["deleted"], false);
+    assert_eq!(
+        reconcile["sessions"][1],
+        json!({"sessionId":"missing","exists":false,"deleted":false})
+    );
+    let foreign = h
+        .request(
+            3,
+            "v4/sessionsIndex/reconcile",
+            json!({"workspaceId":"/elsewhere","sessionIds":["sess_reserved"]}),
+        )
+        .await;
+    assert_eq!(foreign["sessions"][0]["exists"], false);
+
+    h.command(
+        4,
+        json!({"commandId":"delete-reserved","clientId":"cli","sessionId":"sess_reserved",
+        "type":"deleteSession","issuedAt":1,"payload":{}}),
+    )
+    .await;
+    let deleted = h
+        .request(
+            5,
+            "v4/sessionsIndex/reconcile",
+            json!({"workspaceId":workspace,"sessionIds":["sess_reserved"]}),
+        )
+        .await;
+    assert_eq!(deleted["sessions"][0]["deleted"], true);
+    assert_eq!(deleted["sessions"][0]["exists"], true);
+
+    let mut restarted = harness::restart(&h).await;
+    let cold = restarted
+        .request(
+            1,
+            "v4/sessionsIndex/reconcile",
+            json!({"workspaceId":workspace,"sessionIds":["sess_reserved"]}),
+        )
+        .await;
+    assert_eq!(cold["sessions"][0]["deleted"], true);
+    assert_eq!(cold["sessions"][0]["exists"], true);
+}
+
+#[tokio::test]
+async fn cold_resume_freezes_subscribe_directories_and_hot_resume_ignores_late_ones() {
+    let mut h = harness::start(None, None).await;
+    let workspace = h.workspace.clone();
+    let ack = h
+        .command(
+            1,
+            json!({"commandId":"create-dirs","clientId":"cli","sessionId":null,
+            "type":"createSession","issuedAt":1,"payload":{
+                "sessionId":"sess_dirs","additionalDirectories":["/first"],
+                "workspaceId":workspace.clone(),"config":{"mode":"yolo"},
+                "firstInput":{"text":"Fix it"}}}),
+        )
+        .await;
+    assert_eq!(ack["result"]["sessionId"], "sess_dirs");
+    h.settled("sess_dirs", 1).await;
+    let _first = h.requests.recv().await.unwrap();
+
+    let mut cold = harness::restart(&h).await;
+    cold.request(
+        1,
+        "v4/conversation/subscribe",
+        json!({"topic":"conversation/sess_dirs","connectionId":"c1",
+            "clientMode":"desktop-continuous","additionalDirectories":["/cold"]}),
+    )
+    .await;
+    cold.send_text(2, "sess_dirs", "after-cold", "Next").await;
+    let cold_request = cold.requests.recv().await.unwrap();
+    let rendered = serde_json::to_string(&cold_request).unwrap();
+    assert!(rendered.contains("/cold"), "{rendered}");
+    assert!(!rendered.contains("/first"), "{rendered}");
+
+    // 热会话：后到的订阅目录不得反向改既有 runtime 合同。
+    cold.request(
+        3,
+        "v4/conversation/subscribe",
+        json!({"topic":"conversation/sess_dirs","connectionId":"c2",
+            "clientMode":"desktop-continuous","additionalDirectories":["/late"]}),
+    )
+    .await;
+    cold.send_text(4, "sess_dirs", "after-hot", "Next").await;
+    let hot_request = cold.requests.recv().await.unwrap();
+    let rendered = serde_json::to_string(&hot_request).unwrap();
+    assert!(rendered.contains("/cold"), "{rendered}");
+    assert!(!rendered.contains("/late"), "{rendered}");
+}

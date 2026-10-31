@@ -16,6 +16,7 @@ pub mod goal_verdict;
 pub mod history;
 pub mod history_cold;
 pub mod hooks;
+pub mod input_validation;
 pub mod js_json;
 pub mod js_string;
 pub mod json_order;

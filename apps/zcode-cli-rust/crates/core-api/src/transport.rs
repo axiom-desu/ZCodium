@@ -97,6 +97,7 @@ methods! {
     SessionGoal => "session/goal",
     SessionRead => "session/read",
     SessionList => "session/list",
+    SessionsIndexReconcile => "v4/sessionsIndex/reconcile",
     SessionSubagents => "session/subagents",
     SessionClose => "session/close",
     RuntimeCapabilities => "runtime/capabilities",

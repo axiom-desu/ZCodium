@@ -139,6 +139,15 @@ impl Engine {
     }
 
     pub(super) async fn ensure_session(&mut self, id: &str) -> Result<()> {
+        self.ensure_session_with_dirs(id, None).await
+    }
+
+    /// 冷恢复入口可携带本次冻结的附加目录；热会话保持原 runtime 合同不变。
+    pub(super) async fn ensure_session_with_dirs(
+        &mut self,
+        id: &str,
+        additional_directories: Option<&[String]>,
+    ) -> Result<()> {
         if self.sessions.contains_key(id) {
             self.touch_session(id);
             return Ok(());
@@ -154,6 +163,9 @@ impl Engine {
         );
         session.validate_history()?;
         session.recover(self.clock.id(), self.clock.now());
+        if let Some(directories) = additional_directories {
+            session.runtime.additional_directories = directories.to_vec();
+        }
         super::file_changes::import(&mut session, self.tools.as_ref()).await;
         self.seed_context_window(&mut session);
         super::file_changes::hydrate(&mut session, self.tools.as_ref(), None).await?;

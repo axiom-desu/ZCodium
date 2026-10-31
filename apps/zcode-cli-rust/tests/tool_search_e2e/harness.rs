@@ -36,6 +36,15 @@ impl Harness {
         root: PathBuf,
         dir: Option<Arc<tempfile::TempDir>>,
     ) -> Self {
+        Self::start_with_hooks(fixture, root, dir, Value::Null).await
+    }
+
+    pub async fn start_with_hooks(
+        fixture: Arc<Fixture>,
+        root: PathBuf,
+        dir: Option<Arc<tempfile::TempDir>>,
+        hooks: Value,
+    ) -> Self {
         let workspace_path = root.join("w");
         std::fs::create_dir_all(&workspace_path).unwrap();
         std::fs::create_dir_all(root.join("home")).unwrap();
@@ -90,7 +99,8 @@ impl Harness {
             .await
             .unwrap()
             .with_tool_search_override(None)
-            .with_title_generation(false);
+            .with_title_generation(false)
+            .with_hooks(&hooks, "fixture-user-config.json");
         let (input, rx) = mpsc::channel(64);
         let (out, mut out_rx) = mpsc::channel(256);
         let (frames, output) = mpsc::channel(256);

@@ -22,6 +22,8 @@ pub(super) struct SearchContext {
     pub enabled: bool,
     pub mode: ResolvedMode,
     pub catalog: Vec<Candidate>,
+    pub discovered: BTreeSet<String>,
+    pub definitions: Vec<Value>,
 }
 
 impl SearchContext {
@@ -158,6 +160,8 @@ pub(super) fn plan(
         enabled: exposure.enabled,
         mode: exposure.mode,
         catalog: exposure.catalog.clone(),
+        discovered: exposure.discovered.clone(),
+        definitions: definitions.to_vec(),
     });
     Ok(Plan {
         tools: exposure.tools,

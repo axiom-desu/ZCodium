@@ -52,23 +52,13 @@ pub(super) async fn run(
     // 与 Node 一致：禁用集合只从提供给模型的定义中移除；执行边界不据此拦截（D1）。
     super::tool_search::hide(&mut definitions, &history.tool_disallowlist);
     let profiles = if definitions.iter().any(|d| d["function"]["name"] == "Agent") {
-        tools.agent_profiles(cancel).await?
+        tools
+            .agent_profiles(cancel, &history.additional_directories)
+            .await?
     } else {
         vec![]
     };
-    if let Some(agent) = definitions
-        .iter_mut()
-        .find(|d| d["function"]["name"] == "Agent")
-    {
-        let descriptions = profiles
-            .iter()
-            .map(|p| format!("- {}: {}", p.name, p.description))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let base = agent["function"]["description"].as_str().unwrap_or("");
-        agent["function"]["description"] =
-            format!("{base}\n\nCurrent profile catalog (authoritative):\n{descriptions}").into();
-    }
+    super::subagent_tools::describe_catalog(&mut definitions, &profiles);
     super::plugin_reference::inject(tools, history, (&skills, &definitions), sink, cancel).await?;
     if let Some(instructions) = manual {
         super::manual_compact::run(

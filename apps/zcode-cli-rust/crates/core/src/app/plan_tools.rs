@@ -46,7 +46,7 @@ pub(super) async fn execute(
         transition(sink, call_id, true, cancel).await?;
         return Ok(ToolOutput::text(plan_mode::enter_result().into()));
     }
-    let plan = plan_mode::exit_plan(args).map_err(anyhow::Error::msg)?;
+    let plan = plan_mode::exit_plan(args)?;
     if permissions.is_some_and(|p| !p.borrow().state.plan_enabled) {
         bail!(plan_mode::NOT_IN_PLAN);
     }

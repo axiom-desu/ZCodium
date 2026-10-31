@@ -1,0 +1,558 @@
+{
+  "tools": {
+    "tools": [
+      {
+        "name": "open_document",
+        "description": "Open a .docx file from the workspace in the Documents viewer panel, which the user sees. Optionally jump to a location. Returns the document's outline and how to address locations in it. Use this when the user wants to view, review or discuss a Word file.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "Workspace-relative path of the file."
+            },
+            "at": {
+              "description": "Optional location to show, e.g. p:12.",
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "required": ["path"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "resourceUri": "ui://documents/panel.html",
+            "surface": "documents",
+            "visibility": ["model", "app"]
+          },
+          "openai/ui": {
+            "preferredModelDisplayMode": "fullscreen"
+          }
+        }
+      },
+      {
+        "name": "read_document",
+        "description": "Read the content of a document or of one location in it as text: Word paragraphs and tables (markdown). Each block is prefixed with its location so you can cite or show it. Long results are paged: call again with the returned cursor.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1200,
+              "description": "Document anchor: <workspace-relative path>#<location>, e.g. report.docx#p:12. Omit #<location> for the whole document."
+            },
+            "cursor": {
+              "description": "Cursor from a previous result to continue reading.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["anchor"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["model"]
+          }
+        }
+      },
+      {
+        "name": "search_document",
+        "description": "Find text in a document (case-insensitive). Returns matching locations as anchors with a snippet each; pass them to read_document or show_in_viewer.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "Workspace-relative path of the file."
+            },
+            "query": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "required": ["path", "query"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["model"]
+          }
+        }
+      },
+      {
+        "name": "show_in_viewer",
+        "description": "Point the user at specific places in a document: the Documents panel opens the document, scrolls to the first target and highlights all targets. Use it whenever your answer refers to a particular paragraph. All anchors must be in the same document. `quote` highlights that exact text inside the location (best for long paragraphs).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "targets": {
+              "minItems": 1,
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "anchor": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1200,
+                    "description": "Document anchor: <workspace-relative path>#<location>, e.g. report.docx#p:12. Omit #<location> for the whole document."
+                  },
+                  "quote": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": ["anchor"]
+              }
+            },
+            "note": {
+              "description": "Optional short caption shown in the dedicated Agent panel next to the highlight; manual document windows are not retargeted.",
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": ["targets"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "resourceUri": "ui://documents/panel.html",
+            "surface": "documents",
+            "visibility": ["model"]
+          },
+          "openai/ui": {
+            "preferredModelDisplayMode": "fullscreen"
+          }
+        }
+      },
+      {
+        "name": "get_view",
+        "description": "See what the user is looking at in the Documents panel: the open document, the visible location and the user's current selection with its text. Call this when the user says \"this\", \"here\" or \"the selected …\" about a document.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "viewId": {
+              "description": "Viewer ID from a previous ambiguous get_view result.",
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["model"]
+          }
+        }
+      },
+      {
+        "name": "begin_file_import",
+        "description": "Begin importing a file explicitly selected by the user into a workspace copy.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 104857600
+            }
+          },
+          "required": ["name", "size"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      },
+      {
+        "name": "write_file_import",
+        "description": "Append a selected file chunk at its expected offset.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "data": {
+              "type": "string",
+              "maxLength": 5592408,
+              "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+            }
+          },
+          "required": ["id", "offset", "data"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      },
+      {
+        "name": "finish_file_import",
+        "description": "Finish a selected file import and return the workspace copy path.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "required": ["id"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      },
+      {
+        "name": "cancel_file_import",
+        "description": "Remove an incomplete file import.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "required": ["id"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      },
+      {
+        "name": "list_documents",
+        "description": "List Word files in the workspace for the viewer's file picker.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      },
+      {
+        "name": "load_document",
+        "description": "Load a document for rendering in the viewer: returns its info and a handle to read the bytes.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            }
+          },
+          "required": ["path"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      },
+      {
+        "name": "check_document",
+        "description": "Return a document's current revision so the viewer can tell when the file changed on disk.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            }
+          },
+          "required": ["path"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      },
+      {
+        "name": "get_viewer",
+        "description": "Return the document the viewer should show (set by the agent or the user).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      },
+      {
+        "name": "report_view",
+        "description": "Record the user's current location and selection in the viewer.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "viewId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "selection": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    },
+                    "text": {
+                      "type": "string",
+                      "maxLength": 20000
+                    }
+                  },
+                  "required": ["at", "text"]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": ["path"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      },
+      {
+        "name": "release_view",
+        "description": "Release a viewer report when its page leaves.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "viewId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "required": ["viewId"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        },
+        "_meta": {
+          "ui": {
+            "visibility": ["app"]
+          }
+        }
+      }
+    ]
+  },
+  "open": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Opened docs/report.docx in the Documents panel.\nShowing: docs/report.docx#p:4.\n\ndocs/report.docx: Word document, 14 blocks, 36 KiB, revision 1249abfaddef4513.\nTitle: Quarterly Report\nOutline:\n- docs/report.docx#p:1  Quarterly Report\n  - docs/report.docx#p:3  Revenue\n  - docs/report.docx#p:5  Outlook\n  - docs/report.docx#p:12  Appendix\nLocations: p:N (paragraph), p:N-M, t:N (table), t:N/rRcC (table cell).\n\nUse read_document to read content; the user sees the rendered file in the panel."
+      }
+    ],
+    "structuredContent": {
+      "document": {
+        "path": "docs/report.docx",
+        "kind": "docx",
+        "title": "Quarterly Report",
+        "bytes": 37139,
+        "revision": "1249abfaddef4513",
+        "units": 14,
+        "outline": [
+          {
+            "at": "p:1",
+            "label": "Quarterly Report",
+            "level": 1
+          },
+          {
+            "at": "p:3",
+            "label": "Revenue",
+            "level": 2
+          },
+          {
+            "at": "p:5",
+            "label": "Outlook",
+            "level": 2
+          },
+          {
+            "at": "p:12",
+            "label": "Appendix",
+            "level": 2
+          }
+        ]
+      },
+      "reveal": {
+        "targets": [
+          {
+            "at": "p:4"
+          }
+        ],
+        "seq": 1
+      }
+    }
+  }
+}

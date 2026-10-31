@@ -8,6 +8,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 pub(super) struct RunContext {
+    /// 本次运行冻结的附加执行目录（Node session runtime config）。
+    pub additional_directories: Vec<String>,
     pub agent_profile: Option<crate::domain::subagent::Profile>,
     pub goal: Option<crate::domain::goal::Goal>,
     pub skills: Option<crate::domain::skills::SkillCatalog>,
@@ -69,6 +71,7 @@ impl RunContext {
         estimated: usize,
     ) -> Self {
         Self {
+            additional_directories: vec![],
             agent_profile: None,
             goal: None,
             skills: None,
@@ -275,6 +278,7 @@ pub(super) async fn step_prefix(
             .as_ref()
             .map(|id| (id.provider_id.as_str(), id.model_id.as_str())),
         context.desktop(),
+        &history.additional_directories,
     );
     if let Some(listing) = skills.listing() {
         chars.skills = crate::domain::usage::js_len(&listing);

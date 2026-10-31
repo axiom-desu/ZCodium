@@ -304,23 +304,28 @@ impl Connection {
                 Err(anyhow::anyhow!("Cancelled"))
             },
             // Node：进程退出后 SDK 以 McpError(ConnectionClosed) 失败，工具错误为 SdkError/CONNECTION_CLOSED。
-            result=handle.await_response()=>result.map_err(|_| if self.peer.is_transport_closed() {
-                crate::contract::ToolError::Sdk { code: "CONNECTION_CLOSED", message: "Connection closed".into() }.into()
-            } else {
-                anyhow::anyhow!("MCP request failed or timed out")
-            }),
+            result=handle.await_response()=>result.map_err(|error|
+                super::mcp_error::response(error, self.peer.is_transport_closed(), method == "tools/call")),
         };
-        if result.is_err() && method == "tools/call" {
+        // InvalidParams 是已收到的参数拒绝，不是断连；关闭健康连接会让同轮纠错重试必败。
+        // 其余错误保留既有清理路径，不重连、不重放工具调用。
+        if method == "tools/call"
+            && result
+                .as_ref()
+                .is_err_and(|error| !error.is::<crate::contract::InputValidationError>())
+        {
             self.close().await?;
         }
         Ok(serde_json::to_value(result?)?)
     }
+    /// `(output, raw tools/call result)`: the hub projects the raw result into
+    /// the V4 `mcp_tool` display from the tool's UI metadata.
     pub async fn call(
         &self,
         name: &str,
         args: &Value,
         cancel: &CancellationToken,
-    ) -> Result<ToolOutput> {
+    ) -> Result<(ToolOutput, Value)> {
         let result = self
             .request("tools/call", json!({"name":name,"arguments":args}), cancel)
             .await?;
@@ -345,7 +350,7 @@ impl Connection {
         }
         let mut output = ToolOutput::text(content);
         output.failed = result["isError"] == true;
-        Ok(output)
+        Ok((output, result))
     }
     pub async fn close(&self) -> Result<()> {
         // 进程先退出（传输已断）后的关闭是崩溃的收口（如调用失败后关闭）：Node 仍记 process_crash。
