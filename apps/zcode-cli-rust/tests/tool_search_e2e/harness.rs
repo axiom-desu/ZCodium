@@ -210,8 +210,12 @@ impl Harness {
             }
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
+        // 失败时必须留下引擎侧证据：最后的事件帧说明排队输入是被消费、
+        // 被拒绝还是被压缩收尾竞态吞掉，而不是只报一个计数差。
+        let tail = self.frames.lock().unwrap();
+        let recent: Vec<Value> = tail.iter().rev().take(24).cloned().collect();
         panic!(
-            "model requests not observed: {} < {count}",
+            "model requests not observed: {} < {count}; recent engine frames: {recent:#?}",
             self.fixture.requests()
         );
     }
@@ -252,6 +256,30 @@ impl Harness {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
         panic!("compact summary not persisted");
+    }
+
+    /// 等待 standalone compact turn 真正结束（terminal 遥测）。
+    /// 摘要落盘先于 turn 收尾；在此之后的后续 prompt 会被运行中守卫
+    /// 以 -32010 正确拒绝，所以测试必须在发送前等到 terminal。
+    /// 事件只在 RPC 调用时被捞出通道，这里必须先排空输出再匹配。
+    pub async fn wait_compact_terminal(&mut self) {
+        for _ in 0..500 {
+            while let Ok(batch) = self.output.try_recv() {
+                self.frames.lock().unwrap().extend(batch.iter().cloned());
+            }
+            {
+                let frames = self.frames.lock().unwrap();
+                if frames.iter().any(|frame| {
+                    frame["method"] == "v4/telemetry/event"
+                        && frame["params"]["kind"] == "compaction.terminal"
+                        && frame["params"]["status"] == "completed"
+                }) {
+                    return;
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        panic!("compaction terminal event not observed");
     }
 
     pub async fn close(mut self) -> (PathBuf, Option<Arc<tempfile::TempDir>>) {
