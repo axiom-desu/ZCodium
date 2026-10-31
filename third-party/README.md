@@ -31,6 +31,15 @@ review. They are not a legal compliance certification.
 - `rust-tui/`: locked crate archives, exact-revision upstream originals, selected
   standard terms and source-correspondence evidence. Refresh with
   `node scripts/sync-rust-tui-notices.mjs`, then regenerate aggregate notices.
+- `office-runtime/`: exact name/version/license registrations for the three
+  non-green Office build dependencies (`@fontsource/noto-sans-sc@5.3.1` OFL-1.1,
+  `buffers@0.1.1` and `chainsaw@0.1.0` MIT/X11). Original material bytes live
+  under the existing `upstream/office-runtime/` byte-preserving boundary, with
+  97 font-slice hashes and publisher evidence. The font is a build-only
+  dependency and is distributed only as a plugin asset; buffers/chainsaw are
+  installed-only. Root identifiers scan prod+dev, root notices only the
+  production graph. These records are not exemptions and do not reduce the 16
+  remaining strict obligations.
 - `copied-components.json`, `embedded-components.json`, `native-search/`,
   `runtime/`: copied-source, embedded native/WASM and runtime provenance. Some
   linked-library build provenance and original publisher material remains

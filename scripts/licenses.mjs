@@ -14,6 +14,7 @@
 import { generateThirdPartyNotices } from "./generate-third-party-notices.mjs";
 import { readVerifiedNotices } from "./third-party-notices.mjs";
 import { verifyCuaLicenseReview } from "./cua-license-review.mjs";
+import { legacyLicenseIdentifier, readOfficeLicenseReview } from "./license-identifiers.mjs";
 import { readFile } from "node:fs/promises";
 import {
   readWorkspaceProductionGraph,
@@ -53,7 +54,9 @@ for (const [key, { pkg }] of scanned) {
   installed.set(key, {
     name: pkg.name,
     version: pkg.version,
-    license: normLicense(pkg.license ?? pkg.licenses ?? MANUAL_LICENSE[pkg.name]),
+    license: normLicense(
+      pkg.license ?? pkg.licenses ?? legacyLicenseIdentifier(pkg) ?? MANUAL_LICENSE[pkg.name],
+    ),
     isProd: required.has(key),
   });
 }
@@ -96,10 +99,13 @@ function weakAllowReason(r) {
 }
 
 if (command === "check") {
+  // 精确标识复核同时校验原始材料、已发布代码与已安装字体分片；任一变化即 fail closed。
+  const officeLicenseReview = await readOfficeLicenseReview(ROOT, { installed: scanned });
   const bad = [];
   for (const r of installed.values()) {
     if (r.bucket === "green") continue;
     // MIT AND MPL 仍需两套义务；仅版本、表达式和源码/许可材料全部匹配的精确登记可通过。
+    if (officeLicenseReview.reviewed.has(`${r.name}@${r.version}:${r.license}`)) continue;
     if (cuaLicenseReview.has(`${r.name}@${r.version}:${r.license}`)) continue;
     if (r.bucket.startsWith("yellow") && weakAllowReason(r)) continue;
     bad.push(r);
@@ -121,7 +127,7 @@ if (command === "check") {
     );
   const n = installed.size;
   console.log(
-    `✓ 许可标识与声明新鲜度检查通过：${n} 个实装包（构建依赖复核 ${[...installed.values()].filter((r) => r.bucket.startsWith("yellow")).length} 项）；材料限制见 third-party/README.md`,
+    `✓ 许可标识与声明新鲜度检查通过：${n} 个实装包（精确标识复核 ${officeLicenseReview.reviewed.size} 项、构建依赖复核 ${[...installed.values()].filter((r) => r.bucket.startsWith("yellow")).length} 项）；材料限制见 third-party/README.md`,
   );
 } else {
   console.error("用法: node scripts/licenses.mjs [notices|check]");
