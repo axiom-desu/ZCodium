@@ -111,6 +111,14 @@
 - 真实 SQLite 冷恢复：持久化 `modelContent` 引用 + 公告增量 → 关库重开 → 下一请求引用/公告一致
   （由既有 node_storage/runtime_consistency 用例扩展，非 mock 名称断言）。
 
+## 参数校验提示的后续设计（实现前冻结）
+
+Rust 不新增通用 inputSchema 验证器。现有 JSON 入参解码、各工具参数读取/领域 parser 与 MCP InvalidParams
+仍各自负责原来的验证，只把确定的输入失败通过严格 `InputValidationError` 诊断契约传回既有 executor。
+executor 不重验 schema、不按异常文本猜类型，仅在当前 deferred 且未发现工具的确定输入失败上追加上游搜索指引；
+普通执行/网络/权限错误不追加。保持 callID/目标事件/原始入参、Hook、权限、错误主因和取消语义。
+测试证明「错误参数 → 明确提示 → ToolSearch → 正确参数执行一次」且无副作用重复；本段为设计，不冒充已执行证据。
+
 ## 剩余缺口（本轮如实记录）
 
 1. 生成器已闭合：`generate-zcode-cli-rust-tool-schemas.mjs` 从真实 `builtInTools` /
@@ -127,14 +135,23 @@
    `NodeStore` SQLite，覆盖 native/local/off、权限/取消/resume、下一请求引用、成功 compact
    发现检查点、Local 提升与公告冷恢复；不使用模型/工具 mock 名称断言。
 5. 未运行 Windows/macOS 或真实 provider；本轮证据限于 Linux、Rust 单测/集成与真实回环 HTTP。
-6. **P2-6「未发现 deferred 工具参数校验失败 → 先 select 搜索」：TS 已接入，Rust 记为架构缺口。**
-   TS 复用既有 `validateInitialModelToolInput` / `ToolInputValidationResult` 失败边界，在
-   `core/src/tool/executor/call-runner.ts` 只追加 ToolSearch 指引与目标 schema，无第二个通用校验器、
-   不改变准入（仍属 handler/ToolCallStarted 之前的既有早退）。Rust `core/src/app/tool_execution.rs`
-   没有通用 `inputSchema` 校验阶段：参数由各 handler 的 `tools/src/tool_args.rs` 或专用解析器在
-   hook/权限/执行之后校验，`ToolOutput`/`ToolError` 只有失败投影，没有可复用的“输入校验失败”分类。
-   要在此处给出同一指引，必须新增跨工具 schema 校验所有者（并决定其位于 hook/权限之前或之后），
-   属于执行准入的架构决策；按本轮约束不添加第二校验器或字符串匹配回退，保持未实现。
+6. **P2-6「未发现 deferred 工具参数校验失败 → 先 select 搜索」：Rust 已按冻结设计闭合。**
+   `domain::input_validation::InputValidationError` 经 `core-api` 公开错误边界传递；既有 Core JSON
+   解码、工具参数读取、Todo/plan parser、Web 验证与 MCP `tools/call` 的数值 `-32602` 各自标记
+   确定入参失败，保留原始 cause 与检查条件。当前 Rust 无 Cron handler/parser，不新增或伪造其能力。
+   executor 只检查严格类型与当前请求 deferred/未发现事实，不校验 schema、不匹配异常文案；
+   原错误后逐字追加 `3c5b2276` 实际 `call-runner.ts` 的解释、select 指引、当前 schema 与 Local 包装提示。
+   `原 decoder/parser → typed error → 既有 executor 错误出口 → 同一 ToolDone/error → 模型与 UI part`；
+   没有第二执行器/队列/IO domain。MCP InvalidParams 是已收到的参数拒绝，不关闭健康连接；其它错误
+   仍走既有清理路径，不自动重连或重放，确保同轮加载后的有效重试只产生一次实际副作用。
+   实证：`tests/tool_input_guidance/{e2e,mcp}.rs` 的真实 Engine + 回环模型 + SQLite + stdio MCP，
+   Native/Local 均完成「错误参数 → 完整提示 → ToolSearch → 正确重试」，真实 Todo owner 一次成功提交、
+   MCP effect 文件恰好一行；同一 callID、目标 part/原始 input、Pre/Failure/Post Hook 与原始失败原因
+   均有断言，错误 part 持久保存纠错提示供 UI 消费。已发现/Off/常驻/无效包装、权限/网络策略/exit 1、
+   MCP 断连/非 JSON 响应/internal/isError 均无提示。Core 契约测试还证明 schema 不匹配但 handler
+   接受时照常执行，未增加通用验证。`cargo test --locked --workspace`：900 passed / 0 failed；
+   ToolSearch 真实引擎测试 13 项通过；fmt 与 16 crate 边界通过（按换行计数的 Rust 源文件均 ≤400 行）。
+   此证据仅限 Linux 受控回环和持久 UI 业务投影，不表述为 Desktop/手机 UI 或真实 provider 验收。
 
 ## 本轮验证（2026-10-23，Linux）
 

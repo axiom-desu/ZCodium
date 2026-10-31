@@ -107,6 +107,14 @@ knip 的 `duplicates` 在真实 JSON 报告里是「组 → 成员」的嵌套�
     单测只锁死 posix 的 URL 编码匹配；Windows `C:\...` 用例以
     `process.platform === "win32"` 作为期望值。在 Linux 上无法伪测 Windows 的执行语义，
     真实 Windows 未在本环境实测，不能写成「已验证 Windows」。
+- **✅ workspace entry 只登记真实入口**：CLI 的 esbuild 入口固定为 `src/main.ts`，knip 只显式声明
+  `src/main.ts` 与 `src/index.ts` 两个真实文件，不用 `src/**` 之类路径 glob 把整个源码树当成入口。
+  `src/index.ts` 是程序化 API port；新增入口必须能指向真实 build/发布路径，不能为了消诊断造伪 entry。
+  守卫测试 `scripts/ci/cli-build-entry.test.mjs` 同时校验 build 脚本与 knip 配置；真实 build 仍需单独执行。
+- **✅ 浏览器/脚本入口只登记真入口**：`scripts/ci/*.mjs`、Vite/HTML 夹具等静态分析看不到的加载路径，
+  必须同时具备「根 npm script（或已登记的构建/发布步骤）+ CI 真实执行步骤 + 源码引用」才可登记为 entry；
+  只为消除 regressed 而新增的空 entry、以及用 ignore 遮蔽未使用文件，都不算消除。
+  同理，本文件内仅自用的函数/类型不做公开导出（knip `exports` 新增不得靠放宽基线吸收）。
 - **✅ 采集时路径归一**：`\` → `/`、去掉前缀 `./`、`path.posix.normalize`；key 中只允许仓库根相对
   路径；绝对路径、盘符路径、`..` 逃逸、空路径 → exit 2。不做大小写折叠（在 Linux 上会把不同文件
   合并成一条）。
