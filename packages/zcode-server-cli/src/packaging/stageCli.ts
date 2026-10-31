@@ -251,6 +251,7 @@ async function main(): Promise<void> {
     appVersion,
     distDir,
     agentBundlePath,
+    bundledSkillsDir: join(repoRoot, "apps/zcode-cli/packages/bundled-skills"),
     nodeBinaryPath,
     notices: {
       thirdParty: thirdParty.toString("utf8"),

@@ -2,6 +2,13 @@ import type { Locale, ZCodeTaskMeta } from "@zcode/shared";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// 日期段按本地日历计算：夏令时切换日只有 23/25 小时，用毫秒差取整会把"今天"
+// 判成"昨天"（25 小时）并错误跳过日期标题。这里统一比较日历日序号。
+function calendarDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS;
+}
+
 type TaskTimelineGroupKind =
   | "today"
   | "yesterday"
@@ -23,65 +30,46 @@ interface TaskTimelineGroup<TTask> {
   items: TTask[];
 }
 
-function startOfDay(timestamp: number): number {
-  const date = new Date(timestamp);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
-
-function startOfMonth(timestamp: number): number {
-  const date = new Date(timestamp);
-  return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
-}
-
-function startOfWeek(timestamp: number, locale: Locale): number {
-  const date = new Date(startOfDay(timestamp));
-  const day = date.getDay();
-  const weekStartsOn = locale === "en-US" ? 0 : 1;
-  const offset = (day - weekStartsOn + 7) % 7;
-  date.setDate(date.getDate() - offset);
-  return date.getTime();
-}
-
 function resolveTaskTimelineGroupKey(
   timestamp: number,
   now: number,
   locale: Locale,
 ): TaskTimelineGroupKey {
-  const todayStart = startOfDay(now);
-  const itemDayStart = startOfDay(timestamp);
-  const dayDiff = Math.floor((todayStart - itemDayStart) / DAY_MS);
+  const today = calendarDay(now);
+  const nowDate = new Date(now);
+  // 与上游 timeline 规则一致：week 起点按 locale 决定（en-US 周日，其余周一）。
+  const weekStartsOn = locale === "en-US" ? 0 : 1;
+  const weekStart = today - ((nowDate.getDay() - weekStartsOn + 7) % 7);
+  const thisMonthStart = calendarDay(
+    new Date(nowDate.getFullYear(), nowDate.getMonth(), 1).getTime(),
+  );
+  const lastMonthStart = calendarDay(
+    new Date(nowDate.getFullYear(), nowDate.getMonth() - 1, 1).getTime(),
+  );
+  const day = calendarDay(timestamp);
+  const daysAgo = today - day;
 
-  if (dayDiff <= 0) {
+  if (daysAgo <= 0) {
     return { kind: "today" };
   }
-  if (dayDiff === 1) {
+  if (daysAgo === 1) {
     return { kind: "yesterday" };
   }
-  if (dayDiff <= 3) {
-    return { kind: "daysAgo", daysAgo: dayDiff };
+  if (daysAgo <= 3) {
+    return { kind: "daysAgo", daysAgo };
   }
-
-  const thisWeekStart = startOfWeek(now, locale);
-  if (itemDayStart >= thisWeekStart) {
+  if (day >= weekStart) {
     return { kind: "thisWeek" };
   }
-
-  const lastWeekStart = thisWeekStart - 7 * DAY_MS;
-  if (itemDayStart >= lastWeekStart) {
+  if (day >= weekStart - 7) {
     return { kind: "lastWeek" };
   }
-
-  const thisMonthStart = startOfMonth(now);
-  if (itemDayStart >= thisMonthStart) {
+  if (day >= thisMonthStart) {
     return { kind: "thisMonth" };
   }
-
-  const nowDate = new Date(now);
-  const lastMonthStart = new Date(nowDate.getFullYear(), nowDate.getMonth() - 1, 1).getTime();
-  if (itemDayStart >= lastMonthStart) {
+  if (day >= lastMonthStart) {
     return { kind: "lastMonth" };
   }
-
   return { kind: "older" };
 }
 

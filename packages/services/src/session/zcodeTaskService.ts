@@ -212,32 +212,47 @@ export interface IZCodeTaskService {
   // ---- Task/Session 管理 ----
 
   /** 创建 ZCode session 并同步 task 索引。 */
-  createTask(params: {
-    workspacePath: string;
-    workspaceIdentity?: string;
-    provider?: ZCodeProvider;
-    mode?: ZCodeTaskMode;
-    /** 正式模型选择；产品提交边界固定后不再拆成 model/thoughtLevel。 */
-    modelSelection?: ModelSelection;
-    /** @deprecated 仅供尚未迁移的旧调用边界读取。 */
-    model?: string;
-    /** @deprecated 仅供尚未迁移的旧调用边界读取。 */
-    thoughtLevel?: string;
-    draftSessionId?: string;
-    forkedFromTaskId?: string;
-    mcpServers?: ZCodeAgentMcpServer[];
-    /** 定时任务派发时标记所属 automation，落 tasks-index 的 cron_automation_id 并归入 cron 分组。 */
-    automationId?: string;
-    /** 闲时任务派发时标记所属 off-peak 任务，落 tasks-index 的 off_peak_task_id。 */
-    offPeakTaskId?: string;
-    /**
-     * 无界面派发会先创建空 session，再立即发送首条 V4 输入。此时使用 deferred，
-     * 让输入 admission 在写 session_input 外键账本前先统一持久化 session 主记录。
-     */
-    deferPersistenceUntilFirstPrompt?: boolean;
-    /** Bot/host 使用 v4 原生 createSession 建立 draft，再配置并发送。 */
-    v4Create?: boolean;
-  }): Promise<ZCodeTaskCreateResult>;
+  createTask(
+    params: {
+      workspacePath: string;
+      workspaceIdentity?: string;
+      provider?: ZCodeProvider;
+      mode?: ZCodeTaskMode;
+      /** 正式模型选择；产品提交边界固定后不再拆成 model/thoughtLevel。 */
+      modelSelection?: ModelSelection;
+      /** @deprecated 仅供尚未迁移的旧调用边界读取。 */
+      model?: string;
+      /** @deprecated 仅供尚未迁移的旧调用边界读取。 */
+      thoughtLevel?: string;
+      draftSessionId?: string;
+      forkedFromTaskId?: string;
+      mcpServers?: ZCodeAgentMcpServer[];
+      /** 定时任务派发时标记所属 automation，落 tasks-index 的 cron_automation_id 并归入 cron 分组。 */
+      automationId?: string;
+      /** 闲时任务派发时标记所属 off-peak 任务，落 tasks-index 的 off_peak_task_id。 */
+      offPeakTaskId?: string;
+      /**
+       * 无界面派发会先创建空 session，再立即发送首条 V4 输入。此时使用 deferred，
+       * 让输入 admission 在写 session_input 外键账本前先统一持久化 session 主记录。
+       */
+      deferPersistenceUntilFirstPrompt?: boolean;
+      /** Bot/host 使用 v4 原生 createSession 建立 draft，再配置并发送。 */
+      v4Create?: boolean;
+      /** Host 项目组织态 id；显式给出才预占归属，不由 cwd 推断。 */
+      projectId?: string | null;
+      /** 已冻结的附加执行目录；由项目服务 prepareSession 给出。 */
+      additionalDirectories?: string[];
+      remoteSessionId?: string;
+    },
+    admission?: import("../zcode-agent/zcodeAgent.js").ExistingRuntimeAdmission,
+  ): Promise<ZCodeTaskCreateResult>;
+
+  /** Typed non-starting RPC entry; expected runtime is mandatory, never retried. */
+  createTaskExistingRuntime(
+    params: Parameters<IZCodeTaskService["createTask"]>[0],
+    expectedRuntime: import("../zcode-agent/zcodeAgent.js").ZCodeAgentWorkspaceRuntimeIdentity,
+    assertAttachment?: () => void,
+  ): Promise<ZCodeTaskCreateResult>;
 
   /** 发送 prompt 到指定 task */
   sendPrompt(

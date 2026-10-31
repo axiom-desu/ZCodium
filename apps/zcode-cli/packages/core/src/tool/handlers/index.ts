@@ -161,6 +161,11 @@ const DYNAMIC_WORKFLOW_TOOL_NAMES: ReadonlySet<string> = new Set([
   RESOLVE_WORKFLOW_QUESTION_TOOL_NAME,
 ]);
 
+/** 冷恢复历史扫描用的唯一工具名判定；与注册门共用同一份名单。 */
+export function isDynamicWorkflowToolName(name: string): boolean {
+  return DYNAMIC_WORKFLOW_TOOL_NAMES.has(name);
+}
+
 interface RegisterBuiltInToolsOptions {
   bashTimeoutPolicy?: BashTimeoutPolicy;
   includeSkill?: boolean;

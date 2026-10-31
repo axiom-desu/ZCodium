@@ -16,6 +16,7 @@ import {
   IZCodeSessionService,
   ICuaPermissionService,
   IConversationShareService,
+  IProjectService,
   IBotsService,
   IFileWatcherService,
   IModelSelectionService,
@@ -41,6 +42,7 @@ import {
   ISettingsSyncService,
   IPromptAttachmentTransferService,
   IWindowControllerService,
+  ISourceServerManagementService,
   type IServiceAccessor,
 } from "@zcode/services";
 
@@ -68,6 +70,8 @@ export class RemoteServiceAccess implements IServiceAccessor {
   // 经 RPC 一定能拿到（main host 始终注册此 descriptor；非 macOS / 未启用时方法返回 available:false）。
   readonly cuaPermissionService: ICuaPermissionService;
   readonly conversationShareService: IConversationShareService;
+  /** 只有 Host 握手声明 virtualProjects 才创建；旧 Host 缺省，UI 走显式只读 legacy。 */
+  readonly projectService?: IProjectService;
   readonly botsService: IBotsService;
   readonly fileWatcherService: IFileWatcherService;
   readonly providerSettingsService: IProviderSettingsService;
@@ -94,8 +98,15 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly memoryService: IMemoryService;
   readonly settingsSyncService: ISettingsSyncService;
   readonly promptAttachmentTransferService: IPromptAttachmentTransferService;
+  /** Host 公开的 Source Server 管理端口；旧 Host 可缺失。 */
+  readonly sourceServerManagementService?: ISourceServerManagementService;
 
-  constructor(channelClient: IChannelClient) {
+  constructor(channelClient: IChannelClient, options: { virtualProjects?: boolean } = {}) {
+    if (options.virtualProjects) {
+      this.projectService = ProxyChannel.toService<IProjectService>(
+        channelClient.getChannel(IProjectService.channelName),
+      );
+    }
     this.fileService = ProxyChannel.toService<IFileService>(
       channelClient.getChannel(IFileService.channelName),
     );
@@ -223,6 +234,9 @@ export class RemoteServiceAccess implements IServiceAccessor {
     );
     this.promptAttachmentTransferService = ProxyChannel.toService<IPromptAttachmentTransferService>(
       channelClient.getChannel(IPromptAttachmentTransferService.channelName),
+    );
+    this.sourceServerManagementService = ProxyChannel.toService<ISourceServerManagementService>(
+      channelClient.getChannel(ISourceServerManagementService.channelName),
     );
   }
 }

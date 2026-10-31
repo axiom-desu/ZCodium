@@ -1512,6 +1512,31 @@ export function openCodeViewerSidePane(
 }
 
 /**
+ * 文件管理器目录行导航：只更新目标 code-viewer tab 的 source/sourceKey，
+ * 不新建 tab、不改变实例 id 与任务归属；其它 tab 原样保留。
+ */
+export function navigateCodeViewerSidePane(
+  current: WorkspaceSidePaneState | null,
+  tabId: string,
+  source: CodeViewerSource,
+): WorkspaceSidePaneState | null {
+  if (!current) return current;
+  const normalizedSource = normalizeCodeViewerSource(source);
+  return {
+    ...current,
+    tabs: current.tabs.map((tab) =>
+      tab.id === tabId && tab.type === "code-viewer"
+        ? {
+            ...tab,
+            source: normalizedSource,
+            sourceKey: getCodeViewerTabSourceKey(normalizedSource),
+          }
+        : tab,
+    ),
+  };
+}
+
+/**
  * 一次性打开一组代码预览 Tab。
  *
  * 自动打开生成产物时不能逐张调用 openCodeViewerSidePane：逐张提交会让右侧

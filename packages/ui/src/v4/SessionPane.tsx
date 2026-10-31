@@ -128,6 +128,8 @@ import { WorkspaceHookPendingBanner } from "@/v4/WorkspaceHookPendingBanner.js";
 import { ConversationStatusPanel } from "@/v4/ConversationStatusPanel.js";
 import { SessionSubscriptionErrorPanel } from "@/v4/SessionSubscriptionErrorPanel.js";
 import { ConversationTimeline } from "@/v4/ConversationTimeline.js";
+import type { ConversationLatestTurnSummary } from "@/v4/conversationTimelineLiveTail.js";
+import { useConversationPanePresentation } from "@/side-pane-full-view/index.js";
 import { ConversationShareImportNotice } from "@/v4/ConversationShareImportNotice.js";
 import { ConversationShareConfirmationDock } from "@/v4/ConversationShareConfirmationDock.js";
 import { ConversationShareSuccessDock } from "@/v4/ConversationShareSuccessDock.js";
@@ -139,6 +141,7 @@ import { ConversationShareSelectionPanel } from "@/v4/ConversationShareSelection
 import { ConversationShareSelectionReopenTab } from "@/v4/ConversationShareSelectionReopenTab.js";
 import { ConversationShareSelectionScrim } from "@/v4/ConversationShareSelectionScrim.js";
 import {
+  aggregateConversationShareBlockingIssues,
   buildConversationSharePreflightCacheEntries,
   conversationSharePreflightCacheKey,
   conversationShareTurnFingerprint,
@@ -755,9 +758,7 @@ export function SessionPane({
     return {
       status: "ready",
       ...sharePreflightMetaRef.current,
-      blockingIssues: dedupeConversationShareIssues(
-        resolvedEntries.flatMap((entry) => entry.blockingIssues),
-      ),
+      blockingIssues: aggregateConversationShareBlockingIssues(resolvedEntries),
       skippableWarnings: dedupeConversationShareIssues(
         resolvedEntries.flatMap((entry) => entry.skippableWarnings),
       ),
@@ -1127,6 +1128,10 @@ export function SessionPane({
     (store) =>
       store.getWorkspaceState(workspacePath, workspaceIdentity).draftRuntimeInvalidationVersion,
   );
+  // 草稿项目归属是 UI 意图；创建时冻结一次交给 Host 预占，之后切项目不得改写在途会话。
+  const draftProjectId = useZCodeSessionStore(
+    (store) => store.getWorkspaceState(workspacePath, workspaceIdentity).draftProjectId,
+  );
   const handleExternalTextInsertApplied = useCallback(
     (requestId: number) => {
       useZCodeSessionStore
@@ -1143,6 +1148,52 @@ export function SessionPane({
     snapshot?.pendingInteractions.find(
       (interaction) => interaction.payload.kind !== "workspaceHookReview",
     )?.interactionId ?? null;
+  const panePresentation = useConversationPanePresentation();
+  const isFloatingPresentation = panePresentation.presentation === "floating";
+  const isRunning = Boolean(snapshot?.control.canStop);
+  const { reportFloatingStatus } = panePresentation;
+  const floatingOwnerKey = sessionId ?? "__draft__";
+  // 浮窗形态下由时间线上报最后一个回合（同一个 render unit 的运行状态、时长与最终回答）；
+  // 记录带上 owner，切换会话后旧会话的摘要不会混进新会话。
+  const [floatingLatestTurn, setFloatingLatestTurn] = useState<{
+    ownerKey: string;
+    summary: ConversationLatestTurnSummary;
+  } | null>(null);
+  const handleFloatingLatestTurnSummaryChange = useCallback(
+    (summary: ConversationLatestTurnSummary) =>
+      setFloatingLatestTurn({ ownerKey: floatingOwnerKey, summary }),
+    [floatingOwnerKey],
+  );
+  const floatingLatestTurnSummary =
+    isFloatingPresentation && floatingLatestTurn?.ownerKey === floatingOwnerKey
+      ? floatingLatestTurn.summary
+      : null;
+  const floatingTurnKey = floatingLatestTurnSummary?.turnKey ?? null;
+  const floatingTurnRunning = floatingLatestTurnSummary?.running ?? false;
+  const floatingTurnAnswer = floatingLatestTurnSummary?.answer ?? null;
+  const hasFloatingLatestTurn = floatingLatestTurnSummary !== null;
+  useEffect(() => {
+    // 完整视图浮窗只展示焦点 pane 的状态；docked 时 reportFloatingStatus 为 noop。
+    if (!focused) return;
+    reportFloatingStatus({
+      running: isRunning,
+      blockingInteractionId,
+      ownerKey: floatingOwnerKey,
+      latestTurn: hasFloatingLatestTurn
+        ? { turnKey: floatingTurnKey, running: floatingTurnRunning, answer: floatingTurnAnswer }
+        : null,
+    });
+  }, [
+    blockingInteractionId,
+    floatingOwnerKey,
+    floatingTurnAnswer,
+    floatingTurnKey,
+    floatingTurnRunning,
+    focused,
+    hasFloatingLatestTurn,
+    isRunning,
+    reportFloatingStatus,
+  ]);
   const selectionSideChatKey = sessionId
     ? buildSelectionSideChatKey(workspaceKey, sessionId)
     : null;
@@ -1323,6 +1374,7 @@ export function SessionPane({
       localTtft?: LocalTtftContext,
       onEnvelopeCreated?: (envelope: CommandEnvelope) => void,
       sessionCreateSource?: SessionCreateSource,
+      creationProjectId?: string | null,
     ): Promise<CommandAck> => {
       if (type === "sendText" && typeof payload.text === "string") {
         const genUiContext = await readGenUiModelContext(targetSessionId ?? sessionId);
@@ -1383,7 +1435,13 @@ export function SessionPane({
             targetSessionId,
           );
         }
-        ack = await measureOperation("command", () => sendCommand(envelope));
+        ack = await measureOperation("command", () =>
+          // 项目归属只作为 Host 预占上下文随命令下发，不写进 CLI wire payload。
+          sendCommand(
+            envelope,
+            creationProjectId !== undefined ? { projectId: creationProjectId } : undefined,
+          ),
+        );
         if (localTtft && ack.reasonCode === "guard.heldQueueConfirmationStale")
           getLocalTtftObserver()?.confirmationRetry(localTtft);
         else if (localTtft) getLocalTtftObserver()?.ack(localTtft, ack.status, ack.ttftExcluded);
@@ -2142,11 +2200,25 @@ export function SessionPane({
     enabled: sessionId === null && draftAgentStartupAllowed,
     workspaceKey,
     paneId,
+    projectId: draftProjectId,
     invalidationVersion: draftRuntimeInvalidationVersion,
     // SessionDataLayer 来自 workspace connection registry：同 transport generation 的 pane/remount
     // 共享 identity；provider wrapper 重建产生的新 sendCommand 函数不能误判为 transport 换代。
     transportIdentity: layer,
-    dispatchCommand,
+    // 预热 dispatch 的第 4 个参数是 Host 预占上下文，而 pane 的 dispatchCommand
+    // 第 4 个是 baseRevision；这里显式映射到末尾的 creationProjectId。
+    dispatchCommand: (type, payload, targetSessionId, context) =>
+      dispatchCommand(
+        type,
+        payload,
+        targetSessionId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        context?.projectId,
+      ),
     // 预热会话只消费当前 Root Composer Draft 的一次性初始化结果。
     resolveInitialConfig: resolveInitialDraftConfig,
   });
@@ -2547,6 +2619,12 @@ export function SessionPane({
           "createSession",
           { workspaceId: workspaceKey, ...draftConfigPayload },
           null,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          draftProjectId,
         );
         if (createAck.status !== "accepted") {
           throw new Error(createAck.reasonCode ?? "createSession 被拒绝");
@@ -2632,6 +2710,7 @@ export function SessionPane({
             options?.localTtft,
             undefined,
             createSourceAtSend,
+            draftProjectId,
           );
           if (ack.status !== "accepted") {
             throw new Error(ack.reasonCode ?? "createSession 被拒绝");
@@ -2650,6 +2729,12 @@ export function SessionPane({
           "createSession",
           { workspaceId: workspaceKey, ...draftConfigPayload },
           null,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          draftProjectId,
         );
         if (createAck.status !== "accepted") {
           throw new Error(createAck.reasonCode ?? "createSession 被拒绝");
@@ -3802,12 +3887,21 @@ export function SessionPane({
       sessionId,
       { randomUUID: () => globalThis.crypto?.randomUUID?.() },
     );
+    // 发布是异步的长链路（收集/打包/写文件）。迟到结果只能写回同一 scope 的同一 attempt：
+    // 换 workspace/远端会话/任务或重新发起选择后，旧结果不得覆盖新范围，也不得把用户带回旧会话。
+    const publishScopeKey = `${workspaceIdentity?.trim() || workspacePath}\u0000${remoteSessionId ?? ""}\u0000${sessionId}`;
+    const isAttemptCurrent = () =>
+      sharePreflightScopeKeyRef.current === publishScopeKey &&
+      getConversationShareDockState(useConversationShareSelectionStore.getState(), sessionId)
+        .attempt?.clientRequestId === shareAttempt.clientRequestId;
     const operationId = `share-operation-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
     let activePhase = "collecting";
     let collectedWarnings: ConversationShareDisplayWarnings | null = null;
     const progressSubscription = conversationShareService.onDynamicPublishProgress(operationId)((
       progress,
     ) => {
+      // 迟到的进度只属于发起它的那次 attempt；不得推进新一轮的进度条/警告。
+      if (!isAttemptCurrent()) return;
       activePhase = progress.phase;
       updateShareDockState(sessionId, {
         progress: progress.phase === "complete" ? "saving" : progress.phase,
@@ -3854,6 +3948,7 @@ export function SessionPane({
       const saved = await saveConversationExport(conversationShareService, platform, share);
       if (saved.canceled) return;
       if (!saved.success) throw new Error("Conversation export could not be saved");
+      if (!isAttemptCurrent()) return;
       const warnings = collectedWarnings as ConversationShareDisplayWarnings | null;
       updateShareDockState(sessionId, {
         exportedFile: {
@@ -3882,6 +3977,7 @@ export function SessionPane({
       }
     } catch (error) {
       const details = getConversationShareErrorDetails(error);
+      if (!isAttemptCurrent()) return;
       // 保存失败也要给出可重试的用户文案，不展示内部阶段名或不存在的服务端诊断。
       const messageId = resolveConversationSharePublishErrorMessageId(error);
       updateShareDockState(sessionId, {
@@ -3922,7 +4018,7 @@ export function SessionPane({
       });
     } finally {
       progressSubscription.dispose();
-      updateShareDockState(sessionId, { publishing: false });
+      if (isAttemptCurrent()) updateShareDockState(sessionId, { publishing: false });
     }
   }, [
     conversationShareService,
@@ -4103,8 +4199,13 @@ export function SessionPane({
       submissionReady={composerSubmissionReady}
       updateComposerContent={updateComposerContent}
       createSubmissionFromComposer={createSubmissionFromComposer}
-      contextHeader={isDraft ? draftComposerHeader : undefined}
+      // 完整视图浮窗默认是一条输入框：草稿项目栏不进入浮窗，切到对话 tab 再选择项目。
+      contextHeader={isDraft && !isFloatingPresentation ? draftComposerHeader : undefined}
       centered={isDraft}
+      layout={isFloatingPresentation ? "inline" : "stacked"}
+      workingDurationMs={
+        floatingTurnRunning ? floatingLatestTurnSummary?.workDurationMs : undefined
+      }
       blockingRequestId={blockingInteractionId}
       listenAddToChatEvents={focused}
       externalTextInsertRequest={focused && sessionId === null ? composerTextInsertRequest : null}
@@ -4248,7 +4349,10 @@ export function SessionPane({
       ) : null}
       {composerNode}
       {/* 办公模式显示主动任务推荐；编程模式保留原有小型场景入口。 */}
-      {isDraft && (!isOfficeMode || sharedSettings?.proactiveSuggestionsEnabled === true) ? (
+      {/* 完整视图浮窗只露出输入框，草稿推荐提示不进入浮窗。 */}
+      {isDraft &&
+      !isFloatingPresentation &&
+      (!isOfficeMode || sharedSettings?.proactiveSuggestionsEnabled === true) ? (
         <ConversationDraftSuggestedPromptsContainer
           className={isOfficeMode ? "mt-4" : "mt-6"}
           proactive={isOfficeMode}
@@ -4486,6 +4590,9 @@ export function SessionPane({
                 (importedShare.rows.length > 0 || importedShare.unsupportedRowCount > 0) ? (
                   <ConversationShareImportNotice
                     rows={importedShare.rows}
+                    {...(importedShare.contentBlocks
+                      ? { contentBlocks: importedShare.contentBlocks }
+                      : {})}
                     unsupportedRowCount={importedShare.unsupportedRowCount}
                     artifactNames={importedShareArtifactNames}
                     artifactWorkspaceRelativePaths={importedShareArtifactWorkspaceRelativePaths}
@@ -4507,7 +4614,19 @@ export function SessionPane({
                   </div>
                 ) : null
               }
-              centerEmptyStateWithDock={isDraft}
+              // 浮窗形态只露出底部输入区，空会话也必须贴底，不能居中。
+              centerEmptyStateWithDock={isDraft && !isFloatingPresentation}
+              floatingComposerDock={isFloatingPresentation}
+              onComposerDockHeightChange={
+                isFloatingPresentation && focused
+                  ? panePresentation.reportComposerDockHeight
+                  : undefined
+              }
+              onLatestTurnSummaryChange={
+                isFloatingPresentation && focused
+                  ? handleFloatingLatestTurnSummaryChange
+                  : undefined
+              }
               summaryPanelLayout={statusPanelLayout}
               conversationFindQuery={!isDraft && focused ? conversationFindQuery : ""}
               conversationFindActiveIndex={!isDraft && focused ? conversationFindActiveIndex : -1}

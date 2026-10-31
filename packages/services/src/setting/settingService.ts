@@ -101,7 +101,10 @@ function shouldPersistSettingsMigrations(rawValue: unknown): boolean {
     (needsLegacyAccountConnectionMigration(rawValue) &&
       readIncompleteLegacyTeamConnections(rawValue).length === 0) ||
     raw.closeToTrayOnWindowsMigrationInitialized !== true ||
-    raw.messageStreamShowReasoningMigrationInitialized !== true
+    raw.messageStreamShowReasoningMigrationInitialized !== true ||
+    // 自动归档重置迁移：首读在内存里关掉旧开关后必须落盘，否则用户重新开启后
+    // 下一次启动又会因为磁盘上仍缺标记而再关一次。
+    raw.taskAutoArchiveResetVersion !== 1
   );
 }
 

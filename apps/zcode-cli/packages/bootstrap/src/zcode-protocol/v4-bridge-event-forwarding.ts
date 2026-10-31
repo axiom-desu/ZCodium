@@ -17,6 +17,7 @@ export function createGatewayEventForwarding(
   | "emitSessionActivity"
   | "emitLocalTtftFacts"
   | "emitCuaPermissionObservation"
+  | "emitPluginUiToolResult"
   | "getSessionMemoryEnabled"
   | "getSessionConfigSeed"
   | "getSessionUsageSeed"
@@ -47,6 +48,8 @@ export function createGatewayEventForwarding(
         method: V4_NOTIFICATIONS.cuaPermissionObservation,
         params: observation,
       }),
+    emitPluginUiToolResult: (result) =>
+      context.notify({ method: V4_NOTIFICATIONS.pluginUiToolResult, params: result }),
     // ── config 种子：投影初值 = runtime 真值 ─────────────
     // 覆盖三个种子来源：启动缺省（Workspace 模型偏好 + 项目持久化 mode）、
     // createSession.config（handler 先应用到 runtime 再种）、历史会话 resume

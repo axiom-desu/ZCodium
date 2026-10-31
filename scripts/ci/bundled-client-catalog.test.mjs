@@ -120,8 +120,12 @@ test("callers cannot mutate bundled scenes or public config for later reads", as
   assert.deepEqual(await scenes.list(), expectedScenes);
   assert.deepEqual(await createClientScenesService(forbiddenNetwork).list(), expectedScenes);
   const config = createClientConfigService(forbiddenNetwork);
+  // 既定 3.16 行为（upstream-3.16-settings-and-navigation.md）：ClientConfigSnapshot
+  // 由 pluginStoreOrder/zsrcUrl/uiPluginRecommendations 三字段构成，解析器恒返回全部键，
+  // 空值即 null/[]；断言保持全量深度相等（非子集），只补齐既定字段。
+  const emptySnapshot = { pluginStoreOrder: null, zsrcUrl: null, uiPluginRecommendations: [] };
   const snapshot = await config.getSnapshot();
-  assert.deepEqual(snapshot, { pluginStoreOrder: null });
+  assert.deepEqual(snapshot, emptySnapshot);
   snapshot.pluginStoreOrder = { code: { categoryOrder: ["caller"] } };
-  assert.deepEqual(await config.getSnapshot({ forceRefresh: true }), { pluginStoreOrder: null });
+  assert.deepEqual(await config.getSnapshot({ forceRefresh: true }), emptySnapshot);
 });

@@ -19,7 +19,13 @@ type DispatchCommand = (
   type: CommandType,
   payload: Record<string, unknown>,
   targetSessionId: string | null,
+  context?: { projectId?: string | null },
 ) => Promise<CommandAck>;
+
+/** createSession 的项目归属只走 Host 预占入口；预热会话必须与首发送同属一个项目。 */
+interface DraftCreateContext {
+  projectId?: string | null;
+}
 
 interface DraftPrewarmController {
   /** 首条 admission 命令已发出、ACK 未收口；dispose 不得删除结果未知的会话。 */
@@ -36,7 +42,7 @@ interface DraftPrewarmController {
 }
 
 /** 预热生命周期纯控制器：创建 → onReady 上抛 → dispose 决策清理。 */
-function startDraftSessionPrewarm(params: {
+export function startDraftSessionPrewarm(params: {
   workspaceKey: string;
   dispatchCommand: DispatchCommand;
   onReady: (sessionId: string) => void;
@@ -44,8 +50,11 @@ function startDraftSessionPrewarm(params: {
   onSettled?: () => void;
   /** 预热会话初始 config（全局「上次选择」，同步解析）；让投影首帧即全局、不闪。 */
   resolveInitialConfig?: () => Partial<SessionConfigState> | undefined;
+  /** 冻结本次草稿的项目归属；项目切换后旧预热会话必须回收重建。 */
+  createContext?: DraftCreateContext;
 }): DraftPrewarmController {
-  const { workspaceKey, dispatchCommand, onReady, onSettled, resolveInitialConfig } = params;
+  const { workspaceKey, dispatchCommand, onReady, onSettled, resolveInitialConfig, createContext } =
+    params;
   let disposed = false;
   let promotionState: "draft" | "pending" | "promoted" | "discarded" = "draft";
   let createdSessionId: string | null = null;
@@ -80,7 +89,7 @@ function startDraftSessionPrewarm(params: {
     if (disposed) {
       return Promise.resolve(null);
     }
-    return dispatchCommand("createSession", createSessionPayload, null);
+    return dispatchCommand("createSession", createSessionPayload, null, createContext);
   };
   const createSessionAck = dispatchCreateSession();
   void createSessionAck
@@ -201,23 +210,28 @@ class DraftSessionPrewarmCoordinator {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private dispatchCommand: DispatchCommand;
   private resolveInitialConfig: (() => Partial<SessionConfigState> | undefined) | undefined;
+  private createContext: DraftCreateContext;
 
   constructor(
     private readonly workspaceKey: string,
     dispatchCommand: DispatchCommand,
     resolveInitialConfig: (() => Partial<SessionConfigState> | undefined) | undefined,
     private readonly onEmpty: () => void,
+    createContext: DraftCreateContext,
   ) {
     this.dispatchCommand = dispatchCommand;
     this.resolveInitialConfig = resolveInitialConfig;
+    this.createContext = createContext;
   }
 
   update(
     dispatchCommand: DispatchCommand,
     resolveInitialConfig: (() => Partial<SessionConfigState> | undefined) | undefined,
+    createContext: DraftCreateContext,
   ): void {
     this.dispatchCommand = dispatchCommand;
     this.resolveInitialConfig = resolveInitialConfig;
+    this.createContext = createContext;
   }
 
   acquire(params: {
@@ -320,9 +334,10 @@ class DraftSessionPrewarmCoordinator {
     let current!: DraftPrewarmCurrent;
     const controller = startDraftSessionPrewarm({
       workspaceKey: this.workspaceKey,
-      dispatchCommand: (type, payload, targetSessionId) =>
-        this.dispatchCommand(type, payload, targetSessionId),
+      dispatchCommand: (type, payload, targetSessionId, context) =>
+        this.dispatchCommand(type, payload, targetSessionId, context),
       resolveInitialConfig: () => this.resolveInitialConfig?.(),
+      createContext: this.createContext,
       onReady: (sessionId) => {
         if (this.current !== current || current.retiring) {
           return;
@@ -421,23 +436,31 @@ const draftPrewarmCoordinatorsByTransport = new Map<
   Map<string, DraftSessionPrewarmCoordinator>
 >();
 
-function logicalDraftOwnerKey(workspaceKey: string, paneId: string): string {
-  return JSON.stringify([workspaceKey, paneId]);
+export function buildDraftPrewarmOwnerKey(
+  workspaceKey: string,
+  paneId: string,
+  projectId: string | null | undefined,
+): string {
+  // 同一 cwd（例如两个项目共享 primaryRoot）但项目归属不同时必须是不同 owner：
+  // 否则一个项目的预热会话会被另一个项目复用，首发送的归属与目录都是错的。
+  return JSON.stringify([workspaceKey, paneId, projectId ?? null]);
 }
 
 function getDraftSessionPrewarmCoordinator(params: {
   workspaceKey: string;
   paneId: string;
+  projectId: string | null | undefined;
   transportIdentity: unknown;
   dispatchCommand: DispatchCommand;
   resolveInitialConfig: (() => Partial<SessionConfigState> | undefined) | undefined;
+  createContext: DraftCreateContext;
 }): DraftSessionPrewarmCoordinator {
   let transportCoordinators = draftPrewarmCoordinatorsByTransport.get(params.transportIdentity);
   if (!transportCoordinators) {
     transportCoordinators = new Map();
     draftPrewarmCoordinatorsByTransport.set(params.transportIdentity, transportCoordinators);
   }
-  const ownerKey = logicalDraftOwnerKey(params.workspaceKey, params.paneId);
+  const ownerKey = buildDraftPrewarmOwnerKey(params.workspaceKey, params.paneId, params.projectId);
   let coordinator = transportCoordinators.get(ownerKey);
   if (!coordinator) {
     coordinator = new DraftSessionPrewarmCoordinator(
@@ -453,6 +476,7 @@ function getDraftSessionPrewarmCoordinator(params: {
           draftPrewarmCoordinatorsByTransport.delete(params.transportIdentity);
         }
       },
+      params.createContext,
     );
     transportCoordinators.set(ownerKey, coordinator);
   }
@@ -465,6 +489,8 @@ export function useDraftSessionPrewarm(params: {
   workspaceKey: string;
   /** 同一 workspace 内的逻辑 pane 身份；同步重挂必须保持稳定。 */
   paneId: string;
+  /** 冻结的新任务项目归属；null/undefined 表示全局任务。 */
+  projectId?: string | null;
   /** 外部能力变化时递增；仅用于回收并重建尚未提升的草稿预热会话。 */
   invalidationVersion?: number;
   /** conversation provider 的 transport identity；同 workspace lease 变化时保持不变。 */
@@ -477,6 +503,7 @@ export function useDraftSessionPrewarm(params: {
     enabled,
     workspaceKey,
     paneId,
+    projectId,
     transportIdentity,
     invalidationVersion = 0,
     dispatchCommand,
@@ -485,23 +512,27 @@ export function useDraftSessionPrewarm(params: {
   // workspace/pane/transport 共同定义逻辑 owner：同 owner 重挂复用 single-flight，transport
   // 换代仍生成新 coordinator，确保旧 session 的清理不会误走新 transport。
   const owner = useMemo(
-    () => ({ workspaceKey, paneId, transportIdentity }),
-    [paneId, transportIdentity, workspaceKey],
+    () => ({ workspaceKey, paneId, projectId, transportIdentity }),
+    [paneId, projectId, transportIdentity, workspaceKey],
   );
   const coordinator = useMemo(
     () =>
       getDraftSessionPrewarmCoordinator({
         workspaceKey,
         paneId,
+        projectId,
         transportIdentity,
         dispatchCommand,
         resolveInitialConfig,
+        createContext: { projectId: projectId ?? null },
       }),
     [owner],
   );
   useLayoutEffect(() => {
-    coordinator.update(dispatchCommand, resolveInitialConfig);
-  }, [coordinator, dispatchCommand, resolveInitialConfig]);
+    coordinator.update(dispatchCommand, resolveInitialConfig, {
+      projectId: projectId ?? null,
+    });
+  }, [coordinator, dispatchCommand, projectId, resolveInitialConfig]);
   const generation = useMemo(() => ({ owner }), [enabled, invalidationVersion, owner]);
   const [ready, setReady] = useState<{
     generation: typeof generation;

@@ -24,3 +24,17 @@ Renderer 模块，层序 `domain → app → adapters → components`；公开�
 - Sampling 使用官方 oncreatesamplingmessage；只有可操作任务声明 sampling:{}。请求携带完整实例凭证，SDK signal 经显式 cancel 到 Agent；controller 将采样计入 busy，切展示位置不取消/重发。结果不进入主聊天；内容扩展和进度仍 pending。
 
 `hostPrimitives.ts` 对 Gen UI 公开 MessagePort 传输、原子移动页面承载层、窗口级容量管理、主题投影和会话动作读取。Gen UI 不复用 MCP 工具调用控制器。绑定显式区分自然流、容器定位与侧栏；Gen UI 预览使用原容器 popover，不重新挂载页面。
+
+## 推荐、市场与后台入口
+
+- 推荐只消费 `clientConfigService` 的公开 `uiPluginRecommendations`；当前仓库没有无账号配置端点，
+  `zsrcUrl` 只做严格 http(s) 解析，不新增后台请求。推荐为空必须保持明确空态。
+- 推荐/市场 target 键 = workspace identity（本地 fallback 路径）+ remoteSessionId + sessionId；
+  同一 pluginId 只渲染首个 surface。换目标后旧 list/surface/describe/安装结果全部丢弃，
+  不覆盖新详情、activeOperations 或错误。
+- 安装/启用仍由 `IPluginManagementService` 与 scoped `pluginManagementStore` 负责；restorable 走
+  `restoreBuiltin`，禁用走 `setEnabled`，只有未安装普通插件才 `installPlugin`。进入商店只读，
+  手动刷新才调用既有 marketplace update。
+- 窗口级 `PluginUiBackgroundHost` 只接本地桌面 live 成功 UI 结果；经 `v4/plugin-ui/tool-result`
+  投影提交后创建/更新同一 page owner。历史、失败、取消、Web/手机/远程不创建 guest；
+  无 guest 能力的调用方继续渲染普通 MCP 卡。页面状态键只下发 SHA-256 摘要。

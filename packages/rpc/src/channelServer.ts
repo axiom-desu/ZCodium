@@ -24,6 +24,7 @@ export class ChannelServer<TContext = string> implements IChannelServer<TContext
     private ctx: TContext,
     private timeoutDelay = 1000,
     private deferInit = false,
+    private readonly capabilities: Readonly<Record<string, true>> = {},
   ) {
     this.protocolListener = this.protocol.onMessage((msg) => this.onRawMessage(msg));
     if (!this.deferInit) {
@@ -43,7 +44,7 @@ export class ChannelServer<TContext = string> implements IChannelServer<TContext
   private sendResponse(response: IRawResponse): void {
     switch (response.type) {
       case ResponseType.Initialize:
-        this.send([response.type]);
+        this.send([response.type], this.capabilities);
         return;
       case ResponseType.PromiseSuccess:
       case ResponseType.PromiseError:

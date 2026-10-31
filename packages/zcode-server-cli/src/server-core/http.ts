@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { hostname } from "node:os";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { hostname, userInfo } from "node:os";
 import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
 import { Hono } from "hono";
@@ -15,14 +15,17 @@ import {
 } from "@zcode/rpc";
 import {
   createZCodeAgentConnectionScope,
+  IProjectService,
   IZCodeAgentService,
   ServiceCollection,
 } from "@zcode/services";
 import { createServiceLogger } from "@zcode/services/node";
 import {
   SERVER_REMOTE_PROTOCOL_VERSION,
+  ZCODE_COMPATIBILITY_MANIFEST,
   ZCODE_RPC_HOST_CAPABILITY_HEADER,
   ZCODE_VERSION,
+  serverRemoteInfoOutputSchema,
   type ServerRemoteInfo,
 } from "@zcode/shared";
 import { createHostCapabilityStore, type HostCapabilityStore } from "./hostCapability.js";
@@ -118,6 +121,7 @@ export async function createCoreHttpServer(
     host?: string;
     port?: number;
     serverId?: string;
+    ingressToken?: string;
     hostCapabilityStore?: HostCapabilityStore;
   } = {},
 ): Promise<CoreHttpServer> {
@@ -125,25 +129,61 @@ export async function createCoreHttpServer(
   const { injectWebSocket, upgradeWebSocket, wss } = createNodeWebSocket({ app });
   const host = options.host ?? "127.0.0.1";
   if (!isLoopbackHost(host)) {
-    // 当前只有本机/SSH 隧道入口，Core 尚未接入 token middleware；对外监听必须 fail-closed。
+    // 当前只有本机/SSH 隧道入口；对外监听必须 fail-closed，直到有明确的对外 TLS/鉴权边界。
     throw new Error(
       `Non-loopback host ${host} requires authentication before the server can listen`,
     );
   }
-  const info: ServerRemoteInfo = {
+  const ingressToken = options.ingressToken?.trim();
+  const info: ServerRemoteInfo = serverRemoteInfoOutputSchema.parse({
     serverId: options.serverId ?? hostname() ?? "zcode-server",
     version: ZCODE_VERSION,
     protocolVersion: SERVER_REMOTE_PROTOCOL_VERSION,
-    authRequired: false,
+    authRequired: Boolean(ingressToken),
     workspaces: [],
+    compatibility: ZCODE_COMPATIBILITY_MANIFEST,
+    identity: { osUser: userInfo().username, hostname: hostname() },
     capabilities: {
       desktopContinuous: true,
       websocketRpc: true,
+      ...(services.getOptional(IProjectService) ? { virtualProjects: true as const } : {}),
     },
-  };
+  });
   // 裸 Set 无法落实 expiresAt，未消费的 capability 会一直有效并持续累积。
   // 使用与 packages/server 兼容的 TTL 一次性 store，使有效期和消费语义与返回信息一致。
   const capabilities = options.hostCapabilityStore ?? createHostCapabilityStore();
+  app.use("*", async (context, next) => {
+    if (!ingressToken) {
+      await next();
+      return;
+    }
+    const authorization = context.req.header("authorization");
+    const bearerToken = authorization?.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length).trim()
+      : undefined;
+    const candidate = bearerToken;
+    const authenticated = candidate
+      ? (() => {
+          const expected = Buffer.from(ingressToken);
+          const received = Buffer.from(candidate);
+          return expected.length === received.length && timingSafeEqual(expected, received);
+        })()
+      : false;
+    if (authenticated) {
+      await next();
+      return;
+    }
+    if (context.req.path === "/api/server-info") {
+      // 匿名只能拿到版本/兼容性等非敏感描述；Host capability 与业务 RPC 仍必须鉴权。
+      return context.json({
+        version: info.version,
+        protocolVersion: info.protocolVersion,
+        authRequired: true,
+        compatibility: info.compatibility,
+      });
+    }
+    return context.json({ error: "Ingress authentication required" }, 401);
+  });
   app.get("/api/server-info", (context) => context.json(info));
   app.get(
     "/ws",

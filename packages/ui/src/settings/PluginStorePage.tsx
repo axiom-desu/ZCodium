@@ -2,6 +2,7 @@
 import { PluginAddMenu } from "@/settings/PluginAddMenu.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Settings } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { Button } from "@/components/ui/button.js";
 import { toast } from "@/components/ui/toast.js";
@@ -9,7 +10,9 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useServices } from "@/hooks/useServices.js";
 import { usePluginStoreOrder } from "@/hooks/usePluginStoreOrder.js";
 import { useZCodeSessionService } from "@/hooks/useZCodeSessionService.js";
-import { usePluginManagementStore } from "@/store/pluginManagementStore.js";
+import { useScopedPluginManagementStore } from "@/store/pluginManagementStore.js";
+import { useMarketPluginUi } from "@/plugin-ui/index.js";
+import { resolvePluginUiSurfaceTitle } from "@/plugin-ui/adapters/usePluginUiSurfaces.js";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
 import { invalidateDeferredDraftSessionForSkillChange } from "@/lib/zcodeDraftSkillInvalidation.js";
 import { refreshSharedSkillStoreForWorkspace } from "@/lib/skillStoreRefresh.js";
@@ -46,6 +49,9 @@ import {
 interface PluginStorePageProps {
   workspacePath?: string | null;
   workspaceIdentity?: string;
+  /** 当前会话；没有会话时只浏览/安装，不提供打开面板。 */
+  sessionId?: string | null;
+  remoteSessionId?: string | null;
   onCreateTask?: (request?: CreateTaskRequest) => void;
   onManageInstalled: () => void;
 }
@@ -55,12 +61,21 @@ type PluginStoreView = "store" | "detail";
 export function PluginStorePage({
   workspacePath,
   workspaceIdentity,
+  sessionId,
+  remoteSessionId,
   onCreateTask,
   onManageInstalled,
 }: PluginStorePageProps) {
   const { intl, locale } = useZCodeIntl();
   const { order: storeOrder, refresh: refreshStoreOrder } = usePluginStoreOrder();
   const { pluginManagementService, skillsService } = useServices();
+  const usePluginManagementStore = useScopedPluginManagementStore(pluginManagementService);
+  const pluginUi = useMarketPluginUi({
+    workspacePath,
+    workspaceIdentity,
+    sessionId,
+    remoteSessionId,
+  });
   const zcodeSessionService = useZCodeSessionService(
     workspacePath ?? undefined,
     undefined,
@@ -80,6 +95,7 @@ export function PluginStorePage({
   const loadedWorkspaceIdentity = usePluginManagementStore((state) => state.workspaceIdentity);
   const error = usePluginManagementStore((state) => state.error);
   const operationId = usePluginManagementStore((state) => state.operationId);
+  const activeOperations = usePluginManagementStore((state) => state.activeOperations);
   const describeCache = usePluginManagementStore((state) => state.describeCache);
   const initialize = usePluginManagementStore((state) => state.initialize);
   const updateMarketplace = usePluginManagementStore((state) => state.updateMarketplace);
@@ -118,10 +134,11 @@ export function PluginStorePage({
     void initialize({
       workspacePath,
       workspaceIdentity,
+      remoteSessionId,
       configScope: "user",
       pluginService: pluginManagementService,
     });
-  }, [initialize, pluginManagementService, workspaceIdentity, workspacePath]);
+  }, [initialize, pluginManagementService, remoteSessionId, workspaceIdentity, workspacePath]);
 
   const items = useMemo(
     () =>
@@ -254,6 +271,8 @@ export function PluginStorePage({
     installedPlugins,
     plugins,
     operationId,
+    activeOperations,
+    uninstallPlugin: usePluginManagementStore.getState().uninstallPlugin,
     onAfterUninstall: async () => {
       await refreshAfterPluginChange();
     },
@@ -347,13 +366,38 @@ export function PluginStorePage({
   const actions: PluginStoreActions = useMemo(
     () => ({
       onOpenDetail: openDetail,
+      ...(sessionId && workspacePath
+        ? {
+            onOpenUi: (item: StorePluginItem) =>
+              void pluginUi.open(item.id, () =>
+                item.info?.enabled
+                  ? Promise.resolve(true)
+                  : usePluginManagementStore
+                      .getState()
+                      .setEnabled(item.id, true, pluginManagementService, "workspace"),
+              ),
+          }
+        : {}),
       onInstall: (item) => void handleInstall(item),
       onUninstall: uninstall.requestUninstall,
       onUpdate: (pluginId) => void handleUpdatePlugin(pluginId),
       operationId,
+      activeOperations,
       togglingPluginId: null,
     }),
-    [handleInstall, handleUpdatePlugin, openDetail, operationId, uninstall.requestUninstall],
+    [
+      activeOperations,
+      handleInstall,
+      handleUpdatePlugin,
+      openDetail,
+      operationId,
+      pluginManagementService,
+      pluginUi,
+      sessionId,
+      uninstall.requestUninstall,
+      usePluginManagementStore,
+      workspacePath,
+    ],
   );
 
   if (!workspacePath) {
@@ -492,7 +536,9 @@ export function PluginStorePage({
                       data-testid="plugin-store-detail-update"
                       variant="outline"
                       size="sm"
-                      disabled={operationId === `plugin:update:${detailItem.id}`}
+                      disabled={activeOperations.some(
+                        (operation) => operation.id === `plugin:update:${detailItem.id}`,
+                      )}
                       onClick={() => void handleUpdatePlugin(detailItem.id)}
                     >
                       {intl.formatMessage({ id: "settings.plugins.detail.update" })}
@@ -526,7 +572,10 @@ export function PluginStorePage({
           items={items}
           marketplaces={marketplaces}
           actions={actions}
-          loading={loading || (operationId?.startsWith("marketplace:update:") ?? false)}
+          loading={
+            loading ||
+            activeOperations.some((operation) => operation.id.startsWith("marketplace:update:"))
+          }
           query={query}
           onQueryChange={setQuery}
           segment={segment}
@@ -534,6 +583,28 @@ export function PluginStorePage({
           onOpenManage={onManageInstalled}
         />
       )}
+
+      <Dialog
+        open={pluginUi.surfaces.length > 1}
+        onOpenChange={(open) => {
+          if (!open) pluginUi.closeSelection();
+        }}
+      >
+        <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+          <DialogTitle>
+            {intl.formatMessage({ id: "settings.plugins.store.ui.chooseSurface" })}
+          </DialogTitle>
+          {pluginUi.surfaces.map((surface) => (
+            <Button
+              key={surface.id}
+              variant="outline"
+              onClick={() => pluginUi.selectSurface(surface)}
+            >
+              {resolvePluginUiSurfaceTitle(surface.title, locale)}
+            </Button>
+          ))}
+        </DialogContent>
+      </Dialog>
 
       <PluginUninstallConfirmDialog
         open={uninstall.pendingPlugin !== null}

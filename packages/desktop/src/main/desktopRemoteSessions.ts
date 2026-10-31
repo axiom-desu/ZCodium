@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { BrowserWindow, MessageChannelMain } from "electron";
 import type { MessagePortMain, UtilityProcess as ElectronUtilityProcess } from "electron";
 import {
-  buildRemoteWorkspaceIdentity,
   buildRemoteEnvironmentKey,
   HostMessageTypes,
   HostResponseTypes,
@@ -17,6 +16,7 @@ import {
 } from "@zcode/shared";
 import type { RemoteAssetDirs } from "./desktopRuntimeEnv.js";
 import { ProviderProvisioningEnvironmentCoordinator } from "./providerProvisioningEnvironmentCoordinator.js";
+import { resolveBoundRemoteWorkspaceIdentity } from "./remoteWorkspaceDescriptorIdentity.js";
 
 interface RemoteWorkspaceSessionContext {
   workspacePath: string;
@@ -27,7 +27,7 @@ interface PendingConnect {
   requestId: string;
   webContentsId: number;
   win: BrowserWindow;
-  resolve: (sessionId: string) => void;
+  resolve: (descriptor: WindowHostRemoteWorkspaceDescriptor) => void;
   reject: (error: Error) => void;
 }
 
@@ -373,7 +373,7 @@ export function createRemoteWorkspaceSessionManager(options: {
           level: "info",
           message: `远程 ${descriptor.target.kind} workspace 已连接`,
         });
-        pending.resolve(descriptor.remoteSessionId);
+        pending.resolve(descriptor);
       })
       .catch((error: unknown) => {
         route.providerProvisioningDispose?.();
@@ -588,7 +588,7 @@ export function createRemoteWorkspaceSessionManager(options: {
     target: RemoteTarget,
     requestId?: string,
     context?: RemoteWorkspaceSessionContext,
-  ): Promise<string> {
+  ): Promise<WindowHostRemoteWorkspaceDescriptor> {
     if (appShutdownStarted) {
       throw new Error("应用正在退出，无法创建远程工作区连接");
     }
@@ -615,7 +615,7 @@ export function createRemoteWorkspaceSessionManager(options: {
       level: "info",
       message: `正在通过窗口 Host 连接 ${resolvedTarget.kind} workspace`,
     });
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<WindowHostRemoteWorkspaceDescriptor>((resolve, reject) => {
       pendingByRequestKey.set(key, {
         requestId: resolvedRequestId,
         webContentsId: win.webContents.id,
@@ -649,9 +649,14 @@ export function createRemoteWorkspaceSessionManager(options: {
     if (expectedWebContentsId != null && route.webContentsId !== expectedWebContentsId) {
       throw new Error(`远程 workspace session 不属于当前窗口，sessionId=${sessionId}`);
     }
-    const workspaceIdentity =
-      context.workspaceIdentity?.trim() ||
-      buildRemoteWorkspaceIdentity(context.workspacePath, route.descriptor.target);
+    // Bug 原因：按 sourceId 强制 canonical 会覆盖 Host 已验证的 legacy 主 key，手机 exact scope 随之失配。
+    // Main 同路径尊重 exact descriptor；切路径只派生同种身份候选，renderer hint 仍由 Host 验证。
+    const routeIdentity = context.workspaceIdentity?.trim();
+    const workspaceIdentity = resolveBoundRemoteWorkspaceIdentity({
+      descriptor: route.descriptor,
+      workspacePath: context.workspacePath,
+      ...(routeIdentity ? { rendererWorkspaceIdentity: routeIdentity } : {}),
+    });
     const child = options.windowHostProcessMap.get(route.webContentsId);
     const win = BrowserWindow.getAllWindows().find(
       (candidate) => candidate.webContents.id === route.webContentsId,
@@ -665,6 +670,9 @@ export function createRemoteWorkspaceSessionManager(options: {
       remoteSessionId: sessionId,
       workspacePath: context.workspacePath,
       workspaceIdentity,
+      ...(route.descriptor.sourceServerId && routeIdentity && routeIdentity !== workspaceIdentity
+        ? { legacyRouteHint: routeIdentity }
+        : {}),
     });
     route.descriptor = {
       ...route.descriptor,
@@ -879,7 +887,12 @@ export function createRemoteWorkspaceSessionManager(options: {
     const key = `${win.webContents.id}\0${params.workspaceIdentity}`;
     const pending = reconnectsByWorkspaceKey.get(key);
     if (pending) return pending;
-    const reconnect = createRemoteWorkspaceSession(win, params.target, params.requestId, params);
+    const reconnect = createRemoteWorkspaceSession(
+      win,
+      params.target,
+      params.requestId,
+      params,
+    ).then((descriptor) => descriptor.remoteSessionId);
     reconnectsByWorkspaceKey.set(key, reconnect);
     void reconnect.finally(() => {
       if (reconnectsByWorkspaceKey.get(key) === reconnect) reconnectsByWorkspaceKey.delete(key);
@@ -914,7 +927,53 @@ export function createRemoteWorkspaceSessionManager(options: {
     }).port;
   }
 
+  /**
+   * Source 级设置 attachment：只复用窗口 Host 已有 services，不创建 workspace session/Agent。
+   * 端口随调用立即投递给 renderer；UI 侧按 attachment 身份注销，不影响其他 Source。
+   */
+  function attachSourceSettings(
+    win: BrowserWindow,
+    sourceServerId: string,
+  ): { attachmentId: string } {
+    const normalizedSourceServerId = sourceServerId.trim();
+    if (!normalizedSourceServerId) {
+      throw new Error("Source Server id is required for settings attachment");
+    }
+    if (win.isDestroyed() || win.webContents.isDestroyed()) {
+      throw new Error("窗口已关闭，无法创建 Source 设置 attachment");
+    }
+    const child = getWindowHost(win);
+    const { port1, port2 } = createMessageChannel();
+    const attachmentId = `source-settings-${randomUUID()}`;
+    const closePorts = () => {
+      closeMessagePort(port1);
+      closeMessagePort(port2);
+    };
+    try {
+      child.postMessage(
+        {
+          type: HostMessageTypes.AttachServicePort,
+          requestId: randomUUID(),
+          attachmentId,
+          clientMode: "desktop-continuous",
+          scope: { kind: "source-settings", sourceServerId: normalizedSourceServerId },
+        },
+        [port2],
+      );
+      win.webContents.postMessage(
+        InternalChannels.SourceSettingsServicePort,
+        { attachmentId, sourceServerId: normalizedSourceServerId },
+        [port1],
+      );
+    } catch (error) {
+      closePorts();
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+    return { attachmentId };
+  }
+
   return {
+    attachSourceSettings,
     createRemoteWorkspaceSession,
     attachRemoteWorkspaceSessionHost,
     reconnectBotRemoteWorkspaceSession,

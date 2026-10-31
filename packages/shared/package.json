@@ -14,6 +14,7 @@
     "./model-config": "./src/model-config.ts",
     "./config-schema": "./src/config-schema.ts",
     "./node": "./src/node.ts",
+    "./sqlite-migrations": "./src/sqlite-migrations/index.ts",
     "./zcodeEndpoint": "./src/zcodeEndpoint.ts",
     "./workspaceFileSearch": "./src/workspaceFileSearch.ts",
     "./workspaceFileEntriesCodec": "./src/workspaceFileEntriesCodec.ts",
@@ -24,6 +25,8 @@
     "./workspace-hook-review-monotonicity": "./src/workspace-hook-review-monotonicity.ts",
     "./workspace-hook-trust-store-file": "./src/workspace-hook-trust-store-file.ts",
     "./builtin-plugin-assets": "./src/builtinPluginAssets.ts",
+    "./office-viewer-assets": "./src/officeViewerAssetsNode.ts",
+    "./office-viewer-assets-contract": "./src/officeViewerAssets.ts",
     "./bundled-remote-assets": "./src/bundledRemoteAssets.ts",
     "./gen-ui": "./src/gen-ui/index.ts"
   },

@@ -14,7 +14,9 @@ export interface ServerLayout {
   readonly componentsCacheDir: string;
   readonly stableBinDir: string;
   readonly statusFile: string;
+  readonly ingressTokenFile: string;
   readonly lockFile: string;
+  readonly updateLockFile: string;
   readonly controlEndpoint: string;
   readonly serviceDir: string;
   readonly uninstalledFile: string;
@@ -40,7 +42,9 @@ export function resolveServerLayout(serverRoot = getDefaultServerDataRoot()): Se
     componentsCacheDir: join(root, "cache", "components"),
     stableBinDir: join(root, "bin"),
     statusFile: join(runDir, "status.json"),
+    ingressTokenFile: join(runDir, "ingress-token"),
     lockFile: join(runDir, "server.lock"),
+    updateLockFile: join(runDir, "update.lock"),
     controlEndpoint:
       process.platform === "win32"
         ? `\\\\.\\pipe\\zcode-server-${stablePathId(root)}`

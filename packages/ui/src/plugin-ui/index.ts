@@ -1,4 +1,5 @@
 export * from "./contract.js";
+export { PluginUiBackgroundHost } from "./adapters/PluginUiBackgroundHost.js";
 export { createPluginUiMessagePortTransport } from "./adapters/messagePortTransport.js";
 export { createPluginUiPagePlane } from "./adapters/pluginUiPagePlane.js";
 export { readPluginUiStyleVariables } from "./adapters/readPluginUiStyleVariables.js";
@@ -40,10 +41,9 @@ export {
   PluginUiLauncherItems,
   buildPluginUiLauncherItemId,
 } from "@/plugin-ui/components/PluginUiLauncherItems.js";
-export {
-  usePluginUiSurfaces,
-  resolvePluginUiSurfaceTitle,
-} from "./adapters/usePluginUiSurfaces.js";
+export { resolvePluginUiSurfaceTitle } from "./adapters/usePluginUiSurfaces.js";
+
+export { useMarketPluginUi } from "./adapters/useMarketPluginUi.js";
 export {
   openPluginUiSidePane,
   type OpenScopedPluginUiSideTabRequest,

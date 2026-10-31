@@ -108,7 +108,7 @@ export async function installZCodeMarketplacePlugin(
     // 否则同一 storageRoot 的 promise-chain lock 会等待自身而永久阻塞。
     await restoreBuiltinPluginCore({ ...options, configResult, pluginId });
     const fresh = resolvePluginContext({ ...options, configResult: undefined });
-    const outcome = resolveZCodePlugins({
+    const outcome = await resolveZCodePlugins({
       ...options,
       configResult: fresh.configResult,
       pluginStorageRoot: fresh.pluginStorageRoot,
@@ -237,7 +237,7 @@ export async function uninstallZCodeMarketplacePlugin(
     // 内置（官方）插件不在 installed_plugins.json 里，无法走 marketplace 卸载路径。
     // 卸载只改变 Runtime 抑制态并清理用户数据/config；Catalog 与不可变 cache 必须保留，
     // 这样详情页仍能离线读取组件，且恢复动作不依赖重新下载或重新构造目录。
-    const outcome = resolveZCodePlugins({
+    const outcome = await resolveZCodePlugins({
       ...options,
       configResult,
       pluginStorageRoot,
@@ -328,7 +328,7 @@ async function restoreBuiltinPluginCore(options: RestoreBuiltinPluginOptions): P
   // 不能复用 patch 前可能被传入的 configResult。
   const fresh = resolvePluginContext({ ...options, configResult: undefined });
   // 立即重新 seed，让插件即刻可用，无需等待下一次 resolve。
-  resolveOfficialPluginRoots({
+  await resolveOfficialPluginRoots({
     storageRoot: fresh.pluginStorageRoot,
     suppressedBuiltins: new Set(fresh.configResult.config.plugins.suppressedBuiltins),
   });

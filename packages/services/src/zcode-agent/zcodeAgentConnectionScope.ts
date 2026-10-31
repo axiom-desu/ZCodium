@@ -906,6 +906,14 @@ export function createZCodeAgentConnectionScope(
       }
       return base.onDynamicCuaPermissionObservation();
     },
+    onDynamicPluginUiToolResult() {
+      assertOpen();
+      // 页面创建只属于本地桌面；手机回放和 relay 不拥有原生 guest。
+      if (role !== "terminal-client" || context.clientMode !== "desktop-continuous") {
+        return RpcEvent.None;
+      }
+      return base.onDynamicPluginUiToolResult();
+    },
     onDynamicProcessResourceSample() {
       assertOpen();
       // CLI 资源样本只供远端 Desktop Host relay 回传 main；renderer/mobile attachment
@@ -1031,6 +1039,10 @@ export function createZCodeAgentConnectionScope(
 
   const service = new Proxy(base, {
     get(target, property, receiver) {
+      if (property === "acquireExistingRuntime")
+        return () => {
+          throw new Error("project.host-only-admission");
+        };
       const override = Reflect.get(overrides, property, receiver);
       if (override !== undefined) return override;
       const value = Reflect.get(target, property, target);

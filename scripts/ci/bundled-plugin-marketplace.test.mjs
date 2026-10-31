@@ -300,3 +300,32 @@ test("bundled listing definitions no longer contain official asset URLs", async 
     /cdn-zcode|https:\/\/zcode\.z\.ai/,
   );
 });
+
+test("official Office4 catalog entries and manifests agree on the ui classification", async () => {
+  const { OFFICIAL_PLUGIN_DEFINITIONS } = await tsImport(
+    "../../apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts",
+    import.meta.url,
+  );
+  for (const name of ["documents", "pdf", "presentations", "spreadsheets"]) {
+    const definition = OFFICIAL_PLUGIN_DEFINITIONS.find((item) => item.name === name);
+    assert.ok(definition, `${name} must stay in the bundled catalog`);
+    assert.ok(definition.componentTypes?.includes("ui"), `${name} must be restorable as ui`);
+    const manifest = JSON.parse(
+      await readFile(
+        new URL(
+          `../../apps/zcode-cli/packages/${name}-plugin/.zcodium-plugin/plugin.json`,
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    assert.deepEqual(
+      manifest.ui?.surfaces?.map((surface) => surface.id),
+      [name],
+      `${name} must expose its built viewer surface`,
+    );
+    assert.equal(manifest.ui.surfaces[0].server, name);
+    assert.ok(manifest.mcpServers?.[name], `${name} surface must bind the real MCP server`);
+    assert.match(manifest.ui.surfaces[0].resourceUri, /^ui:\/\//u);
+  }
+});

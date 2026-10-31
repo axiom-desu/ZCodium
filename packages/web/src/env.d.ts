@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly DEV: boolean;
   readonly PROD: boolean;
   readonly VITE_CONVERSATION_SHARE_PREVIEW_MOCK?: string;
+  /** 分享 API 与落地页共用的环境 origin；缺省同源，不允许内置生产地址。 */
+  readonly VITE_ZCODE_BASE_URL?: string;
   // OSS 多版本发布时资源 base 带版本目录，页面路由由该变量显式给出。
   readonly VITE_WEB_REMOTE_CONTROL_ROUTE_PATH?: string;
   readonly VITE_ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL?: string;

@@ -65,7 +65,7 @@ export interface AppDependencies {
   ownsSessionStore: boolean;
   pdfDocumentPort: import("@zcode/contracts").PdfDocumentPort;
   permissionService: PermissionService;
-  pluginOutcome: ReturnType<typeof resolveStartupPlugins>;
+  pluginOutcome: Awaited<ReturnType<typeof resolveStartupPlugins>>;
   pluginReferenceCatalog: import("@zcode/contracts").PluginReferenceCatalog;
   pluginRuntimeFeatures: ReturnType<typeof resolvePluginRuntimeFeatures>;
   projectID: import("@zcode/contracts").ProjectId;
@@ -139,9 +139,10 @@ export async function resolveAppDependencies(
     logger,
     storageRoot,
     workingDirectory,
+    additionalDirectories: options.additionalDirectories,
   });
   const zcodeSubagentProfiles = zcodeSubagentProfileOutcome.profiles;
-  const pluginOutcome = resolveStartupPlugins({
+  const pluginOutcome = await resolveStartupPlugins({
     cliStorageRoot,
     configResult,
     env: options.env,

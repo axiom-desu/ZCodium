@@ -26,18 +26,28 @@ export function useConversationWorkspaceActions({
     [addTab, setWorkspaceActionError],
   );
 
-  const handleResolveConversationWorkspace = useCallback(async () => {
-    try {
-      const result = await services.fileService.ensureConversationWorkspace();
-      setWorkspaceActionError(null);
-      return result.path;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.error("[Root] ensure conversation workspace failed", { error });
-      setWorkspaceActionError(message);
-      throw error;
-    }
-  }, [services.fileService, setWorkspaceActionError]);
+  const handleResolveConversationWorkspace = useCallback(
+    async (isCurrent?: () => boolean) => {
+      // detach 来自各 pane 的精确 scope；陈旧/远端资格不能进入本机文件 IO。
+      // 独立“对话 +”与 pluginCreator 不携带 detach 资格，继续使用原本地流程。
+      if (isCurrent && !isCurrent()) throw new Error("conversation.workspace-stale");
+      try {
+        const result = await services.fileService.ensureConversationWorkspace();
+        if (isCurrent && !isCurrent()) throw new Error("conversation.workspace-stale");
+        setWorkspaceActionError(null);
+        return result.path;
+      } catch (error) {
+        // IO 在途换 scope 后，成功与拒绝都不得污染当前窗口错误。
+        if (!isCurrent || isCurrent()) {
+          const message = error instanceof Error ? error.message : String(error);
+          logger.error("[Root] ensure conversation workspace failed", { error });
+          setWorkspaceActionError(message);
+        }
+        throw error;
+      }
+    },
+    [services.fileService, setWorkspaceActionError],
+  );
 
   const handleEnsureConversationWorkspace = useCallback(async () => {
     const path = await handleResolveConversationWorkspace();

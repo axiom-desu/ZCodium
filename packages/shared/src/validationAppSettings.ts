@@ -1,6 +1,7 @@
 /* oxlint-disable eslint(max-lines) -- AppSettings schema 聚合历史迁移、默认值和 patch 校验，拆分会削弱设置迁移的单一入口。 */
 import { z } from "zod";
 import { appToolSearchModeSchema } from "./app-runtime-preferences.js";
+import { DYNAMIC_WORKFLOW_MODES } from "./dynamic-workflow-feature.js";
 import { isKnownRemoteResourcePackageId } from "./remoteResourcePackages.js";
 import { wslUserSchema } from "./wslUserValidation.js";
 import { normalizeZCodeEndpointOrigin } from "./zcodeEndpoint.js";
@@ -9,6 +10,11 @@ import {
   embeddedBrowserViewportPreferenceSchema,
 } from "./browser-use/command-metadata.js";
 import { providerFamilyConnectionSelectionSettingsSchema } from "./provider-family-connection-selection.js";
+import {
+  connectionProfileSchema,
+  sourceServerRecordSchema,
+  sourceServerWorkspaceHistoryEntrySchema,
+} from "./source-server/index.js";
 import { webRemoteControlEndpointModeSchema } from "./webRemoteControl/index.js";
 
 /** 引导职业枚举；单独导出供 onboarding 记录回填 settings 时做窄化校验。 */
@@ -35,6 +41,9 @@ const nonEmptyStringSchema = z.string().trim().min(1);
 export const localeSchema = z.enum(["zh-CN", "en-US"]);
 const localePreferenceSchema = z.enum(["system", "zh-CN", "en-US"]);
 const zcodeInteractionBehaviorSchema = z.enum(["queue", "guide"]);
+// launch.md「The user's choice」：读文件时未知取值（降级后读到新版本写的值）按「跟随」处理，
+// 不能让一个偏好字段把整份设置读坏。
+const dynamicWorkflowModeSettingSchema = z.enum(DYNAMIC_WORKFLOW_MODES).optional().catch(undefined);
 const electronReleaseChannelSchema = z.enum(["stable", "preview"]);
 const desktopZoomLevelSchema = z.number().int().min(-3).max(5);
 const desktopWindowSizeSchema = z.object({
@@ -98,6 +107,15 @@ const remoteWorkspaceTargetSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("docker"),
     container: nonEmptyStringSchema,
+  }),
+  z.object({
+    kind: z.literal("server"),
+    url: nonEmptyStringSchema,
+    name: nonEmptyStringSchema.optional(),
+    workspacePath: nonEmptyStringSchema.optional(),
+    serverId: nonEmptyStringSchema.optional(),
+    // 只保存 credential key 名；token 永不进 setting.json。
+    tokenCredentialKey: nonEmptyStringSchema.optional(),
   }),
 ]);
 
@@ -204,6 +222,15 @@ function migrateCloseToTrayOnWindowsDefault(value: unknown): unknown {
     closeToTrayOnWindows: true,
     closeToTrayOnWindowsMigrationInitialized: true,
   };
+}
+
+function migrateTaskAutoArchiveReset(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const raw = value as Record<string, unknown>;
+  if (raw.taskAutoArchiveResetVersion === 1) return value;
+  // 旧版开关开启后可能从未真正执行过（归档判定缺阈值的读路径坑）；修复后直接沿用旧值
+  // 会在下次启动时突然批量归档历史会话。首次读取统一关闭并写迁移标记，用户重新开启后不再重置。
+  return { ...raw, taskAutoArchiveEnabled: false, taskAutoArchiveResetVersion: 1 };
 }
 
 function migrateMessageStreamShowReasoningDefault(value: unknown): unknown {
@@ -436,7 +463,9 @@ const appSettingsObjectSchema = z.object({
   // default 只对缺省字段生效，显式存过 false 的用户仍保持展示。
   computerUseComposerEntryHidden: z.boolean().default(true),
   taskAutoArchiveEnabled: z.boolean().default(false),
-  taskAutoArchiveOlderThanDays: z.number().int().positive().max(365).default(7),
+  /** 自动归档修复后的一次性关闭标记；只用于设置迁移，不参与归档判断。 */
+  taskAutoArchiveResetVersion: z.literal(1).default(1),
+  taskAutoArchiveOlderThanDays: z.number().int().positive().max(365).default(30),
   closeToTrayOnWindows: z.boolean().default(true),
   closeToTrayOnWindowsMigrationInitialized: z.boolean().default(true),
   keepAwakeWhileRunning: z.boolean().default(false),
@@ -451,6 +480,8 @@ const appSettingsObjectSchema = z.object({
   toolGroupingChangesEnabled: z.boolean().default(false),
   zcodeInteractionBehavior: zcodeInteractionBehaviorSchema.default("queue"),
   askUserQuestionAutoResolutionEnabled: z.boolean().default(true),
+  /** 用户选的动态工作流模式；缺席 = 跟随服务端提供的模式（`""` 哨兵在 patch 侧归一成删除）。 */
+  dynamicWorkflowMode: dynamicWorkflowModeSettingSchema,
   providerFamilyConnectionSelections: providerFamilyConnectionSelectionSettingsSchema.default({}),
   providerFamilyDomain: providerFamilyDomainSchema.optional(),
   providerFamilyDomainUpdatedAt: z.number().int().nonnegative().optional(),
@@ -462,6 +493,11 @@ const appSettingsObjectSchema = z.object({
   proactiveSuggestionsEnabled: z.boolean().optional(),
   memoryEnabled: z.boolean().default(false),
   lastWorkspaceSession: z.array(appWorkspaceSessionEntrySchema).default([]),
+  // Source/Profile/workspace 历史由 Host Directory 拥有；落 settings，不另建 DB。
+  sourceServers: z.array(sourceServerRecordSchema).default([]),
+  connectionProfiles: z.array(connectionProfileSchema).default([]),
+  sourceServerWorkspaceHistory: z.array(sourceServerWorkspaceHistoryEntrySchema).default([]),
+  sourceServerDirectoryMigrationVersion: z.literal(1).optional(),
   lastActiveTabIndex: z.number().int().nonnegative().default(0),
   lastActiveTaskByWorkspace: z.record(z.string(), z.string()).optional(),
   dataBaseDir: z.string().trim().min(1).optional(),
@@ -501,7 +537,9 @@ export const appSettingsSchema = z.preprocess(
         migrateMessageStreamShowReasoningDefault(
           migrateCloseToTrayOnWindowsDefault(
             migrateLegacyLocalePreference(
-              sanitizeZCodeEndpointOrigin(migrateLegacyWorkspaceSession(value)),
+              sanitizeZCodeEndpointOrigin(
+                migrateLegacyWorkspaceSession(migrateTaskAutoArchiveReset(value)),
+              ),
             ),
           ),
         ),
@@ -525,6 +563,7 @@ export const appSettingsPatchSchema = z.object({
   embeddedBrowserViewportPreference: embeddedBrowserViewportPreferenceSchema.optional(),
   computerUseComposerEntryHidden: z.boolean().optional(),
   taskAutoArchiveEnabled: z.boolean().optional(),
+  taskAutoArchiveResetVersion: z.literal(1).optional(),
   taskAutoArchiveOlderThanDays: z.number().int().positive().max(365).optional(),
   closeToTrayOnWindows: z.boolean().optional(),
   keepAwakeWhileRunning: z.boolean().optional(),
@@ -540,6 +579,8 @@ export const appSettingsPatchSchema = z.object({
   toolGroupingChangesEnabled: z.boolean().optional(),
   zcodeInteractionBehavior: zcodeInteractionBehaviorSchema.optional(),
   askUserQuestionAutoResolutionEnabled: z.boolean().optional(),
+  // 空串哨兵 = 删除选择（跟随服务端提供）；normalizeSettingsPatch 负责把 "" 折成 undefined。
+  dynamicWorkflowMode: z.union([z.enum(DYNAMIC_WORKFLOW_MODES), z.literal("")]).optional(),
   providerFamilyConnectionSelections: providerFamilyConnectionSelectionSettingsSchema.optional(),
   providerFamilyDomain: z.union([providerFamilyDomainSchema, z.literal("")]).optional(),
   providerFamilyDomainUpdatedAt: z.number().int().nonnegative().optional(),
@@ -567,6 +608,10 @@ export const appSettingsPatchSchema = z.object({
   proactiveSuggestionsEnabled: z.boolean().optional(),
   memoryEnabled: z.boolean().optional(),
   lastWorkspaceSession: z.array(appWorkspaceSessionEntrySchema).optional(),
+  sourceServers: z.array(sourceServerRecordSchema).optional(),
+  connectionProfiles: z.array(connectionProfileSchema).optional(),
+  sourceServerWorkspaceHistory: z.array(sourceServerWorkspaceHistoryEntrySchema).optional(),
+  sourceServerDirectoryMigrationVersion: z.literal(1).optional(),
   lastActiveTabIndex: z.number().int().nonnegative().optional(),
   lastActiveTaskByWorkspace: z.record(z.string(), z.string()).optional(),
   dataBaseDir: z.string().trim().min(1).optional(),

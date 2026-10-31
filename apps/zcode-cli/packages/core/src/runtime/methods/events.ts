@@ -19,6 +19,7 @@ import { recordToolUsageFromEvent } from "./usage-observability.js";
 import { persistSessionShellEnvironmentSnapshot } from "./session-shell-environment.js";
 import { persistRuntimeModelSelection } from "./turn-model.js";
 import { persistDurableSessionEvent } from "./events-durable-persistence.js";
+import { writeDynamicWorkflowActivationEntryIfActivated } from "./dynamic-workflow-activation.js";
 import {
   flushSessionEventAppendAggregates,
   recordSessionEventAppendAggregate,
@@ -210,6 +211,8 @@ async function persistSession(
       buildExecutionStateEntry(this.sessionId, readRuntimeExecutionState(this)),
     );
     this.sessionPersisted = true;
+    // `/workflow` 作为会话首轮到来时激活先于落盘；此时才第一次有会话可挂 entry。
+    await writeDynamicWorkflowActivationEntryIfActivated(this);
     this.logger?.debug("Session persisted", {
       ...traceContextToLogContext(traceContext),
       event: "session.persisted",

@@ -62,6 +62,7 @@ import type {
 } from "./types.js";
 import type { AgentRuntimeInternal } from "./internal.js";
 import type { AgentRuntimeSurface } from "./agent-runtime-surface.js";
+import { resolveInitialDynamicWorkflowToolsActivated } from "./methods/dynamic-workflow-activation.js";
 import { InMemoryRuntimeTaskRegistry, type RuntimeTaskRegistry } from "../runtime-task/registry.js";
 import type { WorkflowBlockedReminderClock } from "../runtime-task/workflow-blocked-reminder.js";
 import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
@@ -98,6 +99,9 @@ export class AgentRuntime {
   private messageHistory: MessageHistory;
   private readFileState: ReadFileStateMap;
   private cachedTools: ModelToolContract[] | null = null;
+  /** launch.md「On demand: activation」：onDemand 会话出生为 false，`activateDynamicWorkflowTools` 翻为 true。 */
+  private dynamicWorkflowToolsActivated: boolean;
+  private dynamicWorkflowActivationSource?: import("./methods/dynamic-workflow-activation.js").DynamicWorkflowActivationSource;
   private contextBuilder: ContextBuilder | null = null;
   private contextInitialized = false;
   private contextSourceSnapshot?: ContextSourceSnapshot;
@@ -179,6 +183,7 @@ export class AgentRuntime {
       modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
     });
     Object.assign(this.config, resolveExecutionState(config));
+    this.dynamicWorkflowToolsActivated = resolveInitialDynamicWorkflowToolsActivated(this.config);
     this.permissionService =
       deps.permissionService ?? new PermissionService(defaultPermissionConfig);
     this.permissionBroker = deps.permissionBroker ?? createDenyPermissionBroker();

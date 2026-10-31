@@ -82,7 +82,11 @@ test("database startup preserves retired queue rows without resuming or rewritin
   const path = join(dir, "tasks.sqlite");
   const db = new DatabaseSync(path);
   try {
-    runTasksDatabaseMigrations(db);
+    // runTasksDatabaseMigrations 是异步（含备份等异步 IO）：漏 await 会让下面的 INSERT 与迁移
+    // 竞态，在表创建前就报 no such table: off_peak_tasks。OffPeak 是本仓已移除功能
+    // （upstream-3.16-sync.md：保留移除决定），但既定 schema 迁移仍会创建 legacy 表并保留
+    // 历史 retired 行不恢复不重写，本测试验证的正是该语义，补 await 即可。
+    await runTasksDatabaseMigrations(db);
     const insert = db.prepare(
       "INSERT INTO off_peak_tasks (off_peak_task_id, prompt, permission_mode, workspace_key, workspace_path, status, queued_at, created_at, updated_at) VALUES (?, 'Historical instructions', 'build', '/fixture', '/fixture', ?, 1, 1, 1)",
     );

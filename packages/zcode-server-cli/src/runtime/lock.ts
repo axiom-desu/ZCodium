@@ -13,7 +13,10 @@ export type DataRootLockInspection =
 export class DataRootLock {
   private handle: FileHandle | undefined;
   private ownerToken: string | undefined;
-  public constructor(private readonly path: string) {}
+  public constructor(
+    private readonly path: string,
+    private readonly busyMessage = "Another ZCode Server instance is already running",
+  ) {}
 
   public async inspect(): Promise<DataRootLockInspection> {
     let raw: string;
@@ -51,7 +54,7 @@ export class DataRootLock {
     for (let attempt = 0; attempt < 100; attempt++) {
       const observed = await this.readOwner(this.path);
       if (observed && this.isHolderAlive(observed.record.pid)) {
-        throw new Error("Another ZCode Server instance is already running");
+        throw new Error(this.busyMessage);
       }
       const recoveryToken = await this.tryAcquireRecoveryGate(recoveryPath);
       if (!recoveryToken) {
@@ -61,7 +64,7 @@ export class DataRootLock {
       try {
         const current = await this.readOwner(this.path);
         if (current && this.isHolderAlive(current.record.pid)) {
-          throw new Error("Another ZCode Server instance is already running");
+          throw new Error(this.busyMessage);
         }
         if (current) {
           await this.claimStalePath(this.path, current.raw);
@@ -72,7 +75,7 @@ export class DataRootLock {
       }
       await new Promise<void>((resolve) => setTimeout(resolve, 5));
     }
-    throw new Error("Another ZCode Server instance is already running");
+    throw new Error(this.busyMessage);
   }
 
   public async release(): Promise<void> {

@@ -15,7 +15,7 @@ type RemoteKind = RemoteTarget["kind"];
 export type SSHAuthMethod = "password" | "privateKey";
 
 function buildAvailableKinds(options: { isWindowsDesktop: boolean }): RemoteKind[] {
-  const kinds: RemoteKind[] = ["ssh"];
+  const kinds: RemoteKind[] = ["ssh", "server"];
   // 远程连接入口里 WSL 和 SSH 同属主机类连接。
   // Windows 下先放 WSL 再放 Docker，避免 WSL 被 Docker 隔开后在选择页显得离 SSH 很远。
   if (options.isWindowsDesktop) {
@@ -52,6 +52,11 @@ export function useRemoteConnectionForm({
   const [wslUser, setWslUser] = useState("");
   const [dockerContainer, setDockerContainer] = useState("");
   const [manualDockerContainer, setManualDockerContainer] = useState("");
+  // server 直连的 token 只保留在本次连接草稿里；向导关闭/切换类型时清空。
+  const [serverUrl, setServerUrl] = useState("");
+  const [serverName, setServerName] = useState("");
+  const [serverToken, setServerToken] = useState("");
+  const [serverWorkspacePath, setServerWorkspacePath] = useState("");
   const [sshConfigAliases, setSshConfigAliases] = useState<SSHConfigAliasOption[]>([]);
   const [sshConfigAliasesLoading, setSshConfigAliasesLoading] = useState(false);
   const [sshConfigAliasesLoaded, setSshConfigAliasesLoaded] = useState(false);
@@ -104,6 +109,10 @@ export function useRemoteConnectionForm({
     setDockerOptionsLoading(false);
     setDockerOptionsError("");
     setDockerContainers([]);
+    setServerUrl("");
+    setServerName("");
+    setServerToken("");
+    setServerWorkspacePath("");
     if (preferredKind && availableKinds.includes(preferredKind)) {
       setKind(preferredKind);
     }
@@ -332,6 +341,10 @@ export function useRemoteConnectionForm({
     wslUser,
     dockerContainer,
     manualDockerContainer,
+    serverUrl,
+    serverName,
+    serverToken,
+    serverWorkspacePath,
     sshConfigAliases,
     sshConfigAliasesLoading,
     sshConfigAliasesError,
@@ -352,6 +365,10 @@ export function useRemoteConnectionForm({
     setWslUser,
     setDockerContainer,
     setManualDockerContainer,
+    setServerUrl,
+    setServerName,
+    setServerToken,
+    setServerWorkspacePath,
     // Docker 容器列表是运行态数据，之前只在进入 Docker 页时拉一次。
     // 下拉每次打开都通过这个回调按需刷新，避免用户看到已过期的容器列表。
     refreshDockerContainers: () => refreshDockerContainers({ clearContainersOnError: false }),

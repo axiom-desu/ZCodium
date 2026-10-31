@@ -285,7 +285,8 @@ export class AutomationRepo {
     }
     // Worker 已完成该路径的原始准备，业务连接不再重复全表修复。
     if (isTasksStoragePrepared(path, this.db)) return;
-    if (!isTasksStorageMigrated(path, this.db)) runTasksDatabaseMigrations(this.db);
+    if (!isTasksStorageMigrated(path, this.db))
+      await runTasksDatabaseMigrations(this.db, { dbPath: path });
   }
 
   private getDatabase(): DatabaseSyncInstance {

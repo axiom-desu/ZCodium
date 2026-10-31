@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   CONVERSATION_ARCHIVE_LIMITS as LIMITS,
+  CONVERSATION_ARCHIVE_MAX_VERSION,
   conversationArchiveManifestSchema,
   type ConversationArchiveContent,
   type ConversationArchiveErrorCode,
@@ -47,7 +48,7 @@ export function validateArchiveManifest(input: unknown): ConversationArchiveCont
       content.format === "zcodium-conversation" &&
       "version" in content &&
       typeof content.version === "number" &&
-      content.version !== 1
+      (content.version < 1 || content.version > CONVERSATION_ARCHIVE_MAX_VERSION)
     ) {
       throw new ConversationArchiveError("unsupported_version");
     }
@@ -82,7 +83,46 @@ export function validateArchiveManifest(input: unknown): ConversationArchiveCont
     throw new ConversationArchiveError("invalid_archive");
   }
   validateArtifactReferences(content);
+  validateContentBlockReferences(content);
   return content;
+}
+
+/**
+ * 内容块只能引用同一份公开投影里的行与结果物。
+ *
+ * 校验放在归档边界而不是只靠渲染端：块是公开 payload，引用不到的行/结果物会让回退
+ * 摘要与图片资源悬空（老读取端认不出块时只剩下不存在的 fallback_row_id）。
+ */
+function validateContentBlockReferences(content: ConversationArchiveContent): void {
+  if (content.version !== 2) return;
+  const blocks = content.content_blocks;
+  const invalid = () => {
+    throw new ConversationArchiveError("invalid_archive");
+  };
+  const ids = new Set<string>();
+  const artifactIds = new Set(content.artifacts.map((artifact) => artifact.artifact_id));
+  const rowsById = new Map(content.rows.map((row) => [row.rowId, row] as const));
+  for (const block of blocks) {
+    if (ids.has(block.id)) invalid();
+    ids.add(block.id);
+    if (!content.selectedProductTurnIds.includes(block.product_turn_id)) invalid();
+    const fallback = rowsById.get(block.fallback_row_id);
+    const expectedKind = block.type === "tool-presentation" ? "toolCall" : "assistantText";
+    if (
+      fallback === undefined ||
+      fallback.productTurnId !== block.product_turn_id ||
+      fallback.kind !== expectedKind
+    )
+      invalid();
+    if (block.resource_ids.some((id) => !artifactIds.has(id))) invalid();
+    if (block.type === "workflow") {
+      for (const artifact of block.payload.artifacts) {
+        if ("resource_id" in artifact && artifact.resource_id !== undefined) {
+          if (!artifactIds.has(artifact.resource_id)) invalid();
+        }
+      }
+    }
+  }
 }
 
 function validateArtifactReferences(content: ConversationArchiveContent): void {

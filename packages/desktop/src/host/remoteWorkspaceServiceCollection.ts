@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- 远程 workspace 服务注册需集中维护，以保持依赖注入顺序 */
 import {
   ServiceCollection,
+  buildHostSessionRuntimePreferences,
   IFileService,
   IGitService,
   IGitCheckpointService,
@@ -13,6 +14,7 @@ import {
   IZCodeAgentService,
   IZCodeSessionService,
   IConversationShareService,
+  IProjectService,
   IBotsService,
   IFileWatcherService,
   IModelSelectionService,
@@ -52,9 +54,11 @@ import {
   createSubagentsService,
   createMemoryService,
   createRemoteConversationShareArtifactSource,
+  createLegacySingleRootProjectService,
 } from "@zcode/services/node";
 import {
-  DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
+  buildServerRemoteWorkspaceIdentity,
+  remoteHostIdFromWorkspaceIdentity,
   type ZCodeSessionRuntimePreferencesResult,
 } from "@zcode/shared";
 import { assertLegacyRemoteWorkspaceRpcContract } from "./legacyRemoteWorkspaceRpcContract.js";
@@ -62,6 +66,53 @@ import {
   createRemoteProviderProvisioningExecutorFromWorkspace,
   registerRemoteProviderProvisioningExecutor,
 } from "./remoteProviderProvisioningService.js";
+
+/**
+ * Source Server 的项目事实归远端 Host（远端 SQLite 是唯一权威）。
+ *
+ * - 握手声明 virtualProjects：直接使用远端 Project channel 代理；
+ * - 旧 Server 缺失该能力：构造显式 legacy single-root 只读适配（真实服务，不是假 undefined proxy），
+ *   树查询只读远端 file/task/setting，绝不启动 Agent。
+ */
+export function resolveServerProjectService(params: {
+  serverId: string;
+  virtualProjects?: boolean;
+  services: {
+    project?: IProjectService;
+    system: ISystemService;
+    file: IFileService;
+    settings: ISettingService;
+    tasks: IZCodeTaskService;
+  };
+}): IProjectService {
+  if (params.virtualProjects) {
+    if (!params.services.project)
+      throw new Error("Remote virtual-project RPC registration incomplete");
+    return params.services.project;
+  }
+  const hostId = remoteHostIdFromWorkspaceIdentity(
+    buildServerRemoteWorkspaceIdentity({ serverId: params.serverId, workspacePath: "/" }),
+  );
+  if (!hostId) throw new Error("Invalid Source Server workspace identity");
+  return createLegacySingleRootProjectService({
+    hostId,
+    directories: {
+      info: () => params.services.system.info(),
+      read: (input) => params.services.file.readdir(input),
+    },
+    readSettings: () => params.services.settings.get(),
+    readTasks: ({ workspacePath, kind }) => {
+      const tasks = params.services.tasks;
+      const scope = { workspacePath };
+      return kind === "pinned"
+        ? tasks.listPinnedTasks(scope)
+        : kind === "archived"
+          ? tasks.listArchivedTasks(scope)
+          : tasks.listTasks(scope);
+    },
+    ensureConversation: async () => (await params.services.file.ensureConversationWorkspace()).path,
+  });
+}
 
 const runtimePreferencesLogger = createServiceLogger("remote-runtime-preferences");
 
@@ -74,6 +125,9 @@ export function createRemoteWorkspaceServiceCollection(params: {
   createRemotePromptAttachmentTaskService: <T extends object>(service: T) => T;
   createRemotePromptAttachmentSessionService: <T extends object>(service: T) => T;
   promptAttachmentTransferService: IPromptAttachmentTransferService;
+  /** 握手得到的 Source 身份与能力；缺失时保持旧的 connectionServices 行为。 */
+  sourceServerId?: string;
+  virtualProjects?: boolean;
   runtimePreferencesBridge: {
     onError: (error: unknown) => void;
   };
@@ -169,21 +223,10 @@ export function createRemoteWorkspaceServiceCollection(params: {
         try {
           // 与本地 Host 同源：固定预算不依赖配置网关，远程/手机偏好响应不再串行等待网络。
           const settings = await trackStage("settings", localSettingService.get());
-          const modelContextBudgetStrategy = DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY;
           resolution = {
             status: "resolved",
-            preferences: {
-              askUserQuestionAutoResolutionEnabled:
-                settings.askUserQuestionAutoResolutionEnabled !== false,
-              nativeSearchEnhancementsEnabled: settings.nativeSearchEnhancementsEnabled !== false,
-              toolSearchMode: settings.toolSearchMode ?? "off",
-              memoryEnabled: settings.memoryEnabled === true,
-              modelContextBudgetStrategy,
-              // remote workspace 与本地 Host 保持同一 scope 边界，首次执行不得再次等待 client config。
-              ...(request.scope === "user-execution" && settings.integratedTerminalShell
-                ? { integratedTerminalShell: settings.integratedTerminalShell }
-                : {}),
-            },
+            // remote workspace 与本地 Host 保持同一 scope 边界，首次执行不得再次等待 client config。
+            preferences: buildHostSessionRuntimePreferences({ settings, scope: request.scope }),
           };
         } catch (error) {
           resolution = {
@@ -281,5 +324,27 @@ export function createRemoteWorkspaceServiceCollection(params: {
     .register(IPromptAttachmentTransferService, params.promptAttachmentTransferService);
   registerHostApiNetworkTransportForDispose(services, hostApiNetworkTransport);
   registerRemoteProviderProvisioningExecutor(services, remoteProviderProvisioningService);
+  // 只有握手声明 virtualProjects 的远端才注册 Project channel 代理；旧远端保留 workspace/reconnect 行，
+  // 由显式 legacy single-root 只读适配承接，不创建本机假项目，也不隐式升级组织能力。
+  if (params.virtualProjects) {
+    if (!params.connectionServices.projectService)
+      throw new Error("Remote virtual-project RPC registration incomplete");
+    services.register(IProjectService, params.connectionServices.projectService);
+  } else if (params.sourceServerId) {
+    services.register(
+      IProjectService,
+      resolveServerProjectService({
+        serverId: params.sourceServerId,
+        services: {
+          system: params.connectionServices.systemService,
+          file: params.connectionServices.fileService,
+          settings: params.connectionServices.settingService,
+          tasks: remoteZCodeTaskService,
+        },
+      }),
+    );
+  } else if (params.connectionServices.projectService) {
+    services.register(IProjectService, params.connectionServices.projectService);
+  }
   return services;
 }

@@ -20,6 +20,23 @@ interface ResolvedWorkspaceServices {
   isRemoteWorkspace: boolean;
 }
 
+/**
+ * session 是否已被另一个 workspace identity 绑定。remoteSessionId 是 logical scope，
+ * 只检查 session 存在会把同 Source 另一个目录的 services 借给当前 target（wrong-scope）。
+ */
+// 只服务本文件的 session/identity 判序；没有跨模块消费方，因此不公开导出。
+function isRemoteSessionForeignToWorkspaceIdentity<TServices>(
+  sessionId: string,
+  workspaceIdentity: string | undefined,
+  state: WorkspaceServiceResolverState<TServices>,
+): boolean {
+  if (!workspaceIdentity) return false;
+  return Object.entries(state.sessionIdByWorkspaceIdentity).some(
+    ([boundIdentity, boundSessionId]) =>
+      boundIdentity !== workspaceIdentity && boundSessionId === sessionId,
+  );
+}
+
 export function resolveWorkspaceRemoteSessionId<TServices>(
   target: WorkspaceServiceTarget,
   state: WorkspaceServiceResolverState<TServices>,
@@ -37,9 +54,13 @@ export function resolveWorkspaceRemoteSessionId<TServices>(
       : undefined,
   ];
 
-  return candidateSessionIds.find((sessionId): sessionId is string =>
-    Boolean(sessionId && state.sessionsById[sessionId]),
-  );
+  // 先取第一个存在且不属于其他 identity 的 session；借来的 session 不能顶替当前 scope。
+  for (const sessionId of candidateSessionIds) {
+    if (!sessionId || !state.sessionsById[sessionId]) continue;
+    if (isRemoteSessionForeignToWorkspaceIdentity(sessionId, workspaceIdentity, state)) continue;
+    return sessionId;
+  }
+  return undefined;
 }
 
 export function isRemoteWorkspaceTarget(

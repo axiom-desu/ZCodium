@@ -47,7 +47,7 @@ export async function listMcpServers(
     },
     startupNow(),
   );
-  const pluginOutcome = resolveStartupPlugins({
+  const pluginOutcome = await resolveStartupPlugins({
     cliStorageRoot,
     configResult,
     env: context.deps.env,

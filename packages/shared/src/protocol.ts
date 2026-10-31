@@ -2,6 +2,7 @@ import type { RemoteResourcePackageSelection } from "./remoteResourcePackages.js
 import type { ProviderFamilyDomain } from "./model-provider-family.js";
 import type { ProviderFamilyConnectionSelectionSettings } from "./provider-family-connection-selection.js";
 import type { WorkspacePurpose } from "./workspacePurpose.js";
+import type { DynamicWorkflowMode } from "./dynamic-workflow-feature.js";
 import type { EmbeddedBrowserViewportPreference } from "./browser-use/command-metadata.js";
 import type { AppToolSearchMode } from "./app-runtime-preferences.js";
 
@@ -154,10 +155,24 @@ export interface DockerRemoteTargetSnapshot {
   container: string;
 }
 
+export interface ServerRemoteTargetSnapshot {
+  kind: "server";
+  url: string;
+  name?: string;
+  workspacePath?: string;
+  serverId?: string;
+  /**
+   * Server token 不写入 setting.json。
+   * 这里只保存 credentialService 的键名，恢复时再读取真实 token。
+   */
+  tokenCredentialKey?: string;
+}
+
 export type RemoteTargetSnapshot =
   | SSHRemoteTargetSnapshot
   | WSLRemoteTargetSnapshot
-  | DockerRemoteTargetSnapshot;
+  | DockerRemoteTargetSnapshot
+  | ServerRemoteTargetSnapshot;
 
 export interface RemoteWorkspaceSessionSnapshot {
   /** 远程 workspace 的真实绝对路径 */
@@ -270,6 +285,8 @@ export interface AppSettings {
   computerUseComposerEntryHidden?: boolean;
   /** 自动归档已完成旧任务的总开关 */
   taskAutoArchiveEnabled?: boolean;
+  /** 自动归档修复后的一次性关闭标记；只用于设置迁移，不参与归档判断。 */
+  taskAutoArchiveResetVersion?: 1;
   /** 自动归档阈值；当任务最后更新时间早于该天数时允许被归档 */
   taskAutoArchiveOlderThanDays?: number;
   /** Windows 桌面端关闭窗口时隐藏到托盘；其它平台忽略 */
@@ -318,6 +335,11 @@ export interface AppSettings {
   nativeSearchEnhancementsEnabled?: boolean;
   /** 新建或冷恢复 Session 的工具搜索模式；缺省 Off，热 resume 保持原值。 */
   toolSearchMode?: AppToolSearchMode;
+  /**
+   * 用户选的动态工作流模式（docs/dynamic-workflow/launch.md「The user's choice」）。缺席 = 跟随服务端
+   * 提供的模式；只在功能已提供且执行端引擎受支持时生效。patch 侧用 `""` 哨兵表示「删除选择」。
+   */
+  dynamicWorkflowMode?: DynamicWorkflowMode;
   /** 新建或冷恢复 Session 是否启用 Memory；默认关闭。 */
   memoryEnabled?: boolean;
   onboardingOccupation?:
@@ -339,6 +361,12 @@ export interface AppSettings {
   proactiveSuggestionsEnabled?: boolean;
   /** 上次关闭时的完整 workspace 会话（含本地与远端 workspace） */
   lastWorkspaceSession?: PersistedWorkspaceSessionEntry[];
+  /** Source Server/Profile/workspace 目录；Host Directory 的唯一持久化位置（不另建 DB）。 */
+  sourceServers?: import("./source-server/contracts.js").SourceServerRecord[];
+  connectionProfiles?: import("./source-server/contracts.js").ConnectionProfile[];
+  sourceServerWorkspaceHistory?: import("./source-server/contracts.js").SourceServerWorkspaceHistoryEntry[];
+  /** 旧 legacy 远端条目已迁移到 Source Directory；只用于一次性迁移判定。 */
+  sourceServerDirectoryMigrationVersion?: 1;
   /** 上次关闭时激活的 tab 索引 */
   lastActiveTabIndex?: number;
   /** 每个 workspace 的最后活跃 taskId，下次打开自动恢复 */

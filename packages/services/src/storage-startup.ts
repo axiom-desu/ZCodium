@@ -4,3 +4,5 @@ export { getTasksIndexDatabasePath } from "#src/paths.js";
 export { resolveDefaultZCodeAgentCommand } from "#src/zcode-agent/zcodeAgentProcessManager.js";
 export type { ZCodeAgentStoragePreparation } from "#src/zcode-agent/zcodeAgentProcessManager.js";
 export { resolveZCodeAgentSpawnCwd } from "#src/zcode-agent/zcodeAgentSpawnCwd.js";
+
+export { createSettingService } from "#src/setting/settingService.js";

@@ -10,17 +10,32 @@ import {
   isRemoteConnectionLogScrolledToLatest,
   scrollRemoteConnectionLogsToLatestIfFollowing,
 } from "@/remote-connection/remoteConnectionLogScroll.js";
+import { SourceConnectionApprovalPanel } from "@/remote-connection/SourceConnectionApprovalPanel.js";
+import type { SourceInstallConfirmation } from "@/lib/sourceServerManagement.js";
+import type { SourceRunningTasksConfirmation } from "@/lib/sourceServerWizardFlow.js";
 
 export function RemoteConnectionConnectingStep({
   logs,
   errorMessage,
   loading,
+  installConfirmation,
+  runningTasksConfirmation,
+  onConfirmInstall,
+  onCancelInstall,
+  onConfirmForce,
+  onCancelForce,
   onBack,
   onRetry,
 }: {
   logs: RemoteConnectionLogEntry[];
   errorMessage: string;
   loading: boolean;
+  installConfirmation?: SourceInstallConfirmation | null;
+  runningTasksConfirmation?: SourceRunningTasksConfirmation | null;
+  onConfirmInstall?: () => void;
+  onCancelInstall?: () => void;
+  onConfirmForce?: () => void;
+  onCancelForce?: () => void;
   onBack: () => void;
   onRetry: () => void;
 }) {
@@ -103,6 +118,18 @@ export function RemoteConnectionConnectingStep({
             )}
           </div>
         </div>
+
+        {installConfirmation || runningTasksConfirmation ? (
+          <SourceConnectionApprovalPanel
+            installConfirmation={installConfirmation}
+            runningTasksConfirmation={runningTasksConfirmation}
+            loading={loading}
+            onConfirmInstall={() => onConfirmInstall?.()}
+            onCancelInstall={() => onCancelInstall?.()}
+            onConfirmForce={() => onConfirmForce?.()}
+            onCancelForce={() => onCancelForce?.()}
+          />
+        ) : null}
 
         {errorMessage ? (
           <div

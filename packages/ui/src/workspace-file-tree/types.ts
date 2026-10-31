@@ -12,10 +12,22 @@ export interface WorkspaceFileTreeProps {
   temporaryExternalDirectory?: boolean;
   canOpenLocalFileManager?: boolean;
   activePreviewPath?: string | null;
-  onClose: () => void;
+  /** 缺省表示嵌入面板（无返回任务入口），只有侧栏覆盖层传关闭回调。 */
+  onClose?: () => void;
   onOpenBrowserUrl?: (url: string) => void;
   onOpenPreview?: (source: CodeViewerSource) => void;
 }
+
+/** 文件管理器面板的 workspace 目标（目录 + 预览的 workspace 作用域）。 */
+export type FileManagerTarget = Pick<
+  WorkspaceFileTreeProps,
+  | "workspacePath"
+  | "workspaceName"
+  | "workspaceIdentity"
+  | "workspaceRemoteSessionId"
+  | "revealPath"
+  | "temporaryExternalDirectory"
+>;
 
 export interface WorkspaceFileTreeWatcherRegistration {
   id: string;

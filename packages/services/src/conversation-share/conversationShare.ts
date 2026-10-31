@@ -43,6 +43,11 @@ export interface ConversationShareAllowedArtifact {
 }
 
 export interface ConversationShareTurnPreflightResult {
+  /**
+   * 本 turn 转换后的公开行数与服务端行上限。
+   * 行数是整组选中项的约束，UI 在取消/新增轮次后必须重算合计，不能缓存某一批 RPC 的结果。
+   */
+  rowBudget?: { count: number; limit: number };
   productTurnId: string;
   turnFingerprint?: string;
   blockingIssues: readonly ConversationShareFailureIssue[];
@@ -92,6 +97,7 @@ export type ConversationShareFailureReasonCode =
   | "artifact_extension_missing"
   | "artifact_outside_workspace"
   | "artifact_changed"
+  | "content_unavailable"
   | "artifact_read_failed"
   // 已知容量超限：附件真实大小超过服务端 max_artifact_bytes 或通道可搬运上限。
   // 与 artifact_read_failed（不确定）不同，它在选择阶段就是确定阻断。
@@ -394,6 +400,8 @@ export interface ImportConversationShareInput {
 
 /** 导入时落盘的公开 rows 副本；会话里的只读块靠它渲染，不回源。 */
 export interface ImportedConversationShare {
+  /** 归档 v2 起携带的公开内容块（workflow/tool-presentation）；旧副本无此字段。 */
+  contentBlocks?: unknown[];
   shareId: string;
   contextId: string;
   title: string;

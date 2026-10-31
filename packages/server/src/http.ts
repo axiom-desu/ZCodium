@@ -18,6 +18,8 @@ import {
 } from "@zcode/rpc";
 import {
   ServiceCollection,
+  IProjectService,
+  IZCodeTaskService,
   IZCodeAgentService,
   createZCodeAgentConnectionScope,
   IFileService,
@@ -102,7 +104,28 @@ function setupChannelServer(
         role: clientMode === "desktop-continuous" ? "trusted-host-relay" : "terminal-client",
       })
     : undefined;
+  let closed = false;
+  const assertAttachment = () => {
+    if (closed) throw new Error("project.stale-attachment");
+  };
   const overrides = new Map<string, unknown>();
+  const tasks = services.getOptional(IZCodeTaskService);
+  if (tasks && typeof tasks.createTaskExistingRuntime === "function") {
+    overrides.set(
+      IZCodeTaskService.channelName,
+      new Proxy(tasks, {
+        get(target, property, receiver) {
+          if (property === "createTaskExistingRuntime")
+            return (
+              params: Parameters<IZCodeTaskService["createTask"]>[0],
+              expected: Parameters<IZCodeTaskService["createTaskExistingRuntime"]>[1],
+            ) => target.createTaskExistingRuntime(params, expected, assertAttachment);
+          const value = Reflect.get(target, property, receiver) as unknown;
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      }),
+    );
+  }
   if (connectionScope) {
     overrides.set(IZCodeAgentService.channelName, connectionScope.service);
   }
@@ -120,6 +143,7 @@ function setupChannelServer(
   }
   services.exposeOnChannelServer(server, overrides);
   socket.onClose(() => {
+    closed = true;
     void connectionScope?.dispose();
     rawServer.dispose();
   });
@@ -143,6 +167,9 @@ interface HttpServerOptions {
   spaFallback?: boolean;
   staticRoot?: string;
   workspaces?: ServerRemoteWorkspaceInfo[];
+  /** 只有 Host 实际注册 ProjectService 才声明；旧/裁剪 server 不伪造项目能力。 */
+  virtualProjects?: boolean;
+  existingRuntimeAdmission?: boolean;
 }
 
 function readTrimmedEnv(name: string): string | undefined {
@@ -182,6 +209,8 @@ function createServerInfo(options: HttpServerOptions): ServerRemoteInfo {
     capabilities: {
       desktopContinuous: true,
       websocketRpc: true,
+      ...(options.virtualProjects ? { virtualProjects: true as const } : {}),
+      ...(options.existingRuntimeAdmission ? { existingRuntimeAdmission: true as const } : {}),
     },
   };
 }
@@ -319,7 +348,13 @@ export function createHttpServer(
     });
   }
 
-  app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
+  const serverInfoOptions = {
+    ...options,
+    virtualProjects: Boolean(services.getOptional(IProjectService)),
+    existingRuntimeAdmission:
+      typeof services.getOptional(IZCodeTaskService)?.createTaskExistingRuntime === "function",
+  };
+  app.get("/api/server-info", (c) => c.json(createServerInfo(serverInfoOptions)));
   app.post("/api/rpc-host-capability", (c) => c.json(hostCapabilities.issue()));
 
   // 普通 `/ws` 永远是 terminal-client；浏览器/任意客户端设置旧 mode header

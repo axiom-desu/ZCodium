@@ -109,7 +109,16 @@ test("remaining workflow configuration has no account dependency and preserves s
     service.getDynamicWorkflowClientConfig(),
     service.getDynamicWorkflowClientConfig(),
   ]);
-  assert.deepEqual(a, { mode: "onDemand", enabled: true, source: "remote" });
+  // 既定 3.16 快照三档字段（upstream-3.16-settings-and-navigation.md）：
+  // offeredMode（服务端/本地覆盖提供的默认）、mode/enabled（生效值）、engine（执行端能力）；
+  // 无用户选择时不落 userMode。保持全量深度相等，防购买/无凭据语义不变。
+  assert.deepEqual(a, {
+    mode: "onDemand",
+    enabled: true,
+    source: "remote",
+    offeredMode: "onDemand",
+    engine: "supported",
+  });
   assert.deepEqual(b, a);
   assert.equal(requests, 1);
   mode = "disabled";
@@ -119,12 +128,16 @@ test("remaining workflow configuration has no account dependency and preserves s
     mode: "disabled",
     enabled: false,
     source: "remote",
+    offeredMode: "disabled",
+    engine: "supported",
   });
   process.env[key] = "alwaysOn";
   assert.deepEqual(await service.getDynamicWorkflowClientConfig(), {
     mode: "alwaysOn",
     enabled: true,
     source: "override",
+    offeredMode: "alwaysOn",
+    engine: "supported",
   });
   assert.equal(requests, 2);
   delete process.env[key];
@@ -133,6 +146,8 @@ test("remaining workflow configuration has no account dependency and preserves s
     mode: "disabled",
     enabled: false,
     source: "default",
+    offeredMode: "disabled",
+    engine: "supported",
   });
   fail = false;
   mode = "alwaysOn";

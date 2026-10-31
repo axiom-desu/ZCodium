@@ -8,7 +8,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { toast } from "@/components/ui/toast.js";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
 import { useCommands } from "@/hooks/useCommands.js";
-import { useWorkspaceServicesResolution } from "@/hooks/useWorkspaceServices.js";
+import { useConfigDirectoryServicesResolution as useWorkspaceServicesResolution } from "@/hooks/useConfigDirectoryServices.js";
 import { CommandCard, isEditableUserCommand } from "@/settings/CommandCard.js";
 import { CommandForm } from "@/settings/CommandForm.js";
 import { getPluginWorkspaceKey } from "@/settings/PluginScopeMenu.js";
@@ -31,7 +31,7 @@ import {
   selectCommandsForScope,
   selectPluginsForScope,
 } from "@/settings/pluginCapabilityProjection.js";
-import type { WorkspaceTabState } from "@/store/tabStore.js";
+import type { PluginWorkspaceTarget } from "@/lib/configDirectoryCatalog.js";
 import {
   resolveCommandScopeRecovery,
   resolveCommandStorageTarget,
@@ -43,7 +43,7 @@ interface CommandsSectionProps {
   workspaceIdentity?: string;
   scopeFilter: "user" | "workspace";
   parentScopeKey: string;
-  workspaceTabs: WorkspaceTabState[];
+  workspaceTabs: PluginWorkspaceTarget[];
   searchQuery: string;
   onVisibleCountChange?: (count: number) => void;
   onEditorOpenChange?: (open: boolean) => void;
@@ -145,10 +145,14 @@ export function CommandsSection({
       workspaceIdentity,
       configScope: scopeFilter,
       pluginService: pluginManagementService,
+      authorityKey: listServiceResolution.configAuthorityKey,
+      remoteSessionId: listServiceResolution.remoteSessionId,
     });
   }, [
     initializePlugins,
     listServiceResolution.rpcReady,
+    listServiceResolution.configAuthorityKey,
+    listServiceResolution.remoteSessionId,
     pluginManagementService,
     scopeFilter,
     workspaceIdentity,

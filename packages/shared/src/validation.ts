@@ -26,6 +26,7 @@ import {
   taskStreamMirrorTargetSchema,
 } from "./task-realtime-core.js";
 import { wslUserSchema } from "./wslUserValidation.js";
+import { sourceServerArtifactPolicySchema } from "./source-server/release.js";
 import { errorAttributionSchema } from "./zcode-protocol-v4/snapshot.js";
 import {
   zcodeMcpResourceSamplesSchema,
@@ -87,10 +88,21 @@ export const dockerConnectOptionsSchema = z.object({
   container: nonEmptyStringSchema,
 });
 
+export const serverConnectOptionsSchema = z.object({
+  kind: z.literal("server"),
+  url: z.string().url(),
+  name: nonEmptyStringSchema.optional(),
+  // token 只允许存在于当前连接流程；持久化必须转换为 credential key。
+  token: z.string().optional(),
+  workspacePath: z.string().optional(),
+  serverId: nonEmptyStringSchema.optional(),
+});
+
 export const remoteTargetSchema = z.discriminatedUnion("kind", [
   sshConnectOptionsSchema,
   wslConnectOptionsSchema,
   dockerConnectOptionsSchema,
+  serverConnectOptionsSchema,
 ]);
 
 export const helloMessageSchema = z.object({
@@ -99,6 +111,8 @@ export const helloMessageSchema = z.object({
   platform: z.string(),
   arch: z.string(),
   pid: z.number().int(),
+  // 旧 server 不带此字段；只有声明能力才允许客户端创建 Project channel 代理。
+  capabilities: z.object({ virtualProjects: z.literal(true).optional() }).optional(),
 });
 
 export const helloAckMessageSchema = z.object({
@@ -128,6 +142,8 @@ export const broadcastMessageSchema = z.object({
 
 export const remoteAssetDirsSchema = z.object({
   bundledRemoteAssetsDir: z.string().optional(),
+  // Source Server 制品策略只影响安装制品定位，不改变 transport 行为。
+  sourceServerArtifactPolicy: sourceServerArtifactPolicySchema.optional(),
 });
 
 const hostAgentWarmupTargetSchema = z.object({
@@ -152,10 +168,14 @@ export const hostInitLocalMessageSchema = z.object({
 
 export const windowHostRemoteWorkspaceDescriptorSchema = z
   .object({
+    /** 本次请求直接复用的在线连接；只包含脱敏目标，不是 session 持久状态。 */
+    reusedConnectionTarget: remoteTargetSchema.optional(),
+    sourceServerId: nonEmptyStringSchema.optional(),
     remoteSessionId: nonEmptyStringSchema,
     target: remoteTargetSchema,
     workspacePath: nonEmptyStringSchema.optional(),
     workspaceIdentity: nonEmptyStringSchema.optional(),
+    workspacePurpose: z.enum(["project", "conversation"]).optional(),
     generation: z.number().int().positive(),
   })
   .strict();
@@ -165,9 +185,17 @@ export type WindowHostRemoteWorkspaceDescriptor = z.infer<
 
 export const windowHostAttachmentScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("local") }).strict(),
+  // Source 级设置/管理投影不需要 workspace session；仍然只解析已在线 Source。
+  z
+    .object({
+      kind: z.literal("source-settings"),
+      sourceServerId: nonEmptyStringSchema,
+    })
+    .strict(),
   z
     .object({
       kind: z.literal("remote"),
+      sourceServerId: nonEmptyStringSchema.optional(),
       remoteSessionId: nonEmptyStringSchema,
       workspacePath: nonEmptyStringSchema,
       workspaceIdentity: nonEmptyStringSchema,
@@ -184,6 +212,8 @@ export const hostConnectRemoteWorkspaceMessageSchema = z
     remoteAssets: remoteAssetDirsSchema,
     workspacePath: nonEmptyStringSchema.optional(),
     workspaceIdentity: nonEmptyStringSchema.optional(),
+    // 未确认时 Host 不得上传 archive 或执行安装命令，只返回 typed install/upgrade-required。
+    confirmSourceServerInstall: z.boolean().optional(),
   })
   .strict();
 
@@ -201,6 +231,9 @@ export const hostBindRemoteWorkspaceContextMessageSchema = z
     remoteSessionId: nonEmptyStringSchema,
     workspacePath: nonEmptyStringSchema,
     workspaceIdentity: nonEmptyStringSchema,
+    workspacePurpose: z.enum(["project", "conversation"]).optional(),
+    // Renderer 传入的 route identity 只能作兼容提示，权威 identity 由 Host 返回。
+    legacyRouteHint: nonEmptyStringSchema.optional(),
   })
   .strict();
 

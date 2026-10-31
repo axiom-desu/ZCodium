@@ -1,14 +1,23 @@
 /* eslint-disable max-lines -- 所有 transport 生命周期共享同一个 registry 状态机，必须原子演进。 */
+import { createHash } from "node:crypto";
+import { resolveServerRemoteEndpoints } from "./serverRemoteConnection.js";
 import {
+  SOURCE_SERVER_IDENTITY_CHANGE_PENDING_ERROR_CODE,
+  buildRemoteWorkspaceIdentity,
+  buildServerRemoteWorkspaceIdentity,
   buildSshRemoteHostKey,
   stripRemoteTargetSecrets,
   type RemoteTarget,
+  type SourceServerArtifactPolicy,
   type WindowHostAttachmentScope,
   type WindowHostRemoteWorkspaceDescriptor,
+  type WorkspacePurpose,
 } from "@zcode/shared";
 
 interface WindowRemoteAssetDirs {
   bundledRemoteAssetsDir?: string;
+  /** UI 请求的制品策略；Host 仍以 fork 版本/显式 CDN base 为权威。 */
+  sourceServerArtifactPolicy?: SourceServerArtifactPolicy;
 }
 
 export interface WindowRemoteConnectionCloseEvent {
@@ -20,14 +29,34 @@ export interface WindowRemoteConnectionCloseEvent {
 export interface WindowRemoteConnectionHandle<TServices, TCapabilities = never> {
   services: TServices;
   capabilities?: TCapabilities;
+  /**
+   * Source 身份只能来自已鉴权握手；URL/路径/route 输入不得写入这里。
+   * 有值时 registry 会按它做原子 claim，派生 `entriesBySourceServerId` 索引。
+   */
+  sourceServerId?: string;
+  /** 握手声明的 virtualProjects 能力；缺失表示只能走 legacy 单 root 只读适配。 */
+  virtualProjects?: boolean;
+  /** 握手报告的产品版本；仅用于展示/兼容快照，不参与 identity。 */
+  serverVersion?: string;
+  /**
+   * 本次连接已鉴权证明的临时摘要（由 ingress secret 派生）。
+   * 只用于同一入口内 owner claim，不持久化、不进日志/snapshot/identity。
+   */
+  sourceServerAuthProofDigest?: string;
+  /** 本次请求实际复用的在线连接（已脱敏）；只是一次请求事实，不是持久状态。 */
+  reusedConnectionTarget?: RemoteTarget;
   dispose(): void | Promise<void>;
   onDidClose?(listener: (event: WindowRemoteConnectionCloseEvent) => void): { dispose(): void };
 }
 
-interface WindowRemoteConnectionConnectRequest {
+export interface WindowRemoteConnectionConnectRequest {
   target: RemoteTarget;
   remoteAssets: WindowRemoteAssetDirs;
   signal: AbortSignal;
+  /** 用户在向导中确认后才会安装/升级；未确认时 connect 必须返回 typed 错误且零上传。 */
+  confirmSourceServerInstall?: boolean;
+  /** 已确认的 Source 身份；握手得到别的 id 即 identity-change-pending，不自动改路由。 */
+  existingSourceServerId?: string;
 }
 
 type WindowRemoteConnectionState = "connecting" | "online" | "closing" | "failed" | "disconnected";
@@ -36,11 +65,23 @@ interface WindowRemoteLogicalSessionSnapshot {
   remoteSessionId: string;
   requestId: string;
   target: RemoteTarget;
+  sourceServerId?: string;
   workspacePath?: string;
   workspaceIdentity?: string;
+  workspacePurpose?: WorkspacePurpose;
   generation: number;
   state: WindowRemoteConnectionState;
   sourceAvailability: "online" | "offline";
+}
+
+class WindowRemoteSourceIdentityChangedError extends Error {
+  public readonly code = SOURCE_SERVER_IDENTITY_CHANGE_PENDING_ERROR_CODE;
+  constructor(expected: string, actual: string | undefined) {
+    super(
+      `Source Server 身份已变化（expected=${expected}, actual=${actual ?? "unknown"}）；不自动把旧会话重发到新 Source`,
+    );
+    this.name = "WindowRemoteSourceIdentityChangedError";
+  }
 }
 
 class WindowRemoteConnectCancelledError extends Error {
@@ -60,6 +101,10 @@ class WindowRemoteConnectionUnavailableError extends Error {
 interface ConnectionEntry<TServices, TCapabilities> {
   key: string;
   target: RemoteTarget;
+  /** 握手确认后的 Source 身份；也是 entriesBySourceServerId 的索引键。 */
+  sourceServerId?: string;
+  /** 本次连接的已鉴权证明摘要；仅内存 owner claim 使用。 */
+  sourceServerAuthProofDigest?: string;
   state: WindowRemoteConnectionState;
   abortController: AbortController;
   sessions: Set<string>;
@@ -91,8 +136,10 @@ interface LogicalSession<TServices, TCapabilities> {
   remoteSessionId: string;
   requestId: string;
   target: RemoteTarget;
+  sourceServerId?: string;
   workspacePath?: string;
   workspaceIdentity?: string;
+  workspacePurpose?: WorkspacePurpose;
   generation: number;
   state: WindowRemoteConnectionState;
   sourceAvailability: "online" | "offline";
@@ -119,6 +166,17 @@ function buildConnectionKey(target: RemoteTarget, remoteSessionId: string): stri
     case "docker":
       // Docker 保持现有 dedicated logical session 生命周期，不按 target 复用。
       return `${target.kind}:dedicated:${remoteSessionId}`;
+    case "server":
+      // Bug 原因：host-only 会在鉴权前复用另一 token/base path 的服务。
+      // 与真实 connector 共用 endpoint 规范化；摘要仅驻内存，不进 descriptor/日志/持久化。
+      return `server:${createHash("sha256")
+        .update(
+          JSON.stringify([
+            resolveServerRemoteEndpoints(target.url).infoUrl,
+            target.token?.trim() ?? "",
+          ]),
+        )
+        .digest("hex")}`;
   }
 }
 
@@ -129,8 +187,10 @@ function toSessionSnapshot<TServices, TCapabilities>(
     remoteSessionId: session.remoteSessionId,
     requestId: session.requestId,
     target: stripRemoteTargetSecrets(session.target),
+    ...(session.sourceServerId ? { sourceServerId: session.sourceServerId } : {}),
     ...(session.workspacePath ? { workspacePath: session.workspacePath } : {}),
     ...(session.workspaceIdentity ? { workspaceIdentity: session.workspaceIdentity } : {}),
+    ...(session.workspacePurpose ? { workspacePurpose: session.workspacePurpose } : {}),
     generation: session.generation,
     state: session.state,
     sourceAvailability: session.sourceAvailability,
@@ -148,6 +208,8 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
   wslIdleTtlMs?: number;
 }) {
   const entriesByKey = new Map<string, ConnectionEntry<TServices, TCapabilities>>();
+  // 派生索引：sourceServerId → 唯一 owner entry。只由握手 claim 写入，profile/route 不能提供 owner。
+  const entriesBySourceServerId = new Map<string, ConnectionEntry<TServices, TCapabilities>>();
   const sessionsById = new Map<string, LogicalSession<TServices, TCapabilities>>();
   const pendingSessionsByRequestId = new Map<string, LogicalSession<TServices, TCapabilities>>();
   let disposed = false;
@@ -354,6 +416,7 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
     if (entriesByKey.get(entry.key) === entry) {
       entriesByKey.delete(entry.key);
     }
+    releaseSourceOwnerIndex(entry);
     entry.disposePromise = Promise.resolve(entry.handle?.dispose()).then(() => undefined);
     return entry.disposePromise;
   }
@@ -370,6 +433,7 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
     if (entriesByKey.get(entry.key) === entry) {
       entriesByKey.delete(entry.key);
     }
+    releaseSourceOwnerIndex(entry);
     for (const remoteSessionId of entry.sessions) {
       const session = sessionsById.get(remoteSessionId);
       if (!session) {
@@ -381,10 +445,110 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
     }
   }
 
+  function releaseSourceOwnerIndex(entry: ConnectionEntry<TServices, TCapabilities>): void {
+    if (entry.sourceServerId && entriesBySourceServerId.get(entry.sourceServerId) === entry) {
+      entriesBySourceServerId.delete(entry.sourceServerId);
+    }
+  }
+
+  /**
+   * 用握手得到的 Source 身份建立索引。claim 是同步原子块：重复 profile 指向同一 Source 时
+   * 只有先到者成为 owner，后来者加入既有 owner，绝不产生第二个在线 owner。
+   */
+  function claimSourceOwner(
+    entry: ConnectionEntry<TServices, TCapabilities>,
+    sourceServerId: string,
+    authProofDigest: string | undefined,
+  ): { owner: ConnectionEntry<TServices, TCapabilities>; duplicate: boolean } {
+    if (entry.sourceServerId && entry.sourceServerId !== sourceServerId) {
+      // 同一物理 entry 在重连后握手返回了不同 Source id：不能静默改写旧会话的授权范围。
+      throw new WindowRemoteSourceIdentityChangedError(entry.sourceServerId, sourceServerId);
+    }
+    const existing = entriesBySourceServerId.get(sourceServerId);
+    if (
+      existing &&
+      existing !== entry &&
+      !existing.disposed &&
+      existing.abortController.signal.aborted === false &&
+      (existing.state === "connecting" || existing.state === "online") &&
+      (existing.state === "connecting" || existing.handle)
+    ) {
+      // Bug 原因：sourceServerId 是可被另一服务自报的普通 id，单独用它 join 会把不同凭据/
+      // 未知授权范围折叠成一个 owner，并把旧会话重发到新 authority。只有双方都持有本次
+      // 连接派生的临时已鉴权证明且摘要一致时才允许加入；缺失/不一致一律 fail-closed。
+      if (
+        !authProofDigest ||
+        !existing.sourceServerAuthProofDigest ||
+        authProofDigest !== existing.sourceServerAuthProofDigest
+      ) {
+        throw new WindowRemoteSourceIdentityChangedError(
+          sourceServerId,
+          `${sourceServerId} (authorization proof mismatch)`,
+        );
+      }
+      return { owner: existing, duplicate: true };
+    }
+    entry.sourceServerId = sourceServerId;
+    if (authProofDigest) {
+      entry.sourceServerAuthProofDigest = authProofDigest;
+    }
+    entriesBySourceServerId.set(sourceServerId, entry);
+    return { owner: entry, duplicate: false };
+  }
+
+  function resolveStableWorkspaceIdentity(
+    session: LogicalSession<TServices, TCapabilities>,
+    workspacePath: string,
+    hint: string | undefined,
+  ): string {
+    if (!session.sourceServerId) {
+      return hint?.trim() || buildRemoteWorkspaceIdentity(workspacePath, session.target);
+    }
+    const canonical = buildServerRemoteWorkspaceIdentity({
+      serverId: session.sourceServerId,
+      workspacePath,
+    });
+    const identity = hint?.trim();
+    if (!identity || identity === canonical) {
+      // 同目录 rebind 不能把已验证 legacy 主 key 降为 canonical alias，避免历史/执行上下文合并。
+      const currentIdentity = session.workspaceIdentity;
+      if (
+        session.workspacePath === workspacePath &&
+        session.entry.handle?.sourceServerAuthProofDigest &&
+        session.target.kind !== "server" &&
+        currentIdentity === buildRemoteWorkspaceIdentity(workspacePath, session.target)
+      )
+        return currentIdentity;
+      return canonical;
+    }
+    // Bug 原因：把 legacy 只留 alias 会合并 execution/history，手机 exact scope 必然不一致。
+    // 真实握手证明 + 原 transport/authority/path 全等才能保留主 key；未知 hint 不自动迁移。
+    if (
+      session.entry.handle?.sourceServerAuthProofDigest &&
+      session.target.kind !== "server" &&
+      identity === buildRemoteWorkspaceIdentity(workspacePath, session.target)
+    )
+      return identity;
+    throw new WindowRemoteSourceIdentityChangedError(identity, session.sourceServerId);
+  }
+
+  function applyStableWorkspaceIdentity(session: LogicalSession<TServices, TCapabilities>): void {
+    if (!session.workspacePath) return;
+    session.workspaceIdentity = resolveStableWorkspaceIdentity(
+      session,
+      session.workspacePath,
+      session.workspaceIdentity,
+    );
+    session.workspaceKey = session.workspaceIdentity;
+    session.entry.workspaceKeys.add(session.workspaceIdentity);
+  }
+
   function createEntry(params: {
     key: string;
     target: RemoteTarget;
     remoteAssets: WindowRemoteAssetDirs;
+    confirmSourceServerInstall?: boolean;
+    existingSourceServerId?: string;
   }): ConnectionEntry<TServices, TCapabilities> {
     const abortController = new AbortController();
     const entry: ConnectionEntry<TServices, TCapabilities> = {
@@ -405,6 +569,10 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
         target: params.target,
         remoteAssets: params.remoteAssets,
         signal: abortController.signal,
+        ...(params.confirmSourceServerInstall ? { confirmSourceServerInstall: true } : {}),
+        ...(params.existingSourceServerId
+          ? { existingSourceServerId: params.existingSourceServerId }
+          : {}),
       })
       .then(async (handle) => {
         entry.handle = handle;
@@ -454,6 +622,8 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
     key: string;
     target: RemoteTarget;
     remoteAssets: WindowRemoteAssetDirs;
+    confirmSourceServerInstall?: boolean;
+    existingSourceServerId?: string;
   }): ConnectionEntry<TServices, TCapabilities> {
     const existing = entriesByKey.get(params.key);
     if (
@@ -474,6 +644,9 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
     remoteAssets: WindowRemoteAssetDirs;
     workspacePath?: string;
     workspaceIdentity?: string;
+    workspacePurpose?: WorkspacePurpose;
+    confirmSourceServerInstall?: boolean;
+    existingSourceServerId?: string;
   }): Promise<WindowHostRemoteWorkspaceDescriptor> {
     if (disposed) {
       throw new Error("窗口 Host 的远程连接 registry 已释放");
@@ -488,6 +661,10 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
       key,
       target: params.target,
       remoteAssets: params.remoteAssets,
+      ...(params.confirmSourceServerInstall ? { confirmSourceServerInstall: true } : {}),
+      ...(params.existingSourceServerId
+        ? { existingSourceServerId: params.existingSourceServerId }
+        : {}),
     });
     let rejectCancellation!: (error: WindowRemoteConnectCancelledError) => void;
     const cancellation = new Promise<never>((_resolve, reject) => {
@@ -499,6 +676,7 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
       target: params.target,
       ...(params.workspacePath ? { workspacePath: params.workspacePath } : {}),
       ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
+      ...(params.workspacePurpose ? { workspacePurpose: params.workspacePurpose } : {}),
       generation: 1,
       state: entry.state === "online" ? "online" : "connecting",
       sourceAvailability: entry.state === "online" ? "online" : "offline",
@@ -518,29 +696,88 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
     sessionsById.set(remoteSessionId, session);
     pendingSessionsByRequestId.set(params.requestId, session);
 
+    let reusedConnectionTarget: RemoteTarget | undefined;
     try {
       await Promise.race([entry.ready, cancellation]);
+      const handle = entry.handle;
+      if (!handle) {
+        throw new WindowRemoteConnectCancelledError();
+      }
+      const handshakeSourceId = handle.sourceServerId?.trim() || undefined;
+      const handshakeAuthProof = handle.sourceServerAuthProofDigest?.trim() || undefined;
+      if (params.target.kind === "server" && !handshakeSourceId) {
+        // 直连请求即使自带旧 hint/serverId，也不能替缺少身份的握手发布 scope 或凭据 slot。
+        throw new WindowRemoteSourceIdentityChangedError("authenticated Source id", undefined);
+      }
+      if (params.existingSourceServerId && handshakeSourceId !== params.existingSourceServerId) {
+        // 不能把已确认的旧 Source 地址当成新 Source 使用：显式 typed pending，由上层重新确认。
+        throw new WindowRemoteSourceIdentityChangedError(
+          params.existingSourceServerId,
+          handshakeSourceId,
+        );
+      }
+      let duplicateOwner: ConnectionEntry<TServices, TCapabilities> | undefined;
+      if (handshakeSourceId) {
+        const claim = claimSourceOwner(entry, handshakeSourceId, handshakeAuthProof);
+        if (claim.duplicate) {
+          // 同一 Source 的重复 profile：加入既有 owner，绝不出现两个在线 owner。
+          if (sessionsById.get(remoteSessionId) !== session || session.cancelled) {
+            throw new WindowRemoteConnectCancelledError();
+          }
+          entry.sessions.delete(remoteSessionId);
+          claim.owner.sessions.add(remoteSessionId);
+          session.entry = claim.owner;
+          session.generation += 1;
+          duplicateOwner = claim.owner;
+          reusedConnectionTarget = stripRemoteTargetSecrets(params.target);
+        }
+        session.sourceServerId = handshakeSourceId;
+      }
+      if (duplicateOwner) {
+        // 加入一个仍在 connecting 的 owner 时，必须等它真正上线再返回 descriptor；
+        // owner 失败会沿这里向上抛出，不会留下已发布的假在线 session。
+        await Promise.race([duplicateOwner.ready, cancellation]);
+        if (entry.sessions.size === 0) {
+          await disposeEntry(entry);
+        }
+      }
+      applyStableWorkspaceIdentity(session);
       await Promise.race([prepareWorkspaceRuntime(session), cancellation]);
       if (session.cancelled || !sessionsById.has(remoteSessionId)) {
         throw new WindowRemoteConnectCancelledError();
       }
       session.state = "online";
       session.sourceAvailability = "online";
+      // descriptor 的 Source 目标由握手结果固定：renderer 传入的 serverId 只是展示/旧 hint，
+      // 不能覆盖已鉴权 serverInfo.serverId。Main/UI 都按这个 descriptor 转发与建身份。
+      const descriptorTarget = stripRemoteTargetSecrets(params.target);
+      const authoritativeTarget =
+        session.sourceServerId && descriptorTarget.kind === "server"
+          ? { ...descriptorTarget, serverId: session.sourceServerId }
+          : descriptorTarget;
+      session.target = authoritativeTarget;
       return {
         remoteSessionId,
-        target: stripRemoteTargetSecrets(params.target),
+        target: authoritativeTarget,
+        ...(session.sourceServerId ? { sourceServerId: session.sourceServerId } : {}),
         ...(session.workspacePath ? { workspacePath: session.workspacePath } : {}),
         ...(session.workspaceIdentity ? { workspaceIdentity: session.workspaceIdentity } : {}),
+        ...(session.workspacePurpose ? { workspacePurpose: session.workspacePurpose } : {}),
+        ...(reusedConnectionTarget ? { reusedConnectionTarget } : {}),
         generation: session.generation,
       };
     } catch (error) {
       if (sessionsById.get(remoteSessionId) === session) {
         sessionsById.delete(remoteSessionId);
-        entry.sessions.delete(remoteSessionId);
+        session.entry.sessions.delete(remoteSessionId);
         session.state = "failed";
         session.sourceAvailability = "offline";
-        if (entry.sessions.size === 0 && entry.target.kind === "docker") {
-          await disposeEntry(entry);
+        const owner = session.entry;
+        if (
+          owner.sessions.size === 0 &&
+          (owner.target.kind === "docker" || owner.target.kind === "server")
+        ) {
+          await disposeEntry(owner);
         }
       }
       throw error;
@@ -594,6 +831,8 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
     remoteSessionId: string;
     workspacePath: string;
     workspaceIdentity: string;
+    workspacePurpose?: WorkspacePurpose;
+    legacyRouteHint?: string;
   }): Promise<void> {
     const session = sessionsById.get(params.remoteSessionId);
     if (!session) {
@@ -605,10 +844,19 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
       workspaceKey: session.workspaceKey,
       workspaceGeneration: session.workspaceGeneration,
     };
+    // 先验证再写状态：失败的 hint 不得留下半更新的 descriptor/execution scope。
+    const workspaceIdentity = resolveStableWorkspaceIdentity(
+      session,
+      params.workspacePath,
+      params.legacyRouteHint?.trim() || params.workspaceIdentity,
+    );
     session.workspacePath = params.workspacePath;
-    session.workspaceIdentity = params.workspaceIdentity;
+    session.workspaceIdentity = workspaceIdentity;
+    if (params.workspacePurpose) {
+      session.workspacePurpose = params.workspacePurpose;
+    }
     session.generation += 1;
-    session.workspaceKey = params.workspaceIdentity.trim() || params.workspacePath;
+    session.workspaceKey = session.workspaceIdentity?.trim() || params.workspacePath;
     session.entry.workspaceKeys.add(session.workspaceKey);
     const ready = prepareWorkspaceRuntime(session);
     if (previousOwnership.workspaceKey !== session.workspaceKey) {
@@ -629,9 +877,14 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
       throw new WindowRemoteConnectionUnavailableError(scope.remoteSessionId);
     }
     if (
-      session.workspacePath !== scope.workspacePath ||
-      session.workspaceIdentity !== scope.workspaceIdentity
+      scope.kind === "remote" &&
+      scope.sourceServerId &&
+      session.sourceServerId !== scope.sourceServerId
     ) {
+      throw new WindowRemoteConnectionUnavailableError(scope.remoteSessionId);
+    }
+    const identityMatches = session.workspaceIdentity === scope.workspaceIdentity;
+    if (session.workspacePath !== scope.workspacePath || !identityMatches) {
       throw new Error(
         `远程 attachment scope 与 logical session 不匹配，remoteSessionId=${scope.remoteSessionId}`,
       );
@@ -700,6 +953,7 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
       workspacePath: string;
       workspaceIdentity?: string;
     }): WindowRemoteLogicalSessionSnapshot | null {
+      // 只查 actual 主 key；canonical 新 context 不得反查到同路径的多个旧 legacy 上下文。
       const matches = Array.from(sessionsById.values()).filter(
         (session) =>
           session.workspacePath === params.workspacePath &&
@@ -716,11 +970,87 @@ export function createWindowRemoteConnectionRegistry<TServices, TCapabilities = 
       const match = onlineMatches[0] ?? matches[0];
       return match ? toSessionSnapshot(match) : null;
     },
-    getStats(): { connectionCount: number; logicalSessionCount: number } {
+    getStats(): {
+      connectionCount: number;
+      logicalSessionCount: number;
+      sourceCount: number;
+    } {
       return {
         connectionCount: entriesByKey.size,
         logicalSessionCount: sessionsById.size,
+        sourceCount: entriesBySourceServerId.size,
       };
+    },
+    /**
+     * 已在线 Source 的只读枚举（每个 Source 一个 owner）。
+     * 用于把桌面侧的 app 级选择推给现有 attachment；不创建、不重建任何连接。
+     */
+    listOnlineSources(): Array<{ sourceServerId: string; services: TServices }> {
+      const online: Array<{ sourceServerId: string; services: TServices }> = [];
+      for (const [sourceServerId, entry] of entriesBySourceServerId) {
+        if (entry.disposed || entry.state !== "online" || !entry.handle) continue;
+        online.push({ sourceServerId, services: entry.handle.services });
+      }
+      return online;
+    },
+    /**
+     * 只解析已在线 Source 的既有 owner；缺失即 undefined。调用方（项目树、Source 设置）
+     * 不能据此创建第二个 Host/Agent。
+     */
+    getOnlineSource(sourceServerId: string): {
+      sourceServerId: string;
+      services: TServices;
+      virtualProjects: boolean;
+      serverVersion?: string;
+      capabilities?: TCapabilities;
+    } | null {
+      const onlineEntry = entriesBySourceServerId.get(sourceServerId);
+      if (
+        !onlineEntry ||
+        onlineEntry.disposed ||
+        onlineEntry.state !== "online" ||
+        !onlineEntry.handle
+      ) {
+        return null;
+      }
+      return {
+        sourceServerId,
+        services: onlineEntry.handle.services,
+        virtualProjects: onlineEntry.handle.virtualProjects === true,
+        ...(onlineEntry.handle.serverVersion
+          ? { serverVersion: onlineEntry.handle.serverVersion }
+          : {}),
+        ...(onlineEntry.handle.capabilities
+          ? { capabilities: onlineEntry.handle.capabilities }
+          : {}),
+      };
+    },
+    /** 管理入口断开 Source：只释放该 owner 及其 logical session，不触碰其他 Source。 */
+    async disposeSource(sourceServerId: string): Promise<void> {
+      const entry = entriesBySourceServerId.get(sourceServerId);
+      if (!entry) {
+        return;
+      }
+      for (const session of Array.from(sessionsById.values())) {
+        if (session.entry !== entry) {
+          continue;
+        }
+        sessionsById.delete(session.remoteSessionId);
+        pendingSessionsByRequestId.delete(session.requestId);
+        session.cancelled = true;
+        session.state = "closing";
+        session.sourceAvailability = "offline";
+        session.rejectCancellation(new WindowRemoteConnectCancelledError());
+      }
+      entry.sessions.clear();
+      await disposeEntry(entry);
+    },
+    resolveSourceScopedServices(sourceServerId: string): TServices {
+      const online = entriesBySourceServerId.get(sourceServerId);
+      if (!online || online.disposed || online.state !== "online" || !online.handle) {
+        throw new WindowRemoteConnectionUnavailableError(sourceServerId);
+      }
+      return online.handle.services;
     },
     setWorkspaceRunningTaskCount(params: {
       workspacePath: string;

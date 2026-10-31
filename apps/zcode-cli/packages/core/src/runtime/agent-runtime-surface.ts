@@ -410,4 +410,11 @@ export interface AgentRuntimeSurface {
   isProjectMemoryEnabled(): boolean;
   /** 缺省等待最多 60 秒；null 等待全部已调度提取结束，不设置 drain deadline。 */
   drainMemoryExtractions(timeoutMs?: number | null): Promise<void>;
+  /**
+   * 激活本会话的工作流工具面（launch.md「On demand: activation」）。已激活时 no-op 返回 false。
+   */
+  activateDynamicWorkflowTools(input: {
+    source: import("./methods/dynamic-workflow-activation.js").DynamicWorkflowActivationSource;
+    traceContext?: TraceContext;
+  }): Promise<boolean>;
 }

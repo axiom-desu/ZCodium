@@ -44,7 +44,7 @@ export async function setZCodePluginEnabled(
       skipUserConfig: options.skipUserConfig,
       userConfigPath: options.userConfigPath,
     });
-  const outcome = resolveZCodePlugins({
+  const outcome = await resolveZCodePlugins({
     ...options,
     configResult,
     workingDirectory,
@@ -70,7 +70,7 @@ export async function configureZCodePlugin(options: ConfigureZCodePluginOptions)
   const normalizedOptions = normalizePluginOptions(options.options);
   const clearOptionKeys = normalizePluginOptionKeys(options.clearOptionKeys);
   const { configResult, pluginStorageRoot, workingDirectory } = resolvePluginContext(options);
-  const outcome = resolveZCodePlugins({
+  const outcome = await resolveZCodePlugins({
     ...options,
     configResult,
     pluginStorageRoot,

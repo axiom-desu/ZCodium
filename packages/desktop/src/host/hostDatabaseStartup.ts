@@ -12,11 +12,19 @@ const BASELINE_BUDGET_MS = 250;
 export function createHostDatabaseStartup(options: {
   startupId?: string;
   cwd: string;
+  /** 可信持库 Host 身份；由 Host composition 派生，不接受 renderer 请求。 */
+  hostId?: string;
   workingDirectories?: string[];
   env?: Record<string, string>;
   publish: (state: DatabaseStartupState) => void;
   initializeServices: () => Promise<void>;
   onFailure: (error: unknown) => void;
+  /** 迁移备份被跳过是真实启动诊断，必须由 Host 日志/状态消费，不能留隐藏标志。 */
+  onStorageWarning?: (warning: {
+    code: "migration_backup_skipped";
+    phases: string[];
+    reason: "insufficient-space";
+  }) => void;
 }) {
   const abort = new AbortController();
   let sampler: StartupDiskSampler | undefined;
@@ -47,12 +55,19 @@ export function createHostDatabaseStartup(options: {
         const tasksPath = getTasksIndexDatabasePath();
         await observePath(tasksPath);
         currentSampler.start();
-        await prepareHostStorage(
+        const storage = await prepareHostStorage(
           tasksPath,
           (phase, migration) =>
             report("preparing_host_storage", phase, { databaseId: "tasks-index", migration }),
           abort.signal,
+          options.hostId,
         );
+        if (storage.backupSkipped)
+          options.onStorageWarning?.({
+            code: "migration_backup_skipped",
+            phases: storage.backupSkippedPhases,
+            reason: "insufficient-space",
+          });
         markTasksStoragePrepared(tasksPath);
         report("preparing_session_storage", "checking");
         const candidates = options.workingDirectories?.length

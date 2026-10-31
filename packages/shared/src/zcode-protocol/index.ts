@@ -28,6 +28,7 @@ import { mcpAppInstanceSchema } from "../mcp-apps/instance.js";
 // 上述旧协议 client/server 组删除时，本文件整体删除。
 // 注：外部零消费 schema 多为存活 schema 联合的内部依赖，随宿主文件一起处理，勿单删。
 import { z } from "zod";
+import { DYNAMIC_WORKFLOW_MODES } from "../dynamic-workflow-feature.js";
 import { bashOutputDisplaySchema } from "../bash-output-display.js";
 import { zcodeAutomationBotDeliveryTargetSchema } from "../bots.js";
 import { executionOutputPreviewSchema } from "../execution-output-preview.js";
@@ -1775,6 +1776,9 @@ export type ZCodeSessionSubagentsResult = z.infer<typeof zcodeSessionSubagentsRe
 export const zcodeSessionCreateParamsSchema = z
   .object({
     sessionId: nonEmptyString.optional(),
+    // ProjectService.prepareSession 冻结的附加执行目录；只影响发现与模型可见环境，
+    // 不改 cwd/identity，也不扩权。
+    additionalDirectories: z.array(nonEmptyString).max(256).optional(),
     workspace: zcodeWorkspaceRefSchema,
     parentSessionId: nonEmptyString.optional(),
     mode: zcodeSessionModeSchema.optional(),
@@ -1788,6 +1792,8 @@ export const zcodeSessionCreateParamsSchema = z
     importedHistory: zcodeSessionImportHistorySchema.optional(),
     // Host 裁决动态工作流工具策略，缺省不下发 = 不注册（fail-closed）。
     dynamicWorkflowEnabled: z.boolean().optional(),
+    // 灰度 mode 与布尔同行；只发布尔的旧 Host 缺席 = alwaysOn。
+    dynamicWorkflowMode: z.enum(DYNAMIC_WORKFLOW_MODES).optional(),
   })
   .strict();
 export type ZCodeSessionCreateParams = z.infer<typeof zcodeSessionCreateParamsSchema>;
@@ -1795,6 +1801,8 @@ export type ZCodeSessionCreateParams = z.infer<typeof zcodeSessionCreateParamsSc
 export const zcodeSessionResumeParamsSchema = z
   .object({
     sessionId: nonEmptyString,
+    // 冷恢复以 Host 当前冻结契约为准；热恢复忽略该字段，既有 runtime cwd 不被改写。
+    additionalDirectories: z.array(nonEmptyString).max(256).optional(),
     workspace: zcodeWorkspaceRefSchema.optional(),
     // 旧 session 尚无 runtime/model_selection entry 时，由同 task 的索引元数据提供迁移 hint。
     thoughtLevel: nonEmptyString.optional(),
@@ -1804,6 +1812,7 @@ export const zcodeSessionResumeParamsSchema = z
     toolDenylist: z.array(nonEmptyString).optional(),
     // 与 create 同语义；resume 不带会导致冷恢复丢工作流工具簇。
     dynamicWorkflowEnabled: z.boolean().optional(),
+    dynamicWorkflowMode: z.enum(DYNAMIC_WORKFLOW_MODES).optional(),
   })
   .strict();
 export type ZCodeSessionResumeParams = z.infer<typeof zcodeSessionResumeParamsSchema>;
@@ -1913,6 +1922,8 @@ export type ZCodeModelContextBudgetStrategy = z.infer<typeof zcodeModelContextBu
 
 export const zcodeSessionRuntimePreferencesResultSchema = z
   .object({
+    // 运行时物化时的执行目录合同；旧 Host 缺失 = 无附加目录。
+    additionalDirectories: z.array(nonEmptyString).max(256).optional(),
     nativeSearchEnhancementsEnabled: z.boolean(),
     // 旧 Host 缺少该字段时按 Off；不在协议边界伪造成 auto。
     toolSearchMode: appToolSearchModeSchema.default("off"),
@@ -2398,6 +2409,8 @@ export const zcodeWorkspaceUpdateDynamicWorkflowPolicyParamsSchema = z
   .object({
     workspace: zcodeWorkspaceRefSchema,
     enabled: z.boolean(),
+    // mode 与布尔同行（launch.md「On demand: activation」）；只在 enabled 时有意义。
+    mode: z.enum(DYNAMIC_WORKFLOW_MODES).optional(),
   })
   .strict();
 export type ZCodeWorkspaceUpdateDynamicWorkflowPolicyParams = z.infer<
@@ -2570,6 +2583,21 @@ export const zcodePluginComponentGroupSchema = z
   .strict();
 export type ZCodePluginComponentGroup = z.infer<typeof zcodePluginComponentGroupSchema>;
 
+export const zcodePluginUiSurfaceSchema = z
+  .object({
+    pluginId: nonEmptyString,
+    pluginName: nonEmptyString,
+    id: nonEmptyString.max(128),
+    title: z.union([nonEmptyString, z.record(z.string(), z.string())]),
+    icon: z.string().optional(),
+    // 运行时 namespaced server 名（plugin:<name>:<server>），可直接用于 mcp/uiReadResource。
+    server: nonEmptyString,
+    resourceUri: nonEmptyString.max(2048),
+    availability: z.literal("session"),
+  })
+  .strict();
+export type ZCodePluginUiSurface = z.infer<typeof zcodePluginUiSurfaceSchema>;
+
 export const zcodePluginInfoSchema = z
   .object({
     id: nonEmptyString,
@@ -2589,6 +2617,8 @@ export const zcodePluginInfoSchema = z
     // 权威组件清单（名称 + 可选描述），由 CLI 对插件根目录枚举得出，与启用态无关。
     // 详情 UI 直接展示，取代旧的「数量取协议、名称靠 UI 侧 join」脆弱方案。optional 兼容旧 payload。
     components: z.array(zcodePluginComponentGroupSchema).optional(),
+    // 已安装清单的合法 `ui.surfaces[]`：与 plugins/listUiSurfaces 同源，供商店/推荐判断 UI 能力。
+    uiSurfaces: z.array(zcodePluginUiSurfaceSchema).optional(),
     declaredMcpServerNames: z.array(z.string()).optional(),
     hostMcpServerNames: z.array(z.string()).optional(),
     mcpServerNames: z.array(z.string()),
@@ -2631,20 +2661,6 @@ export type ZCodePluginsListResult = z.infer<typeof zcodePluginsListResultSchema
 
 // ── 插件 UI 面板入口──
 // 工作区级只读投影：已启用插件清单 `ui.surfaces[]` 的合法条目；插件启停后 host 重新拉取。
-export const zcodePluginUiSurfaceSchema = z
-  .object({
-    pluginId: nonEmptyString,
-    pluginName: nonEmptyString,
-    id: nonEmptyString.max(128),
-    title: z.union([nonEmptyString, z.record(z.string(), z.string())]),
-    icon: z.string().optional(),
-    // 运行时 namespaced server 名（plugin:<name>:<server>），可直接用于 mcp/uiReadResource。
-    server: nonEmptyString,
-    resourceUri: nonEmptyString.max(2048),
-    availability: z.literal("session"),
-  })
-  .strict();
-export type ZCodePluginUiSurface = z.infer<typeof zcodePluginUiSurfaceSchema>;
 export const zcodePluginsListUiSurfacesParamsSchema = z
   .object({ workspace: zcodeWorkspaceRefSchema })
   .strict();

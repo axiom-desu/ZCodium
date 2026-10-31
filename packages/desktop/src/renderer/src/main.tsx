@@ -10,6 +10,7 @@ import {
   ZCodeIntlProvider,
   registerBaseWorkspaceServices,
   registerRemoteWorkspaceSession,
+  registerSourceSettingsServices,
   createRemoteWorkspaceDisconnectedError,
   playTaskNotificationSound,
 } from "@zcode/ui";
@@ -34,6 +35,7 @@ import {
   parseRemoteWorkspaceServicePortMessage,
   type RemoteWorkspaceServicePortRegistration,
 } from "./remoteWorkspaceServicePortBridge.js";
+import { parseSourceSettingsServicePortMessage } from "./sourceSettingsServicePortBridge.js";
 
 type DesktopRendererImportMetaEnv = {
   VITE_ZCODE_E2E_STORE_BRIDGE?: string;
@@ -260,6 +262,19 @@ function handleServicePortMessage(event: MessageEvent): void {
 
   if (event.data === InternalChannels.TaskNotificationSound) {
     void playTaskNotificationSound();
+    return;
+  }
+
+  const sourceSettingsPort = parseSourceSettingsServicePortMessage(event);
+  if (sourceSettingsPort) {
+    // Source 级设置只复用该 Source 已有 Host services；attachment 身份换代由 store 判序。
+    const connection = createMessagePortServiceConnection(sourceSettingsPort.port);
+    registerSourceSettingsServices({
+      sourceServerId: sourceSettingsPort.sourceServerId,
+      attachmentId: sourceSettingsPort.attachmentId,
+      services: connection.services,
+      dispose: () => connection.dispose(),
+    });
     return;
   }
 

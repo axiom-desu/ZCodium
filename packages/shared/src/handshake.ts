@@ -4,6 +4,7 @@ export interface HelloMessage {
   platform: string;
   arch: string;
   pid: number;
+  capabilities?: { virtualProjects?: true };
 }
 
 export interface HelloAckMessage {

@@ -23,6 +23,7 @@ import { uuidv7 } from "@zcode/shared";
 import { createMessageId, traceContextToLogContext } from "../deps.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { emitControlOnlyUserTurn, persistWorkflowLaunchUserMessage } from "./control-only-turn.js";
+import { activateDynamicWorkflowTools } from "./dynamic-workflow-activation.js";
 
 /**
  * `startSavedWorkflowRun` 的结构化结果。成功给 run 的两把关联键（`runId` ≡ backgroundTaskId ≡
@@ -147,6 +148,9 @@ export async function startSavedWorkflowRun(
   // rejected ACK 后通过 deleteSession 回收空会话。
   await this.ensureContextInitialized(traceContext);
   await this.ensureSessionPersisted(found.name, traceContext);
+  // 直接启动即激活工具面（launch.md「On demand: activation」）：启动轮之后的通知要模型去调
+  // GetWorkflowRun；放在落盘之后，entry 才有会话可挂。
+  await activateDynamicWorkflowTools.call(this, { source: "run_control", traceContext });
 
   // (3) toolCallId：`launch-` 前缀，日志与工具卡可辨于模型工具调用 id（`tool_*`）与 resume 重臂。
   const toolCallId = `launch-${randomUUID()}`;

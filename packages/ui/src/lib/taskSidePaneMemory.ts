@@ -1,4 +1,5 @@
 import type { GitChangeSourceId } from "@zcode/shared";
+import type { SidePaneFullViewState } from "@/side-pane-full-view/contract.js";
 import {
   normalizeWorkspaceSidePaneState,
   type WorkspaceSidePaneState,
@@ -9,6 +10,12 @@ interface TaskSidePaneMemoryState {
   isSidePaneCollapsed: boolean;
   /** 对话级展开/收起偏好；tabs 本身仍按 workspace 复用。 */
   sidePaneCollapsedByOwner: Record<string, boolean>;
+  /**
+   * 完整视图记录（spec：docs/specs/side-pane-full-view.md）。
+   * 与 sidePaneCollapsedByOwner 同口径：正式任务用 taskId，草稿用 `__draft__`；
+   * 外层仍是 workspace key，所以不同 workspace 的同 taskId 不会互相泄漏。
+   */
+  sidePaneFullViewByOwner: Record<string, SidePaneFullViewState>;
   /** 工具调用的自动打开已消费记录；不随消息行卸载清空。 */
   pluginUiAutoOpenKeys: ReadonlySet<string>;
   activeGitSourceId: GitChangeSourceId;
@@ -21,6 +28,7 @@ const DEFAULT_TASK_SIDE_PANE_MEMORY_STATE: TaskSidePaneMemoryState = {
   sidePaneState: null,
   isSidePaneCollapsed: true,
   sidePaneCollapsedByOwner: {},
+  sidePaneFullViewByOwner: {},
   pluginUiAutoOpenKeys: new Set(),
   activeGitSourceId: "unstaged",
   browserUrls: {},
@@ -90,6 +98,10 @@ export function readTaskSidePaneMemoryState(key: string | null): TaskSidePaneMem
       ...DEFAULT_TASK_SIDE_PANE_MEMORY_STATE.sidePaneCollapsedByOwner,
       ...state.sidePaneCollapsedByOwner,
     },
+    sidePaneFullViewByOwner: {
+      ...DEFAULT_TASK_SIDE_PANE_MEMORY_STATE.sidePaneFullViewByOwner,
+      ...state.sidePaneFullViewByOwner,
+    },
   };
   return touchTaskSidePaneMemoryEntry(key, normalizedState);
 }
@@ -114,6 +126,12 @@ export function saveTaskSidePaneMemoryState(
       ...taskSidePaneMemory.get(key)?.sidePaneCollapsedByOwner,
       ...patch.sidePaneCollapsedByOwner,
     },
+    sidePaneFullViewByOwner:
+      // 完整视图记录是「按 owner 的存在集合」：调用方给值时整体替换，才能删掉单个 owner；
+      // 其他字段的 patch 不带该字段时保留既有记录。
+      patch.sidePaneFullViewByOwner ??
+      taskSidePaneMemory.get(key)?.sidePaneFullViewByOwner ??
+      DEFAULT_TASK_SIDE_PANE_MEMORY_STATE.sidePaneFullViewByOwner,
   };
   nextState.sidePaneState = normalizeWorkspaceSidePaneState(nextState.sidePaneState);
   touchTaskSidePaneMemoryEntry(key, nextState);
@@ -143,6 +161,43 @@ export function saveTaskSidePaneCollapsedPreference(
       [ownerKey]: isSidePaneCollapsed,
     },
   });
+}
+
+function buildSidePaneFullViewOwnerKey(ownerTaskId: string | null | undefined): string {
+  return ownerTaskId ?? DRAFT_SIDE_PANE_OWNER_KEY;
+}
+
+/**
+ * 只读当前 owner 的完整视图记录：不创建条目、不触发 LRU 更新。
+ * owner 切换时 hook 会重新 peek，所以读路径必须是纯的。
+ */
+export function peekTaskSidePaneFullView(
+  key: string | null,
+  ownerTaskId: string | null | undefined,
+): SidePaneFullViewState | null {
+  if (!key) return null;
+  return (
+    taskSidePaneMemory.get(key)?.sidePaneFullViewByOwner[
+      buildSidePaneFullViewOwnerKey(ownerTaskId)
+    ] ?? null
+  );
+}
+
+/** 写入 / 清除当前 owner 的完整视图记录；null 表示退出。 */
+export function saveTaskSidePaneFullView(
+  key: string | null,
+  ownerTaskId: string | null | undefined,
+  value: SidePaneFullViewState | null,
+): void {
+  if (!key) return;
+  const ownerKey = buildSidePaneFullViewOwnerKey(ownerTaskId);
+  const next = { ...taskSidePaneMemory.get(key)?.sidePaneFullViewByOwner };
+  if (value) {
+    next[ownerKey] = value;
+  } else {
+    delete next[ownerKey];
+  }
+  saveTaskSidePaneMemoryState(key, { sidePaneFullViewByOwner: next });
 }
 
 export function claimPluginUiSidePaneAutoOpen(

@@ -2,12 +2,24 @@ import { Event as RpcEvent } from "@zcode/rpc";
 import type { IConversationShareService, IZCodeAgentService } from "@zcode/services";
 import { conversationShareConnectionScopeFactory } from "@zcode/services/node";
 
+/**
+ * 连接范围（connection scope）的唯一实现。
+ *
+ * 分享在 Desktop 只允许在当前 attachment 的可信 Agent scope 内读取 contents/file：
+ * 手机远控（web-remote-replayable）没有本地 workspace 副本，只保留 capability 查询
+ * 与「读回已导入副本」，其余入口一律拒绝，避免另起一套 Agent/会话。
+ */
 type ConversationShareAgentService = Pick<
   IZCodeAgentService,
   | "conversationRowsRangeV4"
   | "conversationFileChangesV4"
   | "conversationAttachmentReadV4"
   | "conversationAttachmentStatV4"
+  | "conversationWorkflowRunsV4"
+  | "conversationWorkflowRunEventsV4"
+  | "conversationWorkflowRunArtifactsV4"
+  | "conversationWorkflowRunArtifactDataV4"
+  | "conversationWorkflowRunArtifactReadV4"
 >;
 
 type ConnectionScopableConversationShareService = IConversationShareService & {

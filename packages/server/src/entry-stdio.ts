@@ -47,6 +47,8 @@ async function main() {
     platform: process.platform,
     arch: process.arch,
     pid: process.pid,
+    // 本构建的 standalone server 总会注册 Host ProjectService；旧 server 不声明该能力。
+    capabilities: { virtualProjects: true },
   };
   process.stdout.write(JSON.stringify(hello) + "\n");
 

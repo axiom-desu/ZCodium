@@ -72,6 +72,10 @@ app
       );
       await checkManaged(env, win, scope, check);
       await checkPermissions(env, root, check);
+      // 修复：权限测试的第二窗口关闭后，Linux 合成器可能不恢复原窗口的 BeginFrame，
+      // 首次双 rAF 布局等待会永久挂起。恢复被测窗口的可见合成顺序，不改断言或超时预算。
+      win.showInactive();
+      win.moveTop();
       await checkLifecycle(env, win, scope, check);
       await writeFile(
         join(root, "managed-storage-identity.json"),

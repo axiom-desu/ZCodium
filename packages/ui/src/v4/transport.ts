@@ -54,8 +54,14 @@ export interface ConversationTransport {
   resync(params: ConversationResyncParams): Promise<V4ConversationResyncResult>;
   /** v4/conversation/unsubscribe。 */
   unsubscribe(subscriptionId: string): Promise<void>;
-  /** v4/command。 */
-  sendCommand(envelope: CommandEnvelope): Promise<CommandAck>;
+  /**
+   * v4/command。context 仅 Host 消费（不进入 CLI wire envelope）：createSession 时
+   * 携带冻结的项目归属，由 Host 在同一次预占里固定执行目录。
+   */
+  sendCommand(
+    envelope: CommandEnvelope,
+    context?: { projectId?: string | null },
+  ): Promise<CommandAck>;
   /** v4/commands/query：重连后按 commandId 与 CLI 权威事实对账。 */
   queryCommands(params: CommandsQueryParams): Promise<CommandsQueryResult>;
   /** v4/conversation/rowsRange（loadOlder）：按游标向上取一窗历史行。 */

@@ -89,7 +89,14 @@ export function createCommandEntrySessionOps(
     // createSession 的执行面：record 建立/事件接线/catalog 同步/失败自清理全在旧
     // createSession op 内（半初始化 record 的回收顺序修过 bug，不重复实现）。
     // 语义决策（draft persistence / firstInput 走原生 prompt turn）在原生 handler。
-    createSessionRecord: async ({ workspaceId, mcpServers, dynamicWorkflowEnabled }) => {
+    createSessionRecord: async ({
+      sessionId,
+      additionalDirectories,
+      workspaceId,
+      mcpServers,
+      dynamicWorkflowEnabled,
+      dynamicWorkflowMode,
+    }) => {
       // workspaceId 双形态（Workspace Identity 约束）：
       // - 本地工作区 = workspacePath（identity 缺省时的 fallback）；
       // - 远程 pane（跨 workspace 分屏）= 远程 identity
@@ -100,6 +107,8 @@ export function createCommandEntrySessionOps(
       // shared parser 统一兼容 WSL legacy 与显式 user identity；非远程格式继续按
       // 本地 workspacePath 处理。
       const created = await createSessionRecordForV4(context, {
+        ...(sessionId ? { sessionId } : {}),
+        ...(additionalDirectories ? { additionalDirectories } : {}),
         workspace: resolveWorkspaceRefFromId(workspaceId),
         // 一律 deferred（draft 不进 sqlite）；提升时机归原生 prompt-turn。
         persistence: "deferred",
@@ -109,7 +118,12 @@ export function createCommandEntrySessionOps(
         // 动态工作流灰度门同为 runtime 创建期配置：
         // v4 createSession 必须与 legacy session/create 等价透传，否则无界面创建的会话
         // 会绕过 Host 的灰度判定，只剩进程级缺省。
-        ...(dynamicWorkflowEnabled === true ? { dynamicWorkflowEnabled: true } : {}),
+        ...(dynamicWorkflowEnabled === true
+          ? {
+              dynamicWorkflowEnabled: true,
+              ...(dynamicWorkflowMode ? { dynamicWorkflowMode } : {}),
+            }
+          : {}),
       });
       return { sessionId: created.sessionId };
     },

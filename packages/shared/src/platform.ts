@@ -296,7 +296,9 @@ export interface PrintPageToPdfResult {
   error?: string;
 }
 
-export function createOpenInEditorRemoteTarget(target: RemoteTarget): OpenInEditorRemoteTarget {
+export function createOpenInEditorRemoteTarget(
+  target: RemoteTarget,
+): OpenInEditorRemoteTarget | undefined {
   switch (target.kind) {
     case "ssh":
       // openInEditor 只需要构造 VS Code Remote-SSH URI 的连接标识，
@@ -321,6 +323,9 @@ export function createOpenInEditorRemoteTarget(target: RemoteTarget): OpenInEdit
         kind: "docker",
         container: target.container,
       };
+    case "server":
+      // Source Server 不提供 SSH/WSL/Docker 连接标识；不伪造 openInEditor URI。
+      return undefined;
   }
 }
 
@@ -632,10 +637,26 @@ export interface IPlatformService {
       workspaceIdentity?: string;
       connectTrigger?: import("./remoteTarget.js").RemoteWorkspaceConnectTrigger;
     },
-  ): Promise<{ success: boolean; error?: string; sessionId?: string }>;
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    sessionId?: string;
+    /** Host 已鉴权握手的 Source id；renderer 只转发，不自行推断。 */
+    sourceServerId?: string;
+    /** Host 返回的 canonical identity（目录选择前可能是 root）。 */
+    workspaceIdentity?: string;
+    /** Host 返回的脱敏目标；server 分支的 serverId 已由握手覆盖。 */
+    target?: RemoteTarget;
+  }>;
 
   /** 取消当前窗口尚未建立完成的远程连接（可选：Web 平台可忽略） */
   cancelPendingRemoteConnection?(requestId?: string): Promise<void>;
+
+  /**
+   * 为已在线 Source 创建配置专用 attachment（复用既有 Host services，不创建 Agent 会话）。
+   * Desktop only；Web/手机没有该桥时按能力缺失降级。
+   */
+  requestSourceSettingsAttachment?(sourceServerId: string): Promise<{ attachmentId: string }>;
 
   /** 将 canonical workspace 身份绑定到已创建的远程 logical session。 */
   bindRemoteWorkspaceSessionContext?(

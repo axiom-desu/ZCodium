@@ -36,5 +36,8 @@
     "@zcode/tui": "workspace:*",
     "dotenv": "^17.4.2",
     "playwright-core": "1.59.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
   }
 }

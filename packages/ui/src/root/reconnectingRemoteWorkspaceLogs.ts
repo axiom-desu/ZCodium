@@ -24,6 +24,17 @@ function getRemoteWorkspaceReconnectLogTargetSuffix(
     }
     case "docker":
       return target.container;
+    case "server":
+      // 直连 Source 只用已握手 serverId；缺失时退到 URL host，绝不带 token/query。
+      return target.serverId?.trim() || formatServerTargetHost(target.url);
+  }
+}
+
+function formatServerTargetHost(url: string): string {
+  try {
+    return new URL(url.trim()).host;
+  } catch {
+    return url.trim();
   }
 }
 

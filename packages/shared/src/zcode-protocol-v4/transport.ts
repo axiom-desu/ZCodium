@@ -380,6 +380,8 @@ export const V4_METHODS = {
   attachmentPreviewSource: "v4/attachment/previewSource",
   commandsQuery: "v4/commands/query",
   command: "v4/command",
+  // 列表事实只读查询：snapshot 缺席不是删除，显式 ID 查询 CLI 持久 store。
+  sessionsIndexReconcile: "v4/sessionsIndex/reconcile",
 } as const;
 export type V4Method = (typeof V4_METHODS)[keyof typeof V4_METHODS];
 
@@ -412,6 +414,7 @@ export const V4_NOTIFICATIONS = {
   localTtftFacts: "v4/telemetry/local-ttft",
   // 仅当前进程 live ToolCallResult 产生；历史与 replayable 链路不得补造。
   cuaPermissionObservation: "v4/cua/permission-observation",
+  pluginUiToolResult: "v4/plugin-ui/tool-result",
 } as const;
 
 /** 3.3.6 SSH 历史任务归属证明与 sessions-index 冷种子共享同一有界窗口。 */
@@ -420,6 +423,8 @@ export const MAX_LEGACY_TASK_IDS_PER_SUBSCRIBE = 200;
 // subscribe 请求 = 通用 SubscribeParams + connectionId（重订阅替换按
 // (connectionId, topic) 判定；stdio 单管道场景由 host 为每个下游客户端分配）。
 export const v4ConversationSubscribeParamsSchema = subscribeParamsSchema.extend({
+  // 冷恢复按当前项目合同冻结附加目录；热订阅忽略，不反向改既有 cwd。
+  additionalDirectories: z.array(z.string().trim().min(1)).max(256).optional(),
   connectionId: z.string(),
   clientMode: z.enum(["desktop-continuous", "web-remote-replayable"]),
   // 当前可信 attachment 的 workspace；cold resume 优先使用它恢复身份，live 不消费。

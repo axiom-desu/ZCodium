@@ -82,6 +82,8 @@ export interface ZCodeProtocolSessionRecord {
   app: ZCodeApp;
   /** 启动时解析的工具搜索模式：fork/子 Agent 继承，热 resume 保持原值。 */
   toolSearchMode: AppToolSearchMode;
+  /** 本次运行冻结的附加执行目录；继承给 child，热 resume 不改写。 */
+  additionalDirectories?: readonly string[];
   memoryEnabled: boolean;
   nativeSearchEnhancementsEnabled: boolean;
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;
@@ -135,6 +137,11 @@ export interface ZCodeProtocolAgentServerContext {
      * 工作流工具面、`/workflow` 与 dynamic-workflows 技能一律不露出。
      */
     dynamicWorkflowEnabled: boolean;
+    /**
+     * 与 dynamicWorkflowEnabled 同行到达的灰度 mode（launch.md「On demand: activation」）。
+     * 缺席（旧 Host 只发布尔）= alwaysOn；`onDemand` 让 createRecord 写 runtimeConfig.dynamicWorkflowToolsOnDemand。
+     */
+    dynamicWorkflowMode?: import("@zcode/shared").DynamicWorkflowMode;
   };
   // 竖切：v4 conversation 通道（订阅/帧/命令），与旧 session/* 方法并存。
   // 构造顺序问题（gateway 闭包持有 context）用可选字段收口，server 构造完立即赋值。
@@ -145,6 +152,8 @@ export interface ZCodeProtocolAgentServerContext {
   // 单 CLI resident session 池。冷恢复入口经 waitForDeactivation 等待旧 app.close 收尾，
   // 协议请求则持有 operation lease，禁止异步 handler 与容量回收交错。
   sessionResidentPool?: SessionResidentPool;
+  /** 正在 materialize 的预占 sessionId（native/V4 并发去重）。 */
+  sessionCreationIds?: Set<string>;
   sessions: Map<string, ZCodeProtocolSessionRecord>;
   notify(notification: ZCodeProtocolNotification): void;
   requestClient<T>(

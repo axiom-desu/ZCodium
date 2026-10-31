@@ -75,8 +75,13 @@ export function resolveRuntimeDisallowedTools(
  * （helpers/runtime-tools.ts 的首次装配、methods/embedded-search-branch.ts 的分支刷新），
  * 两个入口必须使用同一规则，否则刷新工具列表时可能重新注册已关闭的工作流工具。
  */
-export function resolveRuntimeDynamicWorkflowToolsIncluded(config: AgentRuntimeConfig): boolean {
-  return config.dynamicWorkflowEnabled !== false;
+export function resolveRuntimeDynamicWorkflowToolsIncluded(runtime: {
+  config: AgentRuntimeConfig;
+  dynamicWorkflowToolsActivated: boolean;
+}): boolean {
+  // enabled ∧ (¬onDemand ∨ activated)：激活态归 runtime（launch.md「On demand: activation」），
+  // 非 onDemand 会话出生即 activated，所以这里对 alwaysOn / TUI / headless 仍只看 enabled。
+  return runtime.config.dynamicWorkflowEnabled !== false && runtime.dynamicWorkflowToolsActivated;
 }
 
 export function resolveBuiltInToolAllowlist(

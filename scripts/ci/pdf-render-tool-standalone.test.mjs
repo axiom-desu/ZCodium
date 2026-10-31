@@ -82,32 +82,56 @@ test("root pnpm workspace and lockfile importers do not own the nested tool proj
     "pnpm-lock.yaml 不能为嵌套工具目录生成 importer",
   );
 
-  // 外层插件清单保持原样：工具依赖不属于插件 workspace。
+  // 外层插件只允许 office-runtime 这一个构建依赖：它经 workspace bin 参与构建，
+  // 既不是工具自身的 peer，也不能把 playwright/pdf-lib 带进插件或根安装图。
   const pluginPkg = await readRepoJson("apps/zcode-cli/packages/pdf-plugin/package.json");
-  for (const field of [
-    "dependencies",
-    "optionalDependencies",
-    "devDependencies",
-    "peerDependencies",
-  ]) {
+  for (const field of ["dependencies", "optionalDependencies", "peerDependencies"]) {
     assert.equal(pluginPkg[field], undefined, `pdf-plugin 的 ${field} 必须保持为空`);
   }
+  assert.deepEqual(
+    pluginPkg.devDependencies,
+    { "@zcode/office-runtime": "workspace:*" },
+    "pdf-plugin 只允许真实构建依赖 office-runtime（workspace:*）",
+  );
 
-  // Root app 选择这些外部工具是可选行为：root 清单不得把它们变成安装前提。
-  const rootPkg = await readRepoJson("package.json");
-  for (const field of [
-    "dependencies",
-    "optionalDependencies",
-    "devDependencies",
-    "peerDependencies",
+  // 构建 ABI：插件脚本调用 workspace bin，而不是相对文件名；bin 必须指向带 shebang 的
+  // 真实脚本，并在插件根目录（process.cwd()）构建，保持 staging/Windows shim 行为不变。
+  const runtimePkg = await readRepoJson("apps/zcode-cli/packages/office-runtime/package.json");
+  const runtimeRoot = "apps/zcode-cli/packages/office-runtime";
+  for (const [scriptName, binName, binPath] of [
+    ["build", "zcode-office-build", "./scripts/build.mjs"],
+    ["smoke", "zcode-office-smoke", "./scripts/smoke.mjs"],
+    ["test:e2e", "zcode-office-e2e", "./scripts/e2e.mjs"],
   ]) {
+    assert.equal(pluginPkg.scripts?.[scriptName], binName, `${scriptName} 必须走 bin ABI`);
+    assert.equal(runtimePkg.bin?.[binName], binPath, `${binName} 必须映射到真实脚本`);
+    assert.match(
+      await readRepoFile(`${runtimeRoot}/${binPath.replace(/^\.\//u, "")}`),
+      /^#!\/usr\/bin\/env node\n/u,
+      `${binName} 的脚本必须有 shebang（pnpm Windows shim 依赖它）`,
+    );
+  }
+  assert.match(
+    await readRepoFile(`${runtimeRoot}/scripts/build.mjs`),
+    /const target = process\.cwd\(\);/u,
+    "build 必须继续以插件根目录为输出目标",
+  );
+
+  // Root app 选择这些外部工具是可选行为：生产安装图不得声明 playwright / pdf-lib。
+  // playwright-core 只作为 root smoke 的直接 devDependency 存在（不下载浏览器、不进入生产包），
+  // standalone 工具自己的 peer 仍由显式安装它的用户提供。
+  const rootPkg = await readRepoJson("package.json");
+  for (const field of ["dependencies", "optionalDependencies", "peerDependencies"]) {
     for (const name of ["playwright", "playwright-core", "pdf-lib"]) {
-      assert.equal(
-        rootPkg[field]?.[name],
-        undefined,
-        `root 的 ${field} 不能声明 ${name}：只由显式进入 standalone project 的用户安装`,
-      );
+      assert.equal(rootPkg[field]?.[name], undefined, `root 的 ${field} 不能声明 ${name}`);
     }
+  }
+  for (const name of ["playwright", "pdf-lib"]) {
+    assert.equal(
+      rootPkg.devDependencies?.[name],
+      undefined,
+      `root devDependencies 不能声明 ${name}：只由显式进入 standalone project 的用户安装`,
+    );
   }
 });
 
@@ -125,6 +149,14 @@ test("knip registers the nested tool as its own project instead of the outer plu
     undefined,
     "外层插件 workspace 不能再登记 entry，否则脚本会被错误 scope 到父项目",
   );
+  // office-runtime 的构建依赖必须由图上的 bin 使用认领，不能靠新增 ignore 消除。
+  assert.equal(config.ignoreIssues, undefined, "不能新增 ignoreIssues 掩盖 office-runtime 的导出");
+  for (const [workspace, entry] of Object.entries(config.workspaces ?? {})) {
+    assert.ok(
+      !entry.ignoreDependencies?.includes("@zcode/office-runtime"),
+      `${workspace} 不能 ignore office-runtime：它由真实的 build bin 使用`,
+    );
+  }
 });
 
 test("the bundled pdf-plugin seed list ships the standalone tool manifest", async () => {

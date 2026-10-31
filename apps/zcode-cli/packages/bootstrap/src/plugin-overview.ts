@@ -31,11 +31,11 @@ import type { PluginLoadOutcome, PluginStoreListing } from "@zcode/contracts";
 import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE } from "@zcode/contracts";
 import { isZCodeCuaInternalFeatureEnabled } from "@zcode/shared";
 import { OFFICIAL_PLUGIN_DEFINITIONS } from "./app/official-plugin-definitions.js";
-export function getZCodePluginsOverview(
+export async function getZCodePluginsOverview(
   options: ResolveZCodePluginsOptions = {},
-): ZCodePluginsOverviewData {
+): Promise<ZCodePluginsOverviewData> {
   const { configResult, pluginStorageRoot, workingDirectory } = resolvePluginContext(options);
-  const outcome = resolveZCodePlugins({
+  const outcome = await resolveZCodePlugins({
     ...options,
     configResult,
     pluginStorageRoot,
@@ -168,8 +168,10 @@ export function getZCodePluginsOverview(
   };
 }
 
-export function listZCodePlugins(options: ListZCodePluginsOptions = {}): PluginLoadOutcome {
-  const outcome = resolveZCodePlugins(options);
+export async function listZCodePlugins(
+  options: ListZCodePluginsOptions = {},
+): Promise<PluginLoadOutcome> {
+  const outcome = await resolveZCodePlugins(options);
   const { pluginStorageRoot } = resolvePluginContext(options);
   return {
     ...outcome,

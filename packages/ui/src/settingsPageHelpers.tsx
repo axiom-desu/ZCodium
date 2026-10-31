@@ -1,13 +1,17 @@
 /* oxlint-disable eslint(max-lines) -- settings helper 聚合多个设置分组；终端、网络与自动归档多侧能力暂时超过行数限制。 */
 import type {
+  AppToolSearchMode,
   IntegratedTerminalShellOption,
   IntegratedTerminalShellSelection,
   LocalePreference,
   ZCodeInteractionBehavior,
 } from "@zcode/shared";
+import { appToolSearchModeSchema } from "@zcode/shared";
 import {
   TID_SETTINGS_ASK_USER_QUESTION_AUTO_RESOLUTION_SWITCH,
   TID_SETTINGS_NATIVE_SEARCH_SWITCH,
+  TID_SETTINGS_TOOL_SEARCH_OPTION,
+  TID_SETTINGS_TOOL_SEARCH_SELECT,
 } from "@zcode/shared";
 import { useState, useCallback, useEffect } from "react";
 import type { IPlatformService } from "@zcode/shared";
@@ -31,6 +35,7 @@ import { DataBaseDirControl } from "@/settings/DataBaseDirControl.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useOptionalServices } from "@/hooks/useServices.js";
 import { ProactiveSuggestionsSetting } from "@/settings/ProactiveSuggestionsSetting.js";
+import { DynamicWorkflowModeSetting } from "@/settings/DynamicWorkflowModeSetting.js";
 import { normalizeInterfaceMode, type InterfaceMode } from "@/lib/interfaceMode.js";
 import {
   createSettingsPageConfig,
@@ -62,6 +67,7 @@ export function GeneralSectionContent({
   integratedTerminalShell = { mode: "auto" },
   integratedTerminalShellOptions = [],
   nativeSearchEnhancementsEnabled,
+  toolSearchMode = "off",
   httpProxy = "",
   httpProxyNoProxy = "",
   httpProxyCaCertPath = "",
@@ -87,6 +93,7 @@ export function GeneralSectionContent({
   onTerminalFontFamilyChange = async () => {},
   onIntegratedTerminalShellChange = async () => {},
   onNativeSearchEnhancementsEnabledChange,
+  onToolSearchModeChange = async () => {},
   onHttpProxyChange = async () => {},
   onHttpProxyNoProxyChange = async () => {},
   onHttpProxyCaCertPathChange = async () => {},
@@ -122,6 +129,8 @@ export function GeneralSectionContent({
   integratedTerminalShell?: IntegratedTerminalShellSelection;
   integratedTerminalShellOptions?: IntegratedTerminalShellOption[];
   nativeSearchEnhancementsEnabled: boolean;
+  /** 工具搜索模式：设置页只暴露源 UI 的 off/auto/local（native 是 CLI 内部模式）。 */
+  toolSearchMode?: AppToolSearchMode;
   httpProxy?: string;
   httpProxyNoProxy?: string;
   httpProxyCaCertPath?: string;
@@ -148,6 +157,7 @@ export function GeneralSectionContent({
   onTerminalFontFamilyChange: (fontFamily: string) => Promise<void>;
   onIntegratedTerminalShellChange?: (selection: IntegratedTerminalShellSelection) => Promise<void>;
   onNativeSearchEnhancementsEnabledChange: (enabled: boolean) => Promise<void>;
+  onToolSearchModeChange?: (mode: AppToolSearchMode) => Promise<void>;
   onHttpProxyChange?: (httpProxy: string) => Promise<void>;
   onHttpProxyNoProxyChange?: (noProxy: string) => Promise<void>;
   onHttpProxyCaCertPathChange?: (caCertPath: string) => Promise<void>;
@@ -344,6 +354,7 @@ export function GeneralSectionContent({
           }
         />
         {hasServices ? <ProactiveSuggestionsSetting /> : null}
+        {hasServices ? <DynamicWorkflowModeSetting /> : null}
       </SettingsGroupCard>
 
       <SettingsGroupCard>
@@ -421,6 +432,45 @@ export function GeneralSectionContent({
             }
           />
         ) : null}
+        <SettingsRow
+          label={intl.formatMessage({ id: "settings.toolSearch" })}
+          description={intl.formatMessage({ id: "settings.toolSearchDescription" })}
+          detail={
+            <p className="text-ui-sm leading-5 text-foreground-subtle">
+              {intl.formatMessage({ id: "settings.toolSearchExperimentalNotice" })}
+            </p>
+          }
+          control={
+            <Select
+              value={toolSearchMode}
+              onValueChange={(value) => {
+                // 未知值严格拒绝：写进设置会让 Host 侧 schema 按旧值回退，用户以为改了却没生效。
+                const parsed = appToolSearchModeSchema.safeParse(value);
+                if (!parsed.success) return;
+                void onToolSearchModeChange(parsed.data);
+              }}
+            >
+              <SelectTrigger
+                size="lg"
+                className="w-[260px] min-w-0 justify-between"
+                data-testid={TID_SETTINGS_TOOL_SEARCH_SELECT}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {appToolSearchModeSchema.options.map((mode) => (
+                  <SelectItem
+                    key={mode}
+                    value={mode}
+                    data-testid={testId(TID_SETTINGS_TOOL_SEARCH_OPTION, mode)}
+                  >
+                    {intl.formatMessage({ id: `settings.toolSearch.${mode}` })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
         <SettingsRow
           label={intl.formatMessage({
             id: "settings.nativeSearchEnhancements",
@@ -816,7 +866,6 @@ export function GeneralSectionContent({
               onValueChange={(value) => {
                 void onTaskAutoArchiveOlderThanDaysChange(Number(value));
               }}
-              disabled={!taskAutoArchiveEnabled}
             >
               <SelectTrigger size="lg" className="w-[260px] min-w-0 justify-between">
                 <SelectValue />

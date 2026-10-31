@@ -236,6 +236,7 @@ export function ensureColdReadyPublisher(
   sessionId: string,
   resumeThoughtLevel?: string,
   workspace?: ZCodeWorkspaceRef,
+  additionalDirectories?: string[],
 ): Promise<ConversationTopicPublisher> {
   const existingFlight = ctx.readyFlights.get(sessionId);
   if (existingFlight) return existingFlight;
@@ -245,6 +246,7 @@ export function ensureColdReadyPublisher(
       sessionId,
       resumeThoughtLevel,
       workspace,
+      additionalDirectories,
     );
     return hydratePublisher(ctx, sessionId, persistedMessages);
   });

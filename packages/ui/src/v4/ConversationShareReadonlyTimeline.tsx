@@ -25,7 +25,12 @@ import {
   SquareTerminalIcon,
   WrenchIcon,
 } from "lucide-react";
-import { getCompactToolCallStatusMessageId, type Locale } from "@zcode/shared";
+import {
+  decodeConversationShareContentBlocks,
+  getCompactToolCallStatusMessageId,
+  type ConversationShareArtifactReader,
+  type Locale,
+} from "@zcode/shared";
 import type {
   ArtifactRow,
   AssistantTextRow,
@@ -64,6 +69,9 @@ import type { AssistantWorkRow, ConversationTurnFlowItem } from "@/v4/conversati
 import type { ConversationTurnWorkSegment } from "@/v4/conversationTurnWorkSegments.js";
 import { formatConversationWorkDuration } from "@/v4/conversationWorkDuration.js";
 import { normalizeConversationShareMarkdown } from "@/v4/conversationShareMarkdown.js";
+import { ConversationShareContent } from "@/v4/ConversationShareContent.js";
+import { resolveConversationShareContentClaims } from "@/v4/conversationShareContentClaims.js";
+import { sanitizeConversationShareArtifactUrls } from "@/v4/conversationShareArtifactReader.js";
 import { resolveToolCallIdentity } from "@/lib/toolIdentity.js";
 import {
   DEFAULT_CODE_PREVIEW_SETTINGS,
@@ -75,17 +83,29 @@ import { FileDisplayIcon, resolveFileDisplayDescriptor } from "@/lib/fileDisplay
 import { formatAttachmentSize } from "@/lib/chatAttachmentMetadata.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { isAbsoluteFilePath, joinFilePath } from "@/lib/path.js";
+import { isPrivateOrLocalHostname } from "@/lib/shareExternalUrlPolicy.js";
 // 仅类型引用，构建期擦除：静态 import OpenSplitButton 会把其整棵 open-with 子树
 // （platform hooks、tab store、workspace-file-tree/model、editorPreference）打进匿名
 // 公开页 bundle，因此打开动作组件改由 Desktop 消费方经 artifactOpenAction 注入。
 import type { OpenSplitButtonTarget } from "@/OpenSplitButton.js";
 
 export interface ConversationShareReadonlyTimelineProps {
+  /**
+   * 公开内容块（workflow v1/v2、tool-presentation v1、以及本端不认识的块）。
+   * 只有实际呈现的块才认领 fallback Row；未知块与不可呈现块保留降级正文，
+   * 不会把未知载荷当正文画出来。
+   */
+  contentBlocks?: readonly unknown[];
   rows: readonly ConversationRow[];
   locale?: Locale;
   theme?: Theme;
   codePreviewSettings?: CodePreviewSettings;
   artifactUrls?: ReadonlyMap<string, string>;
+  /**
+   * 公开页注入的匿名 artifact 读取端口。Desktop 导入副本不传：没有 URL 时不发网络请求。
+   * 渲染器只消费端口，不在这里复制 GET/credentials/限额策略。
+   */
+  artifactReader?: ConversationShareArtifactReader;
   artifactNames?: ReadonlyMap<string, string>;
   artifactWorkspaceRelativePaths?: ReadonlyMap<string, string>;
   workspacePath?: string;
@@ -1070,10 +1090,12 @@ function ReadonlyTurn({
 
 export function ConversationShareReadonlyTimeline({
   rows,
+  contentBlocks,
   locale = "zh-CN",
   theme = "system",
   codePreviewSettings = DEFAULT_CODE_PREVIEW_SETTINGS,
   artifactUrls = EMPTY_ARTIFACT_URLS,
+  artifactReader,
   artifactNames = EMPTY_ARTIFACT_NAMES,
   artifactWorkspaceRelativePaths = EMPTY_ARTIFACT_WORKSPACE_RELATIVE_PATHS,
   workspacePath,
@@ -1084,11 +1106,47 @@ export function ConversationShareReadonlyTimeline({
   artifactOpenAction,
   unsupportedRowCount = 0,
 }: ConversationShareReadonlyTimelineProps) {
+  // 注入的 artifact URL 也走同一份协议白名单：javascript:/file:/内部 URI 不进入 href/src。
+  const safeArtifactUrls = useMemo(
+    () => sanitizeConversationShareArtifactUrls(artifactUrls),
+    [artifactUrls],
+  );
+  const rowsById = new Map(rows.map((row) => [row.rowId, row] as const));
+  const allBlocks = decodeConversationShareContentBlocks(contentBlocks).filter((block) => {
+    const row = rowsById.get(block.fallback_row_id);
+    return (
+      row?.productTurnId === block.product_turn_id &&
+      row.kind === (block.type === "tool-presentation" ? "toolCall" : "assistantText")
+    );
+  });
+  // workflow 块替代 fallback 摘要；tool-presentation 块补上公开工具展示（display + 图片），
+  // 原 toolCall 行仍然保留它的文字输出。只有实际画出卡片的块才认领摘要行：未知块、
+  // 不可呈现的 workflow（unavailable 且无 run/artifacts）与无归属块都保留原位正文，
+  // 不能既不出卡片、又把唯一的摘要藏起来。
   const units = buildConversationTurnRenderUnits(rows);
+  const { claimedRowIds, blocksByUnitKey } = resolveConversationShareContentClaims({
+    units,
+    blocks: allBlocks,
+  });
+  const claimedResources = new Set(allBlocks.flatMap((block) => block.resource_ids));
+  const fallbacks = new Map(
+    rows.flatMap((row) => (row.kind === "assistantText" ? [[row.rowId, row.text] as const] : [])),
+  );
+  const filteredUnits = new Map(
+    buildConversationTurnRenderUnits(
+      rows.filter(
+        (row) =>
+          !claimedRowIds.has(row.rowId) &&
+          !(row.kind === "artifact" && claimedResources.has(row.artifactVersionId)),
+      ),
+    ).map((unit) => [unit.key, unit] as const),
+  );
   const openShareExternalUrl = useCallback((url: string) => {
     try {
       const parsed = new URL(url);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return;
+      // 分享正文是不可信输入：不允许把读者引到本机/内网地址（含 IPv6 映射与十进制/十六进制写法）。
+      if (isPrivateOrLocalHostname(parsed.hostname)) return;
       window.open(parsed.toString(), "_blank", "noopener,noreferrer");
     } catch {
       // 外链来自不可信 Markdown；解析失败时保持不可操作，不交给浏览器未知协议。
@@ -1162,19 +1220,55 @@ export function ConversationShareReadonlyTimeline({
                   <span className="min-w-0 break-words">{labels.unsupportedRows}</span>
                 </div>
               ) : null}
-              {units.map((unit) => (
-                <ReadonlyTurn
-                  key={unit.key}
-                  unit={unit}
-                  locale={locale}
-                  theme={theme}
-                  codePreviewSettings={codePreviewSettings}
-                  artifactUrls={artifactUrls}
-                  artifactNames={artifactNames}
-                  labels={labels}
-                  onOpenExternalUrl={openShareExternalUrl}
-                />
-              ))}
+              {units.map((unit) => {
+                const filteredUnit = filteredUnits.get(unit.key);
+                const turnBlocks = blocksByUnitKey.get(unit.key) ?? [];
+                return (
+                  <Fragment key={unit.key}>
+                    {filteredUnit ? (
+                      <ReadonlyTurn
+                        unit={filteredUnit}
+                        locale={locale}
+                        theme={theme}
+                        codePreviewSettings={codePreviewSettings}
+                        artifactUrls={safeArtifactUrls}
+                        artifactNames={artifactNames}
+                        labels={labels}
+                        onOpenExternalUrl={openShareExternalUrl}
+                      />
+                    ) : null}
+                    {turnBlocks.length ? (
+                      <div className="min-w-0 px-4 pb-5 @md/conversation:px-6">
+                        <ConversationShareContent
+                          blocks={turnBlocks}
+                          fallbacks={fallbacks}
+                          artifactUrls={safeArtifactUrls}
+                          artifactReader={artifactReader}
+                          locale={locale}
+                          {...(artifactOpenContext && onOpenFileLink && workspacePath
+                            ? {
+                                onOpenResource: (id: string) => {
+                                  const path = resolveImportedArtifactPath(
+                                    workspacePath,
+                                    artifactWorkspaceRelativePaths.get(id),
+                                  );
+                                  if (!path) return;
+                                  onOpenFileLink({
+                                    path,
+                                    label: artifactNames.get(id) ?? path,
+                                    workspacePath,
+                                    workspaceIdentity,
+                                    workspaceRemoteSessionId,
+                                  });
+                                },
+                              }
+                            : {})}
+                        />
+                      </div>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </div>
           </ArtifactOpenContext.Provider>
         </PluginReferenceIconProvider>

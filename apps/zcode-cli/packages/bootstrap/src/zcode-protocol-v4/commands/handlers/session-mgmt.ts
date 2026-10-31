@@ -48,9 +48,14 @@ async function createSession(
     throw new V4InputAdmissionRejectedError("proto.invalidPayload", "input must not be empty");
   }
   const { sessionId } = await host.createSessionRecord({
+    ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+    ...(payload.additionalDirectories
+      ? { additionalDirectories: payload.additionalDirectories }
+      : {}),
     workspaceId: payload.workspaceId,
     mcpServers: payload.mcpServers,
     dynamicWorkflowEnabled: payload.dynamicWorkflowEnabled,
+    dynamicWorkflowMode: payload.dynamicWorkflowMode,
   });
   // createSession.config 消费——草稿态 UI 的先行选择（模型/思考深度/
   // 模式）在首发之前应用并补发事件，首条 turn 即用所选配置。必须在 firstInput 之前。

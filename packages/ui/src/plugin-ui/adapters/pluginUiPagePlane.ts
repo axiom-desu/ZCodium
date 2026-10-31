@@ -28,6 +28,8 @@ export function createPluginUiPagePlane(events: {
   let stopLayout: (() => void) | undefined;
   let stopPreview: (() => void) | undefined;
   let preview: HTMLElement | null = null;
+  let executionActive = false;
+  let backgroundSize = { width: 640, height: 480 };
   let disposed = false,
     loaded = false,
     pluginLoaded = false,
@@ -89,10 +91,24 @@ export function createPluginUiPagePlane(events: {
   };
   const layout = () => {
     if (disposed) return;
-    const candidates = [...anchors].filter(([, a]) => a.placement.node.isConnected);
+    // forceMount 的隐藏 tab 仍连接 DOM，但尺寸为零；不能让它夺走后台创建/初始化的承载表面。
+    const candidates = [...anchors].filter(([, a]) => {
+      const node = a.placement.node;
+      const rect = node.getBoundingClientRect();
+      return (
+        node.isConnected &&
+        node.checkVisibility({ visibilityProperty: true }) &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    });
     const chosen = candidates.find(([, a]) => a.placement.kind === "sidebar") ?? candidates.at(-1);
     visibility(Boolean(chosen && (chosen[1].visible || preview)));
     if (chosen && chosen[0] === current) return;
+    const bounds = root.getBoundingClientRect();
+    if (bounds.width > 0 && bounds.height > 0) {
+      backgroundSize = { width: bounds.width, height: bounds.height };
+    }
     current = chosen?.[0];
     stopLayout?.();
     stopLayout = undefined;
@@ -102,6 +118,19 @@ export function createPluginUiPagePlane(events: {
       move(parkingRoot());
       root.style.display = "none";
       root.inert = true;
+      if (executionActive) {
+        // display:none 会停止编辑器依赖的 rAF；后台创建的页面仍需可执行且不接收输入。
+        Object.assign(root.style, {
+          display: "block",
+          position: "fixed",
+          top: "0",
+          left: "0",
+          width: `${backgroundSize.width}px`,
+          height: `${backgroundSize.height}px`,
+          opacity: "0.001",
+          pointerEvents: "none",
+        });
+      }
       return;
     }
     root.inert = false;
@@ -145,6 +174,11 @@ export function createPluginUiPagePlane(events: {
     handleId = null;
   };
   return {
+    setExecutionActive(active: boolean) {
+      if (executionActive === active) return;
+      executionActive = active;
+      layout();
+    },
     bind(placement: SandboxPagePlacement) {
       const token = Symbol();
       anchors.set(token, { placement, visible: true });

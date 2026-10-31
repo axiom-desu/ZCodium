@@ -241,11 +241,14 @@ export class ConversationArchiveImporter {
       };
     });
     const storedConversation = JSON.stringify({
-      formatVersion: 1,
+      // 归档 v2 及其内容块并存时才写 formatVersion 2；旧归档继续写 v1，
+      // 让回退到旧版读取端的情况保持与原来一致。
+      formatVersion: decoded.content.version === 2 ? 2 : 1,
       shareId,
       contextId: receipt.contextId,
       title: decoded.content.title,
       rows: decoded.content.rows,
+      ...(decoded.content.version === 2 ? { content_blocks: decoded.content.content_blocks } : {}),
       artifacts: installed.map(({ artifactId, displayName, mimeType, workspaceRelativePath }) => ({
         artifactId,
         displayName,

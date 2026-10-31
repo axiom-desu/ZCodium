@@ -43,6 +43,7 @@ import {
   BROWSER_USE_OPERATION_INDICATOR_DURATION_MS,
   openCodeViewerSidePane,
   openCodeViewerSidePanes,
+  navigateCodeViewerSidePane,
   activateGitSidePane,
   getActiveSidePaneTab,
   getVisibleSidePaneTabs,
@@ -1290,6 +1291,14 @@ export function useAppPanels(options: {
     });
   }, [commitSidePaneState, syncSidePaneCollapsedWithTabs, workspaceAbsPath]);
 
+  // 文件管理器目录行只改当前预览 Tab 的 source，不新建 Tab、不重排。
+  const handleNavigateCodeViewer = useCallback(
+    (tabId: string, source: CodeViewerSource) => {
+      commitSidePaneState((current) => navigateCodeViewerSidePane(current, tabId, source));
+    },
+    [commitSidePaneState],
+  );
+
   const handleCloseGit = useCallback(() => {
     logger.info(`[App] 关闭右侧面板 mode=git workspace=${workspaceAbsPath}`);
     commitSidePaneState((current) => {
@@ -1624,6 +1633,7 @@ export function useAppPanels(options: {
     handleToggleSidebar,
     handleToggleSidePaneCollapse,
     handleCloseCodeViewer,
+    handleNavigateCodeViewer,
     handleCloseGit,
     handleActivateSidePaneTab,
     handleReorderSidePaneTab,

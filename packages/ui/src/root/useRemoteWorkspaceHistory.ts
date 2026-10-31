@@ -28,6 +28,9 @@ import {
   createRemoteTargetFromSnapshot,
   getRemoteWorkspaceSessionEntries,
   removeRemoteWorkspaceSessionEntries,
+  withAuthenticatedServerTarget,
+  resolveConnectedRemoteWorkspaceIdentity,
+  type ConnectedRemoteWorkspaceTarget,
 } from "@/lib/remoteWorkspaceHistory.js";
 import { getErrorMessage } from "@/lib/errorMessage.js";
 import { logger } from "@/logger.js";
@@ -116,7 +119,7 @@ interface OpenRemoteWorkspaceFromHistoryParams {
   connectRemoteWorkspaceTarget: (
     target: Parameters<IPlatformService["connectRemote"]>[0],
     requestId?: string,
-  ) => Promise<string>;
+  ) => Promise<ConnectedRemoteWorkspaceTarget>;
   resolveRemoteWorkspaceCanonicalPath: (
     sessionId: string,
     workspacePath: string,
@@ -464,7 +467,7 @@ async function selectRemoteWorkspaceProjectFromDialog({
   localWorkspacePath,
   loadingMessage,
   getRemoteWorkspaceSession,
-  connectionTarget,
+  connection,
   getWorkspaceTabs,
   resolveRemoteWorkspaceCanonicalPath,
   activateTabByPath,
@@ -485,7 +488,7 @@ async function selectRemoteWorkspaceProjectFromDialog({
   localWorkspacePath?: string;
   loadingMessage: string;
   getRemoteWorkspaceSession: (sessionId: string) => RemoteWorkspaceSession | null;
-  connectionTarget?: Parameters<IPlatformService["connectRemote"]>[0];
+  connection?: ConnectedRemoteWorkspaceTarget;
   getWorkspaceTabs: () => WindowTabState[];
   resolveRemoteWorkspaceCanonicalPath: (
     sessionId: string,
@@ -529,7 +532,7 @@ async function selectRemoteWorkspaceProjectFromDialog({
   if (!remoteSession) {
     throw new Error(loadingMessage);
   }
-  const remoteTarget = connectionTarget ?? remoteSession.target;
+  const remoteTarget = connection?.target ?? remoteSession.target;
   if (!remoteTarget) {
     // 手机 web relay 复用 remote session store 只做服务路由，没有本地可重连 target。
     // 远程历史的选目录/持久化流程必须有 target，缺失时直接阻断，避免把无 target 的桥接 session 写进历史。
@@ -537,7 +540,10 @@ async function selectRemoteWorkspaceProjectFromDialog({
   }
 
   const canonicalPath = await resolveRemoteWorkspaceCanonicalPath(sessionId, path);
-  const workspaceIdentity = buildRemoteWorkspaceIdentity(canonicalPath, remoteTarget);
+  const workspaceIdentity = resolveConnectedRemoteWorkspaceIdentity({
+    connected: connection ?? { sessionId, target: remoteTarget },
+    workspacePath: canonicalPath,
+  });
   const existingWorkspaceTab = getWorkspaceTabs().find(
     (tab): tab is import("@/store/tabStore.js").WorkspaceTabState =>
       isWorkspaceTab(tab) &&
@@ -664,7 +670,7 @@ export function useRemoteWorkspaceHistory({
   const inflightReconnectWorkspaceKeysRef = useRef<Set<string>>(new Set());
   const pendingReconnectRequestIdsRef = useRef<Map<string, string>>(new Map());
   const pendingConnectionTargetsBySessionIdRef = useRef<
-    Map<string, Parameters<IPlatformService["connectRemote"]>[0]>
+    Map<string, ConnectedRemoteWorkspaceTarget>
   >(new Map());
   // 上一个版本这里有一个启动重连尝试用的 useRef。
   // 移除自动重连逻辑后，Vite Fast Refresh 会复用旧 fiber 的 hook slot，
@@ -762,16 +768,30 @@ export function useRemoteWorkspaceHistory({
         throw new Error("Remote session was not created");
       }
 
+      // Host 的 descriptor 是 Source 身份的唯一样本：serverId 只来自握手，
+      // 不能继续用表单里的 name/URL 或旧 target.serverId 建历史/凭据 key。
+      const connectedTarget =
+        target.kind === "server"
+          ? withAuthenticatedServerTarget(target, result.sourceServerId)
+          : target;
+
       // 远程连接成功只代表 main/host 已经建好 session，
       // renderer 侧的 MessagePort 仍然可能在下一拍才注册进 zustand store。
       // 如果此时立刻 addTab，会短暂走到本地 services，导致首屏读目录/预热 ZCode Agent 命中错误服务。
       // 这里等 session 真正挂进 store 再继续。
       await waitForRemoteWorkspaceSessionReady(result.sessionId);
+      const connected: ConnectedRemoteWorkspaceTarget = {
+        sessionId: result.sessionId,
+        target: connectedTarget,
+        ...(result.sourceServerId ? { sourceServerId: result.sourceServerId } : {}),
+        ...(result.workspaceIdentity ? { workspaceIdentity: result.workspaceIdentity } : {}),
+      };
       if (!context) {
-        // 共享 Host 只向 renderer store 回传脱敏 target；完整凭据只在选目录流程完成前临时保留。
-        pendingConnectionTargetsBySessionIdRef.current.set(result.sessionId, target);
+        // Bug 原因：选目录只暂存 target 会丢失 Host actual key，Source legacy/canonical 无法区分。
+        // 同一临时流程保存 descriptor 与凭据，取消/完成仍在既有 finally 清理，不新增身份 owner。
+        pendingConnectionTargetsBySessionIdRef.current.set(result.sessionId, connected);
       }
-      return result.sessionId;
+      return connected;
     },
     [platform, waitForRemoteWorkspaceSessionReady],
   );
@@ -999,7 +1019,7 @@ export function useRemoteWorkspaceHistory({
           localWorkspacePath,
           loadingMessage: intl.formatMessage({ id: "common.loading" }),
           getRemoteWorkspaceSession,
-          connectionTarget: pendingConnectionTargetsBySessionIdRef.current.get(sessionId),
+          connection: pendingConnectionTargetsBySessionIdRef.current.get(sessionId),
           getWorkspaceTabs: () => tabStoreApi.getState().tabs,
           resolveRemoteWorkspaceCanonicalPath,
           activateTabByPath,
@@ -1042,7 +1062,8 @@ export function useRemoteWorkspaceHistory({
         throw new Error("Remote workspace is disabled in this mode");
       }
 
-      return connectRemoteWorkspaceTarget(options, requestId, context);
+      const connected = await connectRemoteWorkspaceTarget(options, requestId, context);
+      return connected.sessionId;
     },
     [canUseRemoteWorkspace, connectRemoteWorkspaceTarget],
   );
@@ -1200,6 +1221,7 @@ export function useRemoteWorkspaceHistory({
             target: createRemoteTargetFromSnapshot(sessionEntry.target, {
               password: null,
               privateKeyPassphrase: null,
+              token: null,
             }),
             lastConnectionStatus: "failed",
             lastConnectionError: reason,

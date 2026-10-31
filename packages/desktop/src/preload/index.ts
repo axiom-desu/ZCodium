@@ -214,6 +214,9 @@ contextBridge.exposeInMainWorld("zcode", {
     ipcRenderer.invoke(PlatformChannels.CancelPendingRemoteConnection, {
       requestId,
     }),
+  /** 为已在线 Source 请求配置专用 attachment（端口随后经 window message 投递） */
+  requestSourceSettingsAttachment: (sourceServerId: string): Promise<{ attachmentId: string }> =>
+    ipcRenderer.invoke(PlatformChannels.RequestSourceSettingsAttachment, { sourceServerId }),
   bindRemoteWorkspaceSessionContext: (context: {
     remoteSessionId: string;
     workspacePath: string;
@@ -774,6 +777,27 @@ ipcRenderer.on(InternalChannels.ServicePort, (event, payload: unknown) => {
     window.postMessage({ type: InternalChannels.ServicePort, ...parsed.data }, "*", [port]);
   else port?.close();
 });
+
+ipcRenderer.on(
+  InternalChannels.SourceSettingsServicePort,
+  (event, payload: { attachmentId?: string; sourceServerId?: string }) => {
+    const [port] = event.ports;
+    if (!port) return;
+    if (!payload?.attachmentId || !payload.sourceServerId) {
+      port.close();
+      return;
+    }
+    window.postMessage(
+      {
+        type: InternalChannels.SourceSettingsServicePort,
+        attachmentId: payload.attachmentId,
+        sourceServerId: payload.sourceServerId,
+      },
+      "*",
+      [port],
+    );
+  },
+);
 
 ipcRenderer.on(
   InternalChannels.ScopedServicePort,

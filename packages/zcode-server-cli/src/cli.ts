@@ -3,6 +3,7 @@ import { fork } from "node:child_process";
 import { access, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join } from "node:path";
+import type { Readable, Writable } from "node:stream";
 import { ZCODE_VERSION } from "@zcode/shared";
 import {
   controlRequestSchema,
@@ -19,7 +20,7 @@ import {
 import { validateServerInstallOwnership } from "./runtime/installationOwnership.js";
 import { createReleaseAgentWiring, type BundledAgentWiring } from "./runtime/agentWiring.js";
 import { writeStableLauncher } from "./runtime/stableLauncher.js";
-import { runUpdateCommand } from "./runtime/updateCommand.js";
+import { runUpdateCommand, runLocalArchiveUpdateCommand } from "./runtime/updateCommand.js";
 import { DataRootLock } from "./runtime/lock.js";
 import {
   acquireUninstallLock,
@@ -34,6 +35,7 @@ import {
   unregisterInstalledService,
   unregisterLegacyServiceForRoot,
 } from "./runtime/serviceInstallation.js";
+import { ProxyStdioError, runProxyStdio } from "./server-core/proxyStdio.js";
 
 export interface CliIO {
   stdout?: { write(value: string): void };
@@ -44,6 +46,8 @@ export interface CliIO {
 
 export interface ServerCliRuntimeOptions {
   bundledAgentWiring?: BundledAgentWiring | null;
+  /** 测试注入的 stdin/stdout；生产环境使用 process streams。 */
+  proxyStdioStreams?: { input: Readable; output: Writable };
 }
 
 const stdout = (io: CliIO, value: unknown): void =>
@@ -81,14 +85,40 @@ export async function runServerCli(
   try {
     const parsed = parseServerCliArguments(argv);
     const command = parsed.argv[0];
+    if (command === "version" || command === "--version") {
+      // Server probe 不能再依赖旁边的 Agent zcode.cjs；产品版本必须由 Server CLI 自己稳定输出。
+      stdout(io, json ? { product: "zcode-server", version: ZCODE_VERSION } : ZCODE_VERSION);
+      return 0;
+    }
+    const proxyStdioRequested =
+      command === "proxy-stdio" || (command === "server" && parsed.argv[1] === "proxy-stdio");
     if (!command) {
       return await (io.legacyDelegate?.(parsed.argv) ?? delegateLegacyCli(parsed.argv, io));
     }
     // 同一物理 data-root 的符号链接别名会派生不同 control endpoint 和 OS service
     // identity。生命周期命令统一在 IO 前收敛 root，避免第二个 Supervisor 绕过探测重复注册。
-    const layout = ["serve", "status", "stop", "restart", "update", "uninstall"].includes(command)
-      ? await resolveCanonicalServerLayout(parsed.layout.serverRoot)
-      : parsed.layout;
+    const layout =
+      ["serve", "status", "stop", "restart", "update", "uninstall"].includes(command) ||
+      proxyStdioRequested
+        ? await resolveCanonicalServerLayout(parsed.layout.serverRoot)
+        : parsed.layout;
+    if (proxyStdioRequested) {
+      try {
+        await runProxyStdio({
+          layout,
+          input: runtimeOptions.proxyStdioStreams?.input ?? process.stdin,
+          output: runtimeOptions.proxyStdioStreams?.output ?? process.stdout,
+        });
+        return 0;
+      } catch (error) {
+        // stdout 必须保持纯协议字节；失败诊断只写 stderr。
+        const code = error instanceof ProxyStdioError ? error.code : "proxy-stdio-failed";
+        io.stderr?.write(
+          `${JSON.stringify({ ok: false, code, error: error instanceof Error ? error.message : String(error) })}\n`,
+        );
+        return 1;
+      }
+    }
     switch (command) {
       case "serve":
         return await runServe(parsed.argv.slice(1), io, json, layout, runtimeOptions);
@@ -97,6 +127,17 @@ export async function runServerCli(
       case "restart":
         return await runControl(command, io, json, {}, layout);
       case "update":
+        if (parsed.argv.includes("--from-archive")) {
+          return await runLocalArchiveUpdateCommand(parsed.argv, io, json, layout, () =>
+            runControl(
+              "apply-update",
+              io,
+              json,
+              { force: parsed.argv.includes("--force") },
+              layout,
+            ),
+          );
+        }
         return await runUpdateCommand(parsed.argv, io, json, layout, () =>
           runControl("apply-update", io, json, { force: parsed.argv.includes("--force") }, layout),
         );

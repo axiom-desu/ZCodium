@@ -115,6 +115,24 @@ export function createWindowHostAttachmentRegistry<
     }
   }
 
+  /** Source 删除/重装时释放所有绑定到该 Source 的 attachment；不触碰其他 Source。 */
+  function detachSourceAttachments(sourceServerId: string): void {
+    for (const [attachmentId, tracked] of attachments) {
+      const scope = tracked.params.scope;
+      const matches =
+        scope.kind === "source-settings"
+          ? scope.sourceServerId === sourceServerId
+          : scope.kind === "remote"
+            ? scope.sourceServerId === sourceServerId
+            : false;
+      if (!matches) {
+        continue;
+      }
+      attachments.delete(attachmentId);
+      disposeTracked(tracked);
+    }
+  }
+
   function detachRemoteSessionAttachments(remoteSessionId: string): void {
     for (const [attachmentId, tracked] of attachments) {
       if (
@@ -132,6 +150,7 @@ export function createWindowHostAttachmentRegistry<
     attach,
     detach,
     detachRemoteSessionAttachments,
+    detachSourceAttachments,
     detachStaleRemoteSessionAttachments,
     size: () => attachments.size,
     list: () =>

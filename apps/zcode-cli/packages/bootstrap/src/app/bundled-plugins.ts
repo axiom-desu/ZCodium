@@ -1,7 +1,8 @@
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Logger } from "@zcode/contracts";
 import { isZCodeCuaInternalFeatureEnabled, ZCODE_CUA_OFFICIAL_PLUGIN_ID } from "@zcode/shared";
+import { validateStagedOfficeViewerAssets } from "@zcode/shared/office-viewer-assets";
 import {
   createOfficialPluginCacheRetryBudget,
   isTransientOfficialPluginCacheFsError,
@@ -22,6 +23,8 @@ import {
   readSeedFileBytes,
   resolveSeedSource,
   uniquePaths,
+  type OfficialPluginSeedPluginSource,
+  type OfficialPluginSeedSource,
 } from "./bundled-plugin-seed-source.js";
 import {
   cleanupLegacySeedBackup,
@@ -36,17 +39,39 @@ import {
 } from "./bundled-plugin-seed-cache.js";
 
 const SEED_LOCK_TOTAL_BUDGET_MS = 15_000;
+/** seed 内容本身残缺（缺资源/哈希不符）的稳定错误码，供降级协议分流。 */
+const SEED_INCOMPLETE_ERROR_CODE = "ZCODE_PLUGIN_SEED_INCOMPLETE";
 
-function seedBundledOfficialPlugins(input: {
+function seedIncompleteError(plugin: OfficialPluginSeedPluginSource, cause: unknown): Error {
+  const reason = cause instanceof Error ? cause.message : String(cause);
+  return Object.assign(
+    new Error(`Bundled official plugin ${plugin.definition.name} seed is incomplete: ${reason}`, {
+      cause,
+    }),
+    { code: SEED_INCOMPLETE_ERROR_CODE },
+  );
+}
+
+function isSeedIncompleteError(error: unknown): error is NodeJS.ErrnoException {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    String((error as NodeJS.ErrnoException).code) === SEED_INCOMPLETE_ERROR_CODE
+  );
+}
+
+async function seedBundledOfficialPlugins(input: {
+  baseDirs?: readonly string[];
   logger?: Logger;
+  seedSource?: OfficialPluginSeedSource;
   storageRoot: string;
-}): OfficialPluginDefinition[] {
-  const source = resolveSeedSource();
+}): Promise<OfficialPluginDefinition[]> {
+  const source = input.seedSource ?? (await resolveSeedSource({ baseDirs: input.baseDirs }));
   if (!source) return [];
 
   // Catalog/cache 是内置插件的不可变产品资产；Runtime 是否加载由 discovery 的抑制态决定，
   // 不能在 seed 阶段删除或过滤，否则卸载后详情页无法读取组件，也无法恢复。
-  writeOfficialMarketplace(input.storageRoot, source);
+  await writeOfficialMarketplace(input.storageRoot, source);
   const retryBudget = createOfficialPluginCacheRetryBudget();
   // 等锁超时降级后循环会继续；若每个插件独立重置 15s 等待预算，成组遗留的
   // 锁会让启动同步冻结 N×15s。全部插件共享同一截止时间：无争用的锁仍瞬时获取（mkdir
@@ -65,24 +90,25 @@ function seedBundledOfficialPlugins(input: {
           new Error(
             `Bundled official plugin ${plugin.definition.name} is missing required seed assets: ${plugin.missingSeedPaths.join(", ")}`,
           ),
-          { code: "ZCODE_PLUGIN_SEED_INCOMPLETE" },
+          { code: SEED_INCOMPLETE_ERROR_CODE },
         ),
         missingSeedPaths: plugin.missingSeedPaths,
         operation: "seed_plugin",
         pluginId,
+        reason: `missing required seed assets: ${plugin.missingSeedPaths.join(", ")}`,
         targetRoot,
       });
       failedSeeds.push(plugin.definition);
       continue;
     }
     try {
-      withOfficialPluginSeedLock(
+      await withOfficialPluginSeedLock(
         targetRoot,
-        () => {
+        async () => {
           // 桌面会并发预热多个 workspace Agent；复制插件资源时，
           // 多进程会互删 target 并在 Windows rename 时触发 EPERM。拿锁后必须二次检查，
           // 让等待者直接复用首个进程已经提交的完整缓存。
-          if (isSeedCurrent(targetRoot, plugin)) {
+          if (await isSeedCurrent(targetRoot, plugin)) {
             cleanupLegacySeedBackup(targetRoot, retryBudget);
             const manifestWritten = tryWriteOfficialPluginRuntimeManifest({
               pluginName: plugin.definition.name,
@@ -94,27 +120,46 @@ function seedBundledOfficialPlugins(input: {
 
           const temporaryRoot = `${targetRoot}.tmp-${process.pid}-${Date.now()}`;
           removeOfficialPluginCacheDirectory(temporaryRoot, retryBudget);
-          mkdirSync(temporaryRoot, { recursive: true });
+          await mkdir(temporaryRoot, { recursive: true });
 
           try {
             for (const file of plugin.files) {
-              const bytes = readSeedFileBytes(source, plugin, file);
+              let bytes: Buffer;
+              try {
+                bytes = await readSeedFileBytes(source, plugin, file);
+              } catch (error) {
+                // SEA 内嵌资产缺键 / 磁盘上 seed 文件读不到：同属 seed 内容残缺，
+                // 降级保留旧缓存，不把会话恢复一起炸掉。
+                throw seedIncompleteError(plugin, error);
+              }
               if (hashBytes(bytes) !== file.sha256) {
-                throw new Error(
-                  `Bundled plugin asset hash mismatch: ${plugin.definition.name}/${file.path}`,
+                // seed 字节与清单不符是「seed 内容残缺」，不是宿主文件系统故障：
+                // 按降级协议保留旧可用缓存，而不是把整个启动炸掉。
+                throw seedIncompleteError(
+                  plugin,
+                  new Error(`Bundled plugin asset hash mismatch: ${file.path}`),
                 );
               }
               const outputPath = join(temporaryRoot, ...file.path.split("/"));
-              mkdirSync(dirname(outputPath), { recursive: true });
-              writeFileSync(outputPath, bytes);
-              chmodSync(outputPath, modeForSeedFile(file.path, file.mode));
+              await mkdir(dirname(outputPath), { recursive: true });
+              await writeFile(outputPath, bytes);
+              await chmod(outputPath, modeForSeedFile(file.path, file.mode));
             }
 
-            writeFileSync(
+            // 修复：filesystem dev 与 SEA 的 seed 过去只校验入口 5 文件，删掉任一字体/worker/
+            // wasm/NOTICE 仍会把半成品 promote 进缓存。现在在 promote 之前对真实 staging
+            // 目录跑与构建期同一份 office 闭包适配器；缺资源/哈希不符都拒绝激活。
+            try {
+              await validateStagedOfficeViewerAssets(temporaryRoot);
+            } catch (error) {
+              throw seedIncompleteError(plugin, error);
+            }
+
+            await writeFile(
               join(temporaryRoot, SEED_MARKER_FILE),
               JSON.stringify(seedMarker(source, plugin), null, 2),
             );
-            replaceSeedRoot(temporaryRoot, targetRoot, plugin, retryBudget);
+            await replaceSeedRoot(temporaryRoot, targetRoot, plugin, retryBudget);
             writeOfficialPluginRuntimeManifest({
               pluginName: plugin.definition.name,
               retryBudget,
@@ -138,16 +183,20 @@ function seedBundledOfficialPlugins(input: {
         // 删不掉的遗留锁 + PID 复用会让接管长期不触发）。seeding 只是刷新缓存，超时必须
         // 走既有降级协议回退到可用缓存并告警，不能把会话恢复整体炸成 resumeFailed。
         isOfficialPluginSeedLockTimeoutError(error) ||
+        // seed 内容残缺（缺字体/worker/NOTICE、哈希不符、office profile 缺失）与缺
+        // requiredSeedPaths 同一语义：单插件降级，保留旧可用缓存。
+        isSeedIncompleteError(error) ||
         // 多个 workspace app 会并发 seed 同一份官方插件缓存。当前进程
         // 写 runtime manifest 时，并发赢家可能已经原子替换整个 targetRoot，连同本进程
         // 的临时文件一起移走，rename 因此返回 ENOENT。只在新 target 已由 marker 证明
         // 完整时降级；目标缺失或仍旧时继续抛错，不能掩盖真实缓存损坏。
-        (isNotFoundFsError(error) && isSeedCurrent(targetRoot, plugin))
+        (isNotFoundFsError(error) && (await isSeedCurrent(targetRoot, plugin)))
       ) {
         warnCacheDegraded(input.logger, {
           error,
           operation: "seed_plugin",
           pluginId,
+          reason: error instanceof Error ? error.message : String(error),
           targetRoot,
         });
         failedSeeds.push(plugin.definition);
@@ -173,33 +222,42 @@ function tryWriteOfficialPluginRuntimeManifest(input: {
   }
 }
 
-export function resolveOfficialPluginRoots(input: {
+export async function resolveOfficialPluginRoots(input: {
+  baseDirs?: readonly string[];
   env?: NodeJS.ProcessEnv;
   extraRoots?: string[];
   logger?: Logger;
+  /**
+   * 已解析好的 seed 源（仅用于验收 SEA 变体：内嵌资产无法在普通 Node 进程里构造，
+   * 但 staging/promote/降级路径必须与运行时完全一致）。生产调用方不传。
+   */
+  seedSource?: OfficialPluginSeedSource;
   storageRoot: string;
   suppressedBuiltins?: ReadonlySet<string>;
-}): string[] {
+}): Promise<string[]> {
   const suppressedBuiltins = new Set(input.suppressedBuiltins ?? []);
   // zcode-cua 内置 plugin 默认不启用，由 feature flag 控制加载。在 seed/discovery 层门控
   // （而非只隐藏某个 UI 面），这样开关关闭时用户无法经 plugin 列表/marketplace/MCP 设置/CLI 命令看到它。
   if (!isZCodeCuaInternalFeatureEnabled(input.env ?? process.env)) {
     suppressedBuiltins.add(ZCODE_CUA_OFFICIAL_PLUGIN_ID);
   }
-  const failedSeeds = seedBundledOfficialPlugins({
+  const failedSeeds = await seedBundledOfficialPlugins({
+    baseDirs: input.baseDirs,
     logger: input.logger,
+    seedSource: input.seedSource,
     storageRoot: input.storageRoot,
   });
 
-  const fallbackRoots = failedSeeds.flatMap((definition) => {
+  const fallbackRoots: string[] = [];
+  for (const definition of failedSeeds) {
     // CUA 的 frame contract 随 wrapper 与 producer 原子升级。加载旧版本
     // cache 会把旧 block 布局接到新 consumer 上；当前 cache 不可用时宁可不注册 CUA。
     if (`${definition.name}@${OFFICIAL_PLUGIN_MARKETPLACE}` === ZCODE_CUA_OFFICIAL_PLUGIN_ID) {
-      return [];
+      continue;
     }
-    const fallbackRoot = findUsableOfficialPluginFallback(input.storageRoot, definition);
-    return fallbackRoot ? [fallbackRoot] : [];
-  });
+    const fallbackRoot = await findUsableOfficialPluginFallback(input.storageRoot, definition);
+    if (fallbackRoot) fallbackRoots.push(fallbackRoot);
+  }
   return uniquePaths([...(input.extraRoots ?? []), ...fallbackRoots]);
 }
 

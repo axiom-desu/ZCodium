@@ -20,6 +20,8 @@ export interface ConversationArchiveInput {
   selectedProductTurnIds: string[];
   rows: ConversationArchiveContent["rows"];
   artifacts: Array<{ descriptor: ConversationArchiveArtifact; bytes: Uint8Array }>;
+  /** 公开内容块（workflow v1/v2 与 tool-presentation v1）；缺席写出 v1 归档。 */
+  contentBlocks?: Extract<ConversationArchiveContent, { version: 2 }>["content_blocks"];
 }
 export interface DecodedConversationArchive {
   content: ConversationArchiveContent;
@@ -34,14 +36,25 @@ function normalizeArchiveError(error: unknown): never {
 /** 调用方先做选择/公开投影；此边界验证内容，只生成本地可移植文件。 */
 export async function encodeConversationArchive(input: ConversationArchiveInput): Promise<Buffer> {
   try {
-    const content: ConversationArchiveContent = {
-      format: "zcodium-conversation",
-      version: 1,
-      title: input.title,
-      selectedProductTurnIds: input.selectedProductTurnIds,
-      rows: input.rows,
-      artifacts: input.artifacts.map(({ descriptor }) => descriptor),
-    };
+    const content: ConversationArchiveContent =
+      input.contentBlocks === undefined
+        ? {
+            format: "zcodium-conversation",
+            version: 1,
+            title: input.title,
+            selectedProductTurnIds: input.selectedProductTurnIds,
+            rows: input.rows,
+            artifacts: input.artifacts.map(({ descriptor }) => descriptor),
+          }
+        : {
+            format: "zcodium-conversation",
+            version: 2,
+            title: input.title,
+            selectedProductTurnIds: input.selectedProductTurnIds,
+            rows: input.rows,
+            artifacts: input.artifacts.map(({ descriptor }) => descriptor),
+            content_blocks: input.contentBlocks,
+          };
     assertArchiveJsonBounds(content);
     const manifest = { content, sha256: sha256ConversationShareJson(content) };
     validateArchiveManifest(manifest);

@@ -356,7 +356,7 @@ test("bundled document plugins keep the ui component type, including restored en
   }
 
   const fixture = await tempStorage(t, "zcode-plugin-ui-types-");
-  writeOfficialMarketplace(fixture.pluginStorage, {
+  await writeOfficialMarketplace(fixture.pluginStorage, {
     kind: "filesystem",
     plugins: DOCUMENT_PLUGIN_NAMES.map((name) => ({
       definition: OFFICIAL_PLUGIN_DEFINITIONS.find((item) => item.name === name)!,
@@ -372,7 +372,7 @@ test("bundled document plugins keep the ui component type, including restored en
       plugins: { enabled: true, suppressedBuiltins: [OFFICIAL_PLUGIN_ID("documents")] },
     }),
   );
-  const overview = getZCodePluginsOverview({
+  const overview = await getZCodePluginsOverview({
     env: {},
     pluginStorageRoot: fixture.pluginStorage,
     userConfigPath,
@@ -397,16 +397,18 @@ test("computer-use restore entry keeps the CUA feature gate", async (t) => {
       plugins: { enabled: true, suppressedBuiltins: [OFFICIAL_PLUGIN_ID("computer-use")] },
     }),
   );
-  const restorableWith = (env: NodeJS.ProcessEnv) =>
-    getZCodePluginsOverview({
-      env,
-      pluginStorageRoot: fixture.pluginStorage,
-      userConfigPath,
-      workingDirectory: fixture.root,
-    }).restorableBuiltins.some((plugin) => plugin.id === OFFICIAL_PLUGIN_ID("computer-use"));
+  const restorableWith = async (env: NodeJS.ProcessEnv) =>
+    (
+      await getZCodePluginsOverview({
+        env,
+        pluginStorageRoot: fixture.pluginStorage,
+        userConfigPath,
+        workingDirectory: fixture.root,
+      })
+    ).restorableBuiltins.some((plugin) => plugin.id === OFFICIAL_PLUGIN_ID("computer-use"));
 
-  assert.equal(restorableWith({ ZCODE_CUA_PRODUCT_HELPER: "0" }), false);
-  assert.equal(restorableWith({ ZCODE_CUA_PRODUCT_HELPER: "1" }), true);
+  assert.equal(await restorableWith({ ZCODE_CUA_PRODUCT_HELPER: "0" }), false);
+  assert.equal(await restorableWith({ ZCODE_CUA_PRODUCT_HELPER: "1" }), true);
 });
 
 test("EOF 期间已受理的插件读请求仍写出响应，不丢已受理的回复", async (t) => {

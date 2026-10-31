@@ -28,6 +28,7 @@ import { createCommandEntryLookups } from "./v4-bridge-command-entry-lookups.js"
 import { createCommandEntryRowResolution } from "./v4-bridge-row-resolution.js";
 import { createCommandEntrySessionOps } from "./v4-bridge-session-ops.js";
 import { createGatewayEventForwarding } from "./v4-bridge-event-forwarding.js";
+import { createGatewaySessionReconcile } from "./v4-bridge-session-reconcile.js";
 import { createGatewayColdHydration } from "./v4-bridge-hydration.js";
 import { createGatewayTransportCodec } from "./v4-bridge-transport-codec.js";
 import { createStoredSessionSummaries } from "./v4-bridge-summaries.js";
@@ -106,9 +107,10 @@ export function createConversationV4Gateway(
       sessionId,
       resumeThoughtLevel,
       workspace?: ZCodeWorkspaceRef,
+      additionalDirectories?: string[],
     ) => {
       const persisted = await context.deps.sessionStore?.getSession(sessionId as SessionId);
-      if (!persisted) {
+      if (!persisted || persisted.time.deleted !== undefined) {
         context.logger?.warn("ZCode Protocol v4 cold resume has no persisted session", {
           activeSessionCount: context.sessions.size,
           event: "zcode_protocol.v4.resume_persisted_missing",
@@ -124,6 +126,7 @@ export function createConversationV4Gateway(
           // session.path 可能是规范化后的执行 cwd，不能覆盖当前 attachment
           // 已知的 workspace 身份。旧 session 没有 attachment 上下文时仍走原有持久化回退。
           ...(workspace ? { workspace } : {}),
+          ...(additionalDirectories !== undefined ? { additionalDirectories } : {}),
           ...(resumeThoughtLevel ? { thoughtLevel: resumeThoughtLevel } : {}),
         },
         { reusePersistedMessages: true },
@@ -134,6 +137,7 @@ export function createConversationV4Gateway(
       };
     },
     ...createGatewayEventForwarding(runtimePorts),
+    ...createGatewaySessionReconcile(basePorts),
     ...createGatewayTransportCodec(runtimePorts),
     ...createGatewayColdHydration(runtimePorts),
     onError: (scope, error, errorContext) =>

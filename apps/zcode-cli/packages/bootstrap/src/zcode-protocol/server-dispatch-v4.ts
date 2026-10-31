@@ -48,6 +48,9 @@ export async function dispatchV4Request(
       }
       return { ack: dispatch.ack };
     }
+    case V4_METHODS.sessionsIndexReconcile: {
+      return requireV4Gateway(host).reconcileSessions(request.params);
+    }
     case V4_METHODS.conversationResync: {
       // same-sub recovery 与 subscribe 共用确定性 post-response outbox；公共
       // response 仍 strict ACK-only，physical recovery 只能在 ACK line 后发送。

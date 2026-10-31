@@ -11,6 +11,7 @@ import { resolveZCodePlugins } from "./plugins.js";
 import { collectDisabledPaths } from "./skill-command-overrides.js";
 
 export interface ListZCodeCustomCommandsOptions {
+  additionalDirectories?: readonly string[];
   env?: NodeJS.ProcessEnv;
   homeDirectory?: string;
   logger?: Logger;
@@ -32,7 +33,7 @@ export interface ZCodeCustomCommandInspection {
 export async function listZCodeCustomCommands(
   options: ListZCodeCustomCommandsOptions = {},
 ): Promise<CustomCommandLoadOutcome> {
-  const discovery = createCustomCommandDiscovery(options);
+  const discovery = await createCustomCommandDiscovery(options);
   return await discovery.adapter.discoverCommands({
     workingDirectory: discovery.workingDirectory,
   });
@@ -41,7 +42,7 @@ export async function listZCodeCustomCommands(
 export async function inspectZCodeCustomCommand(
   options: InspectZCodeCustomCommandOptions,
 ): Promise<ZCodeCustomCommandInspection> {
-  const discovery = createCustomCommandDiscovery(options);
+  const discovery = await createCustomCommandDiscovery(options);
   const workingDirectory = discovery.workingDirectory;
   const adapter = discovery.adapter;
   const outcome = await adapter.discoverCommands({ workingDirectory });
@@ -62,14 +63,14 @@ export async function inspectZCodeCustomCommand(
 export async function loadZCodeCustomCommand(
   options: InspectZCodeCustomCommandOptions,
 ): Promise<CustomCommandContent> {
-  const discovery = createCustomCommandDiscovery(options);
+  const discovery = await createCustomCommandDiscovery(options);
   return await discovery.adapter.loadCommand({
     name: normalizeCommandName(options.name),
     workingDirectory: discovery.workingDirectory,
   });
 }
 
-function createCustomCommandDiscovery(options: ListZCodeCustomCommandsOptions) {
+async function createCustomCommandDiscovery(options: ListZCodeCustomCommandsOptions) {
   const workingDirectory = resolve(options.workingDirectory ?? process.cwd());
   const configResult = createConfig({
     env: options.env,
@@ -78,7 +79,7 @@ function createCustomCommandDiscovery(options: ListZCodeCustomCommandsOptions) {
     skipUserConfig: options.skipUserConfig,
     userConfigPath: options.userConfigPath,
   });
-  const pluginOutcome = resolveZCodePlugins({
+  const pluginOutcome = await resolveZCodePlugins({
     configResult,
     env: options.env,
     logger: options.logger,
@@ -89,6 +90,7 @@ function createCustomCommandDiscovery(options: ListZCodeCustomCommandsOptions) {
   });
   return {
     adapter: createNodeCustomCommandAdapter({
+      additionalDirectories: options.additionalDirectories,
       extraResolvedRoots: pluginOutcome.commandRoots,
       disabledPaths: collectDisabledPaths(configResult.config.commandOverrides),
       homeDirectory: options.homeDirectory,

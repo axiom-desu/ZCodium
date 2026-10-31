@@ -11,10 +11,12 @@ import {
   NodeModelSelectionConfigRepository,
   PERSONAL_PROVIDER_CONFIG_FILE_NAME,
 } from "@zcode/provider-node";
-import { getAppConfigDir as resolveAppConfigDir } from "./paths.js";
+import { getAppConfigDir as resolveAppConfigDir, getZCodeDataRootDir } from "./paths.js";
 import {
   ZCODE_USER_DATA_DIR_NAME,
   buildLocalMediaPreviewUrl,
+  normalizeDynamicWorkflowMode,
+  type DynamicWorkflowMode,
   type ProviderProvisioningTrigger,
 } from "@zcode/shared";
 
@@ -80,11 +82,13 @@ export { createTerminalService } from "./terminal/terminalService.js";
 export { createSettingService } from "./setting/settingService.js";
 export { createCredentialService } from "./credential/credentialService.js";
 export { createBroadcastService } from "./broadcast/broadcastService.js";
+export { createMobileProjectDirectoryService, type MobileProjectDirectoryOwner } from "./mobile-project-directory/service.js";
 export { createZCodeAgentService } from "./zcode-agent/zcodeAgentService.js";
 export { createZCodeTaskServiceAdapter } from "./zcode-agent/zcodeTaskServiceAdapter.js";
 export { createZCodeSessionService } from "./zcode-session/zcodeSessionService.js";
 export {
   resolveDefaultZCodeAgentCommand,
+  resolveZCodeAgentRuntimeKind,
   ZCodeAgentProcessManager,
 } from "./zcode-agent/zcodeAgentProcessManager.js";
 export type {
@@ -273,8 +277,13 @@ import { createObservableSettingService } from "./setting/observableSettingServi
 import { createCredentialService } from "./credential/credentialService.js";
 import { createBroadcastService } from "./broadcast/broadcastService.js";
 import { createZCodeAgentService } from "./zcode-agent/zcodeAgentService.js";
-import type { ZCodeAgentCommandResolver } from "./zcode-agent/zcodeAgentProcessManager.js";
+import {
+  resolveZCodeAgentRuntimeKind,
+  type ZCodeAgentCommandResolver,
+} from "./zcode-agent/zcodeAgentProcessManager.js";
 import { resolveZCodeAgentPresentationSurface } from "./zcode-agent/zcodeAgentPresentationSurface.js";
+import { resolveDynamicWorkflowEngineSupport } from "./zcode-agent/dynamicWorkflowEngineSupport.js";
+import { buildHostSessionRuntimePreferences } from "./zcode-agent/hostSessionRuntimePreferences.js";
 import { createZCodeTaskServiceAdapter } from "./zcode-agent/zcodeTaskServiceAdapter.js";
 import { createZCodeSessionService } from "./zcode-session/zcodeSessionService.js";
 import { createZCodeTaskIndexSyncer } from "./zcode-agent/zcodeTaskIndexSyncer.js";
@@ -382,7 +391,6 @@ import {
   type CuaProductMcpServerResolverContext,
 } from "@zcode/zcode-cua/helper-transport";
 import {
-  DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
   formatLogPrefix,
   type ServiceAuthorityMode,
   resolveRuntimeZCodeEndpointOrigin,
@@ -403,6 +411,17 @@ import {
 export { ConversationShareService, conversationShareConnectionScopeFactory };
 
 import { createPluginUiAccountBindings } from "./plugin-ui-bridge/instanceAccounts.js";
+import {
+  createProjectService,
+  createProjectSessionCreationPort,
+  createTaskAutoArchiveScheduler,
+  IProjectService,
+  shouldRescanTaskAutoArchive,
+} from "#src/project/index.js";
+
+// Source Server 旧版本缺失 virtualProjects 时，Host 必须构造真实的只读 legacy 单 root 项目服务；
+// 该实现使用 node:crypto/node:path，只能从 Node 子路径导出。
+export { createLegacySingleRootProjectService } from "#src/project/index.js";
 interface ServiceWithDisposeAll {
   disposeAll: () => void;
 }
@@ -512,6 +531,7 @@ const providerProvisioningTriggerDisposers = new WeakMap<
 // （stdioDesktopPresentationSurface 单测稳定复现），Linux 的 unlink-while-open 语义掩盖了泄漏。
 // 与其它侧表一样按 ServiceCollection 登记并在 dispose 时统一 close。
 const sharedSqliteRepos = new WeakMap<ServiceCollection, ReadonlyArray<{ close(): void }>>();
+const projectSchedulers = new WeakMap<ServiceCollection, { dispose(): void }>();
 /** Local Host 进程内的 Provisioning Source；不会把凭据通过通用 RPC 暴露给 Renderer。 */
 export function getProviderProvisioningSource(
   services: ServiceCollection,
@@ -1070,6 +1090,15 @@ export function createLocalServices(options: {
   };
   /** Windows desktop-local Host 的 CUA turn 状态投影；其它 authority 会在装配层拒绝。 */
   cuaOperationStateReporter?: CuaOperationStateReporter;
+  /** 可信持库 Host 身份；只由 Host composition 注入，不接受客户端请求改写。 */
+  projectStorageHostId?: string;
+  /** 只解析现有远端 attachment；缺失即拒绝，不创建第二个 Remote Host。 */
+  resolveProjectHostService?: (hostId: string) => Promise<IProjectService>;
+  /**
+   * 本机 Host 把动态工作流的用户选择变化推给本窗口在线远端 Host
+   * （docs/dynamic-workflow/launch.md「The user's choice」）；desktop host 注入，缺省不推。
+   */
+  forwardDynamicWorkflowUserMode?: (mode: DynamicWorkflowMode | undefined) => void;
 }): ServiceCollection {
   const isDesktopAttachedRemote = options?.serviceAuthorityMode === "desktop-attached-remote";
   // host / remote server 以前直接沿用当前进程环境启动后续服务。
@@ -1129,7 +1158,11 @@ export function createLocalServices(options: {
   });
   const systemService = createSystemService();
   // 任务列表与 session syncer 共用全局 tasks-index；repo 懒加载数据库，构造不增加启动 I/O。
-  const taskIndexRepo = new TaskIndexRepo();
+  // Host 旧设置必须由装配层注入；缺失时项目迁移延期而不是先记“已 seed”账本。
+  const taskIndexRepo = new TaskIndexRepo(undefined, 5000, {
+    settingsLoader: async () => settingService.get(),
+    ...(options?.projectStorageHostId ? { hostId: options.projectStorageHostId } : {}),
+  });
   const onboardingRecordService = createOnboardingRecordService();
   const providerConfigLog = createServiceLogger("provider-config");
   const providerConfigRuntime = createProviderConfigRuntime({
@@ -1365,8 +1398,41 @@ export function createLocalServices(options: {
       return { ok: true };
     },
   };
-  const codingPlanSubscriptionService = createCodingPlanSubscriptionService({ apiClient });
+  /**
+   * 动态工作流的用户选择在本 Host 的读取口径（docs/dynamic-workflow/launch.md「The user's choice」）：
+   * - 本机设置权威：每次现读 setting.json，它是选择唯一事实源；
+   * - desktop-attached remote Host：读 desktop 推来的值，本地没有设置权威；未推送即「跟随提供」。
+   */
+  const pushedDynamicWorkflowUserMode: { value: DynamicWorkflowMode | undefined } = {
+    value: undefined,
+  };
+  async function readDynamicWorkflowUserMode(): Promise<DynamicWorkflowMode | undefined> {
+    if (isDesktopAttachedRemote) return pushedDynamicWorkflowUserMode.value;
+    return normalizeDynamicWorkflowMode((await settingService.get()).dynamicWorkflowMode);
+  }
+  const codingPlanSubscriptionService = createCodingPlanSubscriptionService({
+    apiClient,
+    // 用户选择（launch.md「The user's choice」）：本机设置文件是唯一来源；desktop-attached remote Host
+    // 没有本机权威，读 desktop 推来的值（zcodeAgentService.syncDynamicWorkflowUserMode）。
+    resolveDynamicWorkflowUserMode: () => readDynamicWorkflowUserMode(),
+    // 执行端引擎能力：Rust runtime 没有 DWF 引擎，不能把「开启」当已生效。
+    // 判定取自 process manager 的公开 runtime 选择解析，避免与真正拉起进程的一侧漂移。
+    resolveDynamicWorkflowEngineSupport: () =>
+      resolveDynamicWorkflowEngineSupport(resolveZCodeAgentRuntimeKind()),
+  });
+  // CLI 首发前原子预占：项目归属与执行目录一次写事务，重试不覆盖组织操作。
+  // 与冷恢复共用同一 production port；agent service 与 task adapter 都注入它，
+  // 测试也直接构造该 port，不再复制一份内联实现。
+  const { prepareSessionCreation, resolveSessionDirectories, settleCreatedTaskReservation } =
+    createProjectSessionCreationPort({
+      repository: () => taskIndexRepo.getProjectRepository(),
+    });
   const zcodeAgentService = createZCodeAgentService({
+    prepareSessionCreation,
+    resolveSessionDirectories,
+    // draft 预热 dispose / 项目切换的预留收口与预占同一 port：Host 只在 CLI 关闭回执后
+    // 释放本次未认领的空行，不新开 agent 方法或第二条队列。
+    settleCreatedTaskReservation,
     ...(modelSelectionReadinessSource ? { modelSelectionReadinessSource } : {}),
     authorizeLocalMediaPreviewPath: options?.authorizeLocalMediaPreviewPath,
     // 动态工作流灰度：
@@ -1374,6 +1440,23 @@ export function createLocalServices(options: {
     // 是它自己那些 workspace 的唯一裁决者，灰度开启时远程 workspace 同样提供工作流。
     resolveDynamicWorkflowClientConfig: () =>
       codingPlanSubscriptionService.getDynamicWorkflowClientConfig(),
+    // 用户选择的读取点：本机每次现读 setting.json；remote Host 读 desktop 推来的值。
+    // 「提供」闩住，选择不闩——改设置后下一次建会话立刻拿到新值。
+    resolveDynamicWorkflowUserMode: () => readDynamicWorkflowUserMode(),
+    // 引擎能力独立于远端读取：提供读取失败时也不能把 Rust 的「选择」当成已生效。
+    resolveDynamicWorkflowEngineSupport: () =>
+      resolveDynamicWorkflowEngineSupport(resolveZCodeAgentRuntimeKind()),
+    // 选择变化的唯一入口：UI 写设置后经广播到达每个窗口，各自通知本窗口 Host。
+    ...(isDesktopAttachedRemote
+      ? {
+          setDynamicWorkflowUserMode: (mode) => {
+            pushedDynamicWorkflowUserMode.value = mode;
+          },
+        }
+      : {}),
+    ...(options?.forwardDynamicWorkflowUserMode
+      ? { forwardDynamicWorkflowUserMode: options.forwardDynamicWorkflowUserMode }
+      : {}),
     commandResolver: options?.zcodeAgentCommandResolver,
     presentationSurface: resolveZCodeAgentPresentationSurface({
       runtimeSurface: options?.agentRuntimeContext?.runtimeSurface,
@@ -1491,20 +1574,8 @@ export function createLocalServices(options: {
           resolveSessionRuntimePreferences: async (scope) => {
             // 预算已统一，不能把可选远端配置作为本地/手机 shared-host 建会话的前置条件。
             const settings = await settingService.get();
-            const modelContextBudgetStrategy = DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY;
-            return {
-              askUserQuestionAutoResolutionEnabled:
-                settings.askUserQuestionAutoResolutionEnabled !== false,
-              nativeSearchEnhancementsEnabled: settings.nativeSearchEnhancementsEnabled !== false,
-              toolSearchMode: settings.toolSearchMode ?? "off",
-              memoryEnabled: settings.memoryEnabled === true,
-              modelContextBudgetStrategy,
-              // user-execution 只消费 Shell；共享默认策略是统一 result schema 的兼容占位，
-              // 不会覆盖 runtime-materialization 阶段已经固定的 strategy。
-              ...(scope === "user-execution" && settings.integratedTerminalShell
-                ? { integratedTerminalShell: settings.integratedTerminalShell }
-                : {}),
-            };
+            // 与远端 Host 同源：本地/远端偏好字节不能各写一份。
+            return buildHostSessionRuntimePreferences({ settings, scope });
           },
         }),
   });
@@ -1571,6 +1642,7 @@ export function createLocalServices(options: {
     zcodeAgentService,
     taskIndexRepo,
     taskIndexSyncer: zcodeTaskIndexSyncer,
+    prepareSessionCreation,
     settingService,
     cuaProductMcpServerResolver,
   });
@@ -1586,6 +1658,40 @@ export function createLocalServices(options: {
     fileService,
     authorizeLocalMediaPreviewPath: options?.authorizeLocalMediaPreviewPath,
     createLocalMediaPreviewUrl: buildLocalMediaPreviewUrl,
+  });
+  const publishProjectChange = async () => {
+    // SQLite 已提交；这里只广播失效，不在服务里缓存项目行。
+    await broadcastService.send({ channel: "state:projects", payload: {} });
+  };
+  const projectService = createProjectService({
+    repository: () => taskIndexRepo.getProjectRepository(),
+    workspaceDirectory: join(getZCodeDataRootDir(), "workspace"),
+    ...(options?.projectStorageHostId ? { ownerHostId: options.projectStorageHostId } : {}),
+    directories: {
+      home: async () => (await systemService.info()).homedir,
+      read: (params) => fileService.readdir(params),
+    },
+    ...(options?.resolveProjectHostService
+      ? { resolveHost: options.resolveProjectHostService }
+      : {}),
+    afterChange: publishProjectChange,
+  });
+  // 自动归档不是读路径的副作用：只由 Host 定时扫描/设置变更触发。
+  const projectAutoArchiveScheduler = createTaskAutoArchiveScheduler({
+    readPolicy: async () => {
+      const settings = await settingService.get();
+      if (!settings.taskAutoArchiveEnabled) return null;
+      // 活跃保护必须用 syncer 的 live active-set（running/waiting/blocked/background 都在里面），
+      // 不能只按 sqlite 里的 status="running" 过滤：DB 状态可能是旧帧，会让真正在跑的任务
+      // 因 CLI 时间过期被归档。这里也不启动 Agent、不读 task 行。
+      const days = Math.max(1, Math.floor(settings.taskAutoArchiveOlderThanDays ?? 30));
+      return {
+        cutoff: Date.now() - days * 24 * 60 * 60 * 1000,
+        activeTasks: zcodeTaskIndexSyncer.activeTaskRefs(),
+      };
+    },
+    repository: () => taskIndexRepo.getProjectRepository(),
+    afterChange: publishProjectChange,
   });
   const conversationShareService: IConversationShareServiceType = isDesktopAttachedRemote
     ? createUnsupportedConversationShareService({
@@ -1612,6 +1718,7 @@ export function createLocalServices(options: {
     .register(IZCodeTaskService, zcodeTaskService)
     .register(IZCodeAgentService, zcodeAgentService)
     .register(IZCodeSessionService, zcodeSessionService)
+    .register(IProjectService, projectService)
     .register(ICuaPermissionService, cuaPermissionService)
     .register(IConversationShareService, conversationShareService)
     .register(
@@ -1709,6 +1816,17 @@ export function createLocalServices(options: {
 
   // 见 sharedSqliteRepos 声明处注释：登记全部 tasks-index sqlite 句柄，dispose 链统一关闭
   sharedSqliteRepos.set(services, [taskIndexRepo]);
+  // 自动归档设置变更后补扫；监听器随 Host dispose 释放。
+  const unsubscribeAutoArchiveSettings = settingService.onDidUpdate((event) => {
+    if (shouldRescanTaskAutoArchive(event.keys)) void projectAutoArchiveScheduler.scan();
+  });
+  projectSchedulers.set(services, {
+    dispose: () => {
+      unsubscribeAutoArchiveSettings();
+      projectAutoArchiveScheduler.dispose();
+    },
+  });
+  projectAutoArchiveScheduler.start();
   return services;
 }
 
@@ -1742,6 +1860,8 @@ export function disposeServiceResources(services: ServiceCollection): void {
   // 关闭共享 tasks-index sqlite 句柄（Windows 上悬着句柄会让后续目录清理撞 EBUSY）
   for (const repo of sharedSqliteRepos.get(services) ?? []) repo.close();
   sharedSqliteRepos.delete(services);
+  projectSchedulers.get(services)?.dispose();
+  projectSchedulers.delete(services);
   providerRuntimes.get(services)?.dispose();
   for (const dispose of providerProvisioningTriggerDisposers.get(services) ?? []) dispose();
   providerProvisioningTriggerDisposers.delete(services);
@@ -1781,6 +1901,8 @@ export async function disposeServiceResourcesAndWait(services: ServiceCollection
   // 关闭共享 tasks-index sqlite 句柄（同 disposeServiceResources，异步收口路径也要释放）
   for (const repo of sharedSqliteRepos.get(services) ?? []) repo.close();
   sharedSqliteRepos.delete(services);
+  projectSchedulers.get(services)?.dispose();
+  projectSchedulers.delete(services);
   providerRuntimes.get(services)?.dispose();
   for (const dispose of providerProvisioningTriggerDisposers.get(services) ?? []) dispose();
   providerProvisioningTriggerDisposers.delete(services);

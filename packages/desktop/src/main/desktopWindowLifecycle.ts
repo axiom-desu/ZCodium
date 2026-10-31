@@ -7,11 +7,14 @@ import { createBrowserWindow } from "./desktopWindowChrome.js";
 import type { HostInitMessage, WindowBootstrapOptions } from "./desktopHostProcess.js";
 import type { StartupWorkspaceWarmupTarget } from "./startupWorkspace.js";
 import { handleDarwinWindowCloseRequest } from "./desktopDarwinCloseBehavior.js";
+import { applyDesktopTrayUnreadBadge } from "./desktopTray.js";
 import {
+  createWindowsTaskbarOverlayApplier,
+  maxWindowUnreadCounts,
   parseWindowUnreadCount,
-  sumWindowUnreadCounts,
-  syncAppUnreadBadge,
+  syncUnreadBadgeForPlatform,
 } from "./unreadBadge.js";
+import { createTaskbarNumberImage } from "./windowsTaskbarBadge.js";
 import { attachDesktopWindowSizePersistence, type DesktopWindowSize } from "./desktopWindowSize.js";
 import {
   registerMainApplicationWindow,
@@ -292,14 +295,25 @@ export function focusWorkspaceInExistingWindow(
   return { activated: false };
 }
 
+// Main 只装配窗口与数字图，不保存任务事实；数字统一居中于 Shell 的 overlay 槽位。
+const applyWindowsTaskbarOverlay = createWindowsTaskbarOverlayApplier({
+  getAllWindows: () => BrowserWindow.getAllWindows(),
+  // 数量同时进入可见 bitmap 与无障碍 description，不能只保留红点。
+  createBadgeImage: createTaskbarNumberImage,
+});
+
 export function syncApplicationUnreadBadge(windowUnreadCountMap: Map<number, number>) {
-  syncAppUnreadBadge({
+  const totalUnreadCount = maxWindowUnreadCounts(windowUnreadCountMap);
+  syncUnreadBadgeForPlatform({
     platform: process.platform,
-    totalUnreadCount: sumWindowUnreadCounts(windowUnreadCountMap),
+    totalUnreadCount,
     setBadgeCount: (count) => {
       app.setBadgeCount(count);
     },
+    applyOverlay: applyWindowsTaskbarOverlay,
   });
+  // 托盘角标：Windows 托盘右上角红点（macOS 无托盘，由 Dock 角标承担）。
+  applyDesktopTrayUnreadBadge(totalUnreadCount);
 }
 
 export function handleWindowUnreadCountSync(

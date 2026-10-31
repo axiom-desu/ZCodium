@@ -1,3 +1,4 @@
+import { pluginUiStateKey } from "@/plugin-ui/adapters/pluginUiStateKey.js";
 import { getPluginUiSessionActions } from "./pluginUiSessionActions.js";
 import { logger } from "@/logger.js";
 import { createPluginUiMessagePortTransport } from "@/plugin-ui/adapters/messagePortTransport.js";
@@ -18,17 +19,11 @@ import type {
   McpUiAppCapabilities,
   McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps/app-bridge";
-import type { PluginSandboxHandle } from "@zcode/shared/mcp-apps";
-import { buildPluginSandboxScopeId } from "@zcode/shared/mcp-apps";
+import { buildPluginSandboxScopeId, type PluginSandboxHandle } from "@zcode/shared/mcp-apps";
 import { clearPluginUiSurfaceFeed } from "../app/pluginUiSurfaceFeedStore.js";
-import {
-  PLUGIN_UI_CARD_DEFAULT_HEIGHT_PX,
-  PLUGIN_UI_CARD_MAX_HEIGHT_PX,
-  PLUGIN_UI_CARD_MIN_HEIGHT_PX,
-} from "../contract.js";
+import { PLUGIN_UI_CARD_DEFAULT_HEIGHT_PX } from "../contract.js";
 import { buildPluginUiHostCapabilities } from "../domain/buildPluginUiHostCapabilities.js";
 import { buildPluginUiHostContext } from "../domain/buildPluginUiHostContext.js";
-
 import { acquireWorkspaceConnection } from "@/v4/workspaceConnectionRegistry.js";
 import type { IServiceAccessor } from "@zcode/services";
 import type { IPlatformService } from "@zcode/shared";
@@ -36,6 +31,8 @@ import { buildPluginUiSessionKey } from "../contract.js";
 import type { Page, UsePluginUiHostInput, UsePluginUiHostResult } from "./pluginUiHostTypes.js";
 import { createPluginUiPagePlane } from "./pluginUiPagePlane.js";
 import { pluginUiPages } from "./pluginUiPageRegistry.js";
+import { createPluginUiToolFeed } from "./pluginUiManagedPageToolFeed.js";
+import { clampCardHeight } from "./pluginUiCardHeight.js";
 import { attachPluginUiResourceDeltaFeed } from "./pluginUiResourceDeltaFeed.js";
 type Platform = IPlatformService;
 type Services = IServiceAccessor;
@@ -50,6 +47,7 @@ export function createPage(
   const surfaceKey = key;
   const latest = { current: input };
   const listeners = new Set<() => void>();
+  let surfaceStateKey: string | undefined;
   let controller: PluginUiHostController | null = null;
   let releaseFeed: (() => void) | undefined;
   let releaseLease: (() => void) | undefined;
@@ -58,8 +56,8 @@ export function createPage(
   let incarnation = 0;
   let releasing: Promise<unknown> = Promise.resolve();
   let contextInputs = "";
-  let lastFeed = "";
   let lastContext = "";
+  const updateToolFeed = createPluginUiToolFeed();
   let appIdentity: string | undefined;
   const notify = () => {
     for (const listener of listeners) listener();
@@ -87,6 +85,7 @@ export function createPage(
     appIdentity = handle.instance.appIdentity;
     patch({ handle });
     plane.mount(handle);
+    plane.setExecutionActive(controller !== null);
   };
   const setHeight = (height: number) => patch({ height });
   const setError = (error: string) => patch({ error });
@@ -108,6 +107,7 @@ export function createPage(
     const epoch = ++incarnation;
     try {
       await releasing;
+      surfaceStateKey = await pluginUiStateKey(surfaceKey);
       if (disposed || epoch !== incarnation) return;
       await pluginUiPages.reserve(page);
     } catch (error) {
@@ -208,7 +208,9 @@ export function createPage(
           canSample: Boolean(services?.pluginUiSamplingService && getPluginUiSessionActions(scope)),
           canSubscribeResources: true,
           canDownloadFile: Boolean(platformInteractions?.onDownloadFile),
-          ...(scope.scope.kind === "surface" ? { surfaceId: scope.scope.surfaceId } : {}),
+          ...(scope.scope.kind === "surface"
+            ? { surfaceId: scope.scope.surfaceId, surfaceStateKey }
+            : {}),
         }),
       ...platformInteractions,
       // 经 latest ref 转调，回调 identity 变化不触发 controller 重建；缺省回 -32601（端口层翻译成 ProtocolError）。
@@ -270,6 +272,7 @@ export function createPage(
     });
 
     controller = nextController;
+    plane.setExecutionActive(true);
     controller.start();
   }
   const task = buildPluginUiSessionKey(input.scope);
@@ -290,6 +293,7 @@ export function createPage(
     task,
     visible: false,
     snapshot: () => snapshot,
+    start: () => void ensure(),
     subscribe(listener) {
       listeners.add(listener);
       return () => {
@@ -336,18 +340,18 @@ export function createPage(
           controller?.updateHostContext(context);
         }
       }
-      const feed = JSON.stringify([
-        next.toolCallId,
-        next.toolInput,
-        next.toolResult,
-        next.toolCancelled,
-      ]);
-      if (feed !== lastFeed) {
-        lastFeed = feed;
-        if (next.toolInput) controller?.notifyToolInput({ arguments: next.toolInput });
-        if (next.toolResult) controller?.notifyToolResult(next.toolResult);
-        if (next.toolCancelled) controller?.notifyToolCancelled();
-      }
+      page.updateToolFeed(next);
+    },
+    updateToolFeed(next) {
+      if (disposed) return;
+      latest.current = {
+        ...latest.current,
+        toolCallId: next.toolCallId,
+        toolInput: next.toolInput,
+        toolResult: next.toolResult,
+        toolCancelled: next.toolCancelled,
+      };
+      updateToolFeed(controller, next);
     },
     async suspend(force = false) {
       const candidate = controller;
@@ -359,6 +363,7 @@ export function createPage(
       starting = false;
       const previous = controller;
       controller = null;
+      plane.setExecutionActive(false);
       const previousHandle = snapshot.handle;
       const offFeed = releaseFeed,
         offLease = releaseLease;
@@ -390,10 +395,4 @@ export function createPage(
     },
   };
   return page;
-}
-
-/** 卡片高度 clamp：下限取资源 `minFrameHeight` 与宿主最小值的较大者，上限固定。 */
-function clampCardHeight(next: number, handle: PluginSandboxHandle | null): number {
-  const min = Math.max(PLUGIN_UI_CARD_MIN_HEIGHT_PX, handle?.resourceMeta?.minFrameHeight ?? 0);
-  return Math.min(PLUGIN_UI_CARD_MAX_HEIGHT_PX, Math.max(min, next));
 }

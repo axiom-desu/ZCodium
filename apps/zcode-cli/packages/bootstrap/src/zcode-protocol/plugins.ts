@@ -81,7 +81,7 @@ export async function listPlugins(
     params.workspace.workspacePath,
     params.configScope,
   );
-  const outcome = resolveZCodePlugins({
+  const outcome = await resolveZCodePlugins({
     configResult,
     logger: context.logger,
     workingDirectory: params.workspace.workspacePath,
@@ -129,7 +129,7 @@ export async function getPluginsOverview(
   rawParams: unknown,
 ): Promise<ZCodePluginsOverviewResult> {
   const params = parseParams(zcodePluginsOverviewParamsSchema, rawParams);
-  const overview = getZCodePluginsOverview({
+  const overview = await getZCodePluginsOverview({
     configResult: createPluginConfigView(
       context,
       params.workspace.workspacePath,

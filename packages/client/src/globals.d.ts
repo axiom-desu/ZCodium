@@ -71,6 +71,8 @@ declare global {
       ): Promise<{ success: boolean; error?: string; sessionId?: string }>;
       /** 取消当前窗口尚未建立完成的远程连接 */
       cancelPendingRemoteConnection?(requestId?: string): Promise<void>;
+      /** 为已在线 Source 请求配置专用 attachment；端口经 window message 投递 */
+      requestSourceSettingsAttachment?(sourceServerId: string): Promise<{ attachmentId: string }>;
       /** 绑定远程 logical session 的 canonical workspace context */
       bindRemoteWorkspaceSessionContext?(context: {
         remoteSessionId: string;

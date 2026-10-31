@@ -1,10 +1,25 @@
 /* eslint-disable max-lines -- 发行包 staging 流程按步骤线性组装，oxfmt 换行后略超 400 行，拆分会增加跨步骤状态同步。 */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, chmod, cp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  cp,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { builtinModules } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { createRuntimeManifest, type ServerTarget } from "../runtime/manifest.js";
+import {
+  BUILTIN_PLUGIN_ASSETS,
+  BUILTIN_PLUGIN_TOP_LEVEL_PATHS,
+} from "@zcode/shared/builtin-plugin-assets";
+import { validateOfficeViewerRuntimeAssets } from "@zcode/shared/office-viewer-assets";
 import { isTarCommand, resolveHostTarCommand } from "./tarCommand.js";
 
 const NODE_BUILTIN_MODULES = new Set(builtinModules);
@@ -154,6 +169,8 @@ interface StageOptions {
   distDir: string;
   /** 既有 CLI/Agent bundle（zcode.cjs，自包含 CJS） */
   agentBundlePath: string;
+  /** CLI 内置技能包；不依赖官方插件缓存。 */
+  bundledSkillsDir: string;
   /** 已准备好的目标平台 Node 二进制 */
   nodeBinaryPath: string;
   /** 构建入口从统一合规 owner 核验后传入；组件组装不能自行拼凑许可。 */
@@ -170,6 +187,8 @@ interface StageOptions {
   officialPluginsDir?: string;
   /** 是否同时产出 tar.gz（默认 true） */
   archive?: boolean;
+  /** 是否生成独立组件归档（默认 true）；关闭时仍保留组件内容哈希和大小。 */
+  componentArchives?: boolean;
 }
 
 interface StagedRelease {
@@ -178,6 +197,8 @@ interface StagedRelease {
   componentArchivePaths: string[];
   packagedDependencies: string[];
 }
+
+const BUNDLED_SKILL_PACK_TOP_LEVEL_PATHS: readonly string[] = ["README.md", "skills"];
 
 const POSIX_LAUNCHER = `#!/bin/sh
 # 由 zcode-server staging 生成：定位发行根后用随包 Node 启动 Server CLI。
@@ -279,17 +300,63 @@ async function copyDirectoryIfPresent(
   } catch {
     return [];
   }
-  const names = (
-    await (await import("node:fs/promises")).readdir(sourceDir, { withFileTypes: true })
-  )
+  const names = (await readdir(sourceDir, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory() && entry.name.endsWith("-plugin"))
     .map((entry) => entry.name)
-    .filter((name) => name !== "superpowers-plugin")
     .sort();
+  // 官方插件白名单以当前 checkout 是否存在 package.json 为准：只有 node_modules 的残留
+  // 目录（别的分支 install 过、切回后 tracked 文件已消失）不能进组件 hash。
+  // 同时只接受 shared 注册表里的内置插件目录名：checkout 里残留的任意 `*-plugin`
+  // 不能因为目录名像插件就被打进发行包。
+  const knownPluginDirs = new Set<string>(BUILTIN_PLUGIN_ASSETS.map((plugin) => plugin.directory));
+  const whitelisted: string[] = [];
   for (const name of names) {
-    await copyPackageDir(join(sourceDir, name), join(targetDir, name));
+    if (!knownPluginDirs.has(name)) continue;
+    const packageJson = await readPackageJson(join(sourceDir, name));
+    if (packageJson === null) continue;
+    whitelisted.push(name);
   }
-  return names.map((name) => name.replace(/-plugin$/u, ""));
+  for (const name of whitelisted) {
+    const source = join(sourceDir, name);
+    const target = join(targetDir, name);
+    // 顶层白名单与桌面/远端 staging 同源：只复制运行/种子资产，`src`、`test`、`.turbo`、
+    // `node_modules` 和未知顶层目录都不能进入组件 hash。这里必须实际过滤复制内容，
+    // 不能只在 hash 清单里声明过滤。
+    await copyPackageDir(source, target, (relativePath) =>
+      shouldCopyOfficialPluginAsset(relativePath),
+    );
+    try {
+      await access(join(target, ".zcodium-plugin", "plugin.json"));
+    } catch (cause) {
+      throw new Error(`Official plugin manifest is missing: ${name}/.zcodium-plugin/plugin.json`, {
+        cause,
+      });
+    }
+    const packageJson = await readPackageJson(source);
+    const office = packageJson?.office as { kinds?: unknown } | undefined;
+    const kinds = Array.isArray(office?.kinds)
+      ? office.kinds.filter((kind): kind is string => typeof kind === "string")
+      : [];
+    // 文档面板插件必须展开构建 manifest 校验字体/worker/wasm/NOTICE，不能只看三个入口文件。
+    if (kinds.length > 0) await validateOfficeViewerRuntimeAssets(target, kinds);
+  }
+  return whitelisted.map((name) => name.replace(/-plugin$/u, ""));
+}
+
+const EXCLUDED_OFFICIAL_PLUGIN_ASSET_NAMES = new Set([
+  ".DS_Store",
+  ".turbo",
+  ".venv",
+  "__pycache__",
+  "node_modules",
+]);
+const OFFICIAL_PLUGIN_TOP_LEVEL_PATHS = new Set<string>(BUILTIN_PLUGIN_TOP_LEVEL_PATHS);
+
+function shouldCopyOfficialPluginAsset(relativePath: string): boolean {
+  const segments = relativePath.split(sep);
+  if (segments.some((segment) => EXCLUDED_OFFICIAL_PLUGIN_ASSET_NAMES.has(segment))) return false;
+  if (segments.some((segment) => segment.endsWith(".pyc"))) return false;
+  return OFFICIAL_PLUGIN_TOP_LEVEL_PATHS.has(segments[0] ?? "");
 }
 
 async function copyNativeTools(
@@ -416,6 +483,21 @@ export async function stageRelease(options: StageOptions): Promise<StagedRelease
     "utf8",
   );
   await cp(options.agentBundlePath, join(runtimeDir, "zcode.cjs"), { dereference: true });
+  // dynamic-workflows 已迁出插件，仍随 Agent 组件独立交付并参与内容哈希；
+  // 远端机器不能依赖旧插件缓存里是否恰好有这些技能。
+  for (const file of ["SKILL.md", "patterns.md", "examples.md"]) {
+    const skillPath = join(options.bundledSkillsDir, "skills/dynamic-workflows", file);
+    try {
+      await access(skillPath);
+    } catch (cause) {
+      throw new Error(`Missing bundled skill required asset: ${skillPath}`, { cause });
+    }
+  }
+  await copyPackageDir(
+    options.bundledSkillsDir,
+    join(runtimeDir, "packages/bundled-skills"),
+    (relativePath) => BUNDLED_SKILL_PACK_TOP_LEVEL_PATHS.includes(relativePath.split(sep)[0] ?? ""),
+  );
   // Agent bundle 是第三个实际运行入口；只扫描 Server bundle 会漏掉外置的 TUI/Playwright。
   bundleSources.push(await readFile(options.agentBundlePath, "utf8"));
 
@@ -506,12 +588,18 @@ export async function stageRelease(options: StageOptions): Promise<StagedRelease
         "runtime/THIRD-PARTY-NOTICES.md",
       ],
     },
-    { id: "agent-runtime", paths: ["runtime/zcode.cjs", "runtime/licenses/agent"] },
+    {
+      id: "agent-runtime",
+      paths: ["runtime/zcode.cjs", "runtime/packages/bundled-skills", "runtime/licenses/agent"],
+    },
     ...(plugins.length > 0
       ? [
           {
             id: "official-plugins",
-            paths: ["runtime/packages", "runtime/licenses/official-plugins"],
+            paths: [
+              ...plugins.map((name) => `runtime/packages/${name}-plugin`),
+              "runtime/licenses/official-plugins",
+            ],
           },
         ]
       : []),
@@ -534,22 +622,18 @@ export async function stageRelease(options: StageOptions): Promise<StagedRelease
     plugins,
     components: componentMeta,
   });
-  await writeFile(
-    join(releaseDir, "manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    "utf8",
-  );
-
-  for (const component of componentMeta) {
-    const archive = await createComponentArchive(
-      releaseDir,
-      outputRoot,
-      options.target,
-      component.id,
-      component.paths,
-    );
-    component.archivePath = relative(outputRoot, archive.archivePath).split(sep).join("/");
-    componentArchivePaths.push(archive.archivePath);
+  if (options.componentArchives !== false) {
+    for (const component of componentMeta) {
+      const archive = await createComponentArchive(
+        releaseDir,
+        outputRoot,
+        options.target,
+        component.id,
+        component.paths,
+      );
+      component.archivePath = relative(outputRoot, archive.archivePath).split(sep).join("/");
+      componentArchivePaths.push(archive.archivePath);
+    }
   }
   await writeFile(
     join(releaseDir, "manifest.json"),

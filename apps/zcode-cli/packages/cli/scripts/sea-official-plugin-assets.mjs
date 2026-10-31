@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
+import { OFFICE_VIEWER_RUNTIME_PATHS } from "@zcode/shared/builtin-plugin-assets";
+import { validateOfficeViewerRuntimeAssets } from "@zcode/shared/office-viewer-assets";
 
 export const seaOfficialPluginAssetPrefix = "zcode-official-plugins/";
 export const seaOfficialPluginManifestAssetKey = `${seaOfficialPluginAssetPrefix}manifest.json`;
@@ -16,6 +18,10 @@ const browserUseRequiredRuntimePaths = [
   "skills/control-browser/SKILL.md",
   "skills/web-gui-tester/SKILL.md",
 ];
+
+// 文档插件查看面板的构建产物（office-runtime 输出到各插件 dist/）。
+// 直接从 shared 清单引用，避免 SEA 与 seed/desktop/remote 的必需资产集合漂移。
+const officeViewerRuntimePaths = [...OFFICE_VIEWER_RUNTIME_PATHS];
 
 export const officialSeaPlugins = [
   {
@@ -76,6 +82,63 @@ export const officialSeaPlugins = [
     // 导致发布产物不 seed browser-use，进而无法装配宿主 node_repl MCP。
     version: "0.5.1",
   },
+  {
+    marketplace: "zcode-plugins-official",
+    name: "documents",
+    packageName: "@zcode/documents-plugin",
+    // 0.2.0 起带查看面板：SEA 必须在嵌入前校验 office-runtime 构建出的 server 与面板资源。
+    requiresRuntime: true,
+    requiredRuntimePaths: officeViewerRuntimePaths,
+    requiredSeedPaths: [
+      "agents/visual-judge.md",
+      "skills/docx/SKILL.md",
+      "skills/docx-viewer/SKILL.md",
+    ],
+    rootPath: join("packages", "documents-plugin"),
+    version: "0.2.0",
+  },
+  {
+    marketplace: "zcode-plugins-official",
+    name: "pdf",
+    packageName: "@zcode/pdf-plugin",
+    requiresRuntime: true,
+    requiredRuntimePaths: officeViewerRuntimePaths,
+    requiredSeedPaths: [
+      "agents/visual-judge.md",
+      "skills/pdf/SKILL.md",
+      "skills/pdf-viewer/SKILL.md",
+    ],
+    rootPath: join("packages", "pdf-plugin"),
+    version: "0.2.1",
+  },
+  {
+    marketplace: "zcode-plugins-official",
+    name: "presentations",
+    packageName: "@zcode/presentations-plugin",
+    requiresRuntime: true,
+    requiredRuntimePaths: officeViewerRuntimePaths,
+    requiredSeedPaths: [
+      "agents/visual-judge.md",
+      "skills/pptx/SKILL.md",
+      "skills/pptx-viewer/SKILL.md",
+    ],
+    rootPath: join("packages", "presentations-plugin"),
+    version: "0.2.0",
+  },
+  {
+    marketplace: "zcode-plugins-official",
+    name: "spreadsheets",
+    packageName: "@zcode/spreadsheets-plugin",
+    requiresRuntime: true,
+    requiredRuntimePaths: officeViewerRuntimePaths,
+    requiredSeedPaths: [
+      "agents/visual-judge.md",
+      "skills/xlsx/SKILL.md",
+      "skills/xlsx-viewer/SKILL.md",
+    ],
+    rootPath: join("packages", "spreadsheets-plugin"),
+    version: "0.2.0",
+  },
 ];
 
 export const collectSeaOfficialPluginAssets = async ({
@@ -99,6 +162,9 @@ export const collectSeaOfficialPluginAssets = async ({
     // 只提供 skills 的内容型插件没有 MCP server，用 requiresRuntime:false 跳过校验；
     // 其余运行时插件仍要在此校验，避免发布缺失可执行入口的产物。
     if (requireRuntime && plugin.requiresRuntime !== false) assertPluginRuntime(pluginRoot, plugin);
+    // office 面板不能只校验三个入口：SEA 也必须展开构建 manifest 验证字体/worker/wasm/NOTICE。
+    const officeKinds = await readOfficeKinds(pluginRoot);
+    if (officeKinds.length > 0) await validateOfficeViewerRuntimeAssets(pluginRoot, officeKinds);
 
     const pluginFiles = [];
     for await (const sourcePath of walkFiles(pluginRoot)) {
@@ -162,6 +228,12 @@ export const collectSeaOfficialPluginAssets = async ({
     manifest,
   };
 };
+
+async function readOfficeKinds(pluginRoot) {
+  const pkg = JSON.parse(await readFile(join(pluginRoot, "package.json"), "utf8"));
+  const kinds = pkg?.office?.kinds;
+  return Array.isArray(kinds) ? kinds.filter((kind) => typeof kind === "string") : [];
+}
 
 function assertPluginRoot(pluginRoot, plugin) {
   if (!existsSync(join(pluginRoot, ".zcodium-plugin", "plugin.json"))) {

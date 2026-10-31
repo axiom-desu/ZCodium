@@ -12,13 +12,14 @@ import {
 } from "@/components/ui/dropdown-menu.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { getWorkspaceKey } from "@/lib/workspaceKey.js";
-import type { WorkspaceTabState } from "@/store/tabStore.js";
+import type { PluginWorkspaceTarget } from "@/lib/configDirectoryCatalog.js";
 
-export function getPluginWorkspaceKey(tab: WorkspaceTabState): string {
+export function getPluginWorkspaceKey(tab: PluginWorkspaceTarget): string {
   return getWorkspaceKey(tab.workspacePath, tab.workspaceIdentity);
 }
 
-export function isPluginScopeWorkspaceConnected(tab: WorkspaceTabState): boolean {
+export function isPluginScopeWorkspaceConnected(tab: PluginWorkspaceTarget): boolean {
+  if (tab.configOnline !== undefined) return tab.configOnline;
   // 持久化 tab 会保留已经断开的远端项目和已失效的本地目录；Scope 若继续展示，
   // 用户会选中一个没有可用 service target 的项目。远端必须有当前 session，本地必须仍可用。
   if (tab.availability === "unavailable-local-directory") {
@@ -54,8 +55,14 @@ export function PluginScopeMenu({
   triggerTestId?: string;
   userOptionTestId?: string;
   workspaceOptionTestIdPrefix?: string;
-  workspaceOptions?: Array<{ key: string; label: string; remote?: boolean }>;
-  workspaceTabs?: WorkspaceTabState[];
+  workspaceOptions?: Array<{
+    key: string;
+    label: string;
+    remote?: boolean;
+    disabled?: boolean;
+    description?: string;
+  }>;
+  workspaceTabs?: PluginWorkspaceTarget[];
   onScopeKeyChange: (scopeKey: string) => void;
 }) {
   const { intl } = useZCodeIntl();
@@ -118,6 +125,7 @@ export function PluginScopeMenu({
                   <DropdownMenuRadioItem
                     key={workspace.key}
                     value={workspace.key}
+                    disabled={"disabled" in workspace && workspace.disabled}
                     data-testid={
                       workspaceOptionTestIdPrefix
                         ? testId(workspaceOptionTestIdPrefix, workspace.key)
@@ -130,6 +138,11 @@ export function PluginScopeMenu({
                       <span className="block truncate text-ui-base font-medium text-foreground">
                         {workspace.label}
                       </span>
+                      {"description" in workspace && workspace.description ? (
+                        <span className="block text-ui-sm text-foreground-subtle">
+                          {workspace.description}
+                        </span>
+                      ) : null}
                     </span>
                   </DropdownMenuRadioItem>
                 );

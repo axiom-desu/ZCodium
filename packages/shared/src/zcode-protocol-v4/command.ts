@@ -3,6 +3,7 @@ import { localTtftContextSchema, localTtftClockSchema } from "../localTtft.js";
 // conversation rewind 无独立命令（裁决：= editUserQuery 的 UI 入口）；
 // workspace-only 文件撤销走 applyFileRewind，不截断聊天历史。
 import { z } from "zod";
+import { DYNAMIC_WORKFLOW_MODES } from "../dynamic-workflow-feature.js";
 import { conversationRowTargetSchema, timestampSchema } from "./core.js";
 import { attachmentRefSchema } from "./attachment-ref.js";
 import { v4ConversationFileRewindPreviewResultSchema } from "./transport.js";
@@ -45,6 +46,10 @@ const createSessionRequestedConfigSchema = z.object({
 export const commandPayloadSchemas = {
   // firstInput 缺省 → phase=draft 空会话；携带 → 直接 turnHeader+userInput rows。
   createSession: z.object({
+    // Host 预留归属使用稳定 ID；CLI 仍负责拒绝覆盖既有会话。
+    sessionId: z.string().min(1).optional(),
+    // ProjectService.prepareSession 冻结的附加执行目录；不是无限外部读写许可。
+    additionalDirectories: z.array(z.string().min(1)).max(256).optional(),
     workspaceId: z.string(),
     firstInput: z
       .object({
@@ -58,8 +63,9 @@ export const commandPayloadSchemas = {
     config: createSessionRequestedConfigSchema.optional(),
     // MCP 是 runtime 启动期配置，必须随 create 一次性进入 record，不能在首发后补写。
     mcpServers: z.array(zcodeProtocolMcpServerSchema).optional(),
-    // Host 下发动态工作流工具策略。
+    // Host 下发动态工作流工具策略；mode 与布尔同行，缺席 = alwaysOn。
     dynamicWorkflowEnabled: z.boolean().optional(),
+    dynamicWorkflowMode: z.enum(DYNAMIC_WORKFLOW_MODES).optional(),
   }),
   // 父会话由 envelope.sessionId 指定；服务端从父 record 派生完整运行配置。
   // firstInput 存在时，child 创建完成后立即启动首条普通输入；缺省则保持空副屏。

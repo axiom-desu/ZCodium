@@ -25,11 +25,14 @@ import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { TID_PLUGIN_STORE_BROWSE } from "@zcode/shared";
 import type { ZCodePluginInfo, ZCodePluginScope, ZCodePluginUserConfigOption } from "@zcode/shared";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
+import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useConfigDirectoryCatalog } from "@/hooks/useConfigDirectoryCatalog.js";
 import {
-  useBaseWorkspaceServices,
-  useWorkspaceServicesResolution,
-} from "@/hooks/useWorkspaceServices.js";
-import { getPathLeaf } from "@/lib/path.js";
+  ConfigDirectoryServicesBoundary,
+  configServiceAuthority,
+  useConfigDirectoryServicesResolution as useWorkspaceServicesResolution,
+} from "@/hooks/useConfigDirectoryServices.js";
+import type { ConfigDirectoryTarget } from "@/lib/configDirectoryCatalog.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { McpSettingsSection } from "@/settings/McpSettingsSection.js";
 import { SkillsSection } from "@/settings/SkillsSection.js";
@@ -74,7 +77,7 @@ import {
 } from "@/settings/pluginStoreListing.js";
 import { usePluginManagementStore } from "@/store/pluginManagementStore.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
-import { isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
+
 import {
   filterPluginsByQuery,
   partitionPluginsForSettings,
@@ -86,11 +89,7 @@ import {
   matchesComputerUseSearch,
   resolveComputerUseAvailability,
 } from "@/settings/computerUseAvailability.js";
-import {
-  PluginScopeMenu,
-  getPluginWorkspaceKey,
-  isPluginScopeWorkspaceConnected,
-} from "@/settings/PluginScopeMenu.js";
+import { PluginScopeMenu, getPluginWorkspaceKey } from "@/settings/PluginScopeMenu.js";
 import {
   RemoteSyncDialogs,
   shouldShowRemoteSyncActions,
@@ -112,7 +111,7 @@ function getPluginTabCountClass(tab: PluginTabTarget, selectedTab: PluginTabTarg
 
 type PluginScope =
   | { kind: "user"; key: "user" }
-  | { kind: "workspace"; key: string; tab: WorkspaceTabState };
+  | { kind: "workspace"; key: string; tab: ConfigDirectoryTarget | null };
 
 interface PluginsSectionProps {
   isDesktop?: boolean;
@@ -128,7 +127,7 @@ interface PluginsSectionProps {
   showMarketplaceBreadcrumb?: boolean;
 }
 
-function workspaceKey(tab: WorkspaceTabState): string {
+function workspaceKey(tab: ConfigDirectoryTarget): string {
   return getPluginWorkspaceKey(tab);
 }
 
@@ -146,7 +145,7 @@ function PluginList({
   showMarketplaceBreadcrumb = false,
   onVisibleCountChange,
 }: {
-  target: WorkspaceTabState | null;
+  target: ConfigDirectoryTarget | null;
   configScope: ZCodePluginScope;
   searchQuery: string;
   isDesktop: boolean;
@@ -170,6 +169,9 @@ function PluginList({
   // Scope 可选择非激活 workspace，若继续从当前 ServiceProvider 取服务，
   // 会把 B 的路径发往 A 的 host。插件读写必须和 Scope target 共用同一服务解析结果。
   const { pluginManagementService } = targetServiceResolution.services;
+  const authorityKey =
+    targetServiceResolution.configAuthorityKey ??
+    configServiceAuthority(targetServiceResolution.services);
   const plugins = usePluginManagementStore((state) => state.plugins);
   const installedPlugins = usePluginManagementStore((state) => state.installedPlugins);
   const marketplaces = usePluginManagementStore((state) => state.marketplaces);
@@ -190,6 +192,7 @@ function PluginList({
   const resetPluginConfig = usePluginManagementStore((state) => state.resetPluginConfig);
   const togglingPluginId = usePluginManagementStore((state) => state.togglingPluginId);
   const operationId = usePluginManagementStore((state) => state.operationId);
+  const activeOperations = usePluginManagementStore((state) => state.activeOperations);
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
   const [pluginOptionsDrafts, setPluginOptionsDrafts] = useState<
     Record<string, Record<string, PluginOptionDraftValue>>
@@ -222,7 +225,11 @@ function PluginList({
       targetKey: pluginSyncTargetKey,
     });
   const storeKey = currentWorkspaceIdentity?.trim() || currentWorkspacePath || "";
-  const storeMatchesTarget = storeKey === targetKey && currentConfigScope === configScope;
+  const currentAuthorityKey = usePluginManagementStore((state) => state.authorityKey);
+  const storeMatchesTarget =
+    storeKey === targetKey &&
+    currentConfigScope === configScope &&
+    currentAuthorityKey === authorityKey;
   const storeItemById = useMemo(
     () =>
       new Map(
@@ -312,10 +319,19 @@ function PluginList({
     await initialize({
       workspacePath: target.workspacePath,
       workspaceIdentity: target.workspaceIdentity,
+      remoteSessionId: target.remoteSessionId,
+      authorityKey,
       configScope,
       pluginService: pluginManagementService,
     });
-  }, [initialize, pluginManagementService, configScope, target, targetServiceResolution.rpcReady]);
+  }, [
+    authorityKey,
+    initialize,
+    pluginManagementService,
+    configScope,
+    target,
+    targetServiceResolution.rpcReady,
+  ]);
   const handleSetEnabled = useCallback(
     async (pluginId: string, enabled: boolean) => {
       const plugin = plugins.find((candidate) => candidate.id === pluginId);
@@ -457,6 +473,7 @@ function PluginList({
           : undefined,
       onUpdate: (pluginId) => void handleUpdatePlugin(pluginId),
       operationId,
+      activeOperations,
       togglingPluginId,
     }),
     [
@@ -476,10 +493,19 @@ function PluginList({
     void initialize({
       workspacePath: target.workspacePath,
       workspaceIdentity: target.workspaceIdentity,
+      remoteSessionId: target.remoteSessionId,
+      authorityKey,
       configScope,
       pluginService: pluginManagementService,
     });
-  }, [initialize, pluginManagementService, configScope, target, targetServiceResolution.rpcReady]);
+  }, [
+    authorityKey,
+    initialize,
+    pluginManagementService,
+    configScope,
+    target,
+    targetServiceResolution.rpcReady,
+  ]);
 
   const renderPluginRows = (items: ZCodePluginInfo[]) => (
     <div className="overflow-hidden rounded-xl bg-surface">
@@ -689,6 +715,12 @@ function PluginList({
           onUsePrompt={(item, prompt) => {
             if (!onCreateTask) return;
             onCreateTask({
+              targetWorkspace: target
+                ? {
+                    workspacePath: target.workspacePath,
+                    workspaceIdentity: target.workspaceIdentity,
+                  }
+                : undefined,
               initialPrompt: buildPluginStoreTryPrompt({
                 item,
                 locale,
@@ -960,50 +992,28 @@ export function PluginsSection({
   showMarketplaceBreadcrumb = false,
 }: PluginsSectionProps) {
   const { intl } = useZCodeIntl();
-  const tabs = useTabStore((state) => state.tabs);
+  const workspaceTabs = useConfigDirectoryCatalog();
+  const openedTabs = useTabStore((state) => state.tabs);
   const storeActiveWorkspacePath = useTabStore((state) => state.activeWorkspacePath);
   const storeActiveWorkspaceIdentity = useTabStore((state) => state.activeWorkspaceIdentity);
   const activeWorkspacePath = workspacePath ?? storeActiveWorkspacePath;
   const activeWorkspaceIdentity = workspaceIdentity ?? storeActiveWorkspaceIdentity ?? undefined;
-  const workspaceTabs = useMemo(() => {
-    const seen = new Set<string>();
-    const scopedTabs = tabs
-      .filter(isWorkspaceTab)
-      .filter(isPluginScopeWorkspaceConnected)
-      .filter((tab) => {
-        const key = workspaceKey(tab);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    if (
-      activeWorkspacePath &&
-      !activeWorkspaceIdentity?.trim() &&
-      !scopedTabs.some(
-        (tab) => workspaceKey(tab) === (activeWorkspaceIdentity?.trim() || activeWorkspacePath),
-      )
-    ) {
-      // 启动恢复可能先恢复 activeWorkspacePath，再异步补齐 tabs；此时不能把
-      // Workspace 配置范围误显示成不可用，否则用户无法读取/修改项目配置。
-      scopedTabs.push({
-        id: `__active_workspace__:${activeWorkspaceIdentity?.trim() || activeWorkspacePath}`,
-        kind: "workspace",
-        workspacePath: activeWorkspacePath,
-        workspaceIdentity: activeWorkspaceIdentity ?? undefined,
-        label: getPathLeaf(activeWorkspacePath) || activeWorkspacePath,
-      });
-    }
-    return scopedTabs;
-  }, [activeWorkspaceIdentity, activeWorkspacePath, tabs]);
   const preferredHost = useMemo(
     () =>
       workspaceTabs.find(
         (tab) =>
           workspaceKey(tab) === (activeWorkspaceIdentity?.trim() || activeWorkspacePath || ""),
       ) ??
-      workspaceTabs[0] ??
+      // Catalog 中未打开的 root 仅供选择；不能在默认 User 视图自动读插件并物化其 runtime。
+      workspaceTabs.find((directory) =>
+        openedTabs.some(
+          (tab) =>
+            tab.kind === "workspace" &&
+            (tab.workspaceIdentity?.trim() || tab.workspacePath) === directory.key,
+        ),
+      ) ??
       null,
-    [activeWorkspaceIdentity, activeWorkspacePath, workspaceTabs],
+    [activeWorkspaceIdentity, activeWorkspacePath, openedTabs, workspaceTabs],
   );
   const [pickedScopeKey, setPickedScopeKey] = useState(() => initialScopeKey?.trim() || "user");
   const selectedScopeKey = pickedScopeKey;
@@ -1038,7 +1048,9 @@ export function PluginsSection({
   const activeSearchQuery = searchQueries[selectedTab];
   const selectedScope: PluginScope = useMemo(() => {
     const tab = workspaceTabs.find((candidate) => workspaceKey(candidate) === selectedScopeKey);
-    return tab ? { kind: "workspace", key: workspaceKey(tab), tab } : { kind: "user", key: "user" };
+    return selectedScopeKey === "user"
+      ? { kind: "user", key: "user" }
+      : { kind: "workspace", key: selectedScopeKey, tab: tab ?? null };
   }, [selectedScopeKey, workspaceTabs]);
   const openPluginStoreForSelectedScope = useCallback(
     (_returnScopeKey?: string, intent?: "add-marketplace") => {
@@ -1088,21 +1100,12 @@ export function PluginsSection({
     setCommandFormScopeKey(null);
   }, [commandEditorWorkspaceMissing]);
 
-  useEffect(() => {
-    if (
-      pickedScopeKey !== "user" &&
-      !workspaceTabs.some((tab) => workspaceKey(tab) === pickedScopeKey)
-    ) {
-      // 市场返回记录的是具体 workspace identity；目标已关闭或断连时，
-      // 静默选中 User 会让用户误以为 Workspace 配置仍在展示，因此提示并显式切换。
-      setPickedScopeKey("user");
-      toast(
-        intl.formatMessage({
-          id: "settings.plugin.scopeUnavailableFallback",
-        }),
-      );
-    }
-  }, [intl, pickedScopeKey, workspaceTabs]);
+  // 选择失效保留其 identity；不能因项目/Source 暂时缺席而静默写回 User。
+  const selectedDirectory =
+    selectedTab === "mcps" ? mcpTarget : selectedTab === "commands" ? commandTarget : target;
+  const configTarget =
+    selectedScope.kind === "workspace" && !selectedScope.tab ? null : selectedDirectory;
+  const writableDirectories = workspaceTabs.filter((directory) => directory.configOnline);
   const selectedTargetKey = target ? workspaceKey(target) : "";
 
   const updatePluginCount = useCallback(
@@ -1137,6 +1140,16 @@ export function PluginsSection({
     },
     [selectedScope.key, selectedTargetKey],
   );
+  const handleConfigUnavailable = useCallback(() => {
+    // 服务/目录失效会卸载子面板；同步清理其展示态，避免详情隐藏 picker 后无法换目标。
+    setPluginDetailOpen(false);
+    setSkillDetailOpen(false);
+    setMcpEditorOpen(false);
+    setCommandEditorOpen(false);
+    setMcpFormScopeKey(null);
+    setCommandFormScopeKey(null);
+    setCapabilityCounts({ plugins: 0, mcps: 0, skills: 0, commands: 0 });
+  }, []);
   const handleMcpEditorOpenChange = useCallback((open: boolean) => {
     setMcpEditorOpen(open);
     if (!open) setMcpFormScopeKey(null);
@@ -1177,7 +1190,31 @@ export function PluginsSection({
                 triggerTestId="plugin-settings-scope-trigger"
                 userOptionTestId="plugin-settings-scope-user-option"
                 workspaceOptionTestIdPrefix="plugin-settings-scope-option"
-                workspaceTabs={workspaceTabs}
+                workspaceOptions={[
+                  ...workspaceTabs.map((directory) => ({
+                    key: directory.key,
+                    label: directory.label,
+                    remote: directory.hostId !== "local",
+                    disabled: !directory.configOnline,
+                    description: directory.disabledReason
+                      ? intl.formatMessage({
+                          id: `settings.plugin.configDirectory.${directory.disabledReason}`,
+                        })
+                      : undefined,
+                  })),
+                  ...(selectedScope.kind === "workspace" && !selectedScope.tab
+                    ? [
+                        {
+                          key: selectedScope.key,
+                          label: selectedScope.key,
+                          disabled: true,
+                          description: intl.formatMessage({
+                            id: "settings.plugin.configDirectory.unavailable",
+                          }),
+                        },
+                      ]
+                    : []),
+                ]}
                 onScopeKeyChange={setPickedScopeKey}
               />
               <div className="hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
@@ -1273,127 +1310,134 @@ export function PluginsSection({
             />
           </div>
         ) : null}
-        {mode === "plugin" ? (
-          <TabsContent
-            forceMount
-            value="plugins"
-            className={
-              pluginDetailOpen
-                ? "data-[state=inactive]:hidden"
-                : "mt-6 data-[state=inactive]:hidden"
-            }
-          >
-            <PluginList
-              target={target}
-              configScope={selectedScope.kind === "user" ? "user" : "workspace"}
-              isDesktop={isDesktop}
-              isMacDesktop={isMacDesktop}
-              isWindowsDesktop={isWindowsDesktop}
-              searchQuery={searchQueries.plugins}
-              onAdd={selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined}
-              onCreateTask={onCreateTask}
-              onDetailOpenChange={setPluginDetailOpen}
-              onOpenPluginStore={openPluginStoreForSelectedScope}
-              showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
-              onVisibleCountChange={updatePluginCount}
-            />
-          </TabsContent>
-        ) : null}
-        {mode === "plugin" || mode === "mcp" ? (
-          <TabsContent
-            forceMount
-            value="mcps"
-            className={
-              mcpEditorOpen ? "data-[state=inactive]:hidden" : "mt-6 data-[state=inactive]:hidden"
-            }
-          >
-            {mcpTarget ? (
-              <McpSettingsSection
-                workspacePath={mcpTarget.workspacePath}
-                workspaceIdentity={mcpTarget.workspaceIdentity}
-                remoteSessionId={mcpTarget.remoteSessionId}
-                remoteTarget={mcpTarget.remoteTarget}
-                localWorkspacePath={mcpTarget.localWorkspacePath}
-                scopeFilter={effectiveMcpScopeKey === "user" ? "user" : "workspace"}
-                parentScopeKey={selectedScopeKey}
-                workspaceTabs={workspaceTabs}
-                searchQuery={searchQueries.mcps}
-                onVisibleCountChange={updateMcpCount}
-                onEditorOpenChange={handleMcpEditorOpenChange}
-                onFormScopeKeyChange={setMcpFormScopeKey}
-                onOpenPluginStore={
-                  selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined
-                }
-                showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
-              />
-            ) : (
-              <EmptyState
-                message={intl.formatMessage({
-                  id: "settings.plugin.noWorkspace",
-                })}
-              />
-            )}
-          </TabsContent>
-        ) : null}
-        {mode === "plugin" || mode === "skill" ? (
-          <TabsContent forceMount value="skills" className="mt-6 data-[state=inactive]:hidden">
-            {target ? (
-              <SkillsSection
-                workspacePath={target.workspacePath}
-                workspaceIdentity={target.workspaceIdentity}
-                remoteSessionId={target.remoteSessionId}
-                remoteTarget={target.remoteTarget}
-                scopeFilter={selectedScope.kind === "user" ? "user" : "workspace"}
-                searchQuery={searchQueries.skills}
+        <ConfigDirectoryServicesBoundary
+          target={configTarget}
+          onUnavailable={handleConfigUnavailable}
+          admitSourceSettings={
+            selectedScope.kind === "workspace" ||
+            (selectedTab === "mcps" && effectiveMcpScopeKey !== "user") ||
+            (selectedTab === "commands" && effectiveCommandScopeKey !== "user")
+          }
+        >
+          {mode === "plugin" ? (
+            <TabsContent
+              value="plugins"
+              className={
+                pluginDetailOpen
+                  ? "data-[state=inactive]:hidden"
+                  : "mt-6 data-[state=inactive]:hidden"
+              }
+            >
+              <PluginList
+                target={target}
+                configScope={selectedScope.kind === "user" ? "user" : "workspace"}
+                isDesktop={isDesktop}
+                isMacDesktop={isMacDesktop}
+                isWindowsDesktop={isWindowsDesktop}
+                searchQuery={searchQueries.plugins}
+                onAdd={selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined}
                 onCreateTask={onCreateTask}
-                onDetailOpenChange={setSkillDetailOpen}
-                onOpenPluginStore={
-                  selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined
-                }
+                onDetailOpenChange={setPluginDetailOpen}
+                onOpenPluginStore={openPluginStoreForSelectedScope}
                 showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
-                reportDetailBreadcrumb={mode === "plugin"}
-                onVisibleCountChange={updateSkillCount}
+                onVisibleCountChange={updatePluginCount}
               />
-            ) : (
-              <EmptyState
-                message={intl.formatMessage({
-                  id: "settings.plugin.noWorkspace",
-                })}
-              />
-            )}
-          </TabsContent>
-        ) : null}
-        {mode === "command" ? (
-          <TabsContent
-            forceMount
-            value="commands"
-            className={
-              commandEditorOpen
-                ? "data-[state=inactive]:hidden"
-                : "mt-6 data-[state=inactive]:hidden"
-            }
-          >
-            {commandTarget ? (
-              <CommandsSection
-                workspacePath={commandTarget.workspacePath}
-                workspaceIdentity={commandTarget.workspaceIdentity}
-                scopeFilter={effectiveCommandScopeKey === "user" ? "user" : "workspace"}
-                parentScopeKey={selectedScopeKey}
-                workspaceTabs={workspaceTabs}
-                searchQuery={searchQueries.commands}
-                onVisibleCountChange={updateCommandCount}
-                onEditorOpenChange={setCommandEditorOpen}
-                onFormScopeKeyChange={setCommandFormScopeKey}
-              />
-            ) : (
-              <EmptyState
-                message={intl.formatMessage({
-                  id: "settings.plugin.noWorkspace",
-                })}
-              />
-            )}
-          </TabsContent>
-        ) : null}
+            </TabsContent>
+          ) : null}
+          {mode === "plugin" || mode === "mcp" ? (
+            <TabsContent
+              value="mcps"
+              className={
+                mcpEditorOpen ? "data-[state=inactive]:hidden" : "mt-6 data-[state=inactive]:hidden"
+              }
+            >
+              {mcpTarget ? (
+                <McpSettingsSection
+                  workspacePath={mcpTarget.workspacePath}
+                  workspaceIdentity={mcpTarget.workspaceIdentity}
+                  remoteSessionId={mcpTarget.remoteSessionId}
+                  remoteTarget={mcpTarget.remoteTarget}
+                  localWorkspacePath={mcpTarget.localWorkspacePath}
+                  scopeFilter={effectiveMcpScopeKey === "user" ? "user" : "workspace"}
+                  parentScopeKey={selectedScopeKey}
+                  workspaceTabs={writableDirectories}
+                  searchQuery={searchQueries.mcps}
+                  onVisibleCountChange={updateMcpCount}
+                  onEditorOpenChange={handleMcpEditorOpenChange}
+                  onFormScopeKeyChange={setMcpFormScopeKey}
+                  onOpenPluginStore={
+                    selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined
+                  }
+                  showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
+                />
+              ) : (
+                <EmptyState
+                  message={intl.formatMessage({
+                    id: "settings.plugin.noWorkspace",
+                  })}
+                />
+              )}
+            </TabsContent>
+          ) : null}
+          {mode === "plugin" || mode === "skill" ? (
+            <TabsContent value="skills" className="mt-6 data-[state=inactive]:hidden">
+              {target ? (
+                <SkillsSection
+                  workspacePath={target.workspacePath}
+                  workspaceIdentity={target.workspaceIdentity}
+                  remoteSessionId={target.remoteSessionId}
+                  remoteTarget={target.remoteTarget}
+                  scopeFilter={selectedScope.kind === "user" ? "user" : "workspace"}
+                  searchQuery={searchQueries.skills}
+                  onCreateTask={onCreateTask}
+                  onDetailOpenChange={setSkillDetailOpen}
+                  onOpenPluginStore={
+                    selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined
+                  }
+                  showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
+                  reportDetailBreadcrumb={mode === "plugin"}
+                  onVisibleCountChange={updateSkillCount}
+                />
+              ) : (
+                <EmptyState
+                  message={intl.formatMessage({
+                    id: "settings.plugin.noWorkspace",
+                  })}
+                />
+              )}
+            </TabsContent>
+          ) : null}
+          {mode === "command" ? (
+            <TabsContent
+              value="commands"
+              className={
+                commandEditorOpen
+                  ? "data-[state=inactive]:hidden"
+                  : "mt-6 data-[state=inactive]:hidden"
+              }
+            >
+              {commandTarget ? (
+                <CommandsSection
+                  workspacePath={commandTarget.workspacePath}
+                  workspaceIdentity={commandTarget.workspaceIdentity}
+                  scopeFilter={effectiveCommandScopeKey === "user" ? "user" : "workspace"}
+                  parentScopeKey={selectedScopeKey}
+                  workspaceTabs={writableDirectories}
+                  searchQuery={searchQueries.commands}
+                  onVisibleCountChange={updateCommandCount}
+                  onEditorOpenChange={setCommandEditorOpen}
+                  onFormScopeKeyChange={setCommandFormScopeKey}
+                />
+              ) : (
+                <EmptyState
+                  message={intl.formatMessage({
+                    id: "settings.plugin.noWorkspace",
+                  })}
+                />
+              )}
+            </TabsContent>
+          ) : null}
+        </ConfigDirectoryServicesBoundary>
       </Tabs>
     </div>
   );

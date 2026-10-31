@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import {
   DndContext,
-  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
@@ -47,7 +46,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 
-import type { Locale, RemoteTarget, ZCodeTaskMeta } from "@zcode/shared";
+import type { Locale, RemoteTarget } from "@zcode/shared";
 
 import {
   TID_CONVERSATION_NEW_TASK,
@@ -56,7 +55,6 @@ import {
   TID_PROJECT_ADD,
   TID_PROJECT_SECTION,
   TID_SIDEBAR,
-  TID_WORKSPACE_LIST,
 } from "@zcode/shared";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { Button } from "@/components/ui/button.js";
@@ -75,9 +73,11 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { NewTaskButtonGroup } from "@/NewTaskButtonGroup.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
+import { useServices } from "@/hooks/useServices.js";
+import { useOptionalPlatform } from "@/hooks/usePlatform.js";
 import { useZCodeStore } from "@/store/StoreProvider.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
-import { isWorkspaceReadOnly, isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
+import { isWorkspaceReadOnly, isWorkspaceTab } from "@/store/tabStore.js";
 import { useWorkspaceTaskLists } from "@/hooks/useWorkspaceTaskLists.js";
 import {
   persistSidebarTaskPreferences,
@@ -120,22 +120,21 @@ import { WorkspaceTimelineTasksSection } from "@/WorkspaceTimelineTasksSection.j
 import { WorkspaceGroupedTasksSection } from "@/WorkspaceGroupedTasksSection.js";
 import { StickyGroupHeaderSlot } from "@/workspace-grouped-tasks/sticky-group-header-slot.js";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
-import {
-  SortableWorkspaceSidebarItem,
-  restrictVerticalDragWithinContainer,
-} from "./SortableWorkspaceSidebar.js";
+import { restrictVerticalDragWithinContainer } from "./SortableWorkspaceSidebar.js";
 import {
   resolveSidebarTaskGroupTogglePresentation,
   type SidebarTaskGroupTogglePresentation,
 } from "@/WorkspaceSidebar/taskGroupTogglePresentation.js";
 import { WorkspacePurposeSection } from "@/WorkspaceSidebar/WorkspacePurposeSection.js";
 import { cn } from "@/components/lib/utils.js";
+import { resolveWorkspaceDragGlobalIndices } from "@/lib/workspaceSidebarDrag.js";
+import { LegacyProjectWorkspaceRows } from "./WorkspaceSidebar/LegacyProjectWorkspaceRows.js";
 import {
-  resolveWorkspaceDragGlobalIndices,
-  resolveWorkspaceDragExpanded,
-  workspaceVerticalListSortingStrategy,
-} from "@/lib/workspaceSidebarDrag.js";
-import { createPortal } from "react-dom";
+  ProjectSidebarSection,
+  useProjectSidebarIntl,
+  type ProjectSidebarActionRequest,
+  type ProjectSidebarViewMode,
+} from "@/project-sidebar/index.js";
 
 function WorkspaceNewTaskTooltip({
   children,
@@ -169,35 +168,12 @@ interface SidebarFileTreeTarget {
   temporaryExternalDirectory?: boolean;
 }
 
-// 流式 task 事件会让 sidebar 父级频繁刷新；缺任务分组时如果传新的 []
-// 会让 memo 的 workspace 行误判 taskItems 变化，穿透到 TaskList/TaskListItem 重渲染。
-const EMPTY_WORKSPACE_TASK_ITEMS: ZCodeTaskMeta[] = [];
 // WorkspaceSidebar 是 memo 组件，默认参数里的 {} 每次调用都会创建新引用；
 // 缺省远程重连日志时必须复用同一个对象，避免浅比较被默认值打穿。
 const EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY: Record<
   string,
   RemoteConnectionLogEntry[]
 > = {};
-
-function WorkspaceDragOverlay({ tab, width }: { tab: WorkspaceTabState; width: number | null }) {
-  const isRemote = Boolean(tab.remoteSessionId || tab.remoteTarget || tab.workspaceIdentity);
-  return (
-    <div
-      data-testid="workspace-drag-overlay"
-      className="pointer-events-none flex cursor-grabbing items-center rounded-lg border border-border bg-background text-ui-base text-foreground shadow-lg h-8 px-2.5 gap-2 [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0"
-      style={width ? { width } : undefined}
-    >
-      {/* 项目列表图标位于 Button 内，运行态会被按钮 SVG 规则收敛为 14px；
-          overlay 脱离 Button 后不再继承该规则，因此显式使用相同尺寸，避免 preview 图标放大。 */}
-      {isRemote ? (
-        <Cloud className="size-3.5 shrink-0 text-foreground-subtle" />
-      ) : (
-        <Folder className="size-3.5 shrink-0 text-foreground-subtle" />
-      )}
-      <span className="min-w-0 flex-1 truncate px-1">{tab.label}</span>
-    </div>
-  );
-}
 
 export interface SidebarFileTreeOpenRequest {
   id: number;
@@ -310,6 +286,17 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onFileTreeOpenChange?: (open: boolean) => void;
 }) {
   const { intl, localePreference, setLocalePreference } = useZCodeIntl();
+  const projectIntl = useProjectSidebarIntl();
+  const projectServiceAvailable = Boolean(useServices().projectService);
+  const platform = useOptionalPlatform();
+  const notificationEnabled = useZCodeStore((state) => state.notificationEnabled);
+  // 角标与侧栏蓝点同源；关掉任务通知时连常驻提醒一起关闭，侧栏蓝点不受影响。
+  const syncProjectUnreadTaskCount = useCallback(
+    (count: number) => {
+      platform?.syncWindowUnreadCount(notificationEnabled ? count : 0);
+    },
+    [notificationEnabled, platform],
+  );
   const handleTaskRowSelect = useCallback(
     (
       targetWorkspacePath: string,
@@ -376,6 +363,11 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     [expandedWorkspacePaths, workspacePaths],
   );
   const [showArchivedTasks, setShowArchivedTasks] = useState(false);
+  const [projectSidebarAction, setProjectSidebarAction] =
+    useState<ProjectSidebarActionRequest | null>(null);
+  const [projectSidebarViewMode, setProjectSidebarViewMode] =
+    useState<ProjectSidebarViewMode>("projects");
+  const projectSidebarActionIdRef = useRef(0);
   const [archivedActionsContainer, setArchivedActionsContainer] = useState<HTMLDivElement | null>(
     null,
   );
@@ -599,19 +591,15 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const handleCreateDraftTaskActionChange = useCallback((action: (() => void) | null) => {
     setCreateGroupedTaskDraftAction(() => action);
   }, []);
-  const shouldShowPinnedTasks =
-    // grouped 主体会主动过滤 pinned task；如果同页不渲染全局置顶区，
-    // 从 Header 置顶当前任务后整条 row 会无处展示，看起来像 session 被删除。
-    taskViewMode === "workspace" ||
-    taskViewMode === "timeline" ||
-    taskViewMode === "archived" ||
-    taskViewMode === "grouped";
+  // 项目树 grouped/timeline 自己渲染完整置顶/时间线行；此时再渲染 workspace 置顶区
+  // 会把同一任务画两次。其它模式保留原 workspace 置顶行为。
+  const projectTreeOwnsPinnedTasks =
+    projectServiceAvailable &&
+    (projectSidebarViewMode === "grouped" || projectSidebarViewMode === "timeline");
+  const shouldShowPinnedTasks = !projectTreeOwnsPinnedTasks;
   const workspaceScrollRef = useRef<HTMLDivElement | null>(null);
   const [showWorkspaceTopMask, setShowWorkspaceTopMask] = useState(false);
   const [showWorkspaceBottomMask, setShowWorkspaceBottomMask] = useState(false);
-  const workspaceSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  );
   const purposeSectionSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, {
@@ -704,13 +692,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
       }
     },
     [projectWorkspaceTabs, reorderWorkspaceTabs, resetWorkspaceDrag, workspaceTabs],
-  );
-  const activeWorkspaceDragTab = useMemo(
-    () =>
-      activeWorkspaceDragId
-        ? (projectWorkspaceTabs.find((tab) => tab.id === activeWorkspaceDragId) ?? null)
-        : null,
-    [activeWorkspaceDragId, projectWorkspaceTabs],
   );
 
   const handleThemeChange = useCallback(
@@ -1463,99 +1444,111 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                         })}
                                       </DropdownMenuItem>
                                     ) : null}
+                                    {projectServiceAvailable ? (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          data-testid="project-sidebar-create"
+                                          onSelect={() => {
+                                            projectSidebarActionIdRef.current += 1;
+                                            setProjectSidebarAction({
+                                              id: projectSidebarActionIdRef.current,
+                                              type: "create",
+                                            });
+                                          }}
+                                        >
+                                          <Plus className="size-4" />
+                                          {projectIntl.formatMessage({
+                                            id: "projectSidebar.newProject",
+                                          })}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          data-testid="project-sidebar-restore"
+                                          onSelect={() => {
+                                            projectSidebarActionIdRef.current += 1;
+                                            setProjectSidebarAction({
+                                              id: projectSidebarActionIdRef.current,
+                                              type: "restore",
+                                            });
+                                          }}
+                                        >
+                                          <Archive className="size-4" />
+                                          {projectIntl.formatMessage({
+                                            id: "projectSidebar.restoreProjects",
+                                          })}
+                                        </DropdownMenuItem>
+                                      </>
+                                    ) : null}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               }
                             >
-                              {projectWorkspaceTabs.length === 0 ? (
-                                <div className="px-3 py-2 text-ui-base text-foreground-subtle">
-                                  {intl.formatMessage({
-                                    id: "workspaceSidebar.noProjects",
-                                  })}
-                                </div>
-                              ) : (
-                                <DndContext
-                                  sensors={workspaceSensors}
-                                  collisionDetection={closestCenter}
-                                  modifiers={[restrictVerticalDragWithinContainer]}
+                              <ProjectSidebarSection
+                                activeWorkspacePath={workspacePath}
+                                activeWorkspaceIdentity={workspaceIdentity}
+                                activeTaskId={activeTaskId}
+                                onSelectTask={(
+                                  targetPath,
+                                  targetTaskId,
+                                  targetIdentity,
+                                  _remoteSessionId,
+                                  expectedUnreadAt,
+                                ) =>
+                                  handleTaskRowSelect(
+                                    targetPath,
+                                    targetTaskId,
+                                    targetIdentity,
+                                    expectedUnreadAt,
+                                  )
+                                }
+                                onCreateTask={(target) =>
+                                  onCreateTask({
+                                    targetWorkspace: {
+                                      workspacePath: target.workspacePath,
+                                      ...(target.workspaceIdentity
+                                        ? { workspaceIdentity: target.workspaceIdentity }
+                                        : {}),
+                                    },
+                                    projectId: target.projectId,
+                                  })
+                                }
+                                onOpenFileTree={handleOpenWorkspaceFileTree}
+                                legacyWorkspaceTabs={projectWorkspaceTabs}
+                                actionRequest={projectSidebarAction}
+                                onActionHandled={() => setProjectSidebarAction(null)}
+                                onUnreadTaskCountChange={syncProjectUnreadTaskCount}
+                                onViewModeChange={setProjectSidebarViewMode}
+                              >
+                                <LegacyProjectWorkspaceRows
+                                  workspaceTabs={projectWorkspaceTabs}
+                                  workspacePath={workspacePath}
+                                  expandedWorkspacePaths={expandedWorkspacePaths}
+                                  workspaceTaskGroupByKey={workspaceTaskGroupByKey}
+                                  workspaceTaskLoadingByKey={
+                                    workspaceTaskLists.loadingByWorkspaceKey
+                                  }
+                                  activeWorkspaceDragId={activeWorkspaceDragId}
+                                  activeWorkspaceDragWidth={activeWorkspaceDragWidth}
+                                  activateTab={activateTab}
+                                  closeTab={closeTab}
+                                  toggleWorkspaceExpanded={toggleWorkspaceExpanded}
+                                  onSelectTask={onSelectTask}
+                                  onStartDraftInWorkspace={onStartDraftInWorkspace}
+                                  onShowMoreWorkspaceTasks={handleShowMoreWorkspaceTasks}
+                                  reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
+                                  remoteWorkspaceErrorByWorkspaceKey={
+                                    remoteWorkspaceErrorByWorkspaceKey
+                                  }
+                                  reconnectingRemoteWorkspaceLogsByWorkspaceKey={
+                                    reconnectingRemoteWorkspaceLogsByWorkspaceKey
+                                  }
+                                  onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
+                                  onOpenFileTree={handleOpenWorkspaceFileTree}
                                   onDragStart={handleWorkspaceDragStart}
                                   onDragEnd={handleWorkspaceDragEnd}
                                   onDragCancel={handleWorkspaceDragCancel}
-                                >
-                                  <SortableContext
-                                    items={projectWorkspaceTabs.map((tab) => tab.id)}
-                                    strategy={workspaceVerticalListSortingStrategy}
-                                  >
-                                    <ul data-testid={TID_WORKSPACE_LIST} className="space-y-2 pb-4">
-                                      {projectWorkspaceTabs.map((tab) => {
-                                        const workspaceKey = buildTaskWorkspaceKey(
-                                          tab.workspacePath,
-                                          tab.workspaceIdentity,
-                                        );
-                                        const taskGroup = workspaceTaskGroupByKey.get(workspaceKey);
-                                        const taskLoading =
-                                          workspaceTaskLists.loadingByWorkspaceKey[workspaceKey] ??
-                                          false;
-
-                                        return (
-                                          <SortableWorkspaceSidebarItem
-                                            key={tab.id}
-                                            tab={tab}
-                                            isActiveWorkspace={tab.workspacePath === workspacePath}
-                                            isExpanded={resolveWorkspaceDragExpanded({
-                                              activeDragId: activeWorkspaceDragId,
-                                              expanded: expandedWorkspacePaths.has(
-                                                tab.workspacePath,
-                                              ),
-                                              tabId: tab.id,
-                                            })}
-                                            activateTab={activateTab}
-                                            closeTab={closeTab}
-                                            toggleWorkspaceExpanded={toggleWorkspaceExpanded}
-                                            onSelectTask={onSelectTask}
-                                            onStartDraftInWorkspace={onStartDraftInWorkspace}
-                                            taskItems={
-                                              taskGroup?.items ?? EMPTY_WORKSPACE_TASK_ITEMS
-                                            }
-                                            taskListLoading={taskLoading}
-                                            taskListHasMore={taskGroup?.hasMore ?? false}
-                                            taskListHasUnread={taskGroup?.hasUnread ?? false}
-                                            taskListLiveWorkflowCount={
-                                              taskGroup?.liveWorkflowCount ?? 0
-                                            }
-                                            workspaceKey={workspaceKey}
-                                            onShowMoreWorkspaceTasks={handleShowMoreWorkspaceTasks}
-                                            reconnectingRemoteWorkspaceKeys={
-                                              reconnectingRemoteWorkspaceKeys
-                                            }
-                                            remoteWorkspaceErrorByWorkspaceKey={
-                                              remoteWorkspaceErrorByWorkspaceKey
-                                            }
-                                            reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-                                              reconnectingRemoteWorkspaceLogsByWorkspaceKey
-                                            }
-                                            onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
-                                            onOpenFileTree={handleOpenWorkspaceFileTree}
-                                          />
-                                        );
-                                      })}
-                                    </ul>
-                                  </SortableContext>
-                                  {typeof document === "undefined"
-                                    ? null
-                                    : createPortal(
-                                        <DragOverlay>
-                                          {activeWorkspaceDragTab ? (
-                                            <WorkspaceDragOverlay
-                                              tab={activeWorkspaceDragTab}
-                                              width={activeWorkspaceDragWidth}
-                                            />
-                                          ) : null}
-                                        </DragOverlay>,
-                                        document.body,
-                                      )}
-                                </DndContext>
-                              )}
+                                />
+                              </ProjectSidebarSection>
                             </WorkspacePurposeSection>
                           ) : (
                             <WorkspacePurposeSection

@@ -1,13 +1,13 @@
 import type { CommandStorageLevel } from "@zcode/shared";
 import { getPluginWorkspaceKey } from "@/settings/PluginScopeMenu.js";
-import type { WorkspaceTabState } from "@/store/tabStore.js";
+import type { PluginWorkspaceTarget } from "@/lib/configDirectoryCatalog.js";
 
 type CommandScopeRecovery = "keep" | "fallback-user" | "close-editor";
 
 export function resolveCommandScopeRecovery(params: {
   editing: boolean;
   scopeKey: string;
-  workspaceTabs: readonly WorkspaceTabState[];
+  workspaceTabs: readonly PluginWorkspaceTarget[];
 }): CommandScopeRecovery {
   if (
     params.scopeKey === "user" ||
@@ -20,10 +20,10 @@ export function resolveCommandScopeRecovery(params: {
 
 export function resolveCommandStorageTarget(
   scopeKey: string,
-  workspaceTabs: readonly WorkspaceTabState[],
+  workspaceTabs: readonly PluginWorkspaceTarget[],
 ): {
   storageLevel: CommandStorageLevel;
-  workspace: WorkspaceTabState | null;
+  workspace: PluginWorkspaceTarget | null;
 } {
   if (scopeKey === "user") {
     return { storageLevel: "user", workspace: null };

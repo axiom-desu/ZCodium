@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Root workspace action hook 集中编排项目、远程和 conversation 入口；合并期保持动作边界完整，后续按领域拆分。 */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type IPlatformService, type RemoteTarget, type ZCodeTaskClientMode } from "@zcode/shared";
 import type { IServiceAccessor } from "@zcode/services";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
@@ -9,6 +9,10 @@ import { isRendererReloadNavigation } from "@/lib/rendererNavigation.js";
 import { parseWslUncWorkspacePath } from "@/lib/wslUncWorkspace.js";
 import { logger } from "@/logger.js";
 import { openFolderFromWorkspaceEntry } from "@/root/openWorkspaceFolderEntry.js";
+import {
+  inheritNewTaskProjectId,
+  resolveExplicitProjectIntent,
+} from "@/root/newTaskProjectIntent.js";
 import { useConversationWorkspaceActions } from "@/root/useConversationWorkspaceActions.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { isWorkspaceReadOnly, type TabStore, type TabStoreState } from "@/store/tabStore.js";
@@ -128,18 +132,29 @@ export function useRootWorkspaceActions({
   }, [workbenchGroupClientMode]);
 
   const startDraftInWorkspace = useCallback(
-    (workspacePath: string, workspaceIdentity?: string) => {
+    (
+      workspacePath: string,
+      workspaceIdentity?: string,
+      options?: { projectId?: string | null },
+    ) => {
       if (workbenchGroupClientMode === "desktop-continuous") {
         useWorkbenchGroupStore.getState().deactivateActiveGroup();
         usePaneLayoutStore.getState().resetToPrimaryPane();
       }
-      useZCodeSessionStore.getState().startDraft(workspacePath, undefined, workspaceIdentity);
+      useZCodeSessionStore.getState().startDraft(workspacePath, undefined, workspaceIdentity, {
+        projectId: options?.projectId ?? null,
+      });
     },
     [workbenchGroupClientMode],
   );
+  // 新任务意图的发起顺序：异步继承项目归属时用它丢弃过期结果，避免切页后迟到回包
+  // 把旧项目写进当前草稿。
+  const createTaskSequenceRef = useRef(0);
 
   const startNewTaskFromActiveWorkspace = useCallback(
     (source: string, request?: CreateTaskRequest) => {
+      const sequence = createTaskSequenceRef.current + 1;
+      createTaskSequenceRef.current = sequence;
       const state = tabStoreApi.getState();
       const {
         activeWorkspacePath: currentActiveWorkspacePath,
@@ -194,23 +209,6 @@ export function useRootWorkspaceActions({
         return;
       }
 
-      if (
-        !focusWorkspace(
-          newTaskTarget.workspacePath,
-          newTaskTarget.workspaceIdentity
-            ? { workspaceIdentity: newTaskTarget.workspaceIdentity }
-            : undefined,
-        )
-      ) {
-        addTab(
-          newTaskTarget.workspacePath,
-          newTaskTarget.workspaceIdentity
-            ? { workspaceIdentity: newTaskTarget.workspaceIdentity }
-            : undefined,
-        );
-      }
-
-      setWorkspaceActionError(null);
       const provider = typeof request === "string" ? request : request?.provider;
       const groupedDraftPlacement =
         typeof request === "string" ? undefined : request?.groupedDraftPlacement;
@@ -220,46 +218,121 @@ export function useRootWorkspaceActions({
       const initialPrompt = rawInitialPrompt?.trim() ? rawInitialPrompt : undefined;
       const initialPromptMention =
         typeof request === "string" ? undefined : request?.initialPromptMention;
-      logger.info(`[Root] ${source}:`, newTaskTarget.workspacePath, provider ?? "default-provider");
-      // Cmd/Ctrl+N 是创建新的单 panel 草稿，不是在当前 workbench
-      // group / paneLayout 中继续拆一个 draft；目标 workspace 取 focused pane。
-      useWorkbenchGroupStore.getState().deactivateActiveGroup();
-      usePaneLayoutStore.getState().resetToPrimaryPane();
-      useZCodeSessionStore
-        .getState()
-        .startDraft(
-          newTaskTarget.workspacePath,
-          provider,
-          newTaskTarget.workspaceIdentity ?? undefined,
-          {
-            groupedDraftPlacement,
-            createSource: typeof request === "string" ? undefined : request?.createSource,
-          },
+      const targetWorkspacePath = newTaskTarget.workspacePath;
+      const targetWorkspaceIdentity = newTaskTarget.workspaceIdentity ?? undefined;
+      // 显式请求（项目行新建/跨项目工作流）必须在第一次 await 前冻结归属：
+      // 之后侧栏切项目、切 workspace 都不能改写本次意图。
+      const explicitProject = resolveExplicitProjectIntent(request);
+      const stillCurrent = () => {
+        if (sequence !== createTaskSequenceRef.current) return false;
+        const latest = tabStoreApi.getState();
+        return (
+          latest.activeWorkspacePath === currentActiveWorkspacePath &&
+          latest.activeWorkspaceIdentity === currentActiveWorkspaceIdentity
         );
-      if (initialPrompt) {
-        // insert request 被首个 composer 消费后会清空；如果随后因 pane/config
-        // 切换 remount，新 composer 会从空的 __draft__ 恢复并覆盖预填。先写草稿事实源，
-        // 再发即时插入请求：当前 composer 立即可见，后续 remount 也恢复同一文本。
-        persistV4ComposerDraft(
-          newTaskTarget.workspacePath,
-          newTaskTarget.workspaceIdentity ?? undefined,
-          V4_DRAFT_SCOPE_ROOT,
-          {
-            text: initialPrompt,
-            ...(initialPromptMention ? { mention: initialPromptMention } : {}),
-          },
+      };
+      const commit = (projectId: string | null | undefined) => {
+        if (sequence !== createTaskSequenceRef.current) return;
+        // 等待项目归属期间 workspace 可能变为只读/已关闭；提交前用最新 state 复验。
+        if (
+          isWorkspaceReadOnly(tabStoreApi.getState(), targetWorkspacePath, targetWorkspaceIdentity)
+        ) {
+          return;
+        }
+        // 只有确认本次意图仍然有效才切换/新增 tab：归属读取期间切页不能让旧请求抢焦点。
+        const focused = focusWorkspace(
+          targetWorkspacePath,
+          targetWorkspaceIdentity ? { workspaceIdentity: targetWorkspaceIdentity } : undefined,
         );
+        if (!focused) {
+          addTab(
+            targetWorkspacePath,
+            targetWorkspaceIdentity ? { workspaceIdentity: targetWorkspaceIdentity } : undefined,
+          );
+        }
+        setWorkspaceActionError(null);
+        logger.info(
+          `[Root] ${source}:`,
+          targetWorkspacePath,
+          provider ?? "default-provider",
+          projectId ?? null,
+        );
+        // Cmd/Ctrl+N 是创建新的单 panel 草稿，不是在当前 workbench
+        // group / paneLayout 中继续拆一个 draft；目标 workspace 取 focused pane。
+        useWorkbenchGroupStore.getState().deactivateActiveGroup();
+        usePaneLayoutStore.getState().resetToPrimaryPane();
         useZCodeSessionStore
           .getState()
-          .requestComposerTextInsert(
-            newTaskTarget.workspacePath,
-            initialPrompt,
-            newTaskTarget.workspaceIdentity ?? undefined,
-            initialPromptMention,
+          .startDraft(targetWorkspacePath, provider, targetWorkspaceIdentity, {
+            groupedDraftPlacement,
+            createSource: typeof request === "string" ? undefined : request?.createSource,
+            projectId: projectId ?? null,
+          });
+        if (initialPrompt) {
+          // insert request 被首个 composer 消费后会清空；如果随后因 pane/config
+          // 切换 remount，新 composer 会从空的 __draft__ 恢复并覆盖预填。先写草稿事实源，
+          // 再发即时插入请求：当前 composer 立即可见，后续 remount 也恢复同一文本。
+          persistV4ComposerDraft(
+            targetWorkspacePath,
+            targetWorkspaceIdentity,
+            V4_DRAFT_SCOPE_ROOT,
+            {
+              text: initialPrompt,
+              ...(initialPromptMention ? { mention: initialPromptMention } : {}),
+            },
           );
+          useZCodeSessionStore
+            .getState()
+            .requestComposerTextInsert(
+              targetWorkspacePath,
+              initialPrompt,
+              targetWorkspaceIdentity,
+              initialPromptMention,
+            );
+        }
+      };
+      if (explicitProject.explicit) {
+        commit(explicitProject.projectId ?? null);
+        return;
       }
+      // 快捷键/工具栏的新任务未显式表态：沿用活动任务的真实项目归属（读 Host 树），
+      // 没有活动任务时沿用当前草稿意图。远端 identity 不走本地 Host 树，保持既有
+      // 全局/legacy 行为，不用 cwd 猜项目。
+      if (targetWorkspaceIdentity?.trim()) {
+        commit(undefined);
+        return;
+      }
+      const workspaceState = useZCodeSessionStore
+        .getState()
+        .getWorkspaceState(targetWorkspacePath, targetWorkspaceIdentity);
+      const activeTaskId = workspaceState.activeTaskId;
+      const projectService = services.projectService;
+      if (!activeTaskId || !projectService) {
+        commit(activeTaskId ? undefined : (workspaceState.draftProjectId ?? null));
+        return;
+      }
+      void (async () => {
+        try {
+          const tree = await projectService.readTree();
+          if (!stillCurrent()) return;
+          commit(
+            inheritNewTaskProjectId({
+              targetWorkspacePath,
+              targetWorkspaceIdentity,
+              activeTaskId,
+              draftProjectId: workspaceState.draftProjectId,
+              tasks: tree.tasks,
+            }),
+          );
+        } catch (error) {
+          if (!stillCurrent()) return;
+          // 归属读取失败不能阻塞新建；退回全局任务而不是伪造项目。
+          logger.warn("[Root] 新任务继承项目归属失败，按全局任务继续", { error });
+          commit(null);
+        }
+      })();
     },
-    [addTab, intl, tabStoreApi, workbenchGroupClientMode],
+    [addTab, intl, services.projectService, tabStoreApi, workbenchGroupClientMode],
   );
 
   const handleSelectProject = useCallback(

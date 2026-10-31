@@ -1,10 +1,10 @@
 import { useOptionalPlatform } from "@/hooks/usePlatform.js";
 import { useOptionalServices } from "@/hooks/useServices.js";
-import { isRemoteWorkspaceIdentity } from "@zcode/shared";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { buildPluginUiSurfaceKey, PLUGIN_UI_CARD_DEFAULT_HEIGHT_PX } from "../contract.js";
 import { resolvePluginUiLogicalScope } from "../domain/pluginUiLogicalScope.js";
 import type { UsePluginUiHostInput, UsePluginUiHostResult } from "./pluginUiHostTypes.js";
+import { supportsPluginUiGuest } from "../domain/pluginUiSupport.js";
 import { createPage } from "./pluginUiManagedPage.js";
 import { acquirePluginUiPage, pluginUiPages, subscribePage } from "./pluginUiPageRegistry.js";
 export type { UsePluginUiHostInput, UsePluginUiHostResult } from "./pluginUiHostTypes.js";
@@ -18,15 +18,20 @@ function pageIdentity(input: UsePluginUiHostInput): { key: string; input: UsePlu
 export function usePluginUiHost(input: UsePluginUiHostInput): UsePluginUiHostResult {
   const platform = useOptionalPlatform();
   const services = useOptionalServices();
-  const local =
-    !input.scope.remoteSessionId && !isRemoteWorkspaceIdentity(input.scope.workspaceIdentity ?? "");
+  const local = supportsPluginUiGuest({
+    hasPlatformSandbox: Boolean(platform?.pluginSandbox),
+    hasBridge: Boolean(services?.pluginUiBridgeService),
+    remoteSessionId: input.scope.remoteSessionId,
+    workspaceIdentity: input.scope.workspaceIdentity,
+    enabled: input.enabled,
+  });
   const identified = pageIdentity(input);
   const key = identified.key;
   const [failure, setFailure] = useState<{ key: string; error: string } | null>(null);
   const empty = useMemo<UsePluginUiHostResult>(
     () => ({
       pageKey: key,
-      supported: Boolean(local && platform?.pluginSandbox && services?.pluginUiBridgeService),
+      supported: local,
       phase: failure?.key === key ? "error" : "idle",
       handle: null,
       height: PLUGIN_UI_CARD_DEFAULT_HEIGHT_PX,
@@ -47,13 +52,7 @@ export function usePluginUiHost(input: UsePluginUiHostInput): UsePluginUiHostRes
   );
   const result = useSyncExternalStore(subscribe, read, () => empty);
   useEffect(() => {
-    if (
-      !local ||
-      !platform?.pluginSandbox ||
-      !services?.pluginUiBridgeService ||
-      input.enabled === false
-    )
-      return;
+    if (!local || !platform?.pluginSandbox || !services?.pluginUiBridgeService) return;
     if (failure?.key === key) return;
     let current = true;
     void acquirePluginUiPage(key, () => createPage(key, identified.input, platform, services)).then(
