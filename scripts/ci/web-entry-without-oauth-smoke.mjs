@@ -16,7 +16,7 @@ const { outputFiles } = await build({
   platform: "browser",
   format: "esm",
   jsx: "automatic",
-  loader: { ".css": "empty" },
+  loader: { ".css": "empty", ".png": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"', "import.meta.env": "{}" },
   plugins: [
     {

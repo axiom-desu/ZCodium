@@ -75,6 +75,31 @@ const serviceValues = {
   },
   botsService: {},
   conversationShareService: {},
+  // 3.16 起根壳挂载项目侧栏，启动期允许只读项目元数据；
+  // 写路径（创建/准备/归属变更）仍一律禁止，由各方法触发 forbidden。
+  projectService: new Proxy(
+    {
+      async readTree() {
+        fixture.calls.push("project.readTree");
+        return { projects: [], tasks: [] };
+      },
+      async readProjects() {
+        fixture.calls.push("project.readProjects");
+        return [];
+      },
+    },
+    {
+      get: (target, key) =>
+        key in target ? target[key] : (..._args) => forbidden(`project.${String(key)}`),
+    },
+  ),
+  zcodeTaskService: new Proxy(
+    { onDynamicWorkspaceEvent: () => ({ dispose() {} }) },
+    {
+      get: (target, key) =>
+        key in target ? target[key] : (..._args) => forbidden(`task.${String(key)}`),
+    },
+  ),
   credentialService: new Proxy(
     {},
     {
