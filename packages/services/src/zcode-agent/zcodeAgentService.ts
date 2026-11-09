@@ -130,6 +130,7 @@ import {
   type ZCodeTaskMode,
 } from "@zcode/shared";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
+import { ZCodeProtocolResponseError } from "./protocolResponseValidation.js";
 import { mergeAutomationMutationToolDenylist } from "#src/zcode-agent/automationToolPolicy.js";
 import { ZCODE_AGENT_RUNTIME_UNAVAILABLE_CODE } from "./zcodeAgent.js";
 import type {
@@ -2971,6 +2972,36 @@ export function createZCodeAgentService(
       });
       try {
         const client = await getClient(params);
+        // 握手期探针：用一次只读 session/list 验证对端 wire 形状。版本不匹配本该在这里暴露，
+        // 而不是等到业务 schema 失败、把 Zod issues 原文当消息渲染给用户。
+        // 只有「协议类」失败才降级 initialize；存储未就绪/超时等保持原可恢复语义。
+        let protocolFailure: ZCodeProtocolResponseError | null = null;
+        try {
+          await client.request(
+            zcodeProtocolMethods.sessionList,
+            { workspace: buildWorkspaceRef(params), limit: 1 },
+            zcodeSessionListResultSchema,
+          );
+        } catch (error) {
+          if (error instanceof ZCodeProtocolResponseError) protocolFailure = error;
+        }
+        if (protocolFailure) {
+          logger.warn(undefined, "ZCode agent 协议不兼容", {
+            durationMs: Date.now() - startedAt,
+            method: protocolFailure.details.method,
+            message: protocolFailure.message,
+            workspaceKey,
+            workspacePath: params.workspacePath,
+          });
+          return {
+            available: false,
+            workspaceKey,
+            protocolName: ZCODE_PROTOCOL_NAME,
+            protocolVersion: ZCODE_PROTOCOL_VERSION,
+            reason: protocolFailure.message,
+            reasonCode: "agent_protocol_mismatch",
+          };
+        }
         logger.info(undefined, "ZCode agent 初始化完成", {
           durationMs: Date.now() - startedAt,
           transportKind: client.transportKind === "websocket" ? "websocket" : "stdio",

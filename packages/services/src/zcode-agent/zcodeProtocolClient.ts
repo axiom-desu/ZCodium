@@ -11,6 +11,7 @@ import type {
 import type { V4Method } from "@zcode/shared/zcode-protocol-v4";
 import type { z } from "zod";
 import type { ZCodeProtocolTransport } from "./zcodeProtocolTransport.js";
+import { normalizeResponseParseFailure } from "./protocolResponseValidation.js";
 
 /** 客户端可发的方法名：旧 zcodeProtocolMethods + v4/*（并存，收敛为 v4）。 */
 type ZCodeProtocolClientMethod = ZCodeProtocolMethod | V4Method;
@@ -332,11 +333,9 @@ export class ZCodeProtocolClient implements IDisposable {
       const parsed = pending.resultSchema ? pending.resultSchema.parse(result) : result;
       pending.resolve(parsed);
     } catch (error) {
-      pending.reject(
-        error instanceof Error
-          ? error
-          : new Error(`ZCode Protocol response parse failed: ${pending.method}`),
-      );
+      // Bug 修复：原来直接 reject ZodError，message 就是 issues 的 JSON 文本，最终被渲染成聊天消息。
+      // 统一收敛为可读的协议错误（含方法名与双方协议身份），并由握手期探针提前暴露版本不匹配。
+      pending.reject(normalizeResponseParseFailure({ method: pending.method, result, error }));
     }
   }
 

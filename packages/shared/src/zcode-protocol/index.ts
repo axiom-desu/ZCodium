@@ -81,6 +81,8 @@ export {
   type HookInvocationRow,
 } from "../zcode-protocol-v4/rows.js";
 
+export * from "./handshake.js";
+
 export const ZCODE_PROTOCOL_NAME = "ZCode Protocol" as const;
 export const ZCODE_PROTOCOL_VERSION = 1 as const;
 // V4 wire 与 legacy 主协议并存；禁止为了 V4 physical framing 改写 legacy 版本。

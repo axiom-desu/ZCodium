@@ -132,8 +132,9 @@ headless 服务器模式，与手机远控互斥。
 
 ## 仍未完成（下一轮必须先做）
 
-1. **协议握手门禁**（截图里的 Zod 原文）：`initialize` 仍未校验对端 `protocolVersion`，schema 失败仍以
-   原始 issues 文本暴露。B3 之后这条依然存在，不是本轮已修项。
+1. **协议握手门禁**（截图里的 Zod 原文）：**已修**，见 `agent-protocol-handshake.md`——
+   `initialize` 增加只读 `session/list` 握手探针，响应解析失败收敛为可读协议错误（含方法名与双方版本），
+   不再把 issues 原文当消息渲染。
 2. **B4 远端 scope**：attachment 固定 local scope，远端工作区依赖窗口 Local Host 的项目投影；
    未在真实 SSH workspace 上验证过浏览器侧导航与 identity 隔离。
 3. **B5 删除旧路径**：`mobile.html`、`web/src/mobile/**`、信封协议、`servicePipe` 仍在（灰度期保留）。
