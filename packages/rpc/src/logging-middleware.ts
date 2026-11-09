@@ -20,6 +20,11 @@ import { Event } from "./foundation.js";
 
 export type RPCLogger = (message: string, ...args: unknown[]) => void;
 
+/** 宿主提供日志出口；框架不绑定平台，不记录 RPC 参数或远端错误文本。 */
+export interface RPCOptions {
+  logger?: RPCLogger;
+}
+
 // ============================================================================
 // LoggingServerChannel —— 装饰单个 IServerChannel，记录 call/listen
 // ============================================================================

@@ -25,6 +25,7 @@ import { Emitter, IDisposable, toDisposable } from "./foundation.js";
 import { ISocket } from "./protocol.js";
 import { PersistentProtocol } from "./persistent-protocol.js";
 import { IPCClient } from "./ipc.js";
+import type { RPCOptions } from "./logging-middleware.js";
 
 // ============================================================================
 // Remote Authority
@@ -271,6 +272,7 @@ export class RemoteAgentConnection implements IDisposable {
     private readonly authority: string,
     private readonly resolverService: RemoteAuthorityResolverService,
     private readonly socketFactory: RemoteSocketFactoryService,
+    private readonly options: RPCOptions = {},
   ) {}
 
   /**
@@ -288,7 +290,7 @@ export class RemoteAgentConnection implements IDisposable {
     this.protocol = new PersistentProtocol(socket);
 
     // Step 4: 包装为 IPCClient
-    this.client = new IPCClient(this.protocol, this.authority);
+    this.client = new IPCClient(this.protocol, this.authority, this.options);
 
     // Step 5: 监听断线，触发重连
     this.protocol.onSocketClose(() => {

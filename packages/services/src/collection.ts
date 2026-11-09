@@ -1,6 +1,10 @@
 import { ProxyChannel, type IChannelServer } from "@zcode/rpc";
 import type { ServiceDescriptor } from "./descriptors.js";
 
+export interface ServiceExposurePolicy {
+  readonly allowedChannels: ReadonlySet<string>;
+}
+
 /**
  * ServiceCollection — 服务注册中心
  *
@@ -26,12 +30,15 @@ export class ServiceCollection {
     return this._services.get(descriptor.channelName) as T | undefined;
   }
 
-  /** 将所有已注册的服务自动暴露为 channel */
+  /** 将已注册服务按可选的显式授权范围暴露为 channel；不传 policy 保持完整服务面。 */
   exposeOnChannelServer(
     server: IChannelServer,
     overrides: ReadonlyMap<string, unknown> = new Map(),
+    exposurePolicy?: ServiceExposurePolicy,
   ): void {
     for (const [channelName, instance] of this._services) {
+      // 手机过去无条件发布全部服务，新注册的高权限频道也会被连带开放；先授权再取 override。
+      if (exposurePolicy && !exposurePolicy.allowedChannels.has(channelName)) continue;
       const exposed = overrides.get(channelName) ?? instance;
       server.registerChannel(
         channelName,

@@ -1,5 +1,5 @@
 import { safeLogArgs } from "@zcode/shared";
-import { MessagePortProtocol, ChannelClient } from "@zcode/rpc";
+import { MessagePortProtocol, ChannelClient, type RPCOptions } from "@zcode/rpc";
 import type { IServiceAccessor } from "@zcode/services";
 import { RemoteServiceAccess } from "./remoteServiceAccess.js";
 import { isRendererProductionBuild } from "./rendererLoggingEnv.js";
@@ -25,10 +25,11 @@ export interface MessagePortServiceConnection {
  */
 export function createMessagePortServiceConnection(
   port: MessagePort,
+  options: RPCOptions = {},
 ): MessagePortServiceConnection {
   logMessagePortDebug("[messageport] creating protocol and client...");
   const protocol = new MessagePortProtocol(port);
-  const client = new ChannelClient(protocol);
+  const client = new ChannelClient(protocol, options);
   client.onDidInitialize(() => {
     logMessagePortDebug("[messageport] ChannelClient received Initialize from server");
   });
@@ -55,6 +56,9 @@ export function createMessagePortServiceConnection(
  * Desktop 模式下，utilityProcess（或 main 进程的远程代理）通过 MessagePort
  * 暴露 ChannelServer，renderer 用此函数建立 ChannelClient 连接。
  */
-export function connectViaMessagePort(port: MessagePort): IServiceAccessor {
-  return createMessagePortServiceConnection(port).services;
+export function connectViaMessagePort(
+  port: MessagePort,
+  options: RPCOptions = {},
+): IServiceAccessor {
+  return createMessagePortServiceConnection(port, options).services;
 }

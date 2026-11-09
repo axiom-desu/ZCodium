@@ -5,6 +5,7 @@ import {
   ChannelClient,
   type IMessagePassingProtocol,
   type ISocket,
+  type RPCOptions,
 } from "@zcode/rpc";
 import type { IServiceAccessor } from "@zcode/services";
 import { RemoteServiceAccess } from "./remoteServiceAccess.js";
@@ -15,7 +16,7 @@ export interface WebSocketConnectionCloseEvent {
   wasClean: boolean;
 }
 
-interface WebSocketConnectionOptions {
+interface WebSocketConnectionOptions extends RPCOptions {
   onClose?: (event: WebSocketConnectionCloseEvent) => void;
   onOpenSocket?: (socket: WebSocket) => void;
 }
@@ -94,12 +95,15 @@ export function connectViaWebSocket(
       settled = true;
       options?.onOpenSocket?.(ws);
       const socket = wrapBrowserWebSocket(ws);
-      resolve(connectViaProtocol(new SocketProtocol(socket)));
+      resolve(connectViaProtocol(new SocketProtocol(socket), options));
     });
   });
 }
 
-export function connectViaProtocol(protocol: IMessagePassingProtocol): IServiceAccessor {
-  const client = new ChannelClient(protocol);
+export function connectViaProtocol(
+  protocol: IMessagePassingProtocol,
+  options: RPCOptions = {},
+): IServiceAccessor {
+  const client = new ChannelClient(protocol, options);
   return new RemoteServiceAccess(client);
 }

@@ -1845,6 +1845,8 @@ export const diagnosticPrefixes: readonly string[] = [
   "Feishu streaming card circuit opened task=",
   "Feishu streaming card sync failed task=",
   "ModelSelection View 刷新失败: ",
+  // RPC 失败诊断只保留固定前缀；channel/event 插值仍由安全 sink 丢弃，不能放行远端错误和参数。
+  "RPC event subscription failed: ",
   "Telegram polling stopped unexpectedly bot=",
   "Unknown channel: ",
   "ZCode Protocol ",

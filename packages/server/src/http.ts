@@ -93,7 +93,9 @@ function setupChannelServer(
 ) {
   const socket = wrapWebSocket(ws);
   const protocol = new SocketProtocol(socket);
-  const rawServer = new ChannelServer(protocol, "server");
+  const rawServer = new ChannelServer(protocol, "server", undefined, undefined, undefined, {
+    logger: log,
+  });
   // 用日志中间件包装，统一记录所有 RPC 调用
   const server = new LoggingChannelServer(rawServer, log);
   const agentService = services.getOptional(IZCodeAgentService);

@@ -217,11 +217,14 @@ export function deserialize(reader: IReader): any {
   }
 }
 
-function encodeRpcJsonValue(_key: string, value: unknown): unknown {
-  if (value instanceof Uint8Array) {
+function encodeRpcJsonValue(this: unknown, key: string, value: unknown): unknown {
+  // Bug 原因：JSON.stringify 先调用 Buffer.toJSON，再调用 replacer，value 已变成数字数组对象。
+  // 从 holder 取原值识别 Buffer（Uint8Array 子类），沿用既有 base64 标记，避免膨胀与二进制类型丢失。
+  const original = (this as Record<string, unknown>)[key];
+  if (original instanceof Uint8Array) {
     return {
       [RPC_NESTED_UINT8_ARRAY_MARKER]: true,
-      [RPC_NESTED_UINT8_ARRAY_BASE64_KEY]: bytesToBase64(value),
+      [RPC_NESTED_UINT8_ARRAY_BASE64_KEY]: bytesToBase64(original),
     };
   }
   return value;

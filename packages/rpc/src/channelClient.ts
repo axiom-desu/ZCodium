@@ -2,6 +2,7 @@ import { VSBuffer } from "./buffer.js";
 import { CancellationToken, Event, Emitter, type IDisposable } from "./foundation.js";
 import { BufferReader, BufferWriter, deserialize, serialize } from "./serialization.js";
 import type { IMessagePassingProtocol } from "./protocol.js";
+import type { RPCOptions } from "./logging-middleware.js";
 import {
   type IChannel,
   type IChannelClient,
@@ -36,7 +37,10 @@ export class ChannelClient implements IChannelClient, IDisposable {
   private readonly _onDidInitialize = new Emitter<void>();
   readonly onDidInitialize = this._onDidInitialize.event;
 
-  constructor(private protocol: IMessagePassingProtocol) {
+  constructor(
+    private protocol: IMessagePassingProtocol,
+    private readonly options: RPCOptions = {},
+  ) {
     this.protocolListener = this.protocol.onMessage((msg) => this.onBuffer(msg));
   }
 
@@ -104,6 +108,7 @@ export class ChannelClient implements IChannelClient, IDisposable {
                 "details",
                 "taskId",
                 "traceId",
+                "profileId",
               ] as const;
               for (const key of passthroughKeys) {
                 const value = response.data[key];
@@ -175,7 +180,18 @@ export class ChannelClient implements IChannelClient, IDisposable {
     });
 
     this.handlers.set(id, (response) => {
-      emitter.fire((response as { data: any }).data);
+      if (response.type === ResponseType.EventFire) {
+        emitter.fire(response.data);
+      } else if (response.type === ResponseType.EventError) {
+        // Bug 原因：订阅拒绝不是业务事件；必须移除 handler 和活动请求，防止迟到事件与订阅泄漏。
+        this.handlers.delete(id);
+        this.activeRequests.delete(emitter);
+        emitter.dispose();
+        // 远端错误文本可能回显 RPC 参数/凭据；日志只保留路由与请求编号。
+        this.options.logger?.(`RPC event subscription failed: ${channelName}.${name}`, {
+          requestId: id,
+        });
+      }
     });
 
     return emitter.event;
@@ -213,13 +229,14 @@ export class ChannelClient implements IChannelClient, IDisposable {
   }
 
   private onBuffer(message: VSBuffer): void {
+    // Bug 原因：双向 protocol 同时挂 client/server；先按头路由，避免反向请求 body 被重复解码。
     const reader = new BufferReader(message);
     const header = deserialize(reader);
-    const body = deserialize(reader);
     const type = header[0] as ResponseType;
 
     switch (type) {
-      case ResponseType.Initialize:
+      case ResponseType.Initialize: {
+        const body = deserialize(reader);
         // 老 peer 的 Initialize 无 body；只接受显式 true，不探测不存在的 channel。
         this.initializedCapabilities =
           body && typeof body === "object"
@@ -229,14 +246,16 @@ export class ChannelClient implements IChannelClient, IDisposable {
             : {};
         this.onResponse({ type: ResponseType.Initialize });
         return;
+      }
       case ResponseType.PromiseSuccess:
       case ResponseType.PromiseError:
       case ResponseType.EventFire:
+      case ResponseType.EventError:
       case ResponseType.PromiseErrorObj:
         this.onResponse({
           type,
           id: header[1],
-          data: body,
+          data: deserialize(reader),
         } as IRawResponse);
         return;
     }
