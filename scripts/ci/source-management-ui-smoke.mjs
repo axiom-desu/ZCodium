@@ -189,6 +189,15 @@ const management = {
   },
   async connectProfile(profileId, options = {}) {
     events.push({ type: "connectProfile", profileId, options: clone(options) });
+    if (scenario === "unsupported-auth" || scenario === "unsupported-platform") {
+      throw codeError(
+        scenario === "unsupported-auth" ? "remote-authentication-unsupported" : "remote-platform-unsupported",
+        "synthetic unsupported failure",
+      );
+    }
+    if (scenario === "ordinary-auth") {
+      throw codeError("remote-authentication-failed", "synthetic password rejected");
+    }
     if (scenario === "install") {
       if (options.confirmSourceServerInstall) {
         throw codeError("remote-target-changed", "target changed while confirming");
@@ -779,10 +788,43 @@ try {
   assert.equal(JSON.stringify(profileConnect.target).includes("profile-secret"), true);
   await page.getByTestId("ssh-success").waitFor();
 
+  // 7. 不支持的 2FA/平台复用错误面板，不弹补密码，不进入安装或成功路径。
+  for (const [scenario, title, reason] of [
+    [
+      "unsupported-auth",
+      "Unsupported authentication method",
+      "Use a private key or SSH agent instead of re-entering the password.",
+    ],
+    [
+      "unsupported-platform",
+      "Unsupported remote platform",
+      "Use a supported Linux or macOS environment.",
+    ],
+    ["ordinary-auth", "Authentication failed", "synthetic password rejected"],
+  ]) {
+    await openSshSettings(page, scenario);
+    await page.getByTestId("ssh-connect-button").click();
+    await page.getByTestId("ssh-error").getByText(new RegExp(title, "u")).waitFor();
+    assert.equal((await page.getByTestId("ssh-error").innerText()).includes(reason), true);
+    assert.equal(
+      await page.getByTestId("ssh-password-input").count(),
+      0,
+      "failure must not automatically reopen a password form",
+    );
+    assert.equal(await page.getByTestId("source-install-panel").count(), 0);
+    assert.equal(await page.evaluate(() => window.__hasPendingConfirm()), false);
+    events = await pageEvents(page);
+    assert.equal(events.filter((event) => event.type === "connectProfile").length, 1);
+    assert.equal(
+      events.some((event) => event.type === "onConnect"),
+      false,
+    );
+  }
+
   assert.deepEqual(externalRequests, [], "source UI smoke must not request external network");
   assert.deepEqual(pageErrors, [], "source UI smoke must not emit uncaught browser errors");
   console.log(
-    "PASS real Source UI browser flow: install preview + expectedTarget race zero execute; background explicit continue; late close only releases own session; server token target not profile/persisted; same-name Sources keep handshake ids/paths distinct and rename stable; late Source success writes no history; force only after confirm; saved profile credentials via credential port",
+    "PASS real Source UI browser flow: install preview + expectedTarget race zero execute; background explicit continue; late close only releases own session; server token target not profile/persisted; same-name Sources keep handshake ids/paths distinct and rename stable; late Source success writes no history; force only after confirm; saved profile credentials via credential port; unsupported auth/platform show dedicated reasons without a password prompt; ordinary auth remains unchanged",
   );
   console.log("Rerun: node scripts/ci/source-management-ui-smoke.mjs");
 } finally {

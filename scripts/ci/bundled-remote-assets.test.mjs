@@ -19,6 +19,7 @@ test("a relocatable bundle includes only verified archives and a manifest, retai
   assert.deepEqual((await readdir(options.outputDirectory)).sort(), [
     "components",
     "manifest-linux-x64.json",
+    "releases",
   ]);
   for (const component of manifest.components) {
     assert.deepEqual(

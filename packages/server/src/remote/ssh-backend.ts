@@ -18,7 +18,10 @@ import {
   normalizeRemotePlatform,
   resolveRemotePlatform,
 } from "@zcode/server/remote/detectEnv.js";
-import { createCloseEventController } from "@zcode/server/remote/closeEvent.js";
+import {
+  createCloseEventController,
+  resolveRemoteExitCode,
+} from "@zcode/server/remote/closeEvent.js";
 import {
   buildPosixShellExecCommand,
   quotePosixShellArg,
@@ -98,13 +101,18 @@ function throwIfUploadAborted(signal?: AbortSignal): void {
 
 export class SSHBackend implements IRemoteBackend {
   private client: SSHClient;
+  private clientUsed = false;
   private connected = false;
   private readonly config: ConnectConfig;
+  private readonly options: SSHBackendOptions;
   private homeDirPromise: Promise<string> | null = null;
   private execUploadOnly = false;
   private disposed = false;
   private hasEverConnected = false;
   private disconnectReported = false;
+  private additionalVerificationPrompted = false;
+  private connectingPromise: Promise<void> | null = null;
+  private failPendingConnect: ((error: Error) => void) | undefined;
   // 本次连接尝试中 hostVerifier 记录的拒绝原因。ssh2 对 verify(false) 只抛固定的
   // "Host denied (verification failed)"，分不清密钥变更与存储故障；verifier 先行记录，
   // onClientError 优先把它换成可区分、可操作的产品错误。
@@ -112,35 +120,66 @@ export class SSHBackend implements IRemoteBackend {
   private readonly disconnectEmitter = new Emitter<RemoteDisconnectEvent>();
   readonly onDidDisconnect = this.disconnectEmitter.event;
 
-  private readonly onClientError = (error: unknown): void => {
-    if (this.disposed) {
+  private isCurrentClient(client: SSHClient): boolean {
+    return !this.disposed && this.client === client;
+  }
+
+  private normalizeConnectError(error: unknown): Error {
+    return this.hostKeyRejection
+      ? formatHostKeyRejectionError(this.hostKeyRejection, getSSHKnownHostsPath())
+      : normalizeSSHConnectError(error, {
+          established: this.connected,
+          additionalVerificationPrompted: this.additionalVerificationPrompted,
+        });
+  }
+
+  private onClientError(client: SSHClient, error: unknown): void {
+    if (!this.isCurrentClient(client)) {
       // ssh2 在 ready timeout 后销毁 socket 时，close/end 阶段可能再次发出 error。
       // dispose 期间保留监听器只为吸收这类迟到事件，不能再向上层重复报告或触发未捕获异常。
       return;
     }
-    const normalizedError = this.hostKeyRejection
-      ? formatHostKeyRejectionError(this.hostKeyRejection, getSSHKnownHostsPath())
-      : normalizeSSHConnectError(error);
+    const normalizedError = this.normalizeConnectError(error);
     // ready 之后如果底层连接抖动，ssh2 仍会发出 "error" 事件。
     // 若没有常驻监听，Node 会把它当成未捕获异常直接抛出，可能导致 host 进程崩溃。
     // 这里先记录错误详情再上报断连；上层收到断连后会退出 host，反过来会丢掉真实 error 文案。
     console.error(...safeLogArgs(["[ssh] client error:", normalizedError]));
+    this.failPendingConnect?.(normalizedError);
     this.reportDisconnect("error", normalizedError);
-  };
+  }
 
-  private readonly onClientClose = (): void => {
-    this.reportDisconnect("close");
-  };
+  private onClientDisconnect(client: SSHClient, reason: "end" | "close"): void {
+    if (!this.isCurrentClient(client)) return;
+    // ssh2 收到 banner 后 FIN 可只发 end/close，并清除 readyTimeout；必须由本次 owner 直接拒绝等待。
+    this.failPendingConnect?.(this.normalizeConnectError(new Error("SSH 连接在就绪前结束")));
+    this.reportDisconnect(reason);
+  }
 
-  private readonly onClientEnd = (): void => {
-    this.reportDisconnect("end");
-  };
+  private createClient(): SSHClient {
+    const client = new SSHClient();
+    // 一个 Client 仅 connect 一次：ssh2 的旧 socket close 会清空 Client 当前 callbacks，
+    // 仅在复用 Client 上加 generation 判断不足以保护后继 channel，必须隔离底层传输对象。
+    client.on("error", (error: unknown) => this.onClientError(client, error));
+    client.on("close", () => this.onClientDisconnect(client, "close"));
+    client.on("end", () => this.onClientDisconnect(client, "end"));
+    if (typeof this.options.password === "string" && this.options.password.length > 0) {
+      const respond = createKeyboardInteractiveResponder(this.options.password, () => {
+        this.additionalVerificationPrompted = true;
+      });
+      (client as unknown as { on(event: string, listener: (...args: unknown[]) => void): void }).on(
+        "keyboard-interactive",
+        (...args: unknown[]) => {
+          if (this.isCurrentClient(client)) {
+            (respond as unknown as (...args: unknown[]) => void)(...args);
+          }
+        },
+      );
+    }
+    return client;
+  }
 
-  constructor(options: SSHBackendOptions) {
-    this.client = new SSHClient();
-    this.client.on("error", this.onClientError);
-    this.client.on("close", this.onClientClose);
-    this.client.on("end", this.onClientEnd);
+  private createConnectConfig(client: SSHClient): ConnectConfig {
+    const options = this.options;
     // SSH 主机密钥 TOFU 校验（spec: ssh-remote-hardening.md 缺陷 1）。
     // 不注入 hostVerifier 时 ssh2 接受任意主机密钥，中间人可冒充目标主机完成密钥交换，
     // 用户密码 / 私钥口令会直接交给冒充者——这正是会执行任意命令的远端 Agent 部署链路。
@@ -156,9 +195,16 @@ export class SSHBackend implements IRemoteBackend {
         password: options.password,
       } satisfies SSHConnectOptions,
       onRejection: (rejection) => {
-        this.hostKeyRejection = rejection;
+        // TOFU 存储为异步 IO：旧 verifier 的拒绝不能覆盖新尝试的判定，verify(false) 仍 fail-closed。
+        if (this.isCurrentClient(client)) this.hostKeyRejection = rejection;
       },
     });
+    return { ...this.config, hostVerifier };
+  }
+
+  constructor(options: SSHBackendOptions) {
+    this.options = { ...options };
+    this.client = this.createClient();
     this.config = buildSSHConnectConfig({
       host: options.host,
       port: options.port,
@@ -167,7 +213,6 @@ export class SSHBackend implements IRemoteBackend {
       passphrase: options.privateKeyPassphrase,
       password: options.password,
       agent: options.agent,
-      hostVerifier,
     });
     if (resolveZCodeRuntimeEnv(process.env) === "development") {
       this.config.debug = (message: string) => {
@@ -179,20 +224,6 @@ export class SSHBackend implements IRemoteBackend {
         }
         console.debug(...safeLogArgs([`[ssh2] ${message}`]));
       };
-    }
-    if (typeof options.password === "string" && options.password.length > 0) {
-      // `ssh2` 类型定义遗漏了 keyboard-interactive 事件，但运行时确实支持。
-      // 这里局部转成 EventEmitter 接口，避免为了一个事件把整段代码降级到 any。
-      (
-        this.client as unknown as {
-          on(event: string, listener: (...args: unknown[]) => void): void;
-        }
-      ).on(
-        "keyboard-interactive",
-        createKeyboardInteractiveResponder(options.password) as unknown as (
-          ...args: unknown[]
-        ) => void,
-      );
     }
   }
 
@@ -207,29 +238,48 @@ export class SSHBackend implements IRemoteBackend {
     // 调用 ensureConnected。ssh2 Client 支持 end 后再次 connect，必须在 backend 边界阻止旧凭据复活。
     this.assertNotDisposed();
     if (this.connected) return;
-    return new Promise((resolve, reject) => {
+    if (this.connectingPromise) return this.connectingPromise;
+    if (this.clientUsed) this.client = this.createClient();
+    const client = this.client;
+    this.clientUsed = true;
+    this.additionalVerificationPrompted = false;
+    this.hostKeyRejection = null;
+    // backend 唯一失败出口供 error/end/close/dispose 共用；所有 waiter 只等待这个 promise。
+    const connecting = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const settle = (): boolean => {
+        if (settled) return false;
+        settled = true;
+        client.off("ready", handleReady);
+        this.failPendingConnect = undefined;
+        return true;
+      };
       const handleReady = () => {
-        this.client.off("error", handleConnectError);
-        if (this.disposed) {
-          // dispose 与 ssh2 ready 可能交错；迟到的 ready 若重新标记 connected，
-          // 后续 detect 会继续使用已取消连接的旧凭据。再次关闭 socket，并让原调用失败。
-          this.client.end();
-          reject(new Error("SSH backend 已释放，无法重新建立连接"));
-          return;
-        }
+        if (!this.isCurrentClient(client) || !settle()) return;
         this.connected = true;
         this.hasEverConnected = true;
         this.disconnectReported = false;
         resolve();
       };
-      const handleConnectError = (error: unknown) => {
-        this.client.off("ready", handleReady);
-        reject(normalizeSSHConnectError(error));
+      const fail = (error: Error) => {
+        if (!settle()) return;
+        reject(error);
+        client.end();
       };
-      this.client.once("ready", handleReady);
-      this.client.once("error", handleConnectError);
-      this.client.connect(this.config);
+      this.failPendingConnect = fail;
+      client.once("ready", handleReady);
+      try {
+        client.connect(this.createConnectConfig(client));
+      } catch (error) {
+        fail(this.normalizeConnectError(error));
+      }
     });
+    this.connectingPromise = connecting;
+    const clear = () => {
+      if (this.connectingPromise === connecting) this.connectingPromise = null;
+    };
+    void connecting.then(clear, clear);
+    return connecting;
   }
 
   private reportDisconnect(reason: RemoteDisconnectReason, error?: Error): void {
@@ -330,16 +380,17 @@ export class SSHBackend implements IRemoteBackend {
           if (code !== 0) {
             console.warn(...safeLogArgs([`[ssh] exec channel failed: code=${code}`]));
           }
-          onClose.fire(code ?? 0);
+          onClose.fire(code);
         };
 
         // ssh2 channels may fire 'exit' before 'close', or sometimes
         // only one of them. Listen to both to be safe.
-        channel.on("exit", (code: number | null) => {
-          fireOnce(code ?? 0);
+        // signal 或缺少 exit-status 不能当成功，见 resolveRemoteExitCode。
+        channel.on("exit", (code: number | null, signal?: string) => {
+          fireOnce(resolveRemoteExitCode(code, signal));
         });
-        channel.on("close", () => {
-          fireOnce(0);
+        channel.on("close", (code?: number | null, signal?: string) => {
+          fireOnce(resolveRemoteExitCode(code, signal));
         });
 
         resolve({
@@ -402,12 +453,11 @@ export class SSHBackend implements IRemoteBackend {
         // ssh2 在短命令场景下可能先发 exit，再异步派发 stdout data。
         // 不能在 exit 事件直接 finish：会把后续 data 丢掉，导致 platform/arch 偶发识别为空。
         // 这里改为只在 close 统一收尾，并优先使用 exit 记录的真实退出码，避免误判成功。
-        channel.on("exit", (code: number | null) => {
-          exitCode = code ?? 0;
+        channel.on("exit", (code: number | null, signal?: string) => {
+          exitCode = resolveRemoteExitCode(code, signal);
         });
-        channel.on("close", (code: number | null) => {
-          const resolvedCode = exitCode ?? code ?? 0;
-          finish(resolvedCode);
+        channel.on("close", (code?: number | null, signal?: string) => {
+          finish(exitCode ?? resolveRemoteExitCode(code, signal));
         });
       });
     });
@@ -646,12 +696,12 @@ export class SSHBackend implements IRemoteBackend {
       return;
     }
     this.disposed = true;
+    // 先摘掉 ready 监听并拒绝在途调用，迟到 ready 不得重新使用已取消连接的凭据。
+    this.failPendingConnect?.(new Error("SSH backend 已释放，无法重新建立连接"));
     // 首次握手失败后，ssh2 可能在 socket end/close 之后继续发出 error。
     // dispose 后保留 onClientError 作为 no-op sink，不能按 end/close 事件时序提前移除，
     // 否则迟到事件会逃逸为 uncaughtException，让共享 Window Host 连带退出其它 workspace。
     // client 只由当前 backend 持有，监听器会随 client 一起回收；此处优先保证退役阶段不崩溃。
-    this.client.off("close", this.onClientClose);
-    this.client.off("end", this.onClientEnd);
     this.client.end();
     this.connected = false;
     this.disconnectEmitter.dispose();

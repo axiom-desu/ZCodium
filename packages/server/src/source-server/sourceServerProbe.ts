@@ -114,6 +114,8 @@ export async function probeSourceServer(
     ),
   );
   if (result.exitCode !== 0) {
+    // Bug 原因：Docker daemon 在命令执行中失效时不能误报设备环境不满足要求。
+    await backend.diagnoseExecFailure?.();
     throw new SourceServerProbeEnvironmentError(
       result.stderr.trim() || "Source Server environment probe failed",
     );
@@ -126,13 +128,8 @@ export async function probeSourceServer(
     arch: normalizeRemoteArch(sections.get("ARCH") ?? ""),
     ...(sections.get("ROOT") ? { installPath: sections.get("ROOT") } : {}),
   };
-  try {
-    assertSupportedRemoteEnvironment(environment);
-  } catch (error) {
-    throw new SourceServerProbeEnvironmentError(
-      error instanceof Error ? error.message : String(error),
-    );
-  }
+  // 平台 typed error 必须原样穿过 probe，不能被预检包装丢掉公开码。
+  assertSupportedRemoteEnvironment(environment);
   assertSupportedGlibc(environment.platform, sections.get("LIBC") ?? "");
   const installed = sections.get("INSTALLED") === "1";
   if (!installed) return { ...environment, installed: false };

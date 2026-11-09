@@ -1,3 +1,4 @@
+import { constants } from "node:os";
 import { Emitter, type Event } from "@zcode/rpc";
 
 interface CloseEventController {
@@ -35,4 +36,19 @@ export function createCloseEventController(): CloseEventController {
   };
 
   return { event, fire };
+}
+
+/**
+ * Bug 原因：code ?? 0 把 signal 终止、SSH 缺少 exit-status 的命令误报成功。
+ * 依 shell 约定保留数字退出码、映射 signal；没有可用状态时返回 OpenSSH 的失败码 255。
+ */
+export function resolveRemoteExitCode(
+  code: number | null | undefined,
+  signal: string | null | undefined,
+): number {
+  if (typeof code === "number") return code;
+  const signalNumber = signal
+    ? constants.signals[signal as keyof typeof constants.signals]
+    : undefined;
+  return typeof signalNumber === "number" ? 128 + signalNumber : 255;
 }

@@ -1,8 +1,10 @@
 /**
  * source-server 标准调用示例：agent 靠模仿写代码，这里放的就是该模仿的那份。
  */
+import type { RemoteConnectionDomainError } from "./index.js";
 import {
   connectionProfileSchema,
+  publicZCodeErrorCodeSchema,
   createCompatibilityManifest,
   evaluateSourceServerCompatibility,
   getSourceServerUpdateTarget,
@@ -32,6 +34,22 @@ export function exampleUpdateRequest(profile: ConnectionProfile): SourceServerUp
     force: true,
     expectedTarget: getSourceServerUpdateTarget(profile.target),
   });
+}
+
+/** 不支持额外验证不是缺少密码；消费者保留专用码并禁止自动重试。 */
+export function exampleUnsupportedAuthentication() {
+  return {
+    code: publicZCodeErrorCodeSchema.parse("remote-authentication-unsupported"),
+    retryable: false,
+  };
+}
+
+/** 已完成 daemon 领域分类：unknown 不是可继续猜测 cause 的普通包装。 */
+export function exampleDockerDaemonFailure(cause: unknown) {
+  return Object.assign(new Error("Docker 环境不可用", { cause }), {
+    code: "remote-connection-unknown",
+    remoteConnectionErrorKind: "domain",
+  } satisfies RemoteConnectionDomainError);
 }
 
 export function exampleCompatibility() {

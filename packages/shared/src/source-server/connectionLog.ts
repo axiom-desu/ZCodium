@@ -4,9 +4,10 @@ const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Z
 function redactUnquotedPath(value: string): string {
   // 裸路径可能含空格，不能把空格后的用户名/目录当成正文放行。只保留机器可识别的
   // 诊断尾部和已经脱敏的字段；其他无法消歧的尾部继续保守过滤，生产者应给路径加引号。
+  // Bug 原因：Docker 裸 socket 路径会连同 connect errno 被吞掉；仅放行明确分隔的固定原因。
   const suffix =
     value.match(
-      /(?:\s+(?:failed with exit code -?\d+|permission denied|no space left on device|read-only file system|[\w-]+=\[redacted\]))+\.?$/iu,
+      /(?:: connect: (?:no such file or directory|connection refused|permission denied)|(?:\s+(?:failed with exit code -?\d+|permission denied|no space left on device|read-only file system|[\w-]+=\[redacted\]))+)\.?$/iu,
     )?.[0] ?? "";
   return `[redacted-path]${suffix}`;
 }
@@ -48,7 +49,8 @@ export function sanitizeRemoteConnectionLog(
         "$1[redacted]",
       )
       .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "[redacted]")
-      .replace(/(?:https?|wss?|file):\/\/[^\s"'<>]+/gi, "[redacted-url]")
+      // Bug 原因：Docker daemon URL 的 unix/npipe/tcp 未被识别，会被盘符规则误吞后续诊断。
+      .replace(/(?:https?|wss?|file|unix|npipe|tcp):\/\/[^\s"'<>]+/gi, "[redacted-url]")
       // 引号提供精确边界，保留后续正文；无引号时不能靠空格猜测路径结束位置。
       .replace(/"(?:~?\/|[A-Za-z]:[\\/]|\\\\)(?:\\[^\r\n]|[^"\\\r\n])*"/g, "[redacted-path]")
       .replace(/'(?:~?\/|[A-Za-z]:[\\/]|\\\\)[^'\r\n]*'/g, "[redacted-path]")

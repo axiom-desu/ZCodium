@@ -162,9 +162,14 @@ export function parseDockerContainerList(rawOutput: string): DockerContainerInfo
     });
 }
 
+/** 连接路径保留 Docker CLI 原始失败原因，发现入口仍可使用布尔接口。 */
+export async function probeDockerDaemon(): Promise<void> {
+  await execDocker(["version", "--format", "{{.Server.Version}}"]);
+}
+
 export async function isDockerAvailable(): Promise<boolean> {
   try {
-    await execDocker(["version", "--format", "{{.Server.Version}}"]);
+    await probeDockerDaemon();
     return true;
   } catch {
     // 之前只把“docker 命令不存在”视为不可用，daemon 未启动时仍会误判成可用，

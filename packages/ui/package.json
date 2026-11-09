@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./useTheme": "./src/useTheme.ts",
+    "./logger": "./src/logger.ts",
     "./conversation-share-readonly": "./src/v4/ConversationShareReadonlyTimeline.tsx",
     "./oauth-provider-icon": "./src/lib/oauthProviderIcon.tsx",
     "./message": "./src/components/ai-elements/message.tsx",

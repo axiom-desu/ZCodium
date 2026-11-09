@@ -11,6 +11,7 @@ import {
   type SourceServerReleaseDescriptor,
 } from "@zcode/shared";
 import type { ServerReleaseAsset } from "@zcode/server/source-server";
+import { createUnsupportedRemotePlatformError } from "@zcode/server/remote/remotePlatformSupport.js";
 
 export interface SourceServerReleaseFetchResponse {
   ok: boolean;
@@ -21,6 +22,70 @@ export interface SourceServerReleaseFetchResponse {
 
 /** 生产走全局 fetch；测试注入 loopback fixture fetch。 */
 export type SourceServerReleaseFetch = (url: string) => Promise<SourceServerReleaseFetchResponse>;
+
+export interface SourceServerReleaseRuntimeOptions {
+  expectedVersion: string;
+  /** Main 已按开发/安装布局解析的资产根目录；Host 不猜 resourcesPath。 */
+  bundledRemoteAssetsDir?: string;
+  requestedArtifactPolicy?: SourceServerArtifactPolicy;
+  cacheRoot?: string;
+  cdnBaseUrl?: string;
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+}
+
+/** 仅选择 R3 静态来源；真正的版本、target、size/hash 校验仍由下方 resolver 负责。 */
+export async function resolveSourceServerReleaseRuntimeOptions(
+  options: SourceServerReleaseRuntimeOptions,
+): Promise<SourceServerReleaseResolverOptions> {
+  const { expectedVersion } = options;
+  const env = options.env ?? process.env;
+  const cwd = options.cwd ?? process.cwd();
+  const candidates = [
+    env["ZCODE_SOURCE_SERVER_RELEASE_DIR"]?.trim(),
+    // 修复：发行版 cwd 与源码树无关，必须消费 Main 注入的真实随包资产目录。
+    options.bundledRemoteAssetsDir
+      ? join(options.bundledRemoteAssetsDir, "releases", expectedVersion)
+      : undefined,
+    join(cwd, "packages", "desktop", "mock-cdn", "releases", expectedVersion),
+    join(cwd, "mock-cdn", "releases", expectedVersion),
+    join(cwd, "packages", "desktop", "bundled-remote-assets", "releases", expectedVersion),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  let localReleaseDir: string | undefined;
+  for (const candidate of candidates) {
+    if (await pathExists(join(candidate, SOURCE_SERVER_RELEASE_DESCRIPTOR_FILE_NAME))) {
+      localReleaseDir = candidate;
+      break;
+    }
+  }
+  const envBases = (env["ZCODE_SOURCE_SERVER_RELEASE_BASE_URL"] ?? "")
+    .split(",")
+    .map((base) => base.trim())
+    .filter(Boolean);
+  const base = options.cdnBaseUrl?.trim();
+  const releaseBaseUrls =
+    envBases.length > 0
+      ? envBases
+      : base
+        ? [`${base.replace(/\/+$/u, "")}/releases/${expectedVersion}`]
+        : [];
+  const requested = options.requestedArtifactPolicy ?? env["ZCODE_SOURCE_SERVER_ARTIFACT_POLICY"];
+  const artifactPolicy =
+    requested === "development-content-addressed" || requested === "release-versioned"
+      ? requested
+      : releaseBaseUrls.length > 0
+        ? "release-versioned"
+        : localReleaseDir
+          ? "development-content-addressed"
+          : "release-versioned";
+  return {
+    expectedVersion,
+    artifactPolicy,
+    ...(localReleaseDir ? { localReleaseDir } : {}),
+    ...(releaseBaseUrls.length > 0 ? { releaseBaseUrls } : {}),
+    ...(options.cacheRoot ? { cacheRoot: options.cacheRoot } : {}),
+  };
+}
 
 export interface SourceServerReleaseResolverOptions {
   /** 本仓 fork 的构建版本；descriptor 必须与它完全一致，禁止回退上游制品。 */
@@ -45,7 +110,9 @@ function supportedTarget(probe: {
     target !== "darwin-x64" &&
     target !== "darwin-arm64"
   ) {
-    throw new Error(`Unsupported Source Server release target: ${target}`);
+    throw createUnsupportedRemotePlatformError(
+      `Unsupported Source Server release target: ${target}`,
+    );
   }
   return target;
 }

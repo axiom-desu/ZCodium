@@ -7,6 +7,12 @@ export interface RemoteConnectionFailure {
   retryable?: boolean;
 }
 
+/** 适配器已确认的领域分类；cause 保留用于诊断，但不再参与跨领域猜码。 */
+export interface RemoteConnectionDomainError {
+  readonly code: PublicZCodeErrorCode;
+  readonly remoteConnectionErrorKind: "domain";
+}
+
 const systemCodes: Record<string, PublicZCodeErrorCode> = {
   ECONNREFUSED: "remote-host-unreachable",
   EHOSTUNREACH: "remote-host-unreachable",
@@ -53,16 +59,24 @@ export function normalizeRemoteConnectionError(
           : "";
     const rawCode = typeof record.code === "string" ? record.code : "";
     const explicitCode = isPublicZCodeErrorCode(rawCode) ? rawCode : undefined;
-    // 适配器已确认的领域原因优先于 cause 的文本猜测；阶段包装仍继续寻找更具体的内层原因。
+    // Bug 原因：Docker daemon 已确认为领域 unknown，但下钻 socket cause 会误报容器文件权限。
+    // 显式领域边界保留其公开码；普通 unknown/阶段包装仍可寻找更具体的内层原因。
     if (
       explicitCode &&
-      explicitCode !== "remote-connection-unknown" &&
-      !Object.values(phaseCodes).includes(explicitCode)
+      (record.remoteConnectionErrorKind === "domain" ||
+        (explicitCode !== "remote-connection-unknown" &&
+          !Object.values(phaseCodes).includes(explicitCode)))
     ) {
       return {
         code: explicitCode,
         message: sanitizeRemoteConnectionLog(message) || "Remote connection failed",
-        ...(typeof record.retryable === "boolean" ? { retryable: record.retryable } : {}),
+        // Bug 原因：不支持的认证/平台不能沿用包装层的 retryable，尤其不能诱导补密码。
+        ...(explicitCode === "remote-authentication-unsupported" ||
+        explicitCode === "remote-platform-unsupported"
+          ? { retryable: false }
+          : typeof record.retryable === "boolean"
+            ? { retryable: record.retryable }
+            : {}),
       };
     }
     for (const child of [

@@ -1993,6 +1993,12 @@ const enUS: Record<string, string> = {
   "source.error.credentialsRequired.title": "Credentials required",
   "source.error.credentialsRequired.reason":
     "Enter the credentials for this saved connection again.",
+  "source.error.authenticationUnsupported.title": "Unsupported authentication method",
+  "source.error.authenticationUnsupported.reason":
+    "The server requires additional verification (such as a one-time code), which is not supported. Use a private key or SSH agent instead of re-entering the password.",
+  "source.error.platformUnsupported.title": "Unsupported remote platform",
+  "source.error.platformUnsupported.reason":
+    "This device platform or architecture is not supported. Use a supported Linux or macOS environment.",
   "source.error.authenticationFailed.title": "Authentication failed",
   "source.error.authenticationFailed.reason": "Check the token or credentials for this device.",
   "source.error.hostUnreachable.title": "Device unreachable",

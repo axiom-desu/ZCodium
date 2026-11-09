@@ -2,6 +2,7 @@
 import { hmac } from "@noble/hashes/hmac";
 import { sha256 } from "@noble/hashes/sha256";
 import { RemoteServiceAccess } from "@zcode/client";
+import { logger } from "@zcode/ui/logger";
 import { ChannelClient, VSBuffer, ProxyChannel } from "@zcode/rpc";
 import { IMobileProjectDirectoryService, type MobileProjectRoot } from "@zcode/client";
 import { WorkspaceBridgeLifecycle } from "./workspaceBridgeLifecycle.js";
@@ -566,54 +567,57 @@ export class MobileRemoteControlClient {
 
   private buildServiceAccessor(): RemoteServiceAccess {
     const generation = this.bridge.version;
-    this.channelClient = new ChannelClient({
-      onMessage: (listener) => {
-        const onMessage = (data: unknown) => {
-          if (this.bridge.isCurrent(generation) && data instanceof Uint8Array) {
-            listener(VSBuffer.wrap(data));
-          }
-        };
-        this.onRpcMessage = onMessage;
-        return {
-          dispose: () => {
-            if (this.onRpcMessage === onMessage) this.onRpcMessage = null;
-          },
-        };
-      },
-      send: (buffer) => {
-        if (this.disposed || !this.bridge.isCurrent(generation)) return;
-        const seq = this.rpcSeq + 1;
-        let frames: WebRemoteControlRpcMessageFrame[];
-        try {
-          frames = encodeWebRemoteControlRpcFrames(
-            encodeRpcMessage(new Uint8Array(buffer.buffer)),
-            {
-              streamId: this.rpcStreamId,
-              seq,
+    this.channelClient = new ChannelClient(
+      {
+        onMessage: (listener) => {
+          const onMessage = (data: unknown) => {
+            if (this.bridge.isCurrent(generation) && data instanceof Uint8Array) {
+              listener(VSBuffer.wrap(data));
+            }
+          };
+          this.onRpcMessage = onMessage;
+          return {
+            dispose: () => {
+              if (this.onRpcMessage === onMessage) this.onRpcMessage = null;
             },
-          );
-        } catch (error) {
-          this.notifyBridgeDegraded({
-            zcode_type: "bridge-degraded",
-            bridgeSessionId: this.rpcStreamId,
-            reason: error instanceof Error ? error.message : "rpc-transport-fault",
-          });
-          return;
-        }
-        // 入队失败就不发出半条：seq 不推进，对端期望值也不会跳过。
-        const recorded = this.rpcReplayBuffer.record(seq, frames);
-        if (!recorded.accepted) {
-          this.notifyBridgeDegraded({
-            zcode_type: "bridge-degraded",
-            bridgeSessionId: this.rpcStreamId,
-            reason: recorded.reasonCode,
-          });
-          return;
-        }
-        this.rpcSeq = seq;
-        this.emitRpcFrames(frames);
+          };
+        },
+        send: (buffer) => {
+          if (this.disposed || !this.bridge.isCurrent(generation)) return;
+          const seq = this.rpcSeq + 1;
+          let frames: WebRemoteControlRpcMessageFrame[];
+          try {
+            frames = encodeWebRemoteControlRpcFrames(
+              encodeRpcMessage(new Uint8Array(buffer.buffer)),
+              {
+                streamId: this.rpcStreamId,
+                seq,
+              },
+            );
+          } catch (error) {
+            this.notifyBridgeDegraded({
+              zcode_type: "bridge-degraded",
+              bridgeSessionId: this.rpcStreamId,
+              reason: error instanceof Error ? error.message : "rpc-transport-fault",
+            });
+            return;
+          }
+          // 入队失败就不发出半条：seq 不推进，对端期望值也不会跳过。
+          const recorded = this.rpcReplayBuffer.record(seq, frames);
+          if (!recorded.accepted) {
+            this.notifyBridgeDegraded({
+              zcode_type: "bridge-degraded",
+              bridgeSessionId: this.rpcStreamId,
+              reason: recorded.reasonCode,
+            });
+            return;
+          }
+          this.rpcSeq = seq;
+          this.emitRpcFrames(frames);
+        },
       },
-    });
+      { logger: logger.lifecycle.warn },
+    );
     return new RemoteServiceAccess(this.channelClient);
   }
 

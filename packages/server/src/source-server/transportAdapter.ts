@@ -254,6 +254,7 @@ class BackendSourceServerTransportAdapter implements SourceServerTransportAdapte
         ),
       );
       if (result.exitCode !== 0) {
+        await backend.diagnoseExecFailure?.();
         throw new Error(result.stderr.trim() || "Source Server bootstrap staging failed");
       }
     };
@@ -318,7 +319,14 @@ class BackendSourceServerTransportAdapter implements SourceServerTransportAdapte
       }
     });
     if (result.exitCode !== 0) {
-      const response = readLastJsonLine(result.stdout);
+      // Bug 原因：Docker 命令非零不一定是安装失败；先诊断 daemon，健康时保留 CLI 原因。
+      await backend.diagnoseExecFailure?.();
+      let response: Record<string, unknown> = {};
+      try {
+        response = readLastJsonLine(result.stdout);
+      } catch {
+        // daemon/解压失败没有 CLI JSON，继续使用 stderr 而非 JSON 解析异常。
+      }
       if (isPublicZCodeErrorCode(response.code)) {
         throw new SourceServerTransportOperationError(
           typeof response.error === "string" && response.error.trim()
@@ -427,7 +435,11 @@ class BackendSourceServerTransportAdapter implements SourceServerTransportAdapte
       ...argv.map(quoteShellArg),
       ...(hasServerRoot ? [] : ["--server-root", sourceServerRootShell(this.rootReadPath)]),
     ].join(" ");
-    return await collectCommand(await backend.exec(command));
+    const result = await collectCommand(await backend.exec(command));
+    // Bug 原因：可选诊断曾没有消费者，daemon 中途失效只能显示泛化 CLI 失败。
+    // 仅非零退出触发，健康 daemon 不改变原结果，也不重试命令。
+    if (result.exitCode !== 0) await backend.diagnoseExecFailure?.();
+    return result;
   }
 
   public dispose(): void {

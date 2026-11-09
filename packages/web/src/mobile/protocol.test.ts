@@ -165,6 +165,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("MobileRemoteControlClient fake WebSocket", () => {
@@ -302,6 +303,44 @@ describe("MobileRemoteControlClient fake WebSocket", () => {
     expect(listener).toHaveBeenCalledTimes(2);
     expect(state.messages[0]?.text).toBe("haha");
     (await subscription).dispose();
+  });
+
+  it("生产 replayable EventError 经安全 lifecycle sink 诊断，不泄漏错误或交付迟到事件", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const log = vi.fn();
+    vi.stubGlobal("window", {
+      zcode: { log },
+      setInterval,
+      clearInterval,
+      setTimeout,
+      clearTimeout,
+    });
+    const { c, socket } = client();
+    const listener = vi.fn();
+    const pending = c.subscribeTaskStream(access, listener);
+    await flush();
+    const open = socket.opens()[0]!;
+    const desktop = host(socket, open.bridgeSessionId);
+    desktop.send([INITIALIZE]);
+    socket.ready(open);
+    const subscription = await pending;
+    const listen = requests(socket, open.bridgeSessionId)[0]!;
+    const id = Number(listen.header[1]);
+    log.mockClear();
+    const frames = desktop.send([205, id], {
+      name: "credential-secret",
+      message: "credential-secret",
+      stack: ["credential-secret"],
+    });
+    for (const frame of frames) socket.receive({ zcode_type: "rpc-frame", frame });
+    desktop.send([EVENT_FIRE, id], chunk);
+    expect(listener).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledExactlyOnceWith(
+      "warn",
+      expect.arrayContaining(["RPC event subscription failed: [omitted]"]),
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/credential-secret|task-a|workspace|trace/);
+    subscription.dispose();
   });
 
   it("degraded 作废旧 RPC，重新 open → Initialize → EventListen → read，不走旧 ready 快路径", async () => {

@@ -2,16 +2,19 @@ import { safeLogArgs } from "@zcode/shared";
 import { spawn, execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
-import type { DockerConnectOptions } from "@zcode/shared";
+import type { DockerConnectOptions, RemoteConnectionDomainError } from "@zcode/shared";
 import type {
   IRemoteBackend,
   RemoteEnvironment,
   RemoteUploadOptions,
   StdioStream,
 } from "@zcode/server/remote/backend.js";
-import { createCloseEventController } from "@zcode/server/remote/closeEvent.js";
 import {
-  isDockerAvailable,
+  createCloseEventController,
+  resolveRemoteExitCode,
+} from "@zcode/server/remote/closeEvent.js";
+import {
+  probeDockerDaemon,
   listDockerContainers,
   resolveDockerCommand,
   type DockerContainerInfo,
@@ -46,6 +49,7 @@ export class DockerBackend implements IRemoteBackend {
   private readonly dockerCommand = resolveDockerCommand();
   private readonly options: DockerConnectOptions;
   private resolvedInfoPromise: Promise<ResolvedDockerInfo> | null = null;
+  private availabilityPromise: Promise<void> | null = null;
 
   constructor(options: DockerConnectOptions) {
     this.options = options;
@@ -203,11 +207,12 @@ export class DockerBackend implements IRemoteBackend {
           onClose.fire(code);
         };
 
-        child.on("exit", (code) => {
-          fireOnce(code ?? 0);
+        // signal 终止不是成功，见 resolveRemoteExitCode。
+        child.on("exit", (code, signal) => {
+          fireOnce(resolveRemoteExitCode(code, signal));
         });
-        child.on("close", (code) => {
-          fireOnce(code ?? 0);
+        child.on("close", (code, signal) => {
+          fireOnce(resolveRemoteExitCode(code, signal));
         });
 
         resolve({
@@ -243,11 +248,35 @@ export class DockerBackend implements IRemoteBackend {
     // Docker backend 的命令都是一次性子进程，没有常驻连接需要显式清理。
   }
 
+  async diagnoseExecFailure(): Promise<void> {
+    // Bug 原因：daemon 可能在成功探测之后停止，失败后必须丢弃旧缓存再诊断。
+    this.availabilityPromise = null;
+    await this.ensureAvailable();
+  }
+
   private async ensureAvailable(): Promise<void> {
-    const available = await isDockerAvailable();
-    if (!available) {
-      throw new Error("当前系统未检测到可用的 Docker 环境");
+    if (!this.availabilityPromise) {
+      const probing = probeDockerDaemon().catch((error: unknown) => {
+        if (this.availabilityPromise === probing) this.availabilityPromise = null;
+        // Bug 原因：布尔探测丢掉 CLI 原因，无法区分未安装、daemon 停止与 socket 权限。
+        // 仅设 unknown 仍会被 shared 沿 cause 改码；显式领域边界保留 daemon 分类与原始 cause。
+        const detail = error instanceof Error ? error.message.trim() : String(error);
+        throw Object.assign(
+          new Error(
+            detail
+              ? `当前系统未检测到可用的 Docker 环境：${detail}`
+              : "当前系统未检测到可用的 Docker 环境",
+            { cause: error },
+          ),
+          {
+            code: "remote-connection-unknown",
+            remoteConnectionErrorKind: "domain",
+          } satisfies RemoteConnectionDomainError,
+        );
+      });
+      this.availabilityPromise = probing;
     }
+    await this.availabilityPromise;
   }
 
   private async resolveInfo(): Promise<ResolvedDockerInfo> {

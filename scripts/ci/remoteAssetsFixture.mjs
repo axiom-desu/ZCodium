@@ -48,6 +48,30 @@ export async function createRemoteAssetFixture(
   };
   const manifestPath = join(release, `manifest-${platform}.json`);
   await writeFile(manifestPath, JSON.stringify(manifest));
+  // 旧组件 fixture 也必须携带 R3；生产 bundle 不再接受旧 manifest 独立成功。
+  const r3Source = join(root, "r3-source");
+  await mkdir(join(r3Source, "zcode-server-linux-x64"), { recursive: true });
+  await writeFile(join(r3Source, "zcode-server-linux-x64", "manifest.json"), "{}\n");
+  const fileName = "zcode-server-linux-x64.tar.gz";
+  packSourceAsDeterministicTarGzip(r3Source, join(release, fileName));
+  const r3Bytes = await readFile(join(release, fileName));
+  await writeFile(
+    join(release, "source-server-release.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      version: fixtureVersion,
+      archives: [
+        {
+          target: platform,
+          version: fixtureVersion,
+          fileName,
+          sizeBytes: r3Bytes.length,
+          sha256: createHash("sha256").update(r3Bytes).digest("hex"),
+          urls: [fileName],
+        },
+      ],
+    }),
+  );
   const options = {
     sourceDirectory: root,
     outputDirectory: join(root, "bundle"),
