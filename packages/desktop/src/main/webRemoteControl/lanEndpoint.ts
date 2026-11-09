@@ -174,6 +174,15 @@ export class LanRemoteControlEndpoint {
   }
 
   /** 创建设备侧会话（桌面用）：register 生成新 sid；persisted 续用（无效则 error）。 */
+  /**
+   * 持久化 sid 是否仍被本端点承认。配对表只在内存，端点重启即失效；
+   * 调用方据此在启动前决定「复用旧配对」还是「重新注册」，避免先报错再让用户刷新。
+   */
+  hasPair(deviceSid: string, passHash: string): boolean {
+    const entry = this.pairs.get(deviceSid);
+    return Boolean(entry && entry.passHash === passHash && !entry.device);
+  }
+
   registerDevice(
     auth:
       | { mode: "register"; passHash: string }

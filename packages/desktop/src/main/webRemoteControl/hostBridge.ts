@@ -48,6 +48,8 @@ export function attachWorkspaceHostPort(params: {
   workspacePath: string;
   workspaceIdentity?: string;
   remoteSessionId?: string;
+  /** 浏览器完整 Web 客户端传 "web-client"；手机子集保持默认。 */
+  surface?: "mobile" | "web-client";
   resolveHostProcess(webContentsId: number): ElectronUtilityProcessLike | undefined;
   logger: WebRemoteControlLogger;
 }): WebRemoteControlHostAttachment {
@@ -79,8 +81,9 @@ export function attachWorkspaceHostPort(params: {
       type: HostMessageTypes.AttachServicePort,
       requestId: randomUUID(),
       attachmentId,
-      // 手机链路必须是 replayable：与桌面 continuous 语义分离（AGENTS.md 硬约束）。
+      // 手机/浏览器链路必须是 replayable：与桌面 continuous 语义分离（AGENTS.md 硬约束）。
       clientMode: "web-remote-replayable",
+      ...(params.surface ? { surface: params.surface } : {}),
       scope,
     },
     [port2],

@@ -71,7 +71,7 @@ import {
   getAstrBotBridgeProvider,
   getAppConfigDir,
 } from "@zcode/services/node";
-import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHostResourceUsageResponder } from "./hostResourceUsage.js";
 import { startBotsBridgeServer, type BotsBridgeServerHandle } from "./botsBridgeServer.js";
@@ -163,6 +163,7 @@ import {
 } from "./remotePromptAttachments.js";
 import { createWindowHostAttachmentRegistry } from "./windowHostAttachmentRegistry.js";
 import { scopeConversationShareServiceForAttachment } from "./conversationShareAttachmentService.js";
+import { exposeWindowHostAttachmentServices } from "./windowHostAttachmentRpcPolicy.js";
 import {
   createWindowRemoteConnectionRegistry,
   type WindowRemoteConnectionCloseEvent,
@@ -176,6 +177,7 @@ import { SourceServerDirectory } from "./sourceServerDirectory.js";
 import { createSourceServerManagementService } from "./sourceServerManagementService.js";
 import {
   resolveSourceServerReleaseAsset,
+  resolveSourceServerReleaseRuntimeOptions,
   type SourceServerReleaseResolverOptions,
 } from "./sourceServerReleaseResolver.js";
 type RemoteBackendHostConnection = RemoteConnection & {
@@ -1613,7 +1615,10 @@ const windowHostControllerRuntime = createWindowHostControllerRuntime({
   },
 });
 
-function registerSourceServerManagementService(services: ServiceCollection): void {
+function registerSourceServerManagementService(
+  services: ServiceCollection,
+  remoteAssets: RemoteAssetDirs,
+): void {
   const settingService = services.get(ISettingService);
   const credentialService = services.get(ICredentialService);
   const directory = new SourceServerDirectory({ settingService, credentialService });
@@ -1622,7 +1627,7 @@ function registerSourceServerManagementService(services: ServiceCollection): voi
       const descriptor = await windowRemoteConnectionRegistry.connect({
         requestId: randomUUID(),
         target: input.target,
-        remoteAssets: {},
+        remoteAssets,
         ...(input.profile.sourceServerId && !input.confirmIdentityChange
           ? { existingSourceServerId: input.profile.sourceServerId }
           : {}),
@@ -1646,7 +1651,7 @@ function registerSourceServerManagementService(services: ServiceCollection): voi
         const release = await resolveSourceServerReleaseAsset(
           probe,
           input.target,
-          await resolveSourceServerReleaseRuntimeOptions(),
+          await getSourceServerReleaseRuntimeOptions(remoteAssets),
         );
         await adapter.installOrUpdate(
           input.target,
@@ -1660,7 +1665,7 @@ function registerSourceServerManagementService(services: ServiceCollection): voi
       const descriptor = await windowRemoteConnectionRegistry.connect({
         requestId: randomUUID(),
         target: input.target,
-        remoteAssets: {},
+        remoteAssets,
         confirmSourceServerInstall: true,
       });
       const sourceServerId = descriptor.sourceServerId;
@@ -1965,6 +1970,8 @@ function exposeServicesOnMessagePort(
   attachmentScope: WindowHostAttachmentScope = { kind: "local" },
   capabilities?: HostRemoteConnectionCapabilities,
   attachmentGeneration = 1,
+  /** 未声明按手机子集；浏览器完整 Web 客户端显式传 "web-client"。 */
+  surface: "mobile" | "web-client" = "mobile",
 ): ExposedServicePortHandle {
   const wrappedPort = wrapElectronPort(port);
   const protocol = new MessagePortProtocol(wrappedPort);
@@ -1994,6 +2001,7 @@ function exposeServicesOnMessagePort(
     1000,
     deferInit,
     directoryAvailable ? { mobileProjectDirectory: true } : {},
+    { logger: (message, ...args) => logger.warn(message, ...args) },
   );
   const loggedServer = new LoggingChannelServer(rawServer, logRpc);
   const server = new NetworkTelemetryChannelServer(loggedServer);
@@ -2079,7 +2087,7 @@ function exposeServicesOnMessagePort(
       ),
     );
   }
-  services.exposeOnChannelServer(server, overrides);
+  exposeWindowHostAttachmentServices({ server, services, clientMode, overrides, surface });
   if (directoryAvailable) {
     server.registerChannel(
       IMobileProjectDirectoryService.channelName,
@@ -2171,8 +2179,17 @@ const windowHostAttachmentRegistry = createWindowHostAttachmentRegistry<
       capabilities: windowRemoteConnectionRegistry.resolveScopedCapabilities(scope),
     };
   },
-  expose: ({ port, services, clientMode, scope, capabilities, generation }) =>
-    exposeServicesOnMessagePort(port, services, false, clientMode, scope, capabilities, generation),
+  expose: ({ port, services, clientMode, surface, scope, capabilities, generation }) =>
+    exposeServicesOnMessagePort(
+      port,
+      services,
+      false,
+      clientMode,
+      scope,
+      capabilities,
+      generation,
+      surface,
+    ),
 });
 
 function logWindowHostTopology(reason: string): void {
@@ -2901,7 +2918,7 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               },
             });
             activeServices = initializedServices;
-            registerSourceServerManagementService(initializedServices);
+            registerSourceServerManagementService(initializedServices, msg.remoteAssets ?? {});
             return initializedServices;
           },
         });
@@ -2980,64 +2997,16 @@ interface SetupRemoteConnectionSourceOptions {
  * 发布来源必须是本仓 fork 的制品：版本取自构建信息，base URL 只来自显式 env/define。
  * 不把上游固定地址当权威；两者都缺失时 resolver 会显式失败，绝不静默回退。
  */
-async function resolveSourceServerReleaseRuntimeOptions(
-  requestedArtifactPolicy?: SourceServerArtifactPolicy,
+async function getSourceServerReleaseRuntimeOptions(
+  remoteAssets: RemoteAssetDirs = {},
 ): Promise<SourceServerReleaseResolverOptions> {
-  const expectedVersion = ZCODE_VERSION;
-  const localCandidates = [
-    process.env["ZCODE_SOURCE_SERVER_RELEASE_DIR"]?.trim(),
-    join(process.cwd(), "packages", "desktop", "mock-cdn", "releases", expectedVersion),
-    join(process.cwd(), "mock-cdn", "releases", expectedVersion),
-    join(
-      process.cwd(),
-      "packages",
-      "desktop",
-      "bundled-remote-assets",
-      "releases",
-      expectedVersion,
-    ),
-  ].filter((candidate): candidate is string => Boolean(candidate));
-  let localReleaseDir: string | undefined;
-  for (const candidate of localCandidates) {
-    if (
-      await access(join(candidate, "source-server-release.json")).then(
-        () => true,
-        () => false,
-      )
-    ) {
-      localReleaseDir = candidate;
-      break;
-    }
-  }
-  const envBases = (process.env["ZCODE_SOURCE_SERVER_RELEASE_BASE_URL"] ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  const cdnBase =
-    typeof __ZCODE_CDN_BASE_URL__ !== "undefined" ? __ZCODE_CDN_BASE_URL__.trim() : "";
-  const releaseBaseUrls =
-    envBases.length > 0
-      ? envBases
-      : cdnBase
-        ? [`${cdnBase.replace(/\/+$/u, "")}/releases/${expectedVersion}`]
-        : [];
-  const requestedPolicy =
-    requestedArtifactPolicy ?? process.env["ZCODE_SOURCE_SERVER_ARTIFACT_POLICY"];
-  const artifactPolicy =
-    requestedPolicy === "development-content-addressed" || requestedPolicy === "release-versioned"
-      ? requestedPolicy
-      : releaseBaseUrls.length > 0
-        ? "release-versioned"
-        : localReleaseDir
-          ? "development-content-addressed"
-          : "release-versioned";
-  return {
-    expectedVersion,
-    artifactPolicy,
-    ...(localReleaseDir ? { localReleaseDir } : {}),
-    ...(releaseBaseUrls.length > 0 ? { releaseBaseUrls } : {}),
+  return resolveSourceServerReleaseRuntimeOptions({
+    expectedVersion: ZCODE_VERSION,
+    ...remoteAssets,
+    requestedArtifactPolicy: remoteAssets.sourceServerArtifactPolicy,
+    cdnBaseUrl: typeof __ZCODE_CDN_BASE_URL__ !== "undefined" ? __ZCODE_CDN_BASE_URL__ : "",
     cacheRoot: join(getAppConfigDir(), "cache", "source-server"),
-  };
+  });
 }
 
 function sourceServerAuthProofDigest(secret: string): string | undefined {
@@ -3120,7 +3089,7 @@ async function setupTransportSourceConnection(
       release = await resolveSourceServerReleaseAsset(
         probe,
         target,
-        sourceOptions.releaseOptions ?? (await resolveSourceServerReleaseRuntimeOptions()),
+        sourceOptions.releaseOptions ?? (await getSourceServerReleaseRuntimeOptions()),
       );
     }
     const prepared = await connectSourceServerTransport({
@@ -3182,8 +3151,7 @@ async function setupRemoteConnection(
   void remoteRuntimeNetwork;
   void deployLockMode;
   const releaseOptions =
-    sourceOptions.releaseOptions ??
-    (await resolveSourceServerReleaseRuntimeOptions(remoteAssets.sourceServerArtifactPolicy));
+    sourceOptions.releaseOptions ?? (await getSourceServerReleaseRuntimeOptions(remoteAssets));
   return await setupTransportSourceConnection(target, onDidRemoteClose, {
     ...sourceOptions,
     releaseOptions,
