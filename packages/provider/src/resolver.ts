@@ -13,7 +13,7 @@ import {
   ModelConfigRules,
   type ZhipuAccountAccessConfig,
   type ModelId,
-  type ProviderConfig,
+  ProviderConfig,
   type ProviderConfigRule,
   ProviderConfigMap,
   type ProviderTemplateMap,
@@ -205,7 +205,28 @@ export class ProviderConfigResolver {
         : undefined;
       return template ? template.overlay(personal) : personal;
     });
-    const effectiveProviders = effectiveBuiltinProviders.overlay(templatePersonalProviders);
+    // Bug 原因：旧配置可能只保留 API 地址而没有 templateId，整份模板 Overlay 无法命中，
+    // 导致 Logo 丢失。仅按协议和去尾斜线地址补展示素材，不改变模型、凭据或请求配置。
+    const templateLogos = new Map<string, ProviderConfig["logo"]>();
+    for (const [, template] of providerTemplates?.entries() ?? []) {
+      const { api, logo } = template.config;
+      if (!api?.type || !api.baseUrl || !logo) continue;
+      const key = `${api.type}:${api.baseUrl.replace(/\/+$/, "")}`;
+      if (templateLogos.has(key) && templateLogos.get(key)?.key !== logo.key) {
+        templateLogos.set(key, undefined);
+      } else if (!templateLogos.has(key)) {
+        templateLogos.set(key, logo);
+      }
+    }
+    const effectiveProviders = effectiveBuiltinProviders
+      .overlay(templatePersonalProviders)
+      .mapConfigs((config) => {
+        if (config.logo !== undefined || !config.api?.type || !config.api.baseUrl) return config;
+        const logo = templateLogos.get(
+          `${config.api.type}:${config.api.baseUrl.replace(/\/+$/, "")}`,
+        );
+        return logo ? config.overlay(new ProviderConfig({ logo })) : config;
+      });
     const effectiveModelRules = ModelConfigRules.composeEffective(
       input.zcodeBuiltinModelRules,
       input.personalModels,
