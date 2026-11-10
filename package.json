@@ -29,6 +29,7 @@
     "test:conversation-detach": "node scripts/ci/conversation-detach-smoke.mjs",
     "test:source-management-ui": "node scripts/ci/source-management-ui-smoke.mjs",
     "test:web-remote-control-mobile": "node scripts/ci/web-remote-control-mobile-smoke.mjs",
+    "test:web-profile-mobile": "vitest run --config packages/ui/vitest.config.ts packages/ui/src/app-shell/mobileWorkspaceShell.test.ts packages/ui/test/resizableLayoutPersistence.test.ts && node scripts/ci/web-profile-mobile-smoke.mjs && node scripts/ci/composer-mobile-focus-smoke.mjs",
     "test:app-shell-full-view": "node scripts/ci/app-shell-full-view-smoke.mjs",
     "test:file-manager-navigation": "node scripts/ci/file-manager-navigation-smoke.mjs",
     "test:project-sidebar": "node --import tsx scripts/ci/project-sidebar-smoke.mjs",

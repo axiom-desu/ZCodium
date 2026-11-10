@@ -49,6 +49,7 @@ export function WorkspaceHeader({
   isWindowsDesktop,
 
   isDesktop,
+  isMobileWeb = false,
   simplifyForNarrowRemote = false,
   isSidebarVisible,
   isTerminalOpen,
@@ -92,6 +93,8 @@ export function WorkspaceHeader({
   reserveWindowControls?: boolean;
   windowsWindowControlsRightPaddingPx?: number;
   isDesktop?: boolean;
+  /** 手机 Web：顶栏不预留桌面窗控空白，只给顶部浮层入口让位。 */
+  isMobileWeb?: boolean;
   simplifyForNarrowRemote?: boolean;
   isSidebarVisible: boolean;
   isTerminalOpen: boolean;
@@ -112,12 +115,15 @@ export function WorkspaceHeader({
   allowOpenWorkspace?: boolean;
 }) {
   const [selectedEditor, setSelectedEditor] = useState<EditorInfo | null>(null);
-  const shouldOffsetHeaderForWindowControls = !isSidebarVisible;
+  const shouldOffsetHeaderForWindowControls = !isSidebarVisible && !isMobileWeb;
   // Linux 与 Windows 共用内联窗控，不再预留旧悬浮窗控的标题栏区域。
   const usesInlineWindowControls = Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop));
 
   let headerWindowControlsPaddingClass: string | false = false;
-  if (shouldOffsetHeaderForWindowControls) {
+  if (isMobileWeb) {
+    // 手机没有 Electron 窗控；只为浮层的侧栏/新建两枚按钮留出宽度，避免标题被压到 0。
+    headerWindowControlsPaddingClass = "pl-16";
+  } else if (shouldOffsetHeaderForWindowControls) {
     if (isMacDesktop) {
       if (hasUpdateReady) {
         headerWindowControlsPaddingClass = isMacFullscreen ? "pl-48" : "pl-66";

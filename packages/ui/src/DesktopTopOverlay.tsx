@@ -21,6 +21,8 @@ interface DesktopTopOverlayProps {
   isMacFullscreen?: boolean;
   isWindowsDesktop?: boolean;
   isDesktop?: boolean;
+  /** 手机 Web：按钮改为直接点击，不依赖 hover，也不绑定侧栏宽度。 */
+  isMobileWeb?: boolean;
   macWindowControlsLeftPaddingPx?: number;
   windowsWindowControlsRightPaddingPx?: number;
   isSidebarVisible: boolean;
@@ -51,6 +53,7 @@ export function DesktopTopOverlay({
   isMacFullscreen,
   isWindowsDesktop,
   isDesktop,
+  isMobileWeb = false,
   macWindowControlsLeftPaddingPx,
   windowsWindowControlsRightPaddingPx,
   isSidebarVisible,
@@ -84,7 +87,7 @@ export function DesktopTopOverlay({
   const newTaskTitle = intl.formatMessage({ id: "sidebar.newTask" });
   const taskBackTitle = intl.formatMessage({ id: "taskNav.back" });
   const taskForwardTitle = intl.formatMessage({ id: "taskNav.forward" });
-  const isNewTaskButtonVisible = showNewTaskButton ?? !isSidebarVisible;
+  const isNewTaskButtonVisible = isMobileWeb ? true : (showNewTaskButton ?? !isSidebarVisible);
   const macTopOverlayPaddingStyle =
     isMacDesktop && !isMacFullscreen && Number.isFinite(macWindowControlsLeftPaddingPx)
       ? { paddingLeft: `${Math.round(macWindowControlsLeftPaddingPx ?? 96)}px` }
@@ -95,9 +98,11 @@ export function DesktopTopOverlay({
         paddingRight: WINDOWS_CAPTION_CONTROLS_RIGHT_INSET_VAR,
       }
     : undefined;
-  const topOverlayWidthStyle = isSidebarVisible
-    ? { width: "var(--workspace-sidebar-panel-width)" }
-    : undefined;
+  const topOverlayWidthStyle =
+    // 手机顶部浮层不跟随桌面侧栏宽度：抽屉覆盖主区，浮层始终保持自身宽度。
+    !isMobileWeb && isSidebarVisible
+      ? { width: "var(--workspace-sidebar-panel-width)" }
+      : undefined;
 
   return (
     <div
@@ -131,6 +136,18 @@ export function DesktopTopOverlay({
             "pointer-events-auto flex items-center gap-1 shrink-0 [app-region:no-drag]",
           )}
         >
+          {isMobileWeb ? (
+            // 手机左侧只有这枚常驻按钮：直接切换抽屉，不依赖桌面 logo hover 或宽度阈值。
+            <DesktopTopOverlayActionButton
+              title={toggleSidebarTitle}
+              ariaLabel={toggleSidebarTitle}
+              testId="desktop-top-sidebar-toggle"
+              onClick={onToggleSidebar}
+            >
+              <SidebarToggleIcon className="size-5" />
+            </DesktopTopOverlayActionButton>
+          ) : null}
+
           {usesCustomCaptionArea && (
             <DesktopTopOverlayActionButton
               title={toggleSidebarTitle}
@@ -161,7 +178,7 @@ export function DesktopTopOverlay({
           )}
 
           {/* 远程控制移动端左上角空间有限，任务前进/后退在这里会与主操作拥挤重叠。*/}
-          {hideTaskNavigationButtons ? null : (
+          {hideTaskNavigationButtons || isMobileWeb ? null : (
             <>
               <DesktopTopOverlayActionButton
                 title={taskBackTitle}
@@ -194,7 +211,7 @@ export function DesktopTopOverlay({
           >
             <DesktopTopOverlayActionButton
               title={newTaskDisabledReason ?? newTaskTitle}
-              shortcut={newTaskShortcutLabel}
+              {...(isMobileWeb ? {} : { shortcut: newTaskShortcutLabel })}
               ariaLabel={newTaskTitle}
               disabled={Boolean(newTaskDisabledReason)}
               onClick={onCreateTask}

@@ -13,10 +13,18 @@ import {
 import { usePaneLayoutStore } from "../../src/v4/paneLayoutStore.js";
 import { useWorkbenchPaneCount } from "../../src/app-shell/useWorkbenchPaneCount.js";
 
+// `?surface=web` 复用同一 App/shell 装配，只把入口能力声明成普通 Web；
+// 默认仍是桌面 surface，保持 app-shell-full-view 冒烟行为不变。
+const surfaceParam = new URLSearchParams(window.location.search).get("surface");
+const isWebSurface = surfaceParam === "web";
 const workspacePath = "/fixture/app-shell";
 const fixture = (window.appShellFixture = {
+  surface: isWebSurface ? "web" : "desktop",
   calls: [],
   paneCount: 1,
+  selectedTaskId: null,
+  newTaskCount: 0,
+  previewOpened: false,
   splitPane: () => {},
   resetPanes: () => {},
   peekFullView: () => null,
@@ -121,26 +129,30 @@ fixture.splitPane = () =>
   });
 fixture.resetPanes = () => usePaneLayoutStore.getState().resetToPrimaryPane();
 saveTaskSidePaneMemoryState(workspacePath, {
-  isSidePaneCollapsed: false,
-  sidePaneState: {
-    tabs: [
-      {
-        id: "fixture-board-tab",
-        type: "whiteboard",
-        boardId: "fixture-board",
-        ownerTaskId: null,
-        workspaceKey: workspacePath,
-        openedAt: 1,
+  // 手机 Web 用例从「右侧面板收起」的干净首屏开始，避免把面板初始态混进抽屉断言。
+  isSidePaneCollapsed: isWebSurface,
+  sidePaneState: isWebSurface
+    ? null
+    : {
+        tabs: [
+          {
+            id: "fixture-board-tab",
+            type: "whiteboard",
+            boardId: "fixture-board",
+            ownerTaskId: null,
+            workspaceKey: workspacePath,
+            openedAt: 1,
+          },
+        ],
+        activeTabId: "fixture-board-tab",
       },
-    ],
-    activeTabId: "fixture-board-tab",
-  },
 });
 
 function PaneCountProbe() {
   fixture.paneCount = useWorkbenchPaneCount();
   return <span data-testid="app-shell-pane-count">{fixture.paneCount}</span>;
 }
+
 const noop = () => {};
 createRoot(document.getElementById("root")).render(
   <ZCodeIntlProvider initialLocale="en-US">
@@ -152,7 +164,7 @@ createRoot(document.getElementById("root")).render(
               <App
                 services={services}
                 workspaceAbsPath={workspacePath}
-                isDesktop
+                isDesktop={!isWebSurface}
                 isMacDesktop={false}
                 isWindowsDesktop={false}
                 supportsEmbeddedBrowser={false}

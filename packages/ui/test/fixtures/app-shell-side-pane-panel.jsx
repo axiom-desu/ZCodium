@@ -2,8 +2,9 @@ import { TID_SIDE_PANE_TOGGLE } from "@zcode/shared";
 import { SidePaneFullViewToggleButton } from "@/side-pane-full-view/index.js";
 
 /**
- * 结构集成夹具的面板展示替身：只画完整视图入口与 slot，不复制 App 的开关/owner 状态。
- * 真实 AnimatedSidePanePanel 的交互已由 side-pane-full-view-smoke 使用生产组件覆盖。
+ * 桌面完整视图守卫的面板展示替身：只画完整视图入口与 slot，不复制 App 的开关/owner 状态。
+ * 这里刻意不声明 panel/frame 的真实 DOM 契约：手机 E2E 已改为挂载真实
+ * AnimatedSidePanePanel，避免替身把外层 Panel 与内层 frame 混成一个节点造成 falsepass。
  */
 export function AnimatedSidePanePanel({
   isVisible,
@@ -13,9 +14,11 @@ export function AnimatedSidePanePanel({
 }) {
   return (
     <div
-      data-workspace-side-frame="true"
-      data-visible={isVisible ? "true" : "false"}
-      className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden border border-border bg-background"
+      className={
+        isVisible
+          ? "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden border border-border bg-background"
+          : "hidden"
+      }
     >
       <div className="flex h-10 shrink-0 items-center gap-1 px-2">
         <button

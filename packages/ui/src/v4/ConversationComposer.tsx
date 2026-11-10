@@ -90,6 +90,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { advanceComposerDraftRevision } from "@/v4/composer/composerDraftRevision.js";
 import type { AppSlashCommand } from "@/slashCommandHelpers.js";
 import { useOptionalServices } from "@/hooks/useServices.js";
+import { useMobileWebViewport } from "@/hooks/useMobileWebViewport.js";
 import { logger } from "@/logger.js";
 
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
@@ -605,6 +606,7 @@ function ConversationComposerImpl({
   const pendingShareContext = activeShareContext?.status === "pending" ? activeShareContext : null;
   const inputApiRef = useRef<LexicalChatInputHandle | null>(null);
 
+  const isMobileViewport = useMobileWebViewport();
   const primaryModifierPressed = usePrimaryFollowupModifier();
   const appleKeyboardPlatform = isAppleKeyboardPlatform();
   const enterSubmits = true;
@@ -828,15 +830,16 @@ function ConversationComposerImpl({
   const appliedExternalTextInsertRequestRef = useRef<number | null>(null);
   // 决策入参经 ref 读取，避免把 autoFocusEnabled/disabled/viewport 灌进 scope effect 依赖，
   // 触发多余的草稿重恢复（disabled 变化本不应重放草稿）。
+  // Bug 原因：这里曾硬编码 false，已有手机“不要抢焦点”策略从未生效，切任务会自动弹软键盘。
   const focusOptsRef = useRef<ComposerAutoFocusOptions>({
     autoFocusEnabled,
     disabled,
-    isMobileViewport: false,
+    isMobileViewport,
   });
   focusOptsRef.current = {
     autoFocusEnabled,
     disabled,
-    isMobileViewport: false,
+    isMobileViewport,
   };
   const flushPendingFocus = useCallback(() => {
     if (!pendingFocusRef.current) return;
@@ -846,7 +849,11 @@ function ConversationComposerImpl({
 
     // Lexical root 可能晚一帧就绪，聚焦排到下一帧（与草稿回填同款时序）。
     if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => inputApiRef.current?.focus());
+      requestAnimationFrame(() => {
+        // viewport/disabled 可能在排帧后变化；兑现时仍需尊重同一焦点门禁。
+        if (resolveComposerAutoFocus(focusOptsRef.current) === "focus-now")
+          inputApiRef.current?.focus();
+      });
     } else {
       inputApiRef.current.focus();
     }
@@ -2121,6 +2128,7 @@ function ConversationComposerImpl({
       style={isBlockedByInteraction ? { display: "none" } : undefined}
       className={cn(
         "chat-composer-region z-20 w-full shrink-0 @container/composer",
+        isMobileViewport && "pb-[env(safe-area-inset-bottom)]",
         centered && "max-w-2xl",
       )}
     >

@@ -66,6 +66,7 @@ import { buildChatSessionScrollMemoryKey } from "@/lib/chatSessionScrollMemory.j
 import type { MessageFileLinkTarget } from "@/components/ai-elements/message.js";
 import { useServices } from "@/hooks/useServices.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
+import { useMobileWebViewport } from "@/hooks/useMobileWebViewport.js";
 import { saveConversationExport } from "@/lib/saveConversationExport.js";
 
 import { useDynamicWorkflowAvailability } from "@/hooks/useDynamicWorkflowAvailability.js";
@@ -540,6 +541,7 @@ export function SessionPane({
   const baseWorkspaceServices = useServices();
   const { intl, locale } = useZCodeIntl();
   const platform = usePlatform();
+  const isMobileViewport = useMobileWebViewport();
   const slashCommands = useSlashCommands(workspacePath, workspaceIdentity);
   const workspaceHomePath = useWorkspaceHomePath({
     workspacePath,
@@ -1994,7 +1996,7 @@ export function SessionPane({
         isDraft: sessionId === null,
         selectionSideChat,
         readOnly,
-        isMobileViewport: false,
+        isMobileViewport,
       })
     ) {
       return undefined;
@@ -2014,6 +2016,7 @@ export function SessionPane({
     cliSlashCommandNames,
     handleOpenSelectionSideConversation,
     intl,
+    isMobileViewport,
     onOpenSelectionSideChat,
     readOnly,
     selectionSideChat,

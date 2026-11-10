@@ -22,6 +22,7 @@ import {
   shouldBareEnterFallThroughToNewline,
 } from "@/shortcuts/composerShortcuts.js";
 import { useEffectiveShortcutBindings } from "@/shortcuts/useShortcutBindings.js";
+import { readMobileWebViewport, useMobileWebViewport } from "@/hooks/useMobileWebViewport.js";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
@@ -43,6 +44,8 @@ import {
   KEY_BACKSPACE_COMMAND,
   COMMAND_PRIORITY_HIGH,
   KEY_ENTER_COMMAND,
+  SKIP_DOM_SELECTION_TAG,
+  SKIP_SELECTION_FOCUS_TAG,
   type EditorState,
   type LexicalEditor,
 } from "lexical";
@@ -186,6 +189,19 @@ function getEditorMarkdown(editorState: EditorState): string {
   return text;
 }
 
+function preserveUnfocusedMobileEditor(editor: LexicalEditor): boolean {
+  const root = editor.getRootElement();
+  return readMobileWebViewport() && !root?.contains(root.ownerDocument.activeElement);
+}
+
+function programmaticRestoreTags(editor: LexicalEditor) {
+  // Bug 原因：恢复草稿时 selectEnd 会通过浏览器DOM选区隐式聚焦，绕过composer的手机焦点门禁。
+  // 手机未主动聚焦时只恢复Lexical状态，不写DOM选区；已在输入/桌面时保持原光标行为。
+  return preserveUnfocusedMobileEditor(editor)
+    ? [PROGRAMMATIC_UPDATE_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SELECTION_FOCUS_TAG]
+    : PROGRAMMATIC_UPDATE_TAG;
+}
+
 function replaceEditorText(editor: LexicalEditor, text: string) {
   editor.update(
     () => {
@@ -203,7 +219,7 @@ function replaceEditorText(editor: LexicalEditor, text: string) {
 
       root.getLastChild()?.selectEnd();
     },
-    { tag: PROGRAMMATIC_UPDATE_TAG },
+    { tag: programmaticRestoreTags(editor) },
   );
 }
 
@@ -243,7 +259,7 @@ function replaceEditorTextWithPluginMentions(editor: LexicalEditor, text: string
       }
       root.getLastChild()?.selectEnd();
     },
-    { tag: PROGRAMMATIC_UPDATE_TAG },
+    { tag: programmaticRestoreTags(editor) },
   );
 }
 
@@ -263,7 +279,7 @@ function replaceEditorWithMention(
       root.append(paragraph);
       trailing.selectEnd();
     },
-    { tag: PROGRAMMATIC_UPDATE_TAG },
+    { tag: programmaticRestoreTags(editor) },
   );
 }
 
@@ -317,7 +333,13 @@ function prependEditorMentionIfMissing(
 
 function replaceEditorStateJson(editor: LexicalEditor, editorStateJson: string) {
   const editorState = editor.parseEditorState(editorStateJson);
-  editor.setEditorState(editorState, { tag: PROGRAMMATIC_UPDATE_TAG });
+  // setEditorState只接受单个tag；未聚焦手机恢复时不恢复选区，避免DOM选区把软键盘拉起。
+  editor.setEditorState(
+    preserveUnfocusedMobileEditor(editor) ? editorState.clone(null) : editorState,
+    {
+      tag: PROGRAMMATIC_UPDATE_TAG,
+    },
+  );
 }
 
 function resetEditor(editor: LexicalEditor) {
@@ -1367,6 +1389,7 @@ export function LexicalChatInput({
   appSlashCommands,
   enableMentionPanel = true,
 }: LexicalChatInputProps) {
+  const isMobileWeb = useMobileWebViewport();
   const inputMountedAtRef = useRef(Date.now());
   const lastReadyLogKeyRef = useRef<string | null>(null);
   const activeTaskProvider = useChatViewActiveTaskProvider(
@@ -1442,7 +1465,7 @@ export function LexicalChatInput({
         "aria-placeholder": placeholder,
         placeholder: (
           <div
-            className={`pointer-events-none absolute left-0 top-0 ${compactPlaceholder ? "line-clamp-2" : ""} text-ui-base leading-5 text-foreground-subtlest`}
+            className={`pointer-events-none absolute left-0 top-0 ${compactPlaceholder ? "line-clamp-2" : ""} ${isMobileWeb ? "text-mobile-input-safe" : "text-ui-base"} leading-5 text-foreground-subtlest`}
           >
             {placeholder}
           </div>
@@ -1456,7 +1479,8 @@ export function LexicalChatInput({
     <ContentEditable
       // mention node 使用固定行高的 inline-flex chip，普通正文如果继承浏览器 normal line-height，
       // 在 token 后继续输入文字时会按不同 line box 计算基线；这里显式收口正文行高。
-      className="min-h-10 max-h-40 overflow-y-auto text-ui-base leading-5 text-foreground outline-none"
+      // Bug 原因：手机编辑区继承14px会触发iOS自动放大；只对显式Web窄屏使用现有16px兼容token。
+      className={`min-h-10 max-h-40 overflow-y-auto ${isMobileWeb ? "text-mobile-input-safe" : "text-ui-base"} leading-5 text-foreground outline-none`}
       data-testid={inputTestId}
       onFocus={onFocus}
       {...contentEditableProps}

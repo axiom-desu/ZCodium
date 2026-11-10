@@ -35,6 +35,7 @@ import { DesktopTopOverlay } from "@/DesktopTopOverlay.js";
 import { DesktopWindowFrame } from "@/DesktopWindowFrame.js";
 import { WorkspacePluginPreview } from "@/WorkspacePluginPreview.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
+import { useMobileWebViewport } from "@/hooks/useMobileWebViewport.js";
 import { GitBranchSwitcher } from "@/GitBranchSwitcher.js";
 import { ScopedErrorBoundary } from "@/ErrorBoundary.js";
 
@@ -50,6 +51,9 @@ import { TaskFindDialog } from "@/quickpick/TaskFindDialog.js";
 import { WorkspaceHeader } from "@/WorkspaceHeader.js";
 import { WorkspaceSidebar, type SidebarFileTreeOpenRequest } from "@/WorkspaceSidebar.js";
 import { AnimatedSidePanePanel } from "@/app-shell/AnimatedSidePanePanel.js";
+import { WorkspaceSidebarDrawer } from "@/app-shell/WorkspaceSidebarDrawer.js";
+import { useMobileSidebarEntry } from "@/app-shell/useMobileSidebarEntry.js";
+import { resolveWorkspaceContentPanelClassName } from "@/app-shell/mobileWorkspaceShell.js";
 import {
   SidePaneFullViewConversationHost,
   readFloatingAnchorPreference,
@@ -361,6 +365,15 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
 }: WorkspaceShellLayoutProps) {
   const { intl } = useZCodeIntl();
   const isOfficeMode = useIsOfficeMode();
+  // 手机 Web 只是表现事实：显式 Web 入口标记 + 单一 viewport 判定。
+  // Electron 窄桌面窗口不带入口标记，仍走原桌面布局。
+  const isMobileWeb = useMobileWebViewport() && !isDesktop;
+  // 手机进入时收起左栏抽屉，回宽屏恢复进入前的可见性；状态 owner 仍是 useAppPanels。
+  useMobileSidebarEntry({
+    isMobileWeb,
+    isSidebarVisible,
+    onToggleSidebar: handleToggleSidebar,
+  });
   const baseServices = useBaseWorkspaceServices();
   const tabStoreApi = useTabStoreApi();
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
@@ -516,7 +529,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   }, [handleToggleSidebar, handleToggleSidePane, isSidebarVisible, isSidePaneOpen, workspaceKey]);
 
   useEffect(() => {
-    if (workspaceMainView !== "chat") {
+    // 手机软键盘/旋转只改变视口，不是桌面窗口尺寸意图；不能触发桌面自动收面板策略。
+    if (isMobileWeb || workspaceMainView !== "chat") {
       return;
     }
 
@@ -601,7 +615,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       }
       window.removeEventListener("resize", handleWindowResize);
     };
-  }, [workspaceMainView]);
+  }, [isMobileWeb, workspaceMainView]);
 
   useEffect(() => {
     workspaceSidebarPanelWidthPxRef.current = workspaceSidebarPanelWidthPx;
@@ -989,6 +1003,58 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     },
     [handleSelectTask, intl, shellWorkbenchBinding, showChatMainView, tabStoreApi, workspaceTabs],
   );
+  // 手机抽屉内的导航/新建必须收起抽屉：包装既有回调，而不是在 sidebar 内部再造一份开合状态。
+  const closeMobileSidebarDrawer = useCallback(() => {
+    if (isMobileWeb && isSidebarVisible) {
+      handleToggleSidebar();
+    }
+  }, [handleToggleSidebar, isMobileWeb, isSidebarVisible]);
+  const handleSidebarSelectTask = useCallback(
+    (
+      targetWorkspacePath: string,
+      taskId: string,
+      targetWorkspaceIdentity?: string,
+      targetRemoteSessionId?: string,
+      expectedUnreadAt?: number,
+    ) => {
+      // 再次选择同一个任务不会产生导航副作用，所以先收起抽屉，再交给原选择路径。
+      closeMobileSidebarDrawer();
+      handleSelectTaskInChat(
+        targetWorkspacePath,
+        taskId,
+        targetWorkspaceIdentity,
+        targetRemoteSessionId,
+        expectedUnreadAt,
+      );
+    },
+    [closeMobileSidebarDrawer, handleSelectTaskInChat],
+  );
+  const handleSidebarCreateTask = useCallback(
+    (request?: Parameters<typeof handleCreateTaskInChat>[0]) => {
+      closeMobileSidebarDrawer();
+      handleCreateTaskInChat(request);
+    },
+    [closeMobileSidebarDrawer, handleCreateTaskInChat],
+  );
+  const handleSidebarCreateConversationTask = useCallback(() => {
+    closeMobileSidebarDrawer();
+    (onCreateConversationTask ?? handleCreateTaskInChat)();
+  }, [closeMobileSidebarDrawer, handleCreateTaskInChat, onCreateConversationTask]);
+  const handleSidebarOpenPreview = useCallback(
+    (source: Parameters<typeof handleOpenCodeViewer>[0]) => {
+      // 预览是覆盖主区的下一步；抽屉不能留在覆盖层后面。
+      closeMobileSidebarDrawer();
+      handleOpenCodeViewer(source);
+    },
+    [closeMobileSidebarDrawer, handleOpenCodeViewer],
+  );
+  const handleSidebarOpenBrowserUrl = useCallback(
+    (url: string) => {
+      closeMobileSidebarDrawer();
+      handleOpenBrowserUrl(url);
+    },
+    [closeMobileSidebarDrawer, handleOpenBrowserUrl],
+  );
   // 中枢直接启动 accepted 后切到新会话（run 卡已在顶部）：复用运行历史那条导航，
   // target 恒带工作流所属项目坐标（不变式 7），remoteSessionId 决定连接 endpoint。
   const handleNavigateToLaunchedRun = useCallback(
@@ -1180,6 +1246,13 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     (path: string, identity?: string) =>
       handleStartDraftInWorkspaceInChat(path, identity, undefined, "project"),
     [handleStartDraftInWorkspaceInChat],
+  );
+  const handleSidebarStartDraftInWorkspace = useCallback(
+    (path: string, identity?: string) => {
+      closeMobileSidebarDrawer();
+      handleCreateProjectDraft(path, identity);
+    },
+    [closeMobileSidebarDrawer, handleCreateProjectDraft],
   );
   const activeWorkspacePurpose = currentWorkspaceTab?.workspacePurpose ?? "project";
   // 每个 pane 只持自己的当前 scope 资格，不以空 identity 通配同路径的远端 tab。
@@ -1621,12 +1694,12 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     updateState?.kind === "download-progress" ||
     updateState?.kind === "update-downloaded";
   // Draft 之前维护一套独立轻量 header，导致 side pane、caption 安全区和拖拽入口
-  // 与 Task Header 分叉。桌面端统一复用 WorkspaceHeader，只由 variant 裁剪 task 专属内容；
-  // 手机远控无 active task 时仍不渲染桌面 chrome，继续遵守 replayable overlay 边界。
+  // 与 Task Header 分叉。统一复用 WorkspaceHeader，只由 variant 裁剪 task 专属内容；
+  // 手机Web草稿也保留同一顶栏给菜单/新建/预览返回让位，但不渲染Electron窗控。
   const shouldRenderMainViewHeader =
     workspaceMainView !== "automations" && workspaceMainView !== "plugin-store";
   const shouldRenderWorkspaceHeader =
-    shouldRenderMainViewHeader && (activeTaskId !== null || isDesktop);
+    shouldRenderMainViewHeader && (activeTaskId !== null || isDesktop || isMobileWeb);
   // ErrorBoundary resetKeys 的数组如果每次 render 都重新创建，
   // 即使 workspace/task 没变化也会在 React DevTools Components 轨道里持续表现为子树 props 变化。
   const workspaceOnlyResetKeys = useMemo(() => [workspaceKey], [workspaceKey]);
@@ -1637,6 +1710,70 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   const workspaceSidebarVisibilityResetKeys = useMemo(
     () => [workspaceKey, isSidebarVisible],
     [workspaceKey, isSidebarVisible],
+  );
+
+  // 桌面在 flex 槽位里渲染侧栏，手机放进 Radix Dialog 抽屉；两侧共用同一份 sidebar 内容。
+  const workspaceSidebarAside = (
+    <aside
+      ref={sidebarContainerRef}
+      className="h-full overflow-hidden select-none"
+      aria-hidden={!isSidebarPanelVisible}
+    >
+      <ScopedErrorBoundary
+        scope="workspace-sidebar"
+        resetKeys={workspaceOnlyResetKeys}
+        variant="panel"
+        className="h-full"
+      >
+        {/* session workbench groups：桌面和普通 web app 可分屏。 */}
+        <V4SplitPaneEntryContext.Provider value={splitPaneEntryValue}>
+          <WorkflowRunOpenProvider onOpenRun={handleOpenSidebarWorkflowRun}>
+            <WorkspaceSidebar
+              workspacePath={workspaceAbsPath}
+              workspaceRemoteSessionId={workspaceRemoteSessionId}
+              activePreviewPath={activePreviewPath}
+              onSelectTask={handleSidebarSelectTask}
+              onStartDraftInWorkspace={handleSidebarStartDraftInWorkspace}
+              onOpenCodeViewer={handleSidebarOpenPreview}
+              onOpenBrowserUrl={handleSidebarOpenBrowserUrl}
+              fileTreeOpenRequest={fileTreeOpenRequest}
+              onCreateTask={handleSidebarCreateTask}
+              onCreateConversationTask={handleSidebarCreateConversationTask}
+              onOpenFolderFromWorkspaceMenu={onOpenFolderFromWorkspaceMenu}
+              onOpenRemoteWorkspace={onOpenRemoteWorkspace}
+              theme={theme}
+              onConnectRemote={onConnectRemote}
+              onSelectRemoteProject={onSelectRemoteProject}
+              onCancelRemoteProject={onCancelRemoteProject}
+              onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
+              reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
+              remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
+              reconnectingRemoteWorkspaceLogsByWorkspaceKey={
+                reconnectingRemoteWorkspaceLogsByWorkspaceKey
+              }
+              isDesktop={isDesktop}
+              isMacDesktop={isMacDesktop}
+              isWindowsDesktop={isWindowsDesktop}
+              isSidebarVisible={isSidebarVisible}
+              onToggleSidebar={handleToggleSidebar}
+              toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
+              canGoBack={canPrimaryNavigationBack}
+              canGoForward={canTaskNavForward}
+              onGoBack={primaryNavigationBack}
+              onGoForward={handleTaskNavForward}
+              goBackShortcutLabel={goBackShortcutLabel}
+              goForwardShortcutLabel={goForwardShortcutLabel}
+              onOpenCommandCenter={handleOpenCommandCenter}
+              onOpenAutomations={handleOpenAutomations}
+              automationsActive={workspaceMainView === "automations"}
+              onOpenPluginStore={handleOpenPluginStore}
+              pluginStoreActive={workspaceMainView === "plugin-store"}
+              onFileTreeOpenChange={setIsSidebarFileTreeOpen}
+            />
+          </WorkflowRunOpenProvider>
+        </V4SplitPaneEntryContext.Provider>
+      </ScopedErrorBoundary>
+    </aside>
   );
 
   return (
@@ -1651,6 +1788,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       <div
         ref={workspaceShellRef}
         data-workspace-shell="true"
+        data-mobile-web={isMobileWeb ? "true" : undefined}
         style={workspaceShellSplitStyle}
         className={cn(
           "relative flex h-full min-h-0 w-full overflow-hidden",
@@ -1659,81 +1797,23 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           // CSS 变量驱动的专用 split，普通窗口 resize 只走浏览器布局，不触发 React 状态。
         )}
       >
-        <div
-          ref={workspaceSidebarPanelElementRef}
-          data-panel=""
-          data-workspace-sidebar-panel="true"
-          id="sidebar"
-          className={cn(
-            "w-[var(--workspace-sidebar-panel-width)] max-w-[50%] flex-none overflow-hidden duration-200 ease-out transition-[width,opacity] data-[workspace-sidebar-resizing=true]:transition-opacity",
-            // 拖动侧栏宽度时如果继续过渡 width，会让指针移动和实际宽度之间产生滞后。
-            // 拖拽 active 通过 DOM 标记切 transition，避免 pointerdown/up 为了切 class 重渲染整棵 workspace。
-            isSidebarPanelVisible ? "opacity-100" : "pointer-events-none opacity-0",
-          )}
-        >
-          <aside
-            ref={sidebarContainerRef}
-            className="h-full overflow-hidden select-none"
-            aria-hidden={!isSidebarPanelVisible}
+        {isMobileWeb ? null : (
+          <div
+            ref={workspaceSidebarPanelElementRef}
+            data-panel=""
+            data-workspace-sidebar-panel="true"
+            id="sidebar"
+            className={cn(
+              "w-[var(--workspace-sidebar-panel-width)] max-w-[50%] flex-none overflow-hidden duration-200 ease-out transition-[width,opacity] data-[workspace-sidebar-resizing=true]:transition-opacity",
+              // 拖动侧栏宽度时如果继续过渡 width，会让指针移动和实际宽度之间产生滞后。
+              // 拖拽 active 通过 DOM 标记切 transition，避免 pointerdown/up 为了切 class 重渲染整棵 workspace。
+              isSidebarPanelVisible ? "opacity-100" : "pointer-events-none opacity-0",
+            )}
           >
-            <ScopedErrorBoundary
-              scope="workspace-sidebar"
-              resetKeys={workspaceOnlyResetKeys}
-              variant="panel"
-              className="h-full"
-            >
-              {/* session workbench groups：桌面和普通 web app 可分屏。 */}
-              <V4SplitPaneEntryContext.Provider value={splitPaneEntryValue}>
-                <WorkflowRunOpenProvider onOpenRun={handleOpenSidebarWorkflowRun}>
-                  <WorkspaceSidebar
-                    workspacePath={workspaceAbsPath}
-                    workspaceRemoteSessionId={workspaceRemoteSessionId}
-                    activePreviewPath={activePreviewPath}
-                    onSelectTask={handleSelectTaskInChat}
-                    onStartDraftInWorkspace={handleCreateProjectDraft}
-                    onOpenCodeViewer={handleOpenCodeViewer}
-                    onOpenBrowserUrl={handleOpenBrowserUrl}
-                    fileTreeOpenRequest={fileTreeOpenRequest}
-                    onCreateTask={handleCreateTaskInChat}
-                    onCreateConversationTask={onCreateConversationTask ?? handleCreateTaskInChat}
-                    onOpenFolderFromWorkspaceMenu={onOpenFolderFromWorkspaceMenu}
-                    onOpenRemoteWorkspace={onOpenRemoteWorkspace}
-                    theme={theme}
-                    onConnectRemote={onConnectRemote}
-                    onSelectRemoteProject={onSelectRemoteProject}
-                    onCancelRemoteProject={onCancelRemoteProject}
-                    onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
-                    reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
-                    remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
-                    reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-                      reconnectingRemoteWorkspaceLogsByWorkspaceKey
-                    }
-                    isDesktop={isDesktop}
-                    isMacDesktop={isMacDesktop}
-                    isWindowsDesktop={isWindowsDesktop}
-                    isSidebarVisible={isSidebarVisible}
-                    onToggleSidebar={handleToggleSidebar}
-                    toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
-                    canGoBack={canPrimaryNavigationBack}
-                    canGoForward={canTaskNavForward}
-                    onGoBack={primaryNavigationBack}
-                    onGoForward={handleTaskNavForward}
-                    goBackShortcutLabel={goBackShortcutLabel}
-                    goForwardShortcutLabel={goForwardShortcutLabel}
-                    onOpenCommandCenter={handleOpenCommandCenter}
-                    onOpenAutomations={handleOpenAutomations}
-                    automationsActive={workspaceMainView === "automations"}
-                    onOpenPluginStore={handleOpenPluginStore}
-                    pluginStoreActive={workspaceMainView === "plugin-store"}
-                    onFileTreeOpenChange={setIsSidebarFileTreeOpen}
-                  />
-                </WorkflowRunOpenProvider>
-              </V4SplitPaneEntryContext.Provider>
-            </ScopedErrorBoundary>
-          </aside>
-        </div>
-
-        {isSidebarVisible ? (
+            {workspaceSidebarAside}
+          </div>
+        )}
+        {isSidebarVisible && !isMobileWeb ? (
           <div
             role="separator"
             tabIndex={0}
@@ -1760,10 +1840,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
         <div
           data-panel=""
           id="content"
-          className={cn(
-            "flex min-w-[320px] flex-1 flex-col",
-            hasDesktopPanelInset ? "p-1 pl-0 pt-0" : "p-0",
-          )}
+          className={resolveWorkspaceContentPanelClassName({ isMobileWeb, hasDesktopPanelInset })}
         >
           {
             hasDesktopPanelInset && (
@@ -1771,9 +1848,22 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
             ) /* 修复 macOS 顶部窗口控制按钮被 header 遮挡无法点击的问题 */
           }
           <ResizablePanelGroup
+            // 手机预览是覆盖层：桌面比例仍然只写 `workspace-body-layout`，
+            // 手机上只关掉持久化（内存比例不回写、重开桌面时还原桌面比例），
+            // 既不新增手机专用 key，也不重建 Group 以免卸载编辑器。
             layoutId="workspace-body-layout"
+            persistLayout={!isMobileWeb}
             panelIds={WORKSPACE_BODY_PANEL_IDS}
-            className={cn("min-h-0 flex-1", isFullView && "relative")}
+            className={cn(
+              "min-h-0 flex-1",
+              (isFullView || (isMobileWeb && isSidePaneVisible)) && "relative",
+              // 手机不把会话和预览各挤一半：同一 side pane owner 仍挂载在原位，
+              // 这里只把它的面板包裹提升为覆盖主区的全宽层；顶部保留 48px 让全局菜单仍可触达，
+              // 关闭仍走原 handleToggleSidePane。
+              isMobileWeb &&
+                isSidePaneVisible &&
+                "[&>[data-panel][data-testid=browser]]:absolute [&>[data-panel][data-testid=browser]]:inset-x-0 [&>[data-panel][data-testid=browser]]:top-12 [&>[data-panel][data-testid=browser]]:bottom-0 [&>[data-panel][data-testid=browser]]:z-30 [&>[data-panel][data-testid=browser]]:w-full [&>[data-panel][data-testid=browser]]:border-0 [&>[data-workspace-side-pane-resize-handle=true]]:hidden",
+            )}
           >
             <ResizablePanel
               id="conversation-column"
@@ -1792,6 +1882,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                 <ResizablePanelGroup
                   orientation="vertical"
                   layoutId="workspace-conversation-column-layout"
+                  // 对话/终端高度同样是桌面比例：手机拖拽只留在内存，避免回写桌面 key。
+                  persistLayout={!isMobileWeb}
                   panelIds={WORKSPACE_CONVERSATION_PANEL_IDS}
                   className="h-full min-h-0"
                 >
@@ -1863,6 +1955,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                               windowsWindowControlsRightPaddingPx
                             }
                             isDesktop={isDesktop}
+                            isMobileWeb={isMobileWeb}
+                            simplifyForNarrowRemote={isMobileWeb}
                             isSidebarVisible={isSidebarVisible}
                             isTerminalOpen={isTerminalOpen}
                             isSidePaneOpen={isSidePaneOpen}
@@ -2078,6 +2172,20 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
             {sidePanePanel}
           </ResizablePanelGroup>
         </div>
+        {isMobileWeb ? (
+          <WorkspaceSidebarDrawer
+            open={isSidebarVisible}
+            onClose={closeMobileSidebarDrawer}
+            title={intl.formatMessage({ id: "workspaceSidebar.workspaces" })}
+          >
+            <div
+              data-workspace-sidebar-panel="true"
+              className="h-full min-h-0 w-full overflow-hidden"
+            >
+              {workspaceSidebarAside}
+            </div>
+          </WorkspaceSidebarDrawer>
+        ) : null}
         <ScopedErrorBoundary
           scope="desktop-top-overlay"
           resetKeys={workspaceSidebarVisibilityResetKeys}
@@ -2092,6 +2200,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
             windowsWindowControlsRightPaddingPx={windowsWindowControlsRightPaddingPx}
             isWindowsDesktop={isWindowsDesktop}
             isDesktop={isDesktop}
+            isMobileWeb={isMobileWeb}
             isSidebarVisible={isSidebarVisible}
             updateReadyVersion={updateReadyVersion}
             updateState={updateState}

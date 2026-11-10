@@ -1,14 +1,60 @@
 // import { GripHorizontal, GripVertical } from "lucide-react";
+import { useCallback, useLayoutEffect, useRef, type Ref } from "react";
 import { cn } from "@/components/lib/utils.js";
 import {
   Group,
   Panel,
   Separator,
   useDefaultLayout,
+  useGroupRef,
+  type GroupImperativeHandle,
   type GroupProps,
+  type Layout,
   type PanelProps,
   type SeparatorProps,
 } from "react-resizable-panels";
+
+/* ------------------------------------------------------------------ */
+/*  布局持久化模型                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 持久化开关切换时对内存布局的唯一动作。
+ * - `freeze-desktop-layout`：停止写盘前先冻结当前（桌面）比例，之后的比例变化只留在内存。
+ * - `restore-desktop-layout`：重新开启持久化时把冻结的桌面比例交回 Group，抵消临时维度上的拖拽。
+ * - `none`：开关未变化。
+ */
+type LayoutPersistenceStep = "none" | "freeze-desktop-layout" | "restore-desktop-layout";
+
+function resolveLayoutPersistenceStep(
+  wasPersisting: boolean,
+  persistLayout: boolean,
+): LayoutPersistenceStep {
+  if (wasPersisting === persistLayout) return "none";
+  return persistLayout ? "restore-desktop-layout" : "freeze-desktop-layout";
+}
+
+/**
+ * 只有面板集合完全一致时才允许把快照交回 Group。
+ * 条件渲染（预览面板/终端开关）会改变面板数量，库会直接抛错，这里交给 Group 自己按当前面板收敛。
+ */
+function isSameResizableLayoutPanels(a: Layout, b: Layout): boolean {
+  const aIds = Object.keys(a);
+  const bIds = Object.keys(b);
+  return aIds.length === bIds.length && bIds.every((id) => id in a);
+}
+
+function assignGroupRef(
+  ref: Ref<GroupImperativeHandle | null> | undefined,
+  handle: GroupImperativeHandle | null,
+): void {
+  if (!ref) return;
+  if (typeof ref === "function") {
+    ref(handle);
+    return;
+  }
+  ref.current = handle;
+}
 
 /* ------------------------------------------------------------------ */
 /*  ResizablePanelGroup                                                */
@@ -23,26 +69,92 @@ function ResizablePanelGroup({
   className,
   layoutId,
   panelIds,
+  persistLayout = true,
+  groupRef,
   ...props
-}: Omit<GroupProps, "defaultLayout" | "onLayoutChange" | "onLayoutChanged"> & {
+}: Omit<GroupProps, "defaultLayout" | "onLayoutChange" | "onLayoutChanged" | "groupRef"> & {
   /** 持久化 key，对应 useDefaultLayout 的 id */
   layoutId: string;
   /** 条件渲染面板时需要传当前可见面板的 id 列表 */
   panelIds?: string[];
+  /**
+   * 是否把布局写入 localStorage（默认 true）。
+   *
+   * 手机预览这类临时维度传 false：Group 实例和子级（编辑器/终端）都不重建，
+   * 只是停止写盘，并把最后一次桌面比例留在内存里，重新开启时用它还原。
+   * 这样手机上的开合/拖拽既不会污染桌面的持久化 key，也不会改变桌面的面板比例。
+   */
+  persistLayout?: boolean;
+  /** 需要同时访问 Group 命令式句柄的调用方 */
+  groupRef?: Ref<GroupImperativeHandle | null>;
 }) {
   const { defaultLayout, onLayoutChange } = useDefaultLayout({
     id: layoutId,
     panelIds,
   });
+  const internalGroupRef = useGroupRef();
+  const setGroupRef = useCallback(
+    (handle: GroupImperativeHandle | null) => {
+      internalGroupRef.current = handle;
+      assignGroupRef(groupRef, handle);
+    },
+    [groupRef, internalGroupRef],
+  );
+
+  // 持久化开启期间最后一次「桌面」布局。persistLayout=false 期间的拖拽只改 Group 内存比例，
+  // 既不写 localStorage，也不覆盖这份快照——重新开启时用它顶掉手机上的拖拽结果。
+  const desktopLayoutRef = useRef<Layout | undefined>(defaultLayout);
+  const persistLayoutRef = useRef(persistLayout);
+  // 还原桌面比例本身不是用户意图，不能把它当成一次新的布局变更写回 storage。
+  const restoringLayoutRef = useRef(false);
+  const handleLayoutChange = useCallback(
+    (layout: Layout) => {
+      // 关闭持久化后不再落盘；用 ref 判断，避免这一帧的旧闭包把手机比例写回桌面 key。
+      if (!persistLayoutRef.current || restoringLayoutRef.current) return;
+      desktopLayoutRef.current = layout;
+      onLayoutChange(layout);
+    },
+    [onLayoutChange],
+  );
+
+  useLayoutEffect(() => {
+    const step = resolveLayoutPersistenceStep(persistLayoutRef.current, persistLayout);
+    persistLayoutRef.current = persistLayout;
+    if (step === "none") return;
+
+    const handle = internalGroupRef.current;
+    if (!handle) return;
+    if (step === "freeze-desktop-layout") {
+      // 快照取自被关闭前的实际布局，而不是渲染时的旧闭包值。
+      const currentLayout = handle.getLayout();
+      if (Object.keys(currentLayout).length > 0) {
+        desktopLayoutRef.current = currentLayout;
+      }
+      return;
+    }
+
+    // 重新开启：defaultLayout 只在挂载时生效，这里必须用命令式句柄还原，否则不会重建 Group。
+    const snapshot = desktopLayoutRef.current;
+    if (!snapshot) return;
+    if (!isSameResizableLayoutPanels(handle.getLayout(), snapshot)) return;
+    restoringLayoutRef.current = true;
+    try {
+      handle.setLayout(snapshot);
+    } finally {
+      restoringLayoutRef.current = false;
+    }
+  }, [persistLayout, internalGroupRef]);
 
   return (
     <Group
       className={cn("flex h-full w-full", className)}
-      defaultLayout={defaultLayout}
+      // 关闭持久化时也不恢复桌面比例：手机直接按面板默认尺寸排版。
+      defaultLayout={persistLayout ? defaultLayout : undefined}
       // onLayoutChanged 会在每次布局变化后立刻写 localStorage。
       // 窗口 resize 时 PanelGroup 会连续产生成百上千次 layout 更新，必须走库内置
       // debounce 的 onLayoutChange，避免同步持久化放大主线程压力。
-      onLayoutChange={onLayoutChange}
+      onLayoutChange={handleLayoutChange}
+      groupRef={setGroupRef}
       {...props}
     />
   );
@@ -113,4 +225,12 @@ function ResizableHandle({ className, ...props }: SeparatorProps) {
   );
 }
 
-export { ResizablePanelGroup, ResizablePanel, ResizableHandle, type ResizablePanelProps };
+export {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+  isSameResizableLayoutPanels,
+  resolveLayoutPersistenceStep,
+  type LayoutPersistenceStep,
+  type ResizablePanelProps,
+};
