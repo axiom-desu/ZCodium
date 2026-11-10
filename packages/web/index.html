@@ -1,9 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-zcode-entry="web">
   <head>
     <meta charset="UTF-8" />
     <meta name="referrer" content="no-referrer" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <meta name="theme-color" content="#161616" />
     <meta name="color-scheme" content="dark" />
     <!-- Chrome dev 下可能不发 favicon 网络请求；内嵌小尺寸 App 图标，避免标签页回退到默认图标。-->
@@ -99,6 +102,14 @@
       html[data-zcode-browser-theme-surface="light"] body,
       html[data-zcode-browser-theme-surface="light"] #root {
         background: var(--color-background, var(--zcode-bootstrap-bg, #f8f8f8)) !important;
+      }
+      @media (max-width: 767px) {
+        html[data-zcode-entry="web"] [data-desktop-window-frame="true"] {
+          /* 仅浏览器入口避让刘海；高度仍由既有动态视口布局负责。 */
+          padding-top: env(safe-area-inset-top);
+          padding-left: env(safe-area-inset-left);
+          padding-right: env(safe-area-inset-right);
+        }
       }
     </style>
   </head>

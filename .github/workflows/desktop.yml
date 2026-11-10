@@ -146,6 +146,8 @@ jobs:
         run: node scripts/ci/file-manager-navigation-smoke.mjs
       - name: App shell full view guard
         run: node scripts/ci/app-shell-full-view-smoke.mjs
+      - name: Web profile mobile layout and composer focus
+        run: pnpm test:web-profile-mobile
       - name: Workbench split guard
         run: node scripts/ci/workbench-split-guard-smoke.mjs
       - name: Conversation workspace detach guard

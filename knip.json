@@ -37,6 +37,7 @@
         "test/fixtures/project-sidebar.jsx",
         "test/fixtures/plugin-ui-recommendations.jsx",
         "test/fixtures/conversation-detach.jsx",
+        "test/fixtures/conversation-composer-mobile-focus.jsx",
         "src/project-sidebar/index.ts",
         "src/project-sidebar/contract.ts",
         "src/project-sidebar/module.ts",
