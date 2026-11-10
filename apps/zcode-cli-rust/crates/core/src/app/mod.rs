@@ -6,6 +6,7 @@ mod engine_builders;
 mod engine_output;
 mod event_projection;
 mod model_config;
+mod protocol;
 mod queries;
 #[cfg(test)]
 #[path = "session_close_tests.rs"]

@@ -33,7 +33,9 @@ describe("normalizeResponseParseFailure", () => {
     const protocolError = error as ZCodeProtocolResponseError;
     expect(protocolError.code).toBe(ZCODE_PROTOCOL_RESPONSE_INVALID_REASON_CODE);
     expect(protocolError.message).toContain("session/messages");
-    expect(protocolError.message).toContain("messages.0.sessionId: Required");
+    expect(protocolError.message).toContain("messages.0.sessionId: invalid");
+    expect(protocolError.message).toContain("对端 ZCode Protocol v1");
+    expect(protocolError.reasonCode).toBe("agent_response_invalid");
     expect(protocolError.message).not.toContain("[{");
     expect(protocolError.details.issues).toHaveLength(3);
   });
@@ -69,6 +71,7 @@ describe("normalizeResponseParseFailure", () => {
     }) as ZCodeProtocolResponseError;
     expect(error.details.actual).toBeNull();
     expect(error.message).not.toContain("undefined");
-    expect(error.reasonCode).toBe("agent_protocol_mismatch");
+    expect(error.message).toContain("未声明协议版本");
+    expect(error.reasonCode).toBe("agent_response_invalid");
   });
 });

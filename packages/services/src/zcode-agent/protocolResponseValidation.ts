@@ -8,6 +8,7 @@ import {
   isProtocolIdentityCompatible,
   readProtocolIdentity,
   summarizeProtocolIssues,
+  zcodeProtocolMethods,
   type ZcodeProtocolIdentity,
 } from "@zcode/shared";
 
@@ -46,9 +47,11 @@ export class ZCodeProtocolResponseError extends Error {
     this.details = params.details;
   }
 
-  /** 两类失败都视为「对端不兼容」，UI 只需一个升级提示。 */
-  get reasonCode(): "agent_protocol_mismatch" {
-    return "agent_protocol_mismatch";
+  /** 只有明确读到不同版本才报告 mismatch；形状错误不能证明版本不同。 */
+  get reasonCode(): "agent_protocol_mismatch" | "agent_response_invalid" {
+    return this.code === ZCODE_PROTOCOL_MISMATCH_REASON_CODE
+      ? "agent_protocol_mismatch"
+      : "agent_response_invalid";
   }
 }
 
@@ -56,7 +59,7 @@ export function normalizeResponseParseFailure(params: {
   method: string;
   result: unknown;
   error: unknown;
-}): Error {
+}): ZCodeProtocolResponseError {
   const expected: ZcodeProtocolIdentity = {
     name: ZCODE_PROTOCOL_NAME,
     version: ZCODE_PROTOCOL_VERSION,
@@ -78,10 +81,21 @@ export function normalizeResponseParseFailure(params: {
     message: formatZcodeResponseInvalidMessage({
       method: params.method,
       expected,
+      actual,
       issues,
     }),
     code: ZCODE_PROTOCOL_RESPONSE_INVALID_REASON_CODE,
     details: { method: params.method, expected, actual, issues },
     cause: params.error,
   });
+}
+
+/** Bug 修复：capabilities schema 接受未来版本，不能等 schema 失败才检查协议身份。 */
+export function assertResponseProtocolIdentity(method: string, result: unknown): void {
+  if (method !== zcodeProtocolMethods.runtimeCapabilities) return;
+  const actual = readProtocolIdentity(result);
+  const expected = { name: ZCODE_PROTOCOL_NAME, version: ZCODE_PROTOCOL_VERSION };
+  if (actual && !isProtocolIdentityCompatible(expected, actual)) {
+    throw normalizeResponseParseFailure({ method, result, error: undefined });
+  }
 }

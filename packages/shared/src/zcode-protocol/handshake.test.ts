@@ -23,6 +23,7 @@ describe("readProtocolIdentity", () => {
     expect(readProtocolIdentity({ protocol: { name: "", version: 1 } })).toBeNull();
     expect(readProtocolIdentity({ protocol: { name: "ZCode Protocol", version: "3" } })).toBeNull();
     expect(readProtocolIdentity({ protocol: { name: "ZCode Protocol", version: 1.5 } })).toBeNull();
+    expect(readProtocolIdentity({ protocol: { name: "ZCode Protocol", version: -1 } })).toBeNull();
   });
 });
 
@@ -40,7 +41,7 @@ describe("isProtocolIdentityCompatible", () => {
 });
 
 describe("summarizeProtocolIssues", () => {
-  it("keeps at most the requested number of path:message pairs", () => {
+  it("keeps at most the requested number of field paths", () => {
     const error = {
       issues: [
         { path: ["messages", 0, "sessionId"], message: "Required" },
@@ -50,15 +51,23 @@ describe("summarizeProtocolIssues", () => {
       ],
     };
     expect(summarizeProtocolIssues(error)).toEqual([
-      "messages.0.sessionId: Required",
-      "messages.0.messageId: Required",
-      "messages.0.partId: Required",
+      "messages.0.sessionId: invalid",
+      "messages.0.messageId: invalid",
+      "messages.0.partId: invalid",
     ]);
+  });
+
+  it("does not expose raw input embedded in a validator message", () => {
+    expect(
+      summarizeProtocolIssues({
+        issues: [{ path: ["kind"], message: "Invalid enum value: PRIVATE-PEER-DATA" }],
+      }),
+    ).toEqual(["kind: invalid"]);
   });
 
   it("skips non-object issues and tolerates missing issues", () => {
     expect(summarizeProtocolIssues({ issues: ["nope", { path: [], message: "bad" }] })).toEqual([
-      "(root): bad",
+      "(root): invalid",
     ]);
     expect(summarizeProtocolIssues(new Error("plain"))).toEqual([]);
     expect(summarizeProtocolIssues(null)).toEqual([]);
@@ -92,22 +101,25 @@ describe("protocol failure messages", () => {
     const message = formatZcodeResponseInvalidMessage({
       method: "session/messages",
       expected,
+      actual: null,
       issues: summarizeProtocolIssues({
         issues: [{ path: ["messages", 0, "sessionId"], message: "Required" }],
       }),
     });
-    expect(message).toContain("messages.0.sessionId: Required");
+    expect(message).toContain("messages.0.sessionId: invalid");
+    expect(message).toContain("未声明协议版本");
     expect(message).not.toContain("[{");
-    expect(message.length).toBeLessThanOrEqual(301);
+    expect(message.length).toBeLessThanOrEqual(300);
   });
 
   it("never produces an unbounded message", () => {
     const message = formatZcodeResponseInvalidMessage({
       method: "session/messages",
       expected,
+      actual: expected,
       issues: Array.from({ length: 3 }, (_, index) => `field${index}: ${"x".repeat(400)}`),
     });
-    expect(message.length).toBeLessThanOrEqual(301);
+    expect(message.length).toBeLessThanOrEqual(300);
     expect(message.endsWith("…")).toBe(true);
   });
 });

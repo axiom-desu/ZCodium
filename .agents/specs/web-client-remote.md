@@ -132,14 +132,33 @@ headless 服务器模式，与手机远控互斥。
 
 ## 仍未完成（下一轮必须先做）
 
-1. **协议握手门禁**（截图里的 Zod 原文）：**已修**，见 `agent-protocol-handshake.md`——
-   `initialize` 增加只读 `session/list` 握手探针，响应解析失败收敛为可读协议错误（含方法名与双方版本），
-   不再把 issues 原文当消息渲染。
+1. **协议握手门禁**（截图里的 Zod 原文）：见 `agent-protocol-handshake.md`——首轮
+   `session/list` 探针不含身份，不能真正校验版本，已改为 `runtime/capabilities` 协议身份声明/比较。
+   探针总预算 10s 且只读 observation，不回收 Agent；旧 Agent 未声明版本时明确
+   `protocolVerified:false`（未验证，不宣称兼容）。响应错误正文不再含原始 issues/对端值。
 2. **B4 远端 scope**：attachment 固定 local scope，远端工作区依赖窗口 Local Host 的项目投影；
    未在真实 SSH workspace 上验证过浏览器侧导航与 identity 隔离。
 3. **B5 删除旧路径**：`mobile.html`、`web/src/mobile/**`、信封协议、`servicePipe` 仍在（灰度期保留）。
 4. **真实浏览器 E2E**：真实 Electron + Chromium 加载 `resources/web-remote`，验证首屏/列表/打开会话/
    发消息/断线重连；本轮只有端点层测试（真实 HTTP/WS/RPC 往返）与策略矩阵测试。
+
+## B5 删除前复核（暂不删除）
+
+代码复核确认：`payloadRouter` / `openWebRemoteControlHostBridge` / `servicePipe` / shared
+`rpcTransport` 不仅供旧 LAN 入口使用，也由 `endpointMode: custom` 的 `relayTransport` 调用；
+relay 托管的手机页面仍依赖 `mobile.html`。当前 Web 客户端端点只在 LAN 模式启动。
+因此“直接删约四千行、不影响 relay”不成立；未迁移 relay 前，不执行整链删除。
+
+后续删除的前置决策：
+
+1. 自定义 relay 先迁移到 Web 客户端，或由用户明确同意下线该能力，不能静默删坏。
+2. 浏览器 WS attach/detach 必须成为 manager 连接状态的传输事实来源；目前旧状态链路仍依赖
+   LAN envelope 回调，删旧链路前要补接线，不能留下永远 waiting 的状态。
+3. 保留 `surface` 默认拒绝策略及 mobile-project-directory 权限/identity/epoch 测试；只替换
+   引用了旧客户端 bundle 的 E2E 测试，不跟随删掉安全断言。
+4. 新入口 HTTP+Cookie+WS+RPC 冒烟先替代旧 mobile smoke，再删 vite 多入口和旧资源打包项。
+
+此复核不改变运行行为；B5 仍未实施，既有 relay 与回退入口保持不动。
 
 ## 发行
 

@@ -24,7 +24,7 @@ const DEFAULT_ISSUE_LIMIT = 3;
 function truncateMessage(text: string): string {
   return text.length <= PROTOCOL_MESSAGE_MAX_CHARS
     ? text
-    : `${text.slice(0, PROTOCOL_MESSAGE_MAX_CHARS)}…`;
+    : `${text.slice(0, PROTOCOL_MESSAGE_MAX_CHARS - 1)}…`;
 }
 
 /**
@@ -37,8 +37,8 @@ export function readProtocolIdentity(value: unknown): ZcodeProtocolIdentity | nu
   if (typeof protocol !== "object" || protocol === null) return null;
   const { name, version } = protocol as { name?: unknown; version?: unknown };
   if (typeof name !== "string" || name.trim() === "") return null;
-  if (typeof version !== "number" || !Number.isInteger(version)) return null;
-  return { name, version };
+  if (typeof version !== "number" || !Number.isInteger(version) || version < 0) return null;
+  return { name: name.trim(), version };
 }
 
 export function isProtocolIdentityCompatible(
@@ -50,7 +50,7 @@ export function isProtocolIdentityCompatible(
 
 /**
  * 鸭子类型读取 `issues`（不引 zod）：服务层可能同时处理 zod 3/4 或类 zod 错误。
- * 只保最多 `limit` 条 `path: message`，用于让调用方自纠字段；不保留原始 JSON。
+ * 只保最多 `limit` 条字段路径；Zod message 也可能内含对端原始输入，不进入 UI 正文。
  */
 export function summarizeProtocolIssues(error: unknown, limit = DEFAULT_ISSUE_LIMIT): string[] {
   const issues = (error as { issues?: unknown } | null | undefined)?.issues;
@@ -60,10 +60,8 @@ export function summarizeProtocolIssues(error: unknown, limit = DEFAULT_ISSUE_LI
     if (summarized.length >= limit) break;
     if (typeof issue !== "object" || issue === null) continue;
     const path = (issue as { path?: unknown }).path;
-    const message = (issue as { message?: unknown }).message;
     const pathText = Array.isArray(path) && path.length > 0 ? path.map(String).join(".") : "(root)";
-    const messageText = typeof message === "string" && message.trim() !== "" ? message : "invalid";
-    summarized.push(`${pathText}: ${messageText}`);
+    summarized.push(`${pathText}: invalid`);
   }
   return summarized;
 }
@@ -88,12 +86,13 @@ export function formatZcodeProtocolMismatchMessage(params: {
 export function formatZcodeResponseInvalidMessage(params: {
   method: string;
   expected: ZcodeProtocolIdentity;
+  actual: ZcodeProtocolIdentity | null;
   issues: string[];
 }): string {
   const issueText = params.issues.length > 0 ? `字段问题：${params.issues.join("; ")}。` : "";
   return truncateMessage(
-    `Agent 响应不符合协议（${params.method}）：期望 ${describeIdentity(
+    `Agent 响应格式不符合协议（${params.method}）：本机 ${describeIdentity(
       params.expected,
-    )}。${issueText}通常意味着对端 Agent 版本不匹配。`,
+    )}，对端 ${params.actual ? describeIdentity(params.actual) : "未声明协议版本"}。${issueText}请检查 Agent 与桌面端的协议实现。`,
   );
 }

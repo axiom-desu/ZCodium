@@ -125,8 +125,9 @@ export interface ZCodeSessionInitializeResult {
   protocolVersion?: number;
   transportKind?: "stdio" | "websocket";
   reason?: string;
-  /** provider_not_ready：等待模型；agent_protocol_mismatch：对端 Agent 协议不兼容，需升级。 */
-  reasonCode?: "provider_not_ready" | "agent_protocol_mismatch";
+  /** 仅在对端明确声明且通过身份比较时为 true；旧 Agent/观测失败为 false。 */
+  protocolVerified?: boolean;
+  reasonCode?: "provider_not_ready" | "agent_protocol_mismatch" | "agent_response_invalid";
 }
 
 export interface ZCodeSessionWorkspaceRuntimeIdentity {
