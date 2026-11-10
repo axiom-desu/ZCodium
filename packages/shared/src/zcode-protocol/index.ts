@@ -81,11 +81,17 @@ export {
   type HookInvocationRow,
 } from "../zcode-protocol-v4/rows.js";
 
+export * from "./handshake.js";
+
 export const ZCODE_PROTOCOL_NAME = "ZCode Protocol" as const;
 export const ZCODE_PROTOCOL_VERSION = 1 as const;
 // V4 wire 与 legacy 主协议并存；禁止为了 V4 physical framing 改写 legacy 版本。
 export const ZCODE_PROTOCOL_V4_WIRE_VERSION = 3 as const;
 export const zcodeRuntimeCapabilitiesSchema = z.object({
+  // 旧 Agent 可以不声明；不同版本必须保留原值，由握手比较，而非被 literal 校验抹成形状错误。
+  protocol: z
+    .object({ name: z.string().trim().min(1), version: z.number().int().nonnegative() })
+    .optional(),
   independentPlanState: z.boolean().optional(),
 });
 export const zcodeProtocolErrorCodes = {

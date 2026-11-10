@@ -219,7 +219,7 @@ async function connectRemoteUnchecked(
 
   const socket = wrapStdioStream(stream);
   const protocol = new SocketProtocol(socket);
-  const client = new ChannelClient(protocol);
+  const client = new ChannelClient(protocol, { logger: log });
   const services = new RemoteServiceAccess(client, {
     // 旧 server 不声明 virtualProjects：不创建代理，调用方走显式 legacy 单 root 只读适配。
     virtualProjects: hello.capabilities?.virtualProjects === true,

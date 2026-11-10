@@ -19,6 +19,7 @@ interface WindowHostExposeAttachmentParams<TServices, TPort, TCapabilities = nev
   requestId: string;
   attachmentId: string;
   clientMode: ZCodeAgentV4ClientMode;
+  surface?: "mobile" | "web-client";
   scope: WindowHostAttachmentScope;
   services: TServices;
   generation: number;
@@ -58,6 +59,8 @@ export function createWindowHostAttachmentRegistry<
     requestId: string;
     attachmentId: string;
     clientMode: ZCodeAgentV4ClientMode;
+    /** 未声明时按手机子集处理，保持旧客户端行为不变。 */
+    surface?: "mobile" | "web-client";
     scope: WindowHostAttachmentScope;
     port: TPort;
   }): void {

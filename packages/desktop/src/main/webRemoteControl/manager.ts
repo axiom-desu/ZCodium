@@ -12,7 +12,9 @@ import {
 import type { ICredentialService, ISettingService } from "@zcode/services";
 import type { WebRemoteControlLogger } from "./logger.js";
 import { createNodeWebRemoteControlRelayAuthProvider } from "./authProvider.js";
+import { resolveDeviceAuth } from "./deviceAuth.js";
 import { createWebRemoteControlRelayAuthStorageProvider } from "./authStorage.js";
+import { attachRuntimeWebClient } from "./webClientAttachment.js";
 import { buildWebRemoteControlQrUrl } from "./qrUrl.js";
 import { LanRemoteControlEndpoint } from "./lanEndpoint.js";
 import { createLanDeviceTransport } from "./deviceTransport.js";
@@ -88,6 +90,11 @@ export interface WebRemoteControlManagerDeps {
    * UI 同步载荷里的 `kind` / `connectionState` 不是事实来源；未注入时保持原值不覆盖。
    */
   resolveRemoteWorkspaceConnectionState?: (remoteSessionId: string) => "connected" | "disconnected";
+  /**
+   * 方案 B：浏览器直接加载随包 Web 客户端（`resources/web-remote`）。
+   * 未注入时保持旧的 mobile.html 信封链路，两者不并存于同一窗口。
+   */
+  webClient?: { assetsRoot: string | null };
 }
 
 export type WebRemoteControlOpenBridgeResult =
@@ -202,6 +209,12 @@ export function createWebRemoteControlManager(
     runtime.bridge?.dispose();
     runtime.bridge = undefined;
     runtime.transport.dispose();
+    void runtime.webClientEndpoint?.stop().catch((error: unknown) => {
+      deps.logger.warn("[web-client-remote] stop failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+    runtime.webClientEndpoint = undefined;
     runtimes.delete(runtime.windowId);
     if (runtimesByDeviceSid.get(runtime.deviceSid) === runtime) {
       runtimesByDeviceSid.delete(runtime.deviceSid);
@@ -233,15 +246,13 @@ export function createWebRemoteControlManager(
         throw new Error("尚未配置可用的远程端点地址（设置 → 远程控制 → 我的端点）");
       }
     }
-    const persisted = await authStorage.load();
-    const auth:
-      | { mode: "register"; passHash: string }
-      | { mode: "persisted"; deviceSid: string; passHash: string } = persisted
-      ? { mode: "persisted", deviceSid: persisted.deviceSid, passHash: persisted.passHash }
-      : {
-          mode: "register",
-          passHash: authProvider.createPassHash(authProvider.createPassword()),
-        };
+    const auth = await resolveDeviceAuth({
+      persisted: await authStorage.load(),
+      hasPair: (deviceSid, passHash) => endpoint.hasPair(deviceSid, passHash),
+      clearPersisted: () => authStorage.clear(),
+      createPassword: () => authProvider.createPassword(),
+      createPassHash: (password) => authProvider.createPassHash(password),
+    });
 
     const runtime: WebRemoteControlRuntime = {
       windowId,
@@ -273,6 +284,9 @@ export function createWebRemoteControlManager(
         runtime.deviceSid = registered.deviceSid;
         runtimesByDeviceSid.set(registered.deviceSid, runtime);
         void authStorage.save(registered);
+        // Bug 原因：首次启动 deviceSid 是 "pending"，注册后旧实现不重建 qrUrl/emitStatus，面板要刷新才出码。
+        if (runtime.qrBaseUrl) runtime.qrUrl = buildQrUrl(runtime);
+        emitStatus(runtime);
         deps.logger.info("[web-remote-control] device registered", {
           windowId,
           transport: endpointMode,
@@ -339,6 +353,15 @@ export function createWebRemoteControlManager(
     } else {
       const baseUrls = lanTransport?.baseUrls() ?? [];
       runtime.qrBaseUrl = baseUrls.find((url) => !url.includes("127.0.0.1")) ?? baseUrls[0] ?? "";
+    }
+    if (deps.webClient && endpointMode === "lan") {
+      // 方案 B：QR 指向浏览器入口（完整 Web 客户端），而不是 mobile.html。
+      try {
+        await attachRuntimeWebClient(runtime, deps, deps.webClient.assetsRoot);
+      } catch (error) {
+        await stopRuntime(windowId, "web-client-endpoint-failed");
+        throw error;
+      }
     }
     if (runtime.deviceSid && runtime.deviceSid !== "pending") {
       runtime.qrUrl = buildQrUrl(runtime);

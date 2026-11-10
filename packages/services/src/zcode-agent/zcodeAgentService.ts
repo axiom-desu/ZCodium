@@ -130,6 +130,7 @@ import {
   type ZCodeTaskMode,
 } from "@zcode/shared";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
+import { probeAgentProtocol } from "./protocolHandshake.js";
 import { mergeAutomationMutationToolDenylist } from "#src/zcode-agent/automationToolPolicy.js";
 import { ZCODE_AGENT_RUNTIME_UNAVAILABLE_CODE } from "./zcodeAgent.js";
 import type {
@@ -2971,7 +2972,29 @@ export function createZCodeAgentService(
       });
       try {
         const client = await getClient(params);
+        // Bug 修复：session/list 不含协议身份；改用 runtime 声明的 capabilities，而非猜测版本。
+        const protocolProbe = await probeAgentProtocol(client);
+        if ("error" in protocolProbe) {
+          const protocolFailure = protocolProbe.error;
+          logger.warn(undefined, "ZCode agent 协议校验失败", {
+            durationMs: Date.now() - startedAt,
+            method: protocolFailure.details.method,
+            message: protocolFailure.message,
+            workspaceKey,
+            workspacePath: params.workspacePath,
+          });
+          return {
+            available: false,
+            workspaceKey,
+            protocolName: ZCODE_PROTOCOL_NAME,
+            protocolVersion: ZCODE_PROTOCOL_VERSION,
+            protocolVerified: false,
+            reason: protocolFailure.message,
+            reasonCode: protocolFailure.reasonCode,
+          };
+        }
         logger.info(undefined, "ZCode agent 初始化完成", {
+          protocolVerification: protocolProbe.status,
           durationMs: Date.now() - startedAt,
           transportKind: client.transportKind === "websocket" ? "websocket" : "stdio",
           workspaceKey,
@@ -2980,6 +3003,7 @@ export function createZCodeAgentService(
         return {
           available: true,
           workspaceKey,
+          protocolVerified: protocolProbe.status === "verified",
           protocolName: ZCODE_PROTOCOL_NAME,
           protocolVersion: ZCODE_PROTOCOL_VERSION,
           transportKind: client.transportKind === "websocket" ? "websocket" : "stdio",
@@ -3001,6 +3025,7 @@ export function createZCodeAgentService(
         return {
           available: false,
           workspaceKey,
+          protocolVerified: false,
           protocolName: ZCODE_PROTOCOL_NAME,
           protocolVersion: ZCODE_PROTOCOL_VERSION,
           reason: error instanceof Error ? error.message : String(error),

@@ -153,6 +153,8 @@ const hostAgentWarmupTargetSchema = z.object({
 
 export const hostInitLocalMessageSchema = z.object({
   type: z.literal("init-local"),
+  // Local Host 的 Source 管理入口也需要同一随包路径，不能依赖启动 cwd。
+  remoteAssets: remoteAssetDirsSchema.optional(),
   databaseStartupId: z.string().min(1).max(128).optional(),
   hostId: nonEmptyStringSchema.optional(),
   deliveryKind: taskRealtimeHostDeliveryKindSchema.optional(),
@@ -253,6 +255,9 @@ export const hostAttachServicePortMessageSchema = z
     requestId: nonEmptyStringSchema,
     attachmentId: nonEmptyStringSchema,
     clientMode: z.enum(["desktop-continuous", "web-remote-replayable"]),
+    // 远端 web-remote-replayable 有两种消费面：手机子集（默认）与浏览器完整 Web 客户端。
+    // 服务授权按面收敛，不能靠「同一个 clientMode 全放行」。
+    surface: z.enum(["mobile", "web-client"]).optional(),
     scope: windowHostAttachmentScopeSchema,
   })
   .strict();

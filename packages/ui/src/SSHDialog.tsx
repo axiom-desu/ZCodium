@@ -435,10 +435,14 @@ export function RemoteConnectionDialog({
       const classification = classifySourceServerFailure(connectError);
       const presentation = resolveSourceServerErrorPresentation(classification.code);
       const errorMessage = getErrorMessage(connectError);
-      // typed Source 失败补充既有错误分类标题；原始错误仍完整展示，便于排查。
+      // Bug 原因：不支持额外验证若只显示底层认证失败，用户会误以为需要补密码。
+      // 复用既有错误面板，只有两个不支持分类补充专用恢复说明，不改变其它恢复入口。
+      const unsupported =
+        classification.code === "remote-authentication-unsupported" ||
+        classification.code === "remote-platform-unsupported";
       setError(
         classification.code
-          ? `${intl.formatMessage({ id: presentation.titleId })}: ${errorMessage}`
+          ? `${intl.formatMessage({ id: presentation.titleId })}: ${unsupported ? `${intl.formatMessage({ id: presentation.reasonId })}\n` : ""}${errorMessage}`
           : errorMessage,
       );
       setCurrentStep(completionState.step);

@@ -1,4 +1,7 @@
-use super::Engine;
+use super::{
+    Engine,
+    protocol::{PROTOCOL_NAME, PROTOCOL_VERSION},
+};
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
 
@@ -114,7 +117,7 @@ impl Engine {
             let start = messages.len().saturating_sub(limit as usize);
             messages.drain(..start);
         }
-        let snapshot = json!({"protocol":{"name":"ZCode Protocol","version":1},"session":info,"settings":{"model":model_settings,"thoughtLevel":thought,"mode":{"current":s.mode},"permission":{"mode":s.mode}},"projection":projection,"runtime":runtime,"messages":messages,"todos":s.todos,"slashCommands":self.workspace_config()["slashCommands"]});
+        let snapshot = json!({"protocol":{"name":PROTOCOL_NAME,"version":PROTOCOL_VERSION},"session":info,"settings":{"model":model_settings,"thoughtLevel":thought,"mode":{"current":s.mode},"permission":{"mode":s.mode}},"projection":projection,"runtime":runtime,"messages":messages,"todos":s.todos,"slashCommands":self.workspace_config()["slashCommands"]});
         ensure!(
             serde_json::to_vec(&snapshot)?.len() <= 900 * 1024,
             "Session snapshot exceeds frame budget; use messageLimit and V4 history queries"

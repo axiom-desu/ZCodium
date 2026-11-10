@@ -10,6 +10,7 @@ import {
   readFile,
   realpath,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { builtinModules } from "node:module";
@@ -18,6 +19,8 @@ import { createRuntimeManifest, type ServerTarget } from "../runtime/manifest.js
 import {
   BUILTIN_PLUGIN_ASSETS,
   BUILTIN_PLUGIN_TOP_LEVEL_PATHS,
+  CUA_RUNTIME_MODULES_PATH,
+  cuaRuntimeRequiredPaths,
 } from "@zcode/shared/builtin-plugin-assets";
 import { validateOfficeViewerRuntimeAssets } from "@zcode/shared/office-viewer-assets";
 import { isTarCommand, resolveHostTarCommand } from "./tarCommand.js";
@@ -293,6 +296,7 @@ async function hashPaths(
 async function copyDirectoryIfPresent(
   sourceDir: string | undefined,
   targetDir: string,
+  target: ServerTarget,
 ): Promise<string[]> {
   if (!sourceDir) return [];
   try {
@@ -301,12 +305,13 @@ async function copyDirectoryIfPresent(
     return [];
   }
   const names = (await readdir(sourceDir, { withFileTypes: true }))
-    .filter((entry) => entry.isDirectory() && entry.name.endsWith("-plugin"))
+    // 不再按 `*-plugin` 后缀挑选：node-repl-host 没有该后缀，却带独立 CUA/MCP 运行时。
+    .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
   // 官方插件白名单以当前 checkout 是否存在 package.json 为准：只有 node_modules 的残留
   // 目录（别的分支 install 过、切回后 tracked 文件已消失）不能进组件 hash。
-  // 同时只接受 shared 注册表里的内置插件目录名：checkout 里残留的任意 `*-plugin`
+  // 同时只接受 shared 注册表里的内置资产目录名：checkout 里残留的任意 `*-plugin`
   // 不能因为目录名像插件就被打进发行包。
   const knownPluginDirs = new Set<string>(BUILTIN_PLUGIN_ASSETS.map((plugin) => plugin.directory));
   const whitelisted: string[] = [];
@@ -318,29 +323,37 @@ async function copyDirectoryIfPresent(
   }
   for (const name of whitelisted) {
     const source = join(sourceDir, name);
-    const target = join(targetDir, name);
+    const targetPath = join(targetDir, name);
+    // node-repl-host 的 CUA 闭包必须随插件分发；其它包仍然禁止任何 node_modules 段。
+    const carriesCuaRuntime = name === "node-repl-host";
+    const cuaTarget = cuaTargetOf(target);
     // 顶层白名单与桌面/远端 staging 同源：只复制运行/种子资产，`src`、`test`、`.turbo`、
     // `node_modules` 和未知顶层目录都不能进入组件 hash。这里必须实际过滤复制内容，
     // 不能只在 hash 清单里声明过滤。
-    await copyPackageDir(source, target, (relativePath) =>
-      shouldCopyOfficialPluginAsset(relativePath),
+    await copyPackageDir(
+      source,
+      targetPath,
+      (relativePath) => shouldCopyOfficialPluginAsset(relativePath, carriesCuaRuntime, cuaTarget),
+      carriesCuaRuntime,
     );
     try {
-      await access(join(target, ".zcodium-plugin", "plugin.json"));
+      await access(join(targetPath, ".zcodium-plugin", "plugin.json"));
     } catch (cause) {
       throw new Error(`Official plugin manifest is missing: ${name}/.zcodium-plugin/plugin.json`, {
         cause,
       });
     }
+    // 复制过 node_modules 边界后必须复核固定 CUA 文件清单，缺一个都不允许出包。
+    if (carriesCuaRuntime) await validateStagedCuaRuntime(targetPath, cuaTarget);
     const packageJson = await readPackageJson(source);
     const office = packageJson?.office as { kinds?: unknown } | undefined;
     const kinds = Array.isArray(office?.kinds)
       ? office.kinds.filter((kind): kind is string => typeof kind === "string")
       : [];
     // 文档面板插件必须展开构建 manifest 校验字体/worker/wasm/NOTICE，不能只看三个入口文件。
-    if (kinds.length > 0) await validateOfficeViewerRuntimeAssets(target, kinds);
+    if (kinds.length > 0) await validateOfficeViewerRuntimeAssets(targetPath, kinds);
   }
-  return whitelisted.map((name) => name.replace(/-plugin$/u, ""));
+  return whitelisted;
 }
 
 const EXCLUDED_OFFICIAL_PLUGIN_ASSET_NAMES = new Set([
@@ -351,12 +364,93 @@ const EXCLUDED_OFFICIAL_PLUGIN_ASSET_NAMES = new Set([
   "node_modules",
 ]);
 const OFFICIAL_PLUGIN_TOP_LEVEL_PATHS = new Set<string>(BUILTIN_PLUGIN_TOP_LEVEL_PATHS);
+type CuaPlatform = "linux" | "win32" | "darwin";
+type CuaArch = "x64" | "arm64";
+interface CuaTarget {
+  platform: CuaPlatform;
+  arch: CuaArch;
+}
 
-function shouldCopyOfficialPluginAsset(relativePath: string): boolean {
+/** 发行 target 与 CUA 支持矩阵的窄化；不支持的目标直接失败，不能悄悄用构建机平台。 */
+function cuaTargetOf(target: ServerTarget): CuaTarget {
+  const [platform, arch] = target.split("-");
+  if (
+    (platform !== "linux" && platform !== "win32" && platform !== "darwin") ||
+    (arch !== "x64" && arch !== "arm64")
+  ) {
+    throw new Error(`Unsupported CUA target: ${target}`);
+  }
+  return { platform, arch };
+}
+
+/** CUA 闭包只有这些包目录；其余 node_modules 内容都不得进入发行包。 */
+function cuaPackagePrefixes(platform: string, arch: string): Set<string> {
+  return new Set(
+    cuaRuntimeRequiredPaths(platform, arch)
+      .filter((path) => path.startsWith(`${CUA_RUNTIME_MODULES_PATH}/`))
+      .map((path) => path.slice(`${CUA_RUNTIME_MODULES_PATH}/`.length))
+      .filter((path) => path.includes("/"))
+      .map((path) => path.split("/").slice(0, 2).join("/")),
+  );
+}
+
+/**
+ * 只放行固定 CUA 包目录（含作用域祖先目录）。文件清单由 `validateStagedCuaRuntime` 复核，
+ * 因此这里可以按包目录放行而不必逐文件列举，同时仍拒绝任意其它 node_modules 内容。
+ */
+function isAllowedCuaRuntimePath(
+  normalizedPath: string,
+  packagePrefixes: ReadonlySet<string>,
+): boolean {
+  if (normalizedPath === CUA_RUNTIME_MODULES_PATH) return true;
+  const prefix = `${CUA_RUNTIME_MODULES_PATH}/`;
+  if (!normalizedPath.startsWith(prefix)) return false;
+  const rest = normalizedPath.slice(prefix.length);
+  if (rest.split("/").includes("node_modules")) return false;
+  // rest 既可能是作用域祖先目录（@trycua），也可能是包内文件路径，两种都要放行。
+  return [...packagePrefixes].some(
+    (packagePrefix) =>
+      rest === packagePrefix ||
+      rest.startsWith(`${packagePrefix}/`) ||
+      packagePrefix.startsWith(`${rest}/`),
+  );
+}
+
+function shouldCopyOfficialPluginAsset(
+  relativePath: string,
+  carriesCuaRuntime = false,
+  cuaTarget?: CuaTarget,
+): boolean {
   const segments = relativePath.split(sep);
-  if (segments.some((segment) => EXCLUDED_OFFICIAL_PLUGIN_ASSET_NAMES.has(segment))) return false;
   if (segments.some((segment) => segment.endsWith(".pyc"))) return false;
+  // node_modules 被默认排除，因此 CUA 闭包必须在通用排除规则之前显式放行。
+  if (
+    carriesCuaRuntime &&
+    cuaTarget &&
+    isAllowedCuaRuntimePath(
+      segments.join("/"),
+      cuaPackagePrefixes(cuaTarget.platform, cuaTarget.arch),
+    )
+  ) {
+    return true;
+  }
+  if (segments.some((segment) => EXCLUDED_OFFICIAL_PLUGIN_ASSET_NAMES.has(segment))) return false;
   return OFFICIAL_PLUGIN_TOP_LEVEL_PATHS.has(segments[0] ?? "");
+}
+
+/** 与 prepare 的输入校验同源：缺任一 CUA 文件即失败，不能发布半套运行时。 */
+async function validateStagedCuaRuntime(pluginRoot: string, cuaTarget: CuaTarget): Promise<void> {
+  for (const relativePath of cuaRuntimeRequiredPaths(cuaTarget.platform, cuaTarget.arch)) {
+    const entry = await stat(join(pluginRoot, ...relativePath.split("/"))).catch(
+      (error: unknown) => {
+        if ((error as { code?: string }).code === "ENOENT") return null;
+        throw error;
+      },
+    );
+    if (!entry?.isFile() || entry.size === 0) {
+      throw new Error(`Missing staged CUA runtime asset: node-repl-host/${relativePath}`);
+    }
+  }
 }
 
 async function copyNativeTools(
@@ -555,6 +649,7 @@ export async function stageRelease(options: StageOptions): Promise<StagedRelease
   const plugins = await copyDirectoryIfPresent(
     options.officialPluginsDir,
     join(runtimeDir, "packages"),
+    options.target,
   );
 
   const launcherPath = join(
@@ -597,7 +692,8 @@ export async function stageRelease(options: StageOptions): Promise<StagedRelease
           {
             id: "official-plugins",
             paths: [
-              ...plugins.map((name) => `runtime/packages/${name}-plugin`),
+              // 组件路径必须使用真实目录名：node-repl-host 没有 `-plugin` 后缀。
+              ...plugins.map((name) => `runtime/packages/${name}`),
               "runtime/licenses/official-plugins",
             ],
           },
@@ -619,7 +715,8 @@ export async function stageRelease(options: StageOptions): Promise<StagedRelease
   }
   const manifest = createRuntimeManifest(options.target, options.appVersion, {
     tools,
-    plugins,
+    // manifest.plugins 沿用既有的“无 -plugin 后缀”标识；目录名只在组件路径上使用。
+    plugins: plugins.map((name) => name.replace(/-plugin$/u, "")),
     components: componentMeta,
   });
   if (options.componentArchives !== false) {

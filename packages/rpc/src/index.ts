@@ -99,6 +99,7 @@ export { ProxyChannel } from "./proxy-channel.js";
 // 日志中间件 —— 装饰 ChannelServer/ChannelClient，统一记录 RPC 调用
 export {
   type RPCLogger,
+  type RPCOptions,
   LoggingChannelServer,
   LoggingChannelClient,
 } from "./logging-middleware.js";

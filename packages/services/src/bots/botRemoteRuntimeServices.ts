@@ -1,3 +1,4 @@
+import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import {
   ChannelClient,
   MessagePortProtocol,
@@ -21,6 +22,8 @@ import {
   IModelSelectionService,
   type IModelSelectionService as IModelSelectionServiceShape,
 } from "#src/model-provider/providerFacadeServices.js";
+
+const rpcLog = createServiceLogger("bot-remote:rpc");
 
 interface PortLike {
   on?(event: "message", listener: (event: { data: MessagePortPayload }) => void): void;
@@ -77,7 +80,9 @@ export function createRemoteRuntimeServicesFromPort(
   port: unknown,
 ): RemoteBotWorkspaceRuntimeServices {
   const protocol = new MessagePortProtocol(toMessagePortLike(port as PortLike));
-  const client = new ChannelClient(protocol);
+  const client = new ChannelClient(protocol, {
+    logger: (message, ...args) => rpcLog.warn(undefined, message, ...args),
+  });
   return {
     zcodeAgentService: ProxyChannel.toService<IZCodeAgentServiceShape>(
       client.getChannel(IZCodeAgentService.channelName),

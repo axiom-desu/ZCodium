@@ -20,6 +20,8 @@ import {
   shouldApplySourceManagementSnapshot,
 } from "@/lib/sourceServerManagement.js";
 import { resolveSourceServerErrorPresentation } from "@/lib/sourceServerErrorPresentation.js";
+import enUS from "@/i18n/locales/en-US.js";
+import zhCN from "@/i18n/locales/zh-CN.js";
 
 function profile(profileId: string, overrides: Partial<ConnectionProfile> = {}): ConnectionProfile {
   const base = {
@@ -95,6 +97,27 @@ describe("Source 管理 UI 快照与 epoch", () => {
 });
 
 describe("Source 失败分类", () => {
+  it.each([
+    ["remote-authentication-unsupported", "authenticationUnsupported"],
+    ["remote-platform-unsupported", "platformUnsupported"],
+  ])("%s 保持不可恢复分类，不能变成补密码入口", (code, name) => {
+    expect(
+      classifySourceServerFailure(
+        Object.assign(new Error("unsupported"), { code, retryable: true }),
+      ),
+    ).toEqual({ kind: "other", code, retryable: false });
+    const presentation = resolveSourceServerErrorPresentation(code);
+    expect(presentation).toEqual({
+      titleId: `source.error.${name}.title`,
+      reasonId: `source.error.${name}.reason`,
+      retryable: false,
+    });
+    for (const locale of [enUS, zhCN]) {
+      expect(locale[presentation.titleId]).toBeTruthy();
+      expect(locale[presentation.reasonId]).toBeTruthy();
+    }
+  });
+
   it("typed 安装/升级/忙碌/身份变化/目标变更各自分类", () => {
     expect(
       classifySourceServerFailure(

@@ -51,6 +51,16 @@ const PRESENTATIONS: Record<string, SourceServerErrorPresentation> = {
     reasonId: "source.error.authenticationFailed.reason",
     retryable: true,
   },
+  "remote-authentication-unsupported": {
+    titleId: "source.error.authenticationUnsupported.title",
+    reasonId: "source.error.authenticationUnsupported.reason",
+    retryable: false,
+  },
+  "remote-platform-unsupported": {
+    titleId: "source.error.platformUnsupported.title",
+    reasonId: "source.error.platformUnsupported.reason",
+    retryable: false,
+  },
   "remote-host-unreachable": {
     titleId: "source.error.hostUnreachable.title",
     reasonId: "source.error.hostUnreachable.reason",

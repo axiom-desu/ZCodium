@@ -1868,6 +1868,12 @@ const zhCN: Record<string, string> = {
   "source.error.targetChanged.reason": "连接期间保存的目标发生变化，请重新检查后重试。",
   "source.error.credentialsRequired.title": "需要凭据",
   "source.error.credentialsRequired.reason": "请重新输入这条已保存连接的凭据。",
+  "source.error.authenticationUnsupported.title": "不支持的认证方式",
+  "source.error.authenticationUnsupported.reason":
+    "服务器要求额外验证（例如动态口令），当前不支持。请改用私钥或 SSH agent 登录，而不是重新输入密码。",
+  "source.error.platformUnsupported.title": "不支持的远端平台",
+  "source.error.platformUnsupported.reason":
+    "此设备的平台或架构暂不受支持。请使用受支持的 Linux 或 macOS 环境。",
   "source.error.authenticationFailed.title": "鉴权失败",
   "source.error.authenticationFailed.reason": "请检查这台设备的 token 或凭据。",
   "source.error.hostUnreachable.title": "设备不可达",

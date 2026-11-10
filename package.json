@@ -1,6 +1,6 @@
 {
   "name": "zcode",
-  "version": "3.16.2",
+  "version": "3.17.2",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -36,6 +36,7 @@
     "test:workbench-split-guard": "node scripts/ci/workbench-split-guard-smoke.mjs",
     "test:settings-dynamic-workflow": "node scripts/ci/settings-dynamic-workflow-smoke.mjs",
     "test:source-authority-loopback": "vitest run --config packages/desktop/vitest.config.ts packages/desktop/test/sourceAuthorityLoopback.test.ts",
+    "test:source-server-first-connect": "node scripts/ci/source-server-first-connect-smoke.mjs",
     "test:zcode-cli-rust-drivers": "node --import tsx --test --test-isolation=none scripts/tests/*.test.mjs",
     "test:zcode-cli-rust-interop": "node --import tsx scripts/zcode-cli-rust-node-interop.mjs apps/zcode-cli/packages/cli/dist/zcode.cjs apps/zcode-cli-rust/target/debug/zcode-cli-rust apps/zcode-cli-rust/target/debug/examples/node_read",
     "build:sea": "pnpm --dir apps/zcode-cli build:sea",

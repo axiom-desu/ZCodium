@@ -29,6 +29,28 @@ function normalizeWslOutput(raw: string): string {
     .replace(/\r/g, "");
 }
 
+/**
+ * Bug 原因：wsl.exe 常将失败原因写入 UTF-16 stdout，只读 stderr 会丢失诊断。
+ * 优先 stderr，再 stdout；保留 cause 与数字退出码，不把 ENOENT 等启动码伪造成退出状态。
+ */
+export function createWslExecError(
+  error: Error & { code?: unknown },
+  stdout: Buffer,
+  stderr: Buffer,
+): Error {
+  const detail =
+    normalizeWslOutput(decodeWslOutput(stderr)).trim() ||
+    normalizeWslOutput(decodeWslOutput(stdout)).trim() ||
+    error.message;
+  const exitCode = typeof error.code === "number" ? error.code : undefined;
+  return Object.assign(
+    new Error(exitCode === undefined ? detail : `${detail}（退出码 ${exitCode}）`, {
+      cause: error,
+    }),
+    exitCode === undefined ? {} : { exitCode },
+  );
+}
+
 export function parseWSLDistroList(rawOutput: string): WSLDistro[] {
   const lines = normalizeWslOutput(rawOutput)
     .split("\n")
@@ -86,8 +108,7 @@ async function execWslForBuffer(args: string[]): Promise<Buffer> {
         const stderrBuffer = Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr ?? "");
 
         if (error) {
-          const stderrText = normalizeWslOutput(decodeWslOutput(stderrBuffer)).trim();
-          reject(new Error(stderrText || error.message));
+          reject(createWslExecError(error, stdoutBuffer, stderrBuffer));
           return;
         }
 

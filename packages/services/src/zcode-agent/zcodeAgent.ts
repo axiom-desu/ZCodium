@@ -187,7 +187,9 @@ export interface ZCodeAgentInitializeResult {
   protocolVersion?: number;
   transportKind?: "stdio" | "websocket";
   reason?: string;
-  reasonCode?: "provider_not_ready";
+  /** 仅在对端明确声明且通过身份比较时为 true；旧 Agent/观测失败为 false。 */
+  protocolVerified?: boolean;
+  reasonCode?: "provider_not_ready" | "agent_protocol_mismatch" | "agent_response_invalid";
 }
 
 export interface ZCodeAgentRunAutomationNowResult {

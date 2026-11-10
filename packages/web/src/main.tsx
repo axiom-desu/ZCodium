@@ -10,6 +10,7 @@ import {
   type Theme,
 } from "@zcode/ui";
 import "@zcode/ui/styles.css";
+import { logger } from "@zcode/ui/logger";
 import { connectViaWebSocket } from "@zcode/client";
 import { ConversationShareLandingLoader } from "./share/ConversationShareLandingPage.js";
 import {
@@ -339,6 +340,7 @@ async function bootstrapWebApp() {
 
   try {
     const services = await connectViaWebSocket(bootstrap.wsUrl, {
+      logger: logger.lifecycle.warn,
       onClose: () => {},
     });
     const platform = createWebPlatform();

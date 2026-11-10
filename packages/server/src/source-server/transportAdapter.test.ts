@@ -4,7 +4,7 @@ import { Emitter } from "@zcode/rpc";
 import type { IRemoteBackend, StdioStream } from "@zcode/server/remote/backend.js";
 import type { RemoteTarget } from "@zcode/shared";
 import { createCompatibilityManifest } from "@zcode/shared";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SourceServerInstallRequiredError,
   SourceServerUpgradeRequiredError,
@@ -169,6 +169,114 @@ function createAdapter(backend: FakeBackend, calls: RemoteTarget[] = []) {
 }
 
 afterEach(() => undefined);
+
+describe("Source Server transport adapter failure diagnosis", () => {
+  it.each(["exec", "daemon", "probe", "staging", "update"] as const)(
+    "%s 非零退出确实消费 daemon 诊断，不只是可选死接口",
+    async (boundary) => {
+      const backend = new FakeBackend();
+      const diagnosis = Object.assign(new Error("fixture Docker daemon unavailable"), {
+        code: "remote-connection-unknown",
+        retryable: true,
+      });
+      const diagnoseExecFailure = vi.fn().mockRejectedValue(diagnosis);
+      Object.assign(backend, { diagnoseExecFailure });
+      const originalExec = backend.exec.bind(backend);
+      vi.spyOn(backend, "exec").mockImplementation(async (command) => {
+        const fails =
+          boundary === "exec" ||
+          boundary === "daemon" ||
+          (boundary === "probe" && command.includes("__ZCODE_PROBE_")) ||
+          (boundary === "staging" && command.includes("now_ms=")) ||
+          (boundary === "update" && command.includes("update --from-archive"));
+        return fails
+          ? createStdioStream({ exitCode: 1, stderr: "original command failed" })
+          : originalExec(command);
+      });
+      const adapter = createAdapter(backend);
+      const operation =
+        boundary === "probe"
+          ? adapter.probe(target, {})
+          : boundary === "daemon"
+            ? adapter.ensureDaemon(target, {})
+            : boundary === "exec"
+              ? adapter.exec(target, ["status", "--json"], {})
+              : adapter.installOrUpdate(target, release, {});
+      await expect(operation).rejects.toMatchObject({
+        code: diagnosis.code,
+        message: diagnosis.message,
+      });
+      expect(diagnoseExecFailure).toHaveBeenCalledOnce();
+      adapter.dispose?.();
+    },
+  );
+
+  it("daemon 健康保留原命令失败与退出码，成功不探测", async () => {
+    const backend = new FakeBackend();
+    const diagnoseExecFailure = vi.fn().mockResolvedValue(undefined);
+    Object.assign(backend, { diagnoseExecFailure });
+    vi.spyOn(backend, "exec")
+      .mockResolvedValueOnce(createStdioStream({ exitCode: 42, stderr: "CLI failed" }))
+      .mockResolvedValueOnce(createStdioStream({ exitCode: 0, stdout: "ok" }));
+    const adapter = createAdapter(backend);
+    await expect(adapter.exec(target, ["status"], {})).resolves.toMatchObject({
+      exitCode: 42,
+      stderr: "CLI failed",
+    });
+    expect(diagnoseExecFailure).toHaveBeenCalledOnce();
+    await expect(adapter.exec(target, ["status"], {})).resolves.toMatchObject({
+      exitCode: 0,
+      stdout: "ok",
+    });
+    expect(diagnoseExecFailure).toHaveBeenCalledOnce();
+    adapter.dispose?.();
+  });
+
+  it.each(["probe", "staging", "update"] as const)(
+    "%s 失败且 daemon 健康仍保留原命令原因",
+    async (boundary) => {
+      const backend = new FakeBackend();
+      const diagnoseExecFailure = vi.fn().mockResolvedValue(undefined);
+      Object.assign(backend, { diagnoseExecFailure });
+      const originalExec = backend.exec.bind(backend);
+      vi.spyOn(backend, "exec").mockImplementation(async (command) => {
+        const fails =
+          (boundary === "probe" && command.includes("__ZCODE_PROBE_")) ||
+          (boundary === "staging" && command.includes("now_ms=")) ||
+          (boundary === "update" && command.includes("update --from-archive"));
+        return fails
+          ? createStdioStream({ exitCode: 42, stderr: "fixture command failure" })
+          : originalExec(command);
+      });
+      const adapter = createAdapter(backend);
+      await expect(
+        boundary === "probe"
+          ? adapter.probe(target, {})
+          : adapter.installOrUpdate(target, release, {}),
+      ).rejects.toMatchObject({
+        message: "fixture command failure",
+        code: boundary === "update" ? "remote-install-failed" : "remote-preflight-failed",
+      });
+      expect(diagnoseExecFailure).toHaveBeenCalledOnce();
+      adapter.dispose?.();
+    },
+  );
+
+  it("Windows probe 不在 preflight 包装时丢失公开码", async () => {
+    const backend = new FakeBackend();
+    vi.spyOn(backend, "exec").mockResolvedValue(
+      createStdioStream({
+        stdout: probeOutput().replaceAll("Linux", "Windows_NT"),
+      }),
+    );
+    const adapter = createAdapter(backend);
+    await expect(adapter.probe(target, {})).rejects.toMatchObject({
+      code: "remote-platform-unsupported",
+      retryable: false,
+    });
+    adapter.dispose?.();
+  });
+});
 
 describe("Source Server transport adapter", () => {
   it("probes once, and refuses an unconfirmed install without any upload or install command", async () => {

@@ -13,27 +13,41 @@ export async function requestControl(
   endpoint: string,
   request: ControlRequestInput,
   timeoutMs = 10_000,
+  signal?: AbortSignal,
 ): Promise<unknown> {
+  signal?.throwIfAborted();
   const id = randomUUID();
   const socket = connect(endpoint);
   const decoder = new JsonLineDecoder();
   return await new Promise<unknown>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      socket.destroy();
-      reject(new Error("Supervisor control request timed out"));
-    }, timeoutMs);
-    socket.setEncoding("utf8");
-    socket.on("error", (error) => {
+    let settled = false;
+    const cleanup = () => {
+      settled = true;
       clearTimeout(timeout);
+      signal?.removeEventListener("abort", abort);
+    };
+    const fail = (error: unknown) => {
+      if (settled) return;
+      cleanup();
+      socket.destroy();
       reject(error);
-    });
+    };
+    const abort = () => fail(signal?.reason ?? new Error("Supervisor control request aborted"));
+    const timeout = setTimeout(() => {
+      fail(new Error("Supervisor control request timed out"));
+    }, timeoutMs);
+    signal?.addEventListener("abort", abort, { once: true });
+    socket.setEncoding("utf8");
+    socket.on("error", fail);
+    // 被复用的 Supervisor 可能在 readiness 期间退出，EOF 不能假装仍在等待 ready。
+    socket.on("close", () => fail(new Error("Supervisor control connection closed")));
     socket.on("data", (chunk: string) => {
       try {
         const response = decoder.push(chunk)[0];
         if (response === undefined) return;
         const parsed = controlResponseSchema.parse(response);
         if (parsed.id !== id) return;
-        clearTimeout(timeout);
+        cleanup();
         socket.end();
         if (parsed.ok) resolve(parsed.result);
         else
@@ -45,9 +59,7 @@ export async function requestControl(
             ),
           );
       } catch (error) {
-        clearTimeout(timeout);
-        socket.destroy();
-        reject(error);
+        fail(error);
       }
     });
     socket.on("connect", () => socket.write(encodeJsonLine({ ...request, id })));

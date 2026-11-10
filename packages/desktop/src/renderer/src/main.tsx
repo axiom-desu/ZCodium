@@ -15,6 +15,7 @@ import {
   playTaskNotificationSound,
 } from "@zcode/ui";
 import "@zcode/ui/styles.css";
+import { logger } from "@zcode/ui/logger";
 import { connectViaMessagePort, createMessagePortServiceConnection } from "@zcode/client";
 import {
   InternalChannels,
@@ -209,7 +210,9 @@ function registerRemoteWorkspaceServicePort(params: RemoteWorkspaceServicePortRe
     return;
   }
 
-  const remoteConnection = createMessagePortServiceConnection(params.port);
+  const remoteConnection = createMessagePortServiceConnection(params.port, {
+    logger: logger.lifecycle.warn,
+  });
   const remoteServices = remoteConnection.services;
   const services = buildRemoteWorkspaceSessionServices(
     baseServicesForRemoteSessions,
@@ -268,7 +271,9 @@ function handleServicePortMessage(event: MessageEvent): void {
   const sourceSettingsPort = parseSourceSettingsServicePortMessage(event);
   if (sourceSettingsPort) {
     // Source 级设置只复用该 Source 已有 Host services；attachment 身份换代由 store 判序。
-    const connection = createMessagePortServiceConnection(sourceSettingsPort.port);
+    const connection = createMessagePortServiceConnection(sourceSettingsPort.port, {
+      logger: logger.lifecycle.warn,
+    });
     registerSourceSettingsServices({
       sourceServerId: sourceSettingsPort.sourceServerId,
       attachmentId: sourceSettingsPort.attachmentId,
@@ -305,7 +310,7 @@ function handleServicePortMessage(event: MessageEvent): void {
 
 function initializeBusinessRoot(port: MessagePort): void {
   appInitialized = true;
-  const services = connectViaMessagePort(port);
+  const services = connectViaMessagePort(port, { logger: logger.lifecycle.warn });
   baseServicesForRemoteSessions = services;
   registerBaseWorkspaceServices(services);
   flushPendingRemoteWorkspaceServicePorts();

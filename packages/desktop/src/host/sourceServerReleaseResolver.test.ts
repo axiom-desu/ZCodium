@@ -1,11 +1,17 @@
 import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { SOURCE_SERVER_RELEASE_DESCRIPTOR_FILE_NAME } from "@zcode/shared";
-import { resolveSourceServerReleaseAsset } from "./sourceServerReleaseResolver.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  SOURCE_SERVER_RELEASE_DESCRIPTOR_FILE_NAME,
+  hostInitLocalMessageSchema,
+} from "@zcode/shared";
+import {
+  resolveSourceServerReleaseAsset,
+  resolveSourceServerReleaseRuntimeOptions,
+} from "./sourceServerReleaseResolver.js";
 
 const cleanup: Array<() => Promise<void> | void> = [];
 const VERSION = "3.16.2";
@@ -69,6 +75,92 @@ async function startReleaseServer(
 }
 
 describe("SourceServerReleaseResolver", () => {
+  it("preserves the same bundled asset path through validated Local Host initialization", () => {
+    const remoteAssets = {
+      bundledRemoteAssetsDir: join("fixture resources", "remote-assets"),
+      sourceServerArtifactPolicy: "development-content-addressed",
+    };
+    const message = hostInitLocalMessageSchema.parse({
+      type: "init-local",
+      zcodeBuiltinProviderConfigFilePath: "fixture-provider.json",
+      remoteAssets,
+    });
+    expect(message).toHaveProperty("remoteAssets", remoteAssets);
+    expect(() =>
+      hostInitLocalMessageSchema.parse({
+        type: "init-local",
+        zcodeBuiltinProviderConfigFilePath: "fixture-provider.json",
+        remoteAssets: { bundledRemoteAssetsDir: 12 },
+      }),
+    ).toThrow();
+  });
+  it("consumes Main's relocated bundledRemoteAssetsDir independently of cwd without network", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zcode-host-resources-"));
+    cleanup.push(() => rm(root, { recursive: true, force: true }));
+    const bundledRemoteAssetsDir = join(root, "resources with spaces", "remote-assets");
+    const releaseDir = join(bundledRemoteAssetsDir, "releases", VERSION);
+    await mkdir(releaseDir, { recursive: true });
+    await writeFile(
+      join(releaseDir, SOURCE_SERVER_RELEASE_DESCRIPTOR_FILE_NAME),
+      JSON.stringify(descriptor()),
+    );
+    await writeFile(join(releaseDir, FILE_NAME), ARCHIVE);
+    const runtime = await resolveSourceServerReleaseRuntimeOptions({
+      expectedVersion: VERSION,
+      bundledRemoteAssetsDir,
+      cwd: join(root, "unrelated working directory"),
+      env: {},
+    });
+    expect(runtime).toMatchObject({
+      localReleaseDir: releaseDir,
+      artifactPolicy: "development-content-addressed",
+    });
+    const fetchImpl = vi.fn();
+    const asset = await resolveSourceServerReleaseAsset(
+      { platform: "linux", arch: "x64" },
+      undefined,
+      { ...runtime, fetchImpl },
+    );
+    expect(asset.localArchivePath).toBe(join(releaseDir, FILE_NAME));
+    expect(fetchImpl).not.toHaveBeenCalled();
+    await expect(
+      resolveSourceServerReleaseAsset({ platform: "darwin", arch: "arm64" }, undefined, runtime),
+    ).rejects.toMatchObject({ code: "remote-download-failed" });
+  });
+
+  it("keeps explicit overrides and requested development policy; missing bundle cannot fall back to CDN", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zcode-host-release-options-"));
+    cleanup.push(() => rm(root, { recursive: true, force: true }));
+    await writeFile(
+      join(root, SOURCE_SERVER_RELEASE_DESCRIPTOR_FILE_NAME),
+      JSON.stringify(descriptor()),
+    );
+    const runtime = await resolveSourceServerReleaseRuntimeOptions({
+      expectedVersion: VERSION,
+      bundledRemoteAssetsDir: join(root, "missing-bundle"),
+      cwd: join(root, "unrelated"),
+      env: { ZCODE_SOURCE_SERVER_RELEASE_DIR: root },
+      cdnBaseUrl: "http://127.0.0.1:1",
+      requestedArtifactPolicy: "development-content-addressed",
+    });
+    expect(runtime.localReleaseDir).toBe(root);
+    const missing = await resolveSourceServerReleaseRuntimeOptions({
+      expectedVersion: VERSION,
+      bundledRemoteAssetsDir: join(root, "missing-bundle"),
+      cwd: join(root, "unrelated"),
+      env: {},
+      cdnBaseUrl: "http://127.0.0.1:1",
+      requestedArtifactPolicy: "development-content-addressed",
+    });
+    const fetchImpl = vi.fn();
+    await expect(
+      resolveSourceServerReleaseAsset({ platform: "linux", arch: "x64" }, undefined, {
+        ...missing,
+        fetchImpl,
+      }),
+    ).rejects.toMatchObject({ code: "remote-download-failed" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
   it("downloads the fork descriptor and archive from a loopback fixture, then serves the verified cache", async () => {
     const cacheRoot = await mkdtemp(join(tmpdir(), "zcode-source-release-"));
     cleanup.push(() => rm(cacheRoot, { recursive: true, force: true }));
@@ -203,12 +295,29 @@ describe("SourceServerReleaseResolver", () => {
     expect(await readFile(asset.localArchivePath!, "utf8")).toBe(ARCHIVE.toString());
   });
 
-  it("rejects unsupported probe targets", async () => {
+  it.each([
+    { platform: "win32", arch: "x64" },
+    { platform: "linux", arch: "ia32" },
+    { platform: "freebsd", arch: "arm64" },
+  ])("unsupported target %j fails with public code before artifact IO", async (probe) => {
+    const fetchImpl = vi.fn();
+    await expect(
+      resolveSourceServerReleaseAsset(probe, undefined, {
+        expectedVersion: VERSION,
+        artifactPolicy: "release-versioned",
+        releaseBaseUrls: ["http://127.0.0.1:1"],
+        fetchImpl,
+      }),
+    ).rejects.toMatchObject({ code: "remote-platform-unsupported", retryable: false });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported probe targets even without artifact configuration", async () => {
     await expect(
       resolveSourceServerReleaseAsset({ platform: "win32", arch: "x64" }, undefined, {
         expectedVersion: VERSION,
         artifactPolicy: "release-versioned",
       }),
-    ).rejects.toMatchObject({ code: "remote-download-failed" });
+    ).rejects.toMatchObject({ code: "remote-platform-unsupported", retryable: false });
   });
 });

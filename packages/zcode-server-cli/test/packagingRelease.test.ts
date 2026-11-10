@@ -3,7 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { BUILTIN_PLUGIN_ASSETS } from "@zcode/shared/builtin-plugin-assets";
+import {
+  BUILTIN_PLUGIN_ASSETS,
+  cuaRuntimeRequiredPaths,
+} from "@zcode/shared/builtin-plugin-assets";
 import { currentServerTarget } from "../src/runtime/manifest.js";
 import { stageRelease } from "../src/packaging/stage.js";
 
@@ -228,6 +231,63 @@ describe("server release staging assets", () => {
     expect(
       await stat(join(releaseDir, "runtime/packages/image-search-plugin/test")).catch(() => null),
     ).toBeNull();
+  });
+
+  it("stages node-repl-host with its fixed CUA closure and no other node_modules", async () => {
+    const { outputDir, options } = await fixture();
+    const [platform, arch] = currentServerTarget().split("-") as [string, string];
+    const pluginRoot = options.officialPluginsDir!;
+    // node-repl-host 不是 `*-plugin` 目录，旧实现会静默丢弃它。
+    await writeKnownPlugin("node-repl-host", pluginRoot);
+    for (const path of cuaRuntimeRequiredPaths(platform, arch)) {
+      await write(`node-repl-host/${path}`, `${path} fixture\n`, pluginRoot);
+    }
+    // 只允许固定闭包：其它包与任何嵌套 node_modules 都不能进发行包。
+    await write("node-repl-host/dist/mcp/node_modules/evil/index.js", "evil\n", pluginRoot);
+    await write(
+      "node-repl-host/dist/mcp/node_modules/@ubjs/core/node_modules/nested/x.js",
+      "nested\n",
+      pluginRoot,
+    );
+
+    await stageRelease(options);
+    const releaseDir = join(outputDir, `zcode-server-${currentServerTarget()}`);
+    const stagedPlugin = join(releaseDir, "runtime/packages/node-repl-host");
+    for (const path of cuaRuntimeRequiredPaths(platform, arch)) {
+      expect((await stat(join(stagedPlugin, path))).isFile(), path).toBe(true);
+    }
+    expect(
+      await stat(join(stagedPlugin, "dist/mcp/node_modules/evil")).catch(() => null),
+    ).toBeNull();
+    expect(
+      await stat(join(stagedPlugin, "dist/mcp/node_modules/@ubjs/core/node_modules")).catch(
+        () => null,
+      ),
+    ).toBeNull();
+
+    const manifest = JSON.parse(await readFile(join(releaseDir, "manifest.json"), "utf8")) as {
+      plugins: string[];
+      components: Array<{ id: string; paths: string[] }>;
+    };
+    expect(manifest.plugins).toContain("node-repl-host");
+    // 组件路径必须使用真实目录名，不能拼出 node-repl-host-plugin。
+    expect(
+      manifest.components.find((component) => component.id === "official-plugins")?.paths,
+    ).toContain("runtime/packages/node-repl-host");
+  });
+
+  it("fails closed when a staged CUA runtime file is missing", async () => {
+    const { options } = await fixture();
+    const [platform, arch] = currentServerTarget().split("-") as [string, string];
+    const pluginRoot = options.officialPluginsDir!;
+    await writeKnownPlugin("node-repl-host", pluginRoot);
+    for (const path of cuaRuntimeRequiredPaths(platform, arch)) {
+      await write(`node-repl-host/${path}`, `${path} fixture\n`, pluginRoot);
+    }
+    const missing = cuaRuntimeRequiredPaths(platform, arch).at(-1)!;
+    await rm(join(pluginRoot, "node-repl-host", ...missing.split("/")));
+    // 缺一个 CUA 文件就不能产出可安装制品，不能发布半套运行时。
+    await expect(stageRelease(options)).rejects.toThrow(/Missing staged CUA runtime asset/u);
   });
 
   it("fails closed when a non-entry office asset is missing from the built tree", async () => {

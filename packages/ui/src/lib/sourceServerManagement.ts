@@ -91,6 +91,10 @@ export function classifySourceServerFailure(error: unknown): SourceServerFailure
       return { kind: "identity-change-pending", code, retryable: true };
     case "remote-target-changed":
       return { kind: "target-changed", code, retryable: true };
+    // 不支持的认证不能被包装层 retryable=true 诱导为补密码/自动重试。
+    case "remote-authentication-unsupported":
+    case "remote-platform-unsupported":
+      return { kind: "other", code, retryable: false };
     case "credentials-required":
       return { kind: "credentials-required", code, retryable: true };
     default:

@@ -4,6 +4,7 @@ import { access, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join } from "node:path";
 import type { Readable, Writable } from "node:stream";
+import { setTimeout as delay } from "node:timers/promises";
 import { ZCODE_VERSION } from "@zcode/shared";
 import {
   controlRequestSchema,
@@ -48,6 +49,8 @@ export interface ServerCliRuntimeOptions {
   bundledAgentWiring?: BundledAgentWiring | null;
   /** 测试注入的 stdin/stdout；生产环境使用 process streams。 */
   proxyStdioStreams?: { input: Readable; output: Writable };
+  /** 只取消本次 readiness 等待，不停止共享 Supervisor。 */
+  daemonReadiness?: { timeoutMs?: number; signal?: AbortSignal };
 }
 
 const stdout = (io: CliIO, value: unknown): void =>
@@ -185,18 +188,29 @@ async function runServe(
   const daemonRequested = args.includes("--daemon");
   const supervisorProcess = args.includes("--supervisor");
   if (shouldRegisterService(daemonRequested, supervisorProcess)) {
+    runtimeOptions.daemonReadiness?.signal?.throwIfAborted();
     const startupMode = daemonStartupMode();
     const legacyIdentityMigration =
       startupMode === "service" && (await hasLegacyServiceRegistration(layout));
-    const existing = await readControlStatus(layout, 500);
+    const existing = await readControlStatus(layout, 500, runtimeOptions.daemonReadiness?.signal);
     if (existing && (existing.state === "ready" || existing.state === "starting")) {
       if ((existing.serviceRegistered && !legacyIdentityMigration) || startupMode === "fallback") {
-        if (json) stdout(io, existing);
-        else
-          stdout(
-            io,
-            `ZCode Server ${existing.state} at ${existing.host ?? ""}:${existing.port ?? ""}`,
-          );
+        // starting 只是 Supervisor 已接管，并非 Core ingress 可用；复用同一 readiness
+        // barrier 读取 control owner，不能把 port:null 当成功返回给 transport adapter。
+        const ready =
+          existing.state === "ready"
+            ? requireReadyIngress(existing)
+            : await waitForPersistedStatus(
+                layout,
+                "ready",
+                0,
+                undefined,
+                existing.serviceRegistered,
+                { ...runtimeOptions.daemonReadiness, readControl: true },
+              );
+        runtimeOptions.daemonReadiness?.signal?.throwIfAborted();
+        if (json) stdout(io, ready);
+        else stdout(io, `ZCode Server ${ready.state} at ${ready.host ?? ""}:${ready.port ?? ""}`);
         return 0;
       }
       if (existing.runningTaskCount > 0) {
@@ -271,6 +285,7 @@ async function runServe(
         }
       },
       serviceStarted,
+      runtimeOptions.daemonReadiness,
     );
     if (json) stdout(io, started);
     else stdout(io, `ZCode Server ${started.state} at ${started.host ?? ""}:${started.port ?? ""}`);
@@ -500,21 +515,51 @@ async function waitForPersistedStatus(
   minUpdatedAt = 0,
   assertStillWaiting?: () => void,
   expectedServiceRegistered?: boolean,
+  options: NonNullable<ServerCliRuntimeOptions["daemonReadiness"]> & {
+    readControl?: boolean;
+  } = {},
 ): Promise<ServerStatus> {
-  const deadline = Date.now() + 10_000;
+  const deadline = Date.now() + (options.timeoutMs ?? 10_000);
   while (Date.now() < deadline) {
-    const status = await readPersistedStatus(layout);
-    if (
-      status?.state === expectedState &&
-      status.updatedAt > minUpdatedAt &&
-      (expectedServiceRegistered === undefined ||
-        status.serviceRegistered === expectedServiceRegistered)
-    )
-      return status;
+    options.signal?.throwIfAborted();
+    // 复用中的事实只来自同一个 control owner；磁盘旧 ready 不能跨 Supervisor 冒充成功。
+    const status = options.readControl
+      ? serverStatusSchema.parse(
+          await requestControl(
+            layout.controlEndpoint,
+            { command: "status" },
+            deadline - Date.now(),
+            options.signal,
+          ),
+        )
+      : await readPersistedStatus(layout);
+    if (status && status.updatedAt > minUpdatedAt) {
+      if (
+        status.state === expectedState &&
+        (expectedServiceRegistered === undefined ||
+          status.serviceRegistered === expectedServiceRegistered)
+      ) {
+        options.signal?.throwIfAborted();
+        return expectedState === "ready" ? requireReadyIngress(status) : status;
+      }
+      if (expectedState === "ready" && status.state !== "starting" && status.state !== "ready") {
+        throw new Error(
+          `Server ${status.state} before ready: ${status.lastExitReason ?? "no exit reason"}`,
+        );
+      }
+    }
     assertStillWaiting?.();
-    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    const remaining = deadline - Date.now();
+    if (remaining > 0) await delay(Math.min(100, remaining), undefined, { signal: options.signal });
   }
   throw new Error(`Timed out waiting for Server ${expectedState}`);
+}
+
+function requireReadyIngress(status: ServerStatus): ServerStatus {
+  if (!status.host?.trim() || !status.port || status.port > 65535) {
+    throw new Error("Server ready status has no valid ingress host/port");
+  }
+  return status;
 }
 
 async function waitForSupervisorReady(supervisor: {
@@ -534,11 +579,19 @@ async function waitForSupervisorReady(supervisor: {
 async function readControlStatus(
   layout: ReturnType<typeof resolveServerLayout>,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<ServerStatus | null> {
   try {
-    const result = await requestControl(layout.controlEndpoint, { command: "status" }, timeoutMs);
+    const result = await requestControl(
+      layout.controlEndpoint,
+      { command: "status" },
+      timeoutMs,
+      signal,
+    );
     return serverStatusSchema.parse(result);
   } catch {
+    // 取消不是 daemon 不存在；不能吞掉后继续注册服务或 fork 新进程。
+    signal?.throwIfAborted();
     return null;
   }
 }

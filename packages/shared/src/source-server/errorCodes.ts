@@ -29,6 +29,8 @@ export const SOURCE_SERVER_REMOVE_PERSIST_FAILED_ERROR_CODE =
 
 export const PUBLIC_ZCODE_ERROR_CODES = [
   "remote-authentication-failed",
+  "remote-authentication-unsupported",
+  "remote-platform-unsupported",
   "remote-host-unreachable",
   "remote-connection-timeout",
   "remote-host-not-found",

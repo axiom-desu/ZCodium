@@ -25,6 +25,7 @@ import {
 } from "./foundation.js";
 import { BufferReader, BufferWriter, serialize, deserialize } from "./serialization.js";
 import { IMessagePassingProtocol } from "./protocol.js";
+import type { RPCOptions } from "./logging-middleware.js";
 import {
   IChannel,
   IServerChannel,
@@ -110,7 +111,7 @@ export class IPCServer<TContext = string>
     return [...this._connections];
   }
 
-  constructor(onDidClientConnect: Event<ClientConnectionEvent>) {
+  constructor(onDidClientConnect: Event<ClientConnectionEvent>, options: RPCOptions = {}) {
     this.disposables.add(
       onDidClientConnect(({ protocol, onDidClientDisconnect }) => {
         // 等待客户端发来的第一条消息：ctx（客户端身份标识）
@@ -122,8 +123,15 @@ export class IPCServer<TContext = string>
             const ctx = deserialize(reader) as TContext;
 
             // 为这个连接创建独立的 ChannelServer 和 ChannelClient
-            const channelServer = new ChannelServer(protocol, ctx);
-            const channelClient = new ChannelClient(protocol);
+            const channelServer = new ChannelServer(
+              protocol,
+              ctx,
+              undefined,
+              undefined,
+              undefined,
+              options,
+            );
+            const channelClient = new ChannelClient(protocol, options);
 
             // 把已注册的 channel 推送给新连接
             this.channels.forEach((channel, name) => channelServer.registerChannel(name, channel));
@@ -281,14 +289,14 @@ export class IPCClient<TContext = string>
   private channelClient: ChannelClient;
   private channelServer: ChannelServer<TContext>;
 
-  constructor(protocol: IMessagePassingProtocol, ctx: TContext) {
+  constructor(protocol: IMessagePassingProtocol, ctx: TContext, options: RPCOptions = {}) {
     // 第一条消息：发送自己的身份标识
     const writer = new BufferWriter();
     serialize(writer, ctx);
     protocol.send(writer.buffer);
 
-    this.channelClient = new ChannelClient(protocol);
-    this.channelServer = new ChannelServer(protocol, ctx);
+    this.channelClient = new ChannelClient(protocol, options);
+    this.channelServer = new ChannelServer(protocol, ctx, undefined, undefined, undefined, options);
   }
 
   getChannel<T extends IChannel>(channelName: string): T {

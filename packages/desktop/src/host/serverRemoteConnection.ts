@@ -1,5 +1,6 @@
 import { WebSocket, type RawData } from "ws";
 import { RemoteServiceAccess } from "@zcode/client";
+import { createServiceLogger } from "@zcode/services/node";
 import { ChannelClient, Emitter, SocketProtocol, VSBuffer, type ISocket } from "@zcode/rpc";
 import type { IServiceAccessor } from "@zcode/services";
 import {
@@ -15,6 +16,8 @@ import {
   requestJsonOverDuplex,
   type ServerRemoteDuplexFactory,
 } from "./serverRemoteDuplexTransport.js";
+
+const rpcLog = createServiceLogger("host-remote:rpc");
 
 interface ServerRemoteEndpoints {
   infoUrl: string;
@@ -177,7 +180,9 @@ function createNodeWebSocketServiceConnection(
   onClose?: ServerRemoteConnectionOptions["onClose"],
 ): { services: IServiceAccessor; dispose(): void } {
   const protocol = new SocketProtocol(wrapNodeWebSocket(socket, onClose));
-  const client = new ChannelClient(protocol);
+  const client = new ChannelClient(protocol, {
+    logger: (message, ...args) => rpcLog.warn(undefined, message, ...args),
+  });
   const dispose = () => {
     // Bug 根因：仅关闭 socket 会让未完成的 RPC 永久 pending，旧 Provisioning 请求
     // 因而占住 Environment lane，新连接始终无法发布 attachment。由物理连接统一

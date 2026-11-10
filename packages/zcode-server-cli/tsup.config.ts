@@ -7,9 +7,15 @@ const { loadBuiltinProviderConfig } = await import(
   pathToFileURL(resolve(import.meta.dirname, "../../scripts/builtin-provider-config.mjs")).href
 );
 
+const { collectRollingAppVersion } = await import(
+  pathToFileURL(resolve(import.meta.dirname, "../../scripts/rolling-app-version.mjs")).href
+);
+const { appVersion } = collectRollingAppVersion();
 const { content: zcodeBuiltinProviderConfigJson } = await loadBuiltinProviderConfig();
 
 export const SERVER_CLI_DEFINES = {
+  // 与 Desktop 共用根版本派生源，不能让未注入的 0.0.0-dev 被严格兼容门禁拒绝。
+  __ZCODE_VERSION__: JSON.stringify(appVersion),
   __ZCODE_BUILTIN_PROVIDER_CONFIG_JSON__: JSON.stringify(zcodeBuiltinProviderConfigJson),
 };
 
@@ -22,6 +28,8 @@ export default defineConfig({
   format: ["esm"],
   platform: "node",
   target: "node22",
+  // node:sqlite 只能带 node: 前缀；tsup 默认剥掉后会被误当成 npm sqlite 包。
+  removeNodeProtocol: false,
   sourcemap: true,
   splitting: false,
   banner: {
@@ -30,6 +38,9 @@ export default defineConfig({
   noExternal: ["@zcode/shared", "@zcode/rpc", "@zcode/services"],
   define: SERVER_CLI_DEFINES,
   external: [
+    // zip 库是 CJS，内联到 ESM 会生成不能执行的 dynamic require("fs")。
+    "yazl",
+    "yauzl",
     "node-pty",
     "ssh2",
     "yaml",

@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { createServiceLogger } from "@zcode/services/node";
 import { Emitter, VSBuffer, SocketProtocol, ChannelServer, type ISocket } from "@zcode/rpc";
 import {
   IZCodeAgentService,
   createZCodeAgentConnectionScope,
   type ServiceCollection,
 } from "@zcode/services";
+
+const rpcLog = createServiceLogger("server-stdio:rpc");
 
 /**
  * Wrap process.stdin/stdout as an ISocket for RPC communication.
@@ -56,7 +59,9 @@ export function wrapStdio(): ISocket {
 export function createStdioServer(services: ServiceCollection) {
   const socket = wrapStdio();
   const protocol = new SocketProtocol(socket);
-  const channelServer = new ChannelServer(protocol, "stdio");
+  const channelServer = new ChannelServer(protocol, "stdio", undefined, undefined, undefined, {
+    logger: (message, ...args) => rpcLog.warn(undefined, message, ...args),
+  });
   const agentService = services.getOptional(IZCodeAgentService);
   const connectionScope = agentService
     ? createZCodeAgentConnectionScope(agentService, {

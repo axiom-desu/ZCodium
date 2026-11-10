@@ -6,6 +6,11 @@ import { promisify } from "node:util";
 import { tsImport } from "tsx/esm/api";
 import { verifyArchiveSha256 } from "./remote-node-runtime.mjs";
 import { getBuildMetadata } from "../packages/desktop/scripts/build-metadata.mjs";
+import {
+  verifySourceServerAssets,
+  copySourceServerArchives,
+  writeSourceServerDescriptor,
+} from "./source-server-assets.mjs";
 
 const { BUNDLED_REMOTE_MANIFEST, parseBundledRemoteManifest, remoteComponentRequiredPaths } =
   await tsImport("@zcode/shared/bundled-remote-assets", import.meta.url);
@@ -28,6 +33,9 @@ async function containedFile(directory, path) {
 }
 
 export async function verifyBundledRemoteAssets(directory, version) {
+  // 旧组件齐全并不代表首次安装可用：R3 descriptor/archive 必须始终验证。
+  const descriptor = await verifySourceServerAssets(join(directory, "releases", version), version);
+  if (!(await stat(join(directory, BUNDLED_REMOTE_MANIFEST)).catch(() => null))) return descriptor;
   const manifest = parseBundledRemoteManifest(
     JSON.parse(await readFile(join(directory, BUNDLED_REMOTE_MANIFEST), "utf8")),
     version,
@@ -48,9 +56,29 @@ export async function bundleRemoteAssets({
   sourceCommit,
   sourceDirty = false,
 }) {
+  const sourceFromOutput = relative(resolve(outputDirectory), resolve(sourceDirectory));
+  if (
+    !sourceFromOutput ||
+    (!isAbsolute(sourceFromOutput) &&
+      sourceFromOutput !== ".." &&
+      !sourceFromOutput.startsWith(`..${sep}`))
+  ) {
+    throw new Error("Remote bundle output must not contain the source directory");
+  }
+  if (!version || version === "." || version === ".." || /[/\\\\]/u.test(version)) {
+    throw new Error("Invalid remote bundle version");
+  }
   // 失败的重建必须撤销旧发布标记，否则打包脚本可能把上一次产物当作本次成功。
   await rm(outputDirectory, { recursive: true, force: true });
   const releaseDirectory = join(sourceDirectory, "releases", version);
+  const descriptor = await verifySourceServerAssets(releaseDirectory, version);
+  const bundledReleaseDirectory = join(outputDirectory, "releases", version);
+  await copySourceServerArchives(releaseDirectory, bundledReleaseDirectory, descriptor);
+  // 旧静态组件仅供已有消费者；不能替代 R3，或在缺 descriptor 时假成功。
+  if (!(await stat(join(releaseDirectory, BUNDLED_REMOTE_MANIFEST)).catch(() => null))) {
+    await writeSourceServerDescriptor(bundledReleaseDirectory, descriptor);
+    return descriptor;
+  }
   const source = JSON.parse(
     await readFile(join(releaseDirectory, BUNDLED_REMOTE_MANIFEST), "utf8"),
   );
@@ -75,6 +103,7 @@ export async function bundleRemoteAssets({
   const manifestPath = join(outputDirectory, BUNDLED_REMOTE_MANIFEST);
   await writeFile(`${manifestPath}.part`, `${JSON.stringify(manifest, null, 2)}\n`);
   await rename(`${manifestPath}.part`, manifestPath);
+  await writeSourceServerDescriptor(bundledReleaseDirectory, descriptor);
   return manifest;
 }
 
@@ -99,14 +128,18 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
   const root = resolve(import.meta.dirname, "..");
   // 与 bundleRepositoryRemoteAssets 同源：verify 的版本串必须等于 manifest.appVersion。
   const { appVersion: version } = getBuildMetadata();
-  if (process.argv[2] === "verify") {
+  if (process.argv[2] === "verify" && process.argv.length <= 5) {
     await verifyBundledRemoteAssets(
       resolve(process.argv[3] || join(root, "packages/desktop/bundled-remote-assets")),
-      version,
+      process.argv[4] || version,
     );
+  } else if (process.argv[2] === "--config" && process.argv.length === 4) {
+    await bundleRemoteAssets(JSON.parse(await readFile(resolve(process.argv[3]), "utf8")));
   } else if (process.argv.length === 2) {
     await bundleRepositoryRemoteAssets(root);
   } else {
-    throw new Error("Usage: node scripts/bundle-remote-assets.mjs [verify [directory]]");
+    throw new Error(
+      "Usage: node scripts/bundle-remote-assets.mjs [verify [directory [version]] | --config <inputs.json>]",
+    );
   }
 }

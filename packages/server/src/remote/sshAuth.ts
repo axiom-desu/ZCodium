@@ -1,8 +1,11 @@
 import type { ConnectConfig } from "ssh2";
+import type { PublicZCodeErrorCode } from "@zcode/shared";
 
 export const SSH_READY_TIMEOUT_MS = 60_000;
 export const SSH_KEEPALIVE_INTERVAL_MS = 15_000;
 export const SSH_KEEPALIVE_COUNT_MAX = 3;
+// ssh2 在第 COUNT_MAX + 1 个无响应间隔才报告 keepalive 超时。
+const SSH_KEEPALIVE_TIMEOUT_MS = SSH_KEEPALIVE_INTERVAL_MS * (SSH_KEEPALIVE_COUNT_MAX + 1);
 
 interface SSHConnectConfigInput {
   host: string;
@@ -64,10 +67,17 @@ export function buildSSHConnectConfig(input: SSHConnectConfigInput): ConnectConf
   };
 }
 
-export function createKeyboardInteractiveResponder(password?: string) {
+// 多轮、多条 Password 也可能只是重试密码，不能作为二次验证证据。
+const ADDITIONAL_VERIFICATION_PROMPT_PATTERN =
+  /verification code|one[- ]?time|\bOTP\b|pass ?code|(?:second|two|2nd)[- ]?factor|\b(?:2FA|MFA)\b|authenticator|动态口令|动态密码/iu;
+
+export function createKeyboardInteractiveResponder(
+  password?: string,
+  onAdditionalVerificationPrompt?: () => void,
+) {
   return (
-    _name: string,
-    _instructions: string,
+    name: string,
+    instructions: string,
     _lang: string,
     prompts: Array<{ prompt: string; echo: boolean }>,
     finish: (responses: string[]) => void,
@@ -77,18 +87,48 @@ export function createKeyboardInteractiveResponder(password?: string) {
       return;
     }
 
+    // Bug 原因：只按提示次数推断 2FA 会把错误密码误判为不支持认证，丢失补密码入口。
+    // 只认服务器明确提示文字；回答方式保持不变，不在 responder 上累积跨连接计数。
+    if (
+      [name, instructions, ...prompts.map(({ prompt }) => prompt)].some((text) =>
+        ADDITIONAL_VERIFICATION_PROMPT_PATTERN.test(text),
+      )
+    ) {
+      onAdditionalVerificationPrompt?.();
+    }
     finish(prompts.map(() => password));
   };
 }
 
-export function normalizeSSHConnectError(error: unknown): Error {
+export interface NormalizeSSHConnectErrorOptions {
+  established?: boolean;
+  additionalVerificationPrompted?: boolean;
+}
+
+export function normalizeSSHConnectError(
+  error: unknown,
+  options: NormalizeSSHConnectErrorOptions = {},
+): Error {
   if (
     typeof error === "object" &&
     error !== null &&
     "level" in error &&
     (error as { level?: string }).level === "client-authentication"
   ) {
-    return new Error("SSH 认证失败：请检查用户名、密码或私钥配置");
+    if (options.additionalVerificationPrompted) {
+      // Bug 原因：只给认证失败文案会被上层误归为补密码；明确的额外验证必须带不可重试公开码。
+      return Object.assign(
+        new Error(
+          "SSH 认证失败：服务器在密码之后还要求额外验证（例如动态口令），当前不支持，请改用私钥或 SSH agent 登录",
+          { cause: error },
+        ),
+        {
+          code: "remote-authentication-unsupported" satisfies PublicZCodeErrorCode,
+          retryable: false,
+        },
+      );
+    }
+    return new Error("SSH 认证失败：请检查用户名、密码或私钥配置", { cause: error });
   }
 
   if (isHostKeyVerificationDeniedMessage(error instanceof Error ? error.message : String(error))) {
@@ -103,6 +143,13 @@ export function normalizeSSHConnectError(error: unknown): Error {
     "level" in error &&
     (error as { level?: string }).level === "client-timeout"
   ) {
+    if (options.established) {
+      // Bug 原因：握手与 keepalive 共用 client-timeout，必须在断连清状态前按阶段区分。
+      return new Error(
+        `SSH 连接无响应：约 ${SSH_KEEPALIVE_TIMEOUT_MS / 1000} 秒没有收到服务器的心跳响应，连接已断开，请检查网络或服务器状态`,
+        { cause: error },
+      );
+    }
     return new Error(
       `SSH 连接握手超时：未能在 ${SSH_READY_TIMEOUT_MS / 1000} 秒内建立 SSH 会话，请检查网络、服务器 SSH 服务或终端 SSH 配置差异`,
     );

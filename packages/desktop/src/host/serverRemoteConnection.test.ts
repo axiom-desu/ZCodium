@@ -2,10 +2,10 @@ import { createServer as createHttpServer, type Server } from "node:http";
 import { Socket } from "node:net";
 import { Duplex } from "node:stream";
 import { ChannelServer, Emitter, SocketProtocol, VSBuffer, type ISocket } from "@zcode/rpc";
-import { IFileService, ServiceCollection } from "@zcode/services";
+import { IFileService, IFileWatcherService, ServiceCollection } from "@zcode/services";
 import type { RawData, WebSocket } from "ws";
 import { WebSocketServer } from "ws";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IServiceAccessor } from "@zcode/services";
 import { createWindowRemoteConnectionRegistry } from "./windowRemoteConnectionRegistry.js";
 import {
@@ -38,6 +38,8 @@ const SERVER_INFO = {
 
 afterEach(async () => {
   for (const dispose of disposals.splice(0).reverse()) await dispose();
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 function wrapWebSocket(ws: WebSocket): ISocket {
@@ -162,6 +164,14 @@ async function startLoopbackSourceServer(
       const channelServer = new ChannelServer(protocol, "loopback-source");
       new ServiceCollection()
         .register(IFileService, fileService)
+        .register(IFileWatcherService, {
+          watch: async () => ({ id: "watcher" }),
+          unwatch: async () => {},
+          disposeAll() {},
+          onDynamicChange: () => {
+            throw new Error("credential-secret");
+          },
+        })
         .exposeOnChannelServer(channelServer);
       webSocket.on("close", () => channelServer.dispose());
     });
@@ -228,6 +238,41 @@ describe("Source Server connection endpoints", () => {
     expect(() => resolveServerRemoteEndpoints("ftp://example.test")).toThrow(/protocol/);
   });
 });
+
+it.each(["direct", "duplex"])(
+  "production Host %s connection logs EventError through its safe warn sink",
+  async (kind) => {
+    vi.stubEnv("NODE_ENV", "production");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const server = await startLoopbackSourceServer();
+    const connection =
+      kind === "direct"
+        ? await connectServerRemote({
+            kind: "server",
+            url: `http://127.0.0.1:${server.port}`,
+            token: INGRESS_TOKEN,
+          })
+        : await connectServerRemoteOverDuplex({
+            ingressToken: INGRESS_TOKEN,
+            createConnection: () => connectOpaqueDuplex(server.port),
+          });
+    disposals.push(() => connection.dispose());
+    const received = vi.fn();
+    const subscription =
+      connection.services.fileWatcherService.onDynamicChange("argument-secret")(received);
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+    expect(warn).toHaveBeenCalledWith(
+      expect.any(String),
+      "RPC event subscription failed: [omitted]",
+      expect.any(Object),
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toMatch(
+      /secret|ingress-token-for-tests|argument-secret/,
+    );
+    expect(received).not.toHaveBeenCalled();
+    subscription.dispose();
+  },
+);
 
 describe("connectServerRemoteOverDuplex", () => {
   it("authenticates over one reusable Duplex and serves existing RPC services", async () => {

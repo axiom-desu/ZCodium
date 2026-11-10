@@ -6,7 +6,7 @@ import {
 } from "@zcode/shared/builtin-plugin-assets";
 /* eslint-disable max-lines */
 
-import { access, cp, mkdir, rm } from "node:fs/promises";
+import { access, cp, mkdir, readFile, rm } from "node:fs/promises";
 import {
   chmodSync,
   copyFileSync,
@@ -25,7 +25,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { resolveRemoteNativeSearchPrebuiltPlan } from "./remote-native-search-tools-config.mjs";
 import { prepareNativeSearchTools } from "./prepare-native-search-tools.mjs";
-import { stageThirdPartyNotices } from "./third-party-notices.mjs";
+import {
+  stageThirdPartyNotices,
+  readThirdPartyNotices,
+  readNodeNotices,
+} from "./third-party-notices.mjs";
 import {
   computeDeterministicSourceSha256 as computeComponentSourceSha256,
   packSourceAsDeterministicTarGzip as packComponentSourceAsArchive,
@@ -38,7 +42,14 @@ import {
   validateStagedOfficeViewerAssets,
 } from "./builtin-plugin-assets.mjs";
 import { stageCuaDriverRuntime } from "./cua-driver-runtime-assets.mjs";
-import { getBuildMetadata } from "../packages/desktop/scripts/build-metadata.mjs";
+import {
+  getBuildMetadata,
+  writeBuildMetadata,
+} from "../packages/desktop/scripts/build-metadata.mjs";
+import {
+  prepareSourceServerRelease,
+  workspacePackageDirectories,
+} from "./prepare-source-server-release.mjs";
 export { DEFAULT_NODE_DIST_BASE, nodeDistBase } from "./remote-node-runtime.mjs";
 
 export { computeComponentSourceSha256, packComponentSourceAsArchive };
@@ -51,9 +62,9 @@ const mockCdnDir = join(desktopDir, "mock-cdn");
 // 版本串唯一来源：与 electron-builder beforePack 的 bundled-remote 校验、desktop-release collect
 // 的产物名匹配同源。直接读 package.json 会让 manifest.appVersion 停在裸基线上，与构建期滚动
 // 版本串漂移，beforePack 的相等校验必炸。getBuildMetadata 与打包侧读取同一函数，浅克隆告警也一致。
-const { appVersion: version } = getBuildMetadata();
+let { appVersion: version } = getBuildMetadata();
 const agentVersion = require(join(rootDir, "apps/zcode-cli/package.json")).version;
-const releaseDir = join(mockCdnDir, "releases", version);
+let releaseDir = join(mockCdnDir, "releases", version);
 const nodeVersion = REMOTE_NODE_VERSION;
 const componentSchemaVersion = 1;
 const remotePlatforms = ["linux-x64"];
@@ -673,10 +684,59 @@ function prepareRemoteComponentArtifacts() {
   }
 }
 
+async function prepareRepositorySourceServerRelease() {
+  runCommand(pnpmCommand, ["--filter", "@zcode/server-cli", "build"], {
+    cwd: rootDir,
+    env: process.env,
+  });
+  const [thirdParty, nodeNotice, workspacePackageDirs] = await Promise.all([
+    readThirdPartyNotices(rootDir),
+    readNodeNotices(nodeVersion, rootDir),
+    workspacePackageDirectories(rootDir),
+  ]);
+  // R3 archive 只由既有 packaging owner 组装；旧组件不再是 Source 的安装来源。
+  await prepareSourceServerRelease({
+    target: remotePlatforms[0],
+    appVersion: version,
+    distDir: join(rootDir, "packages/zcode-server-cli/dist"),
+    agentBundlePath: join(releaseDir, "glm", remotePlatforms[0], "zcode.cjs"),
+    bundledSkillsDir: join(rootDir, "apps/zcode-cli/packages/bundled-skills"),
+    nodeBinaryPath: join(releaseDir, "node", remotePlatforms[0], "node"),
+    workspaceNodeModulesDir: join(rootDir, "node_modules"),
+    workspacePackageDirs,
+    officialPluginsDir: join(releaseDir, "glm", remotePlatforms[0], "packages"),
+    nativeToolsDir: join(releaseDir, "tools", remotePlatforms[0]),
+    notices: {
+      thirdParty: thirdParty.toString("utf8"),
+      node: nodeNotice.bytes.toString("utf8"),
+      nodeSource: `${JSON.stringify(nodeNotice.source, null, 2)}\n`,
+    },
+    outputDir: releaseDir,
+    componentArchives: false,
+  });
+}
+
 async function main() {
+  const args = process.argv.slice(2);
+  if (args.length > 0) {
+    if (args.length !== 2 || args[0] !== "--source-server-config") {
+      throw new Error(
+        "Usage: prepare-prebuilds.mjs [--source-server-config <prepared-inputs.json>]",
+      );
+    }
+    const config = JSON.parse(await readFile(resolve(args[1]), "utf8"));
+    if (config.workspacePackageDirs)
+      config.workspacePackageDirs = new Map(Object.entries(config.workspacePackageDirs));
+    await prepareSourceServerRelease(config);
+    return;
+  }
+  // 切换 checkout 后旧 out/metadata 可能仍在；刷新既有 owner，不能将旧版本写入新制品。
+  ({ appVersion: version } = writeBuildMetadata());
+  releaseDir = join(mockCdnDir, "releases", version);
   console.log(`==> Preparing mock CDN release in ${releaseDir}`);
 
   mkdirSync(releaseDir, { recursive: true });
+  await rm(join(releaseDir, "source-server-release.json"), { force: true });
   // 旧 manifest 不能在构建失败后伪装为本次完整产物；发布标记最后生成。
   for (const platform of remotePlatforms) {
     await rm(join(releaseDir, `manifest-${platform}.json`), { force: true });
@@ -695,6 +755,7 @@ async function main() {
     await stageThirdPartyNotices(join(releaseDir, "glm", platformKey), rootDir);
   }
   prepareRemoteComponentArtifacts();
+  await prepareRepositorySourceServerRelease();
   await bundleRepositoryRemoteAssets(rootDir);
 
   console.log(`==> Done! Mock CDN release ready at ${releaseDir}`);

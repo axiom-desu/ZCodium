@@ -95,7 +95,9 @@ function exposeWebSocket(
 ): void {
   const socket = wrapWebSocket(ws);
   const protocol = new SocketProtocol(socket);
-  const rawServer = new ChannelServer(protocol, "server");
+  const rawServer = new ChannelServer(protocol, "server", undefined, undefined, undefined, {
+    logger: (message, ...args) => log.warn(undefined, message, ...args),
+  });
   const server = new LoggingChannelServer(rawServer, (...args) => log.debug(undefined, ...args));
   const agentService = services.getOptional(IZCodeAgentService);
   const scope = agentService

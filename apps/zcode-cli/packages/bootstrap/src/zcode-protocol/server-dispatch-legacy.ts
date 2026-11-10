@@ -1,7 +1,12 @@
 // 旧 session/*、workspace/*、plugins/*、mcp*/* 方法分派。执行函数仍来自
 // server-operations / plugins / mcp-ui，本模块只负责方法路由与 operation 信号接线。
 import type { ZCodeProtocolRequest } from "@zcode/shared";
-import { zcodeProtocolMethods, zcodeWorkspaceHookTrustGrantParamsSchema } from "@zcode/shared";
+import {
+  ZCODE_PROTOCOL_NAME,
+  ZCODE_PROTOCOL_VERSION,
+  zcodeProtocolMethods,
+  zcodeWorkspaceHookTrustGrantParamsSchema,
+} from "@zcode/shared";
 import {
   cancelBackgroundTask,
   closeSession,
@@ -250,7 +255,12 @@ export async function dispatchLegacyRequest(
     case zcodeProtocolMethods.processChildProcesses:
       return listChildProcesses(host.context.deps.mcpProcesses?.listProcesses() ?? []);
     case zcodeProtocolMethods.runtimeCapabilities:
-      return { independentPlanState: true };
+      // session/list 不带协议身份，握手改由 runtime/capabilities 声明；这里是静态事实，
+      // 不读 workspace/model/网络，避免把运行时私有数据混进能力响应。
+      return {
+        protocol: { name: ZCODE_PROTOCOL_NAME, version: ZCODE_PROTOCOL_VERSION },
+        independentPlanState: true,
+      };
     case zcodeProtocolMethods.pluginsMarketplaceAdd:
       return await withPluginOperationSignal(host.pluginOperationControllers, request, (signal) =>
         addPluginMarketplace(host.context, request.params, signal),

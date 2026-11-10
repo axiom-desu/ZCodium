@@ -44,6 +44,7 @@ import {
   buildHostProcessEnv,
   hostModulePath,
   resolveBundledGlmBinaryPath,
+  type RemoteAssetDirs,
 } from "./desktopRuntimeEnv.js";
 import { buildHostE2ECoverageEnv } from "./e2eCoverage.js";
 import { createHostLogRelay } from "./hostLogRelay.js";
@@ -69,6 +70,8 @@ export interface WindowBootstrapOptions {
 
 export interface HostInitMessage {
   type: typeof HostMessageTypes.InitLocal;
+  /** 与常规远程连接共享 Main 解析的静态资产路径。 */
+  remoteAssets?: RemoteAssetDirs;
   hostId?: string;
   databaseStartupId?: string;
   deliveryKind?: TaskRealtimeHostDeliveryKind;

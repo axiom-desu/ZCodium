@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
+import { join } from "node:path";
 import { app, BrowserWindow, type WebContents } from "electron";
 import { PlatformChannels } from "@zcode/shared";
 import type { WebRemoteControlPlatformMethod } from "@zcode/shared";
@@ -121,6 +122,11 @@ export async function createWebRemoteControl(
       ipcHandle.requestRendererReconnect(windowId, workspaceKey),
     resolveHostProcess: options.resolveHostProcess,
     resolveRemoteWorkspaceConnectionState: options.resolveRemoteWorkspaceConnectionState,
+    // 方案 B：手机改用随包 Web 客户端（resources/web-remote）。
+    // 默认开启；ZCODE_WEB_CLIENT_REMOTE=0 可回退旧 mobile.html 入口（B5 之前的逃生阀）。
+    ...(process.env.ZCODE_WEB_CLIENT_REMOTE === "0"
+      ? {}
+      : { webClient: { assetsRoot: resolveWebClientAssetsRoot() } }),
   });
   managerHolder.manager = manager;
 
@@ -130,6 +136,15 @@ export async function createWebRemoteControl(
       ipcHandle.dispose();
     },
   };
+}
+
+/** 随包 Web 客户端目录：`ZCODE_WEB_REMOTE_MOBILE_DIR` 覆盖优先（dev），否则 resources/web-remote。 */
+function resolveWebClientAssetsRoot(): string | null {
+  const override = process.env.ZCODE_WEB_CLIENT_ASSETS_DIR?.trim();
+  if (override) return override;
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (resourcesPath) return join(resourcesPath, "web-remote");
+  return null;
 }
 
 function resolveLanPort(): number | undefined {

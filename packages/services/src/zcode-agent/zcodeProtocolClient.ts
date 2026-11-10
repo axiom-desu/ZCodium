@@ -11,6 +11,16 @@ import type {
 import type { V4Method } from "@zcode/shared/zcode-protocol-v4";
 import type { z } from "zod";
 import type { ZCodeProtocolTransport } from "./zcodeProtocolTransport.js";
+import {
+  ZCodeProtocolClientError,
+  ZCodeProtocolRequestTimeoutError,
+} from "./zcodeProtocolClientErrors.js";
+export { ZCodeProtocolRequestTimeoutError } from "./zcodeProtocolClientErrors.js";
+import {
+  assertResponseProtocolIdentity,
+  normalizeResponseParseFailure,
+  ZCodeProtocolResponseError,
+} from "./protocolResponseValidation.js";
 
 /** 客户端可发的方法名：旧 zcodeProtocolMethods + v4/*（并存，收敛为 v4）。 */
 type ZCodeProtocolClientMethod = ZCodeProtocolMethod | V4Method;
@@ -46,28 +56,6 @@ interface ZCodeProtocolClientRequestOptions {
 }
 
 const DEFAULT_ZCODE_PROTOCOL_REQUEST_TIMEOUT_MS = 3 * 60_000;
-
-class ZCodeProtocolClientError extends Error {
-  constructor(
-    message: string,
-    readonly code?: number,
-    readonly data?: unknown,
-  ) {
-    super(message);
-    this.name = "ZCodeProtocolClientError";
-  }
-}
-
-export class ZCodeProtocolRequestTimeoutError extends Error {
-  constructor(
-    readonly method: ZCodeProtocolClientMethod,
-    readonly requestId: ZCodeProtocolRequestId,
-    readonly timeoutMs: number,
-  ) {
-    super(`ZCode Protocol request timed out: ${method}`);
-    this.name = "ZCodeProtocolRequestTimeoutError";
-  }
-}
 
 export class ZCodeProtocolClient implements IDisposable {
   readonly storageStartup: ZCodeStorageStartupGate;
@@ -201,21 +189,24 @@ export class ZCodeProtocolClient implements IDisposable {
       return resultPromise;
     }
 
-    try {
-      await this.transport.send({
+    // Bug 修复：不能先 await send 再交付 resultPromise；transport 写入阻塞时会绕过请求取消预算，
+    // 且已超时的 resultPromise 会无人接收。发送失败也进入同一 pending 清理/拒绝点。
+    const rejectSend = (error: unknown) =>
+      this.rejectResponse(
         id,
-        method,
-        params,
-        ...(options?.trace ? { trace: options.trace } : {}),
-      });
+        error instanceof Error ? error : new Error("ZCode Protocol transport send failed"),
+      );
+    try {
+      void this.transport
+        .send({
+          id,
+          method,
+          params,
+          ...(options?.trace ? { trace: options.trace } : {}),
+        })
+        .catch(rejectSend);
     } catch (error) {
-      const pending = this.pending.get(requestKey);
-      if (pending) {
-        clearTimeout(pending.timeout);
-        pending.cleanupAbort?.();
-        this.deletePending(requestKey);
-      }
-      throw error;
+      rejectSend(error);
     }
 
     return resultPromise;
@@ -329,13 +320,16 @@ export class ZCodeProtocolClient implements IDisposable {
     this.deletePending(requestKey);
 
     try {
+      assertResponseProtocolIdentity(pending.method, result);
       const parsed = pending.resultSchema ? pending.resultSchema.parse(result) : result;
       pending.resolve(parsed);
     } catch (error) {
+      // Bug 修复：原来直接 reject ZodError，message 就是 issues 的 JSON 文本，最终被渲染成聊天消息。
+      // 统一收敛为可读的协议错误（含方法名与双方协议身份），并由握手期探针提前暴露版本不匹配。
       pending.reject(
-        error instanceof Error
+        error instanceof ZCodeProtocolResponseError
           ? error
-          : new Error(`ZCode Protocol response parse failed: ${pending.method}`),
+          : normalizeResponseParseFailure({ method: pending.method, result, error }),
       );
     }
   }
