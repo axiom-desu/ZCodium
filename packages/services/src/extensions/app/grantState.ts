@@ -4,6 +4,8 @@ import {
   type ExtensionGrant,
   type ExtensionGrantRecord,
   type ExtensionGrantState,
+  type ExtensionProtocolName,
+  type ExtensionProtocols,
 } from "@zcode/shared/extension-host";
 
 /**
@@ -18,7 +20,7 @@ export interface DeclaredPlugin {
   capabilities: string[];
   /** 清单声明的槽位 id。 */
   slotIds: string[];
-  protocols: { projects?: number };
+  protocols: ExtensionProtocols;
   declared: ExtensionGrant[];
 }
 
@@ -132,8 +134,8 @@ type CapabilityAdmission =
 export function admitCapability(input: {
   declaredCapabilities: readonly string[];
   capabilityId: string;
-  declaredProtocols: { projects?: number };
-  protocolName?: "projects";
+  declaredProtocols: ExtensionProtocols;
+  protocolName?: ExtensionProtocolName;
   compatible: boolean;
   granted: readonly ExtensionGrant[];
   requiredGrant: "none" | ExtensionGrant;

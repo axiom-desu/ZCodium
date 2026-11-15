@@ -16,3 +16,7 @@ Desktop Host 侧 App 会话控制：把 `appControl/*` 十二个封闭意图映�
   fork store 或 accepted 队列。
 - 十二个意图：listProjects / listSessions / readSession / createSession / forkSession / sendToSession /
   waitSessions / interruptSession / renameSession / openSession / setSessionArchived / setSessionPinned。
+- 幂等身份：create/fork/sendToSession 的 commandId 一律是 `appControlCommandId(callerId, requestId)`，
+  按调用方命名空间隔离；两个插件/调用者对同一会话提交相同 requestId 也是两条命令。
+- 观察：`waitSessions` 的 initial 必须是 owner 的真实 owner 快照（读一次 task meta / live 执行），
+  不能用合成的 revision 0/unknown——否则 wait 会在第一份 baseline 上直接判定 unknown 并返回。

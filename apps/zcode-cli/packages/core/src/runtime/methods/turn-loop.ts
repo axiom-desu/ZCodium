@@ -56,6 +56,9 @@ import {
   commitTurnRequestEntries,
   filterOutputTokenContinuationEntries,
 } from "./turn-output-token-continuation.js";
+import { consumeSettledProjectMemoryRecall } from "../helpers/project-memory-recall.js";
+import { consumePendingProjectMemoryUpdate } from "../helpers/project-memory-dream.js";
+import { ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH } from "../../memory/project-memory-retrieval-branch.js";
 
 export async function runRegularTurnLoop(
   this: AgentRuntimeInternal,
@@ -79,6 +82,19 @@ export async function runRegularTurnLoop(
         state.repeatedToolCallSignature = undefined;
         state.repeatedToolCallStreakCount = 0;
       }
+      // 完整真实 tool-result batch 且 queued 输入已 drain 后：Recall prefetch 只在此边界消费一次，
+      // selector 未完成时不等待；Dream 的 memory_update 同样只注入一次。
+      // 两者都是 per-request 提醒（不写入 canonical history），与上游 turn request entries 语义一致。
+      const recallEntry = consumeSettledProjectMemoryRecall(
+        this,
+        ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+      );
+      appendTurnRequestEntries(
+        state.turnRequestState,
+        [recallEntry, consumePendingProjectMemoryUpdate(this)].filter(
+          (entry): entry is RuntimeMessageEntry => entry !== undefined,
+        ),
+      );
     }
 
     const compactPhase =

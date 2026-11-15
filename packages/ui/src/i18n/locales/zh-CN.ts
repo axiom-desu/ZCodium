@@ -4187,6 +4187,7 @@ const zhCN: Record<string, string> = {
   "settings.plugins.config.undoClearSecret": "保留已保存密钥",
   "settings.plugins.config.restoreOption": "恢复继承值",
   "settings.plugins.config.undoRestoreOption": "保留工作区覆盖",
+  "settings.plugins.config.secretStoredPlaceholder": "已安全保存，留空表示不修改。",
   "settings.plugins.config.sensitiveUnavailable": "该值需要安全存储接入后才能配置。",
   "settings.plugins.import.open": "从外部 Agent 导入插件",
   "settings.plugins.import.title": "导入外部 Agent 插件",
@@ -6670,6 +6671,10 @@ const zhCN: Record<string, string> = {
   "extensions.status.pending": "扩展权限待确认",
   "extensions.status.loading": "正在加载扩展…",
   "extensions.status.error": "扩展不可用",
+  "extensions.status.grant.projects.read": "读取项目列表",
+  "extensions.status.grant.sessions.read": "读取本窗口的会话：列出会话、读取消息、等待执行结束",
+  "extensions.status.grant.sessions.write":
+    "读取并修改本窗口的会话：发送消息、新建、fork、改名、归档、置顶、中断并在窗口中打开。包含读取会话权限。",
   "extensions.status.notice":
     "扩展会以你的用户权限运行第三方 Node.js 代码；启用不提供操作系统级隔离。",
 };

@@ -43,6 +43,15 @@ impl Engine {
         self.tool_search_override = mode;
         self
     }
+    /// 本次 create/resume 的 App 会话控制能力。3.18 规则：只由 Host 偏好回包写入的
+    /// `runtimeConfig.appControl` 决定；无 Host（TUI/无头/in-process）、旧 Host 与任何
+    /// 模型/CLI 输入都不能开启，冷恢复也不继承上一代授权的结论。
+    pub(super) fn session_app_control(&self, params: &Value) -> bool {
+        params
+            .get("runtimeConfig")
+            .and_then(|config| config["appControl"].as_bool())
+            .unwrap_or(false)
+    }
     /// 本次 create/resume 的实际模式：显式 CLI > Host runtimeConfig > 缺省 Off。
     pub(super) fn session_tool_search_mode(
         &self,

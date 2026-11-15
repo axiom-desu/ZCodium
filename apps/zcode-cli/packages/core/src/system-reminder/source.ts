@@ -45,6 +45,9 @@ export const SYSTEM_REMINDER_PERSISTED_SOURCES = [
 export const SYSTEM_REMINDER_PER_REQUEST_SOURCES = [
   "incoming_message",
   "hook_context",
+  // Semantic Recall / Dream 的当前回合注入（上游 3.18.2 §5.3/§7.3）；不落 session。
+  "memory_update",
+  "relevant_memory",
   "runtime_mode",
   "plan_mode_exit",
   "output_style",
@@ -187,6 +190,8 @@ const SYSTEM_REMINDER_DESCRIPTORS: Record<SystemReminderSource, DescriptorShape>
     true,
     "sr.total_tokens_reminder",
   ),
+  memory_update: descriptor("current_turn", "per_current_turn", true, "sr.memory_update"),
+  relevant_memory: descriptor("current_turn", "per_current_turn", true, "sr.relevant_memory"),
   // 第四批 4a-0（2026-09-12）：原 plugin_ui_state 源已删除，插件给模型的信息改走 ui/update-model-context。
 };
 

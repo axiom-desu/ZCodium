@@ -165,15 +165,19 @@ fn imported_history() -> Schema {
     )
 }
 
-/// Host 启动偏好的既有传输路径；Rust 只消费 `toolSearch.mode`，其余字段由 TS Host 解释。
+/// Host 启动偏好的既有传输路径；Rust 只消费 `toolSearch.mode` 与 3.18 的
+/// `appControl`（App 会话控制能力，只能由 Host 偏好回包置位），其余字段由 TS Host 解释。
 fn runtime_config() -> Schema {
-    Schema::Object(vec![optional(
-        "toolSearch",
-        Schema::Object(vec![optional(
-            "mode",
-            Schema::Enum(&["auto", "native", "local", "off"]),
-        )]),
-    )])
+    Schema::Object(vec![
+        optional(
+            "toolSearch",
+            Schema::Object(vec![optional(
+                "mode",
+                Schema::Enum(&["auto", "native", "local", "off"]),
+            )]),
+        ),
+        optional("appControl", Schema::Bool),
+    ])
 }
 
 fn tail() -> Vec<(&'static str, Schema, bool)> {

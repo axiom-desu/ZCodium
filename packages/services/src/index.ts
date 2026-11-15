@@ -238,7 +238,7 @@ export type {
 } from "./zcode-session/zcodeSession.js";
 
 // Bots service — IBotsService is both a type (interface) and value (descriptor).
-export { IBotsService } from "./bots/bots.js";
+export { IBotsService, WEB_REMOTE_BOTS_ALLOWED_METHODS } from "./bots/bots.js";
 export type {
   BotBindCodeResult,
   BotCreateBindCodeParams,

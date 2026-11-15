@@ -30,6 +30,8 @@ pub(super) struct Scope<'a> {
     pub model: &'a dyn crate::contract::ModelPort,
     /// Host-admitted automationId of this run (`CronPauseSelf` only).
     pub automation_id: Option<&'a str>,
+    /// 本轮 App 会话控制授予（三分支都只读这一份本轮事实）。
+    pub app_control: bool,
 }
 async fn execute(
     tools: &dyn ToolPort,
@@ -49,6 +51,7 @@ async fn execute(
         hooks,
         model,
         automation_id,
+        app_control,
     } = context;
     let (search, skills, profile, profiles, permissions, hooks) =
         (*search, *skills, *profile, *profiles, *permissions, *hooks);
@@ -164,6 +167,11 @@ async fn execute(
             }
             Some(args) if name == crate::domain::automation::PAUSE_SELF => {
                 super::automation_tool::execute(&args, *automation_id, sink, cancel).await
+            }
+            // 3.18 App 会话控制十二工具：执行边界只读本轮的授予事实与身份，
+            // 模型输入只承载 `input`（RequestId 由这里注入）。
+            Some(args) if crate::domain::app_control::is_tool(name) => {
+                super::app_control_tool::execute(name, &args, &id, *app_control, sink, cancel).await
             }
             Some(args) if plan_tool => {
                 super::plan_tools::execute(tools, name, &args, &id, permissions, sink, cancel).await

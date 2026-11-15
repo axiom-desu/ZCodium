@@ -54,6 +54,9 @@ import type { AgentRuntimeCoreMethods } from "./internal-methods.js";
 import type { AgentRuntimeTurnMethods } from "./internal-turn-methods.js";
 import type { AgentRuntimeHookMethods } from "./internal-hook-methods.js";
 import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
+import type { ProjectMemoryRecallPrefetch } from "./helpers/project-memory-recall.js";
+import type { ProjectMemoryUpdate } from "./helpers/project-memory-dream.js";
+import type { MemoryRecallState } from "../memory/recall/index.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
 import type { DynamicWorkflowActivationSource } from "./methods/dynamic-workflow-activation.js";
 import type { InstructionRefreshReason } from "../context/types.js";
@@ -79,6 +82,8 @@ export interface AgentRuntimeInternal
   eventSinks: Set<SessionEventSink>;
   now: () => Date;
   isRemoteWorkspace: () => boolean;
+  /** model-io transcript 目录；缺席时 Dream handler 直接返回（无 transcript 可读）。 */
+  modelIoDir?: string;
   registry: ToolRegistry;
   executor: ToolExecutor;
   hookRunner?: HookRunner;
@@ -101,6 +106,12 @@ export interface AgentRuntimeInternal
   latestContextBuildResult?: ContextBuildResult;
   memoryRoot?: string;
   memoryIndexContent?: string;
+  /** session-local Semantic Recall 状态；只在内存，compact/resume 重置。 */
+  memoryRecallState: MemoryRecallState;
+  memoryRecallPrefetch?: ProjectMemoryRecallPrefetch;
+  /** Dream 扫描节流钟（进程内）与待注入的 memory_update。 */
+  memoryDreamLastScanAtMs: number;
+  pendingMemoryUpdate?: ProjectMemoryUpdate;
   memoryExtractionScheduler?: ProjectMemoryExtractionScheduler;
   contextSourcePort?: ContextSourcePort;
   skillPort?: SkillPort;

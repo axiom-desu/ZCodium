@@ -77,6 +77,7 @@ impl Engine {
             workspace: Some(workspace),
             fresh: false,
             tool_search_mode: self.session_tool_search_mode(p),
+            app_control: self.session_app_control(p),
             ..Default::default()
         };
         if let Some(servers) = p.get("mcpServers") {

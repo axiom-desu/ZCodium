@@ -23,6 +23,7 @@ pub use engine::Engine;
 mod input_validation;
 
 mod agent_loop;
+mod app_control_tool;
 mod automation;
 mod automation_tool;
 mod durable;

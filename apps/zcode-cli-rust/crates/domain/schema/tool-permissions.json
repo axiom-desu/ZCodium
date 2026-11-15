@@ -286,6 +286,19 @@
         "needsApproval": false
       }
     },
+    "ReadTopicResource": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "session",
+      "riskLevel": "low",
+      "needsApproval": false,
+      "permission": {
+        "permission": "session.topic_resource.read",
+        "riskLevel": "low",
+        "sideEffectScope": "session",
+        "needsApproval": false
+      }
+    },
     "SearchPlugins": {
       "readOnly": true,
       "destructive": false,

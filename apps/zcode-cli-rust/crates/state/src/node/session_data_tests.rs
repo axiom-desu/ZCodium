@@ -4,6 +4,23 @@ use super::{open, session_data, session_data_files, session_data_inspect};
 use rusqlite::{Connection, params};
 use serde_json::Value;
 use std::collections::BTreeSet;
+use std::path::Path;
+
+/// 平台目录链接原语：unix `symlink`，Windows `symlink_dir`；其它平台返回 `None`。
+/// 存储类别目录被换成链接必须拒绝清理的安全断言由平台自己的真实原语构造，
+/// 不能用 `std::os::unix::fs::symlink` 直写（那会让 Windows `--all-targets` 编译失败）。
+#[cfg(any(unix, windows))]
+fn link_directory(target: &Path, link: &Path) -> Option<std::io::Result<()>> {
+    #[cfg(unix)]
+    return Some(std::os::unix::fs::symlink(target, link));
+    #[cfg(windows)]
+    return Some(std::os::windows::fs::symlink_dir(target, link));
+}
+
+#[cfg(not(any(unix, windows)))]
+fn link_directory(_target: &Path, _link: &Path) -> Option<std::io::Result<()>> {
+    None
+}
 
 fn database() -> (tempfile::TempDir, Connection) {
     let dir = tempfile::tempdir().unwrap();
@@ -257,9 +274,14 @@ fn file_deletion_retains_referenced_artifact_and_rejects_symlink_root() {
     // 存储类别目录被换成链接时拒绝清理，不能沿祖先链接删除用户文件。
     let elsewhere = dir.path().join("elsewhere");
     std::fs::create_dir_all(&elsewhere).unwrap();
-    std::os::unix::fs::symlink(&elsewhere, root.join("exec")).unwrap();
-    let error = session_data_files::list(&root, "root").unwrap_err();
-    assert_eq!(error.to_string(), "session-data.symlink-root");
+    std::fs::write(elsewhere.join("kept.txt"), "keep").unwrap();
+    if let Some(created) = link_directory(&elsewhere, &root.join("exec")) {
+        created.unwrap();
+        let error = session_data_files::list(&root, "root").unwrap_err();
+        assert_eq!(error.to_string(), "session-data.symlink-root");
+        // 拒绝必须发生在动手之前：链接目标与用户文件都还在。
+        assert!(elsewhere.join("kept.txt").exists());
+    }
 
     // 记忆目录与 Node `resolveProjectMemoryRoot` 同构：slug-hash/memory。
     let memory = session_data_files::memory_root(&root, "/work/example", None).unwrap();

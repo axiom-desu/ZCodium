@@ -8,6 +8,9 @@ import { runCommand } from "./spawn-command.mjs";
 // adapters tsc 在内存受限机器上会 OOM（exit 134），给整条构建链路提高堆上限。
 process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS ? process.env.NODE_OPTIONS + " " : ""}--max-old-space-size=8192`;
 import { resolveBuiltinProviderBuildEnvironment } from "./builtin-provider-config.mjs";
+// 根 workspace 的 dist 导出依赖（@zcode/session-control）不在下面的 cliWorkspaceBuilds 里：
+// 冷 checkout 上 @zcode/core 的 tsc 报 TS2307，必须由单一前置入口先按依赖序构建。
+import { buildWorkspacePrerequisites } from "./ci/build-workspace-prerequisites.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const useTurboBuild = process.env.ZCODE_DESKTOP_AGENT_BUILD_MODE === "turbo";
@@ -135,6 +138,8 @@ async function runBootstrapWithRemoteBuild() {
     stdio: "inherit",
   });
 }
+
+buildWorkspacePrerequisites({ root: repoRoot });
 
 if (useBootstrapWithRemoteBuild) {
   await runBootstrapWithRemoteBuild();

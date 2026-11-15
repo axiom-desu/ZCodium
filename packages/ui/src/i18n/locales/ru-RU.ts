@@ -29,6 +29,7 @@ import chunk27 from "./ru-RU/messages-27.json" with { type: "json" };
 import chunk28 from "./ru-RU/messages-28.json" with { type: "json" };
 import chunk29 from "./ru-RU/messages-29.json" with { type: "json" };
 import chunk30 from "./ru-RU/messages-30.json" with { type: "json" };
+import chunk31 from "./ru-RU/messages-31.json" with { type: "json" };
 
 const messages: Record<string, string> = {
   ...chunk1,
@@ -61,6 +62,7 @@ const messages: Record<string, string> = {
   ...chunk28,
   ...chunk29,
   ...chunk30,
+  ...chunk31,
 };
 
 export default messages;

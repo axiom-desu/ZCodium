@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
@@ -60,10 +60,19 @@ pub(super) async fn current(path: &Path) -> Result<Option<Vec<u8>>> {
     Ok(Some(tokio::fs::read(path).await?))
 }
 pub(super) async fn sync_parent(path: &Path) -> Result<()> {
+    // `std::fs::File::open(dir).sync_all()` 是 POSIX 目录 fsync；Windows 没有等价语义。
+    // `Context` 与参数 `path` 只在 unix 分支使用，所以它们必须留在分支内/显式说明，
+    // 否则 Windows 编译时整块消失、import 与参数变成 cfg unused 警告。
     #[cfg(unix)]
     {
+        use anyhow::Context;
+
         let parent = path.parent().context("Missing parent")?.to_owned();
         tokio::task::spawn_blocking(move || std::fs::File::open(parent)?.sync_all()).await??;
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
     }
     Ok(())
 }

@@ -77,7 +77,7 @@ export interface LexicalChatInputHandle {
   getEditorState: () => EditorState;
   getMarkdown: () => string;
   getText: () => string;
-  appendText: (text: string) => void;
+  appendText: (text: string, options?: { exactSuffix?: boolean; keepFocus?: boolean }) => void;
   appendFileMention: (
     label: string,
     value: string,
@@ -444,7 +444,11 @@ function appendEditorFileMention(
   );
 }
 
-function appendEditorPlainText(editor: LexicalEditor, text: string) {
+function appendEditorPlainText(
+  editor: LexicalEditor,
+  text: string,
+  options: { exactSuffix?: boolean; keepFocus?: boolean } = {},
+) {
   editor.update(
     () => {
       const root = $getRoot();
@@ -455,14 +459,18 @@ function appendEditorPlainText(editor: LexicalEditor, text: string) {
       }
 
       const currentText = paragraph.getTextContent();
-      if (currentText.length > 0 && !/\s$/.test(currentText)) {
+      if (!options.exactSuffix && currentText.length > 0 && !/\s$/.test(currentText)) {
         paragraph.append($createTextNode(" "));
       }
 
       paragraph.append($createTextNode(text));
-      paragraph.selectEnd();
+      if (!options.keepFocus) paragraph.selectEnd();
     },
-    { tag: PROGRAMMATIC_UPDATE_TAG },
+    {
+      tag: options.keepFocus
+        ? [PROGRAMMATIC_UPDATE_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SELECTION_FOCUS_TAG]
+        : PROGRAMMATIC_UPDATE_TAG,
+    },
   );
 }
 
@@ -1296,7 +1304,7 @@ function EditorApiPlugin({
       getEditorState: () => editor.getEditorState(),
       getMarkdown: () => getEditorMarkdown(editor.getEditorState()),
       getText: () => getEditorMarkdown(editor.getEditorState()),
-      appendText: (text: string) => appendEditorPlainText(editor, text),
+      appendText: (text: string, options) => appendEditorPlainText(editor, text, options),
       appendFileMention: (
         label: string,
         value: string,

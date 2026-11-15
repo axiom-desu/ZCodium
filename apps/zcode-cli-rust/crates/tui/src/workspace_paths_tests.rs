@@ -1,7 +1,6 @@
 //! `@file` 路径查询的真实临时目录回归：token 边界、排序/上限、隐藏与 VCS 过滤、
 //! symlink 穿出与显式错误。
 use super::*;
-use std::path::Path;
 
 fn fixture() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -145,6 +144,10 @@ async fn symlinks_cannot_escape_the_workspace() {
 #[cfg(unix)]
 #[tokio::test]
 async fn control_character_names_never_become_candidates() {
+    // `Path` 只在本用例使用，而本用例本身是 unix 专属；放在文件顶部会在 Windows
+    // `--all-targets` 里变成 cfg unused import 警告。
+    use std::path::Path;
+
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("bad\u{1}.txt"), "x").unwrap();
     std::fs::write(dir.path().join("good.txt"), "x").unwrap();

@@ -4,6 +4,10 @@
     "-lintignore"
   ],
   "workspaces": {
+    "apps/zcode-cli/packages/core": {
+      "entry": ["src/index.ts", "test/*.test.ts", "src/tool/topic-resource/module.ts", "src/tool/topic-resource/contract.example.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
     ".": {
       "entry": [
         ".release-it.mjs",
@@ -18,7 +22,11 @@
         "scripts/ci/sync318-u4-project-remote-smoke.mjs",
         "scripts/ci/locale-switcher-smoke.mjs",
         "scripts/ci/managed-worktree-ui-smoke.mjs",
-        "scripts/ci/remote-projects-ui-smoke.mjs"
+        "scripts/ci/remote-projects-ui-smoke.mjs",
+        "scripts/ci/build-workspace-prerequisites.mjs",
+        "scripts/ci/build-workspace-prerequisites.test.mjs",
+        "scripts/ci/extension-sessions-consent-smoke.mjs",
+        "scripts/ci/input-prediction-composer-smoke.mjs"
       ]
     },
     "packages/ui": {
@@ -75,7 +83,9 @@
         "test/fixtures/data-sync-ui.jsx",
         "test/fixtures/upstream-318-project-remote-ui.jsx",
         "test/fixtures/managed-worktree-dialog.jsx",
-        "test/fixtures/remote-projects-dialog.jsx"
+        "test/fixtures/remote-projects-dialog.jsx",
+        "test/fixtures/extension-sessions-consent.jsx",
+        "test/fixtures/conversation-composer-input-prediction.jsx"
       ]
     },
     "packages/session-control": {
@@ -120,6 +130,9 @@
       "entry": [
         "src/index.ts",
         "src/storage/module.ts",
+        "src/bots/topic-resource/module.ts",
+        "src/bots/topic-resource/contract.ts",
+        "src/bots/topic-resource/contract.example.ts",
         "src/project-storage/module.ts",
         "src/project-storage/contract.example.ts",
         "src/project/index.ts",
@@ -226,7 +239,7 @@
       "entry": [
         "skills/design/scripts/*.mjs",
         "test/*.test.ts"
-      ],
+      ]
     },
     "apps/zcode-cli/packages/node-repl-host": {
       "project": [
@@ -242,14 +255,10 @@
       ]
     }
   },
-  "ignoreIssues": {
-    "apps/zcode-cli/packages/design-plugin/test/fixtures/frontend/tailwind.config.js": [
-      "unlisted"
-    ]
-  },
   "ignore": [
     ".agents/**",
     "docs/**",
-    "packages/ui/src/components/**"
+    "packages/ui/src/components/**",
+    "apps/zcode-cli/packages/design-plugin/test/fixtures/**"
   ]
 }

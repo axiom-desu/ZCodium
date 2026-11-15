@@ -61,6 +61,8 @@ import { SettingsBreadcrumbReporter } from "@/settings/SettingsHeaderBreadcrumb.
 import { SettingsScopeBadge } from "@/settings/SettingsScopeBadge.js";
 import {
   buildPluginConfigPatch,
+  resolvePluginOptionValue,
+  type PluginOptionDisplayState,
   type PluginOptionDraftValue,
 } from "@/settings/pluginConfigPatch.js";
 import { formatRemoteSkillSyncTarget } from "@/settings/RemoteSkillSyncDialog.js";
@@ -430,20 +432,13 @@ function PluginList({
       [pluginId]: { ...current[pluginId], [key]: value },
     }));
   };
-  const getPluginOptionValue = (
+  // 单一取值实现（含「敏感值已保存但不回显」判定），与配置 patch 构造同处一个模块。
+  const getPluginOptionState = (
     plugin: ZCodePluginInfo,
     key: string,
     option: ZCodePluginUserConfigOption,
-  ): string | number | boolean => {
-    const draft = pluginOptionsDrafts[plugin.id]?.[key];
-    if (draft === null) return "";
-    return (
-      draft ??
-      plugin.configuredOptions?.[key] ??
-      option.default ??
-      (option.type === "boolean" ? false : "")
-    );
-  };
+  ): PluginOptionDisplayState =>
+    resolvePluginOptionValue(plugin, key, option, pluginOptionsDrafts[plugin.id]?.[key]);
   const savePluginOptions = async (plugin: ZCodePluginInfo) => {
     const { options, clearOptionKeys } = buildPluginConfigPatch(
       plugin,
@@ -761,7 +756,7 @@ function PluginList({
                   <PluginHookDetails hooks={selectedPlugin.hookDetails ?? []} />
                 ) : null}
                 <PluginConfigControls
-                  getValue={getPluginOptionValue}
+                  getOptionState={getPluginOptionState}
                   isOptionClearPending={(pluginId, key) =>
                     pluginOptionsDrafts[pluginId]?.[key] === null
                   }

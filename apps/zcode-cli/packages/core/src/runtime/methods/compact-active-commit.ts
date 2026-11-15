@@ -25,6 +25,7 @@ import { selectPersistedCompactTail } from "../helpers/compact-preservation.js";
 import type { CompactTimelineContext } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { supersedeContextComposition } from "../context-composition/state.js";
+import { resetProjectMemoryRecall } from "../helpers/project-memory-recall.js";
 import {
   legacySyntheticRuntimeMetadata,
   type RuntimeMessageEntry,
@@ -242,6 +243,8 @@ export async function commitActiveCompact(
       : recordablePostCompactEntries,
   );
   this.readFileState.clear();
+  // compact 重建了 provider 窗口：Recall 的 manifest conversation、prefetch 与字符计数全部作废。
+  resetProjectMemoryRecall(this);
   // compact 替换了历史：最近一次请求组成作废，查询改为预演（子 spec §2.1）。
   supersedeContextComposition(this, "compact");
   // 指令文件与 Memory 索引在压缩提交后重读：会话中途改过的 AGENTS.md / MEMORY.md

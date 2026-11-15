@@ -102,6 +102,7 @@ import type {
   V4ConversationFileChangesResult,
   V4ConversationFileRewindPreviewResult,
   V4ConversationPlansResult,
+  V4ConversationInputPredictionResult,
   V4ConversationWorkflowRunEventsResult,
   V4ConversationWorkflowRunArtifactDataResult,
   V4ConversationWorkflowRunArtifactReadResult,
@@ -435,6 +436,20 @@ export interface ZCodeAgentConversationRowsRangeParams extends ZCodeAgentSession
 
 /** 当前有效分支里的终态 ExitPlanMode 目录。 */
 export type ZCodeAgentConversationPlansParams = ZCodeAgentSessionTarget;
+
+/** 手机远控输入预测（ghost hint）；线格式见 .agents/specs/upstream-3.18-input-prediction.md。 */
+export interface ZCodeAgentConversationInputPredictionCancelParams extends ZCodeAgentSessionTarget {
+  requestId: string;
+}
+
+export interface ZCodeAgentConversationInputPredictionParams extends ZCodeAgentSessionTarget {
+  /** 手机当前看到的会话 revision；参与 CLI 侧缓存键，回包据此丢弃过期结果。 */
+  revision: number;
+  /** 当前草稿；缺省/空 = 预测下一条输入，非空 = 续写草稿。 */
+  draft?: string;
+  /** 手机侧请求 id，原样回声，用于丢弃过期回包。 */
+  requestId?: string;
+}
 
 /** workflow run 的事件日志分页（详情页审计面）；cursor = journal sequence。 */
 export interface ZCodeAgentConversationWorkflowRunEventsParams extends ZCodeAgentSessionTarget {
@@ -912,6 +927,13 @@ export interface IZCodeAgentService {
   conversationPlansV4(
     params: ZCodeAgentConversationPlansParams,
   ): Promise<V4ConversationPlansResult>;
+  /** 输入预测：只读、无状态；Host 开关关闭 / 无运行时 / 失败一律回空结果，不抛错。 */
+  conversationInputPredictionV4(
+    params: ZCodeAgentConversationInputPredictionParams,
+  ): Promise<V4ConversationInputPredictionResult>;
+  cancelConversationInputPredictionV4(
+    params: ZCodeAgentConversationInputPredictionCancelParams,
+  ): Promise<void>;
   /** workflow run 事件日志分页；与 plans 同族（只读、无状态、超时重发安全）。 */
   conversationWorkflowRunEventsV4(
     params: ZCodeAgentConversationWorkflowRunEventsParams,

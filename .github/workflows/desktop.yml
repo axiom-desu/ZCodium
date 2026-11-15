@@ -38,7 +38,11 @@ jobs:
         run: node scripts/ci/desktop-release.mjs check-version
       - uses: ./.github/actions/setup-workspace
         id: setup
+      # services-safety 包含真实 native app-server ↔ Node Host 纵向，不能借本地旧 binary 通过。
+      - uses: dtolnay/rust-toolchain@stable
       - name: Typecheck
+        # 单个早期检查失败不能让后续门禁变成 skipped：skipped 会静默丢掉覆盖。
+        if: ${{ !cancelled() }}
         run: pnpm typecheck
       # 门禁是「棘轮」：存量债务收在 .gate-baseline/ 里，只拦截新增违规。
       # 原始真值命令是 pnpm lint / pnpm fmt:check（存量债务会报错，属预期）。
@@ -62,8 +66,11 @@ jobs:
         run: pnpm vitest run --config packages/ui/vitest.config.ts packages/ui/src/plugin-ui/domain packages/ui/src/plugin-ui/contract.test.ts
       - name: Build Agent test dependencies
         id: agent-build
+        # 冷 runner 上没有 packages/session-control/dist；该包不在 CLI turbo 图里，
+        # 必须由 root 前置构建先产出，否则 @zcode/core 的 tsc 报 TS2307。
         # 根安装采用 hoisted 布局；从子 workspace 启动会丢失根目录的工具路径。
-        run: pnpm -r --filter './apps/zcode-cli/packages/*' build
+        if: ${{ !cancelled() }}
+        run: pnpm build:zcode-cli-agent-deps
       - name: Agent package tests
         if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
         # 这些包的测试是 node:test、入口在各自的包级 test 脚本里；根 CI 此前只跑了 scripts/ci 与 zcode-cua，
@@ -84,6 +91,7 @@ jobs:
         if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
         run: node --test --test-isolation=none scripts/ci/*.test.mjs
       - name: Computer Use runtime and SDK checks
+        if: ${{ !cancelled() }}
         run: |
           node --test --test-isolation=none packages/zcode-cua/test/*.test.mjs
           pnpm --filter @zcode/zcode-cua-plugin check:sdk
@@ -91,14 +99,19 @@ jobs:
         if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
         run: pnpm vitest run --config packages/ui/vitest.config.ts packages/ui/src/v4/conversationTurnNavigatorPreview.test.ts
       - name: Standalone CLI and TUI model setup checks
+        if: ${{ !cancelled() }}
         run: |
           node scripts/ci/cli-local-entrypoints-smoke.mjs
           node scripts/ci/local-automation-protocol-smoke.mjs
           node scripts/ci/bundled-plugin-marketplace-protocol-smoke.mjs
           node scripts/ci/tui-model-setup-smoke.mjs
       - name: Install browser for remote form checks
+        # 前置工具安装必须与依赖它的检查同生共死：早先步骤失败时若被 skip，
+        # 后面的 !cancelled() 浏览器检查会以 missing chromium 这种假失败掩盖真实原因。
+        if: ${{ !cancelled() }}
         run: pnpm exec playwright-core install --with-deps chromium
       - name: Install isolated Computer Use test desktop
+        if: ${{ !cancelled() }}
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends xvfb openbox bubblewrap dbus-x11 at-spi2-core apparmor
@@ -111,25 +124,35 @@ jobs:
           }
           PROFILE
       - name: Computer Use actions without network access
+        if: ${{ !cancelled() }}
         run: node scripts/ci/cua-actions-smoke.mjs
       - name: Remote form browser checks
+        if: ${{ !cancelled() }}
         run: node scripts/ci/remote-form-smoke.mjs
       - name: Bundled help browser checks
+        if: ${{ !cancelled() }}
         run: node scripts/ci/bundled-help-smoke.mjs
       - name: Local feedback browser checks
+        if: ${{ !cancelled() }}
         run: node scripts/ci/local-feedback-smoke.mjs
       - name: Conversation navigator browser checks
+        if: ${{ !cancelled() }}
         run: node scripts/ci/conversation-navigator-smoke.mjs
       - name: Web remote control dialog browser checks
+        if: ${{ !cancelled() }}
         run: node scripts/ci/web-remote-control-dialog-smoke.mjs
       - name: Imported conversation browser checks
+        if: ${{ !cancelled() }}
         run: node scripts/ci/local-share-context-smoke.mjs
       - name: Config directory catalog browser checks
         # S11：生产 PluginsSection + 真实 ProjectService/SQLite + scoped loopback 配置 IO。
         # 通过根 npm 入口执行，保证脚本本身是真实 CLI 入口（不是只留在 knip 配置里的文件）。
+        if: ${{ !cancelled() }}
         run: pnpm test:config-directory-catalog
       - name: Self-managed model settings
+        if: ${{ !cancelled() }}
         run: |
+          pnpm build:workspace-prerequisites
           pnpm --filter @zcode/desktop build:no-runtime-assets
           node scripts/ci/local-scheduler-smoke.mjs
           node scripts/ci/self-managed-models-smoke.mjs
@@ -163,47 +186,64 @@ jobs:
           pnpm test:remote-projects-ui
           pnpm test:locale-switcher
           pnpm test:extension-host
+          pnpm test:extension-sessions-consent
+          pnpm test:input-prediction
           pnpm test:browser-design
       - name: Side pane full view browser checks
+        if: ${{ !cancelled() }}
         run: node scripts/ci/side-pane-full-view-smoke.mjs
       - name: File manager navigation browser checks
+        if: ${{ !cancelled() }}
         run: node scripts/ci/file-manager-navigation-smoke.mjs
       - name: Services safety, admission and storage regressions
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm test:services-safety
       - name: Browser-safe services public entry
+        if: ${{ !cancelled() }}
         run: pnpm test:services-browser-entry
       - name: App shell full view guard
+        if: ${{ !cancelled() }}
         run: node scripts/ci/app-shell-full-view-smoke.mjs
       - name: Web profile mobile layout and composer focus
+        if: ${{ !cancelled() }}
         run: pnpm test:web-profile-mobile
       - name: Workbench split guard
+        if: ${{ !cancelled() }}
         run: node scripts/ci/workbench-split-guard-smoke.mjs
       - name: Conversation workspace detach guard
         # 生产 App/Shell/menu + Root actions 的 detach 资格回归；依赖上一步产出的 renderer assets。
+        if: ${{ !cancelled() }}
         run: pnpm test:conversation-detach
       - name: Bundled catalog browser checks
+        if: ${{ !cancelled() }}
         run: |
           node scripts/ci/client-catalog-smoke.mjs
           node scripts/ci/bundled-plugin-marketplace-smoke.mjs
       - name: Model setup without official purchases
+        if: ${{ !cancelled() }}
         run: node scripts/ci/no-official-purchase-smoke.mjs
       - name: Local preferences without official accounts
+        if: ${{ !cancelled() }}
         run: node scripts/ci/local-preferences-smoke.mjs
       - name: Verify self-managed image search configuration
+        if: ${{ !cancelled() }}
         run: node scripts/ci/image-search-config-smoke.mjs
       - name: Startup without official account restoration
+        if: ${{ !cancelled() }}
         run: |
+          pnpm build:workspace-prerequisites
           pnpm --filter @zcode/web build
           node scripts/ci/root-startup-smoke.mjs
           node scripts/ci/web-entry-without-oauth-smoke.mjs
       - name: Conversation file browser checks
+        if: ${{ !cancelled() }}
         run: |
           node scripts/ci/conversation-export-smoke.mjs
           node scripts/ci/conversation-import-smoke.mjs
 
       - name: Conversation share landing page checks
         # 真实 packages/web 入口 + @zcode/ui 只读渲染器，分享 API 只走 127.0.0.1 loopback。
+        if: ${{ !cancelled() }}
         run: node scripts/ci/conversation-share-web-smoke.mjs
 
   remote-assets:

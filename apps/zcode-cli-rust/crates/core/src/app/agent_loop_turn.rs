@@ -35,6 +35,13 @@ pub(super) async fn prepare(
     if history.automation_id.is_none() {
         definitions.retain(|d| d["function"]["name"] != crate::domain::automation::PAUSE_SELF);
     }
+    // 3.18 App 会话控制：只有本轮授予（Host 能力 + mainRoot + 非子代理）才注册十二工具。
+    // 无 Host / 旧 Host / 子代理 / 非根会话都不注册；强行调用在执行边界得到明确不可用错误。
+    if !history.app_control {
+        definitions.retain(|d| {
+            !crate::domain::app_control::is_tool(d["function"]["name"].as_str().unwrap_or(""))
+        });
+    }
     if let Some(profile) = &profile {
         // 子代理不注册 plan 工具（Node subagent tool-policy）。
         definitions.retain(|d| {

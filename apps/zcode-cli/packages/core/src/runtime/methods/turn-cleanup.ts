@@ -3,6 +3,7 @@ import { createTurnAbortScope } from "../helpers/index.js";
 import { clearBrowserTurnState } from "../../repl/browser-turn-state.js";
 import type { ActiveTurnSteeringState } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { disposeProjectMemoryRecallPrefetch } from "../helpers/project-memory-recall.js";
 
 export async function cleanupTurnExecution(
   this: AgentRuntimeInternal,
@@ -17,6 +18,8 @@ export async function cleanupTurnExecution(
   if (params.targetRunHeartbeat) {
     clearInterval(params.targetRunHeartbeat);
   }
+  // turn 结束（成功、失败或取消）丢弃未消费的 Recall prefetch：迟到结果不再注入任何后续请求。
+  disposeProjectMemoryRecallPrefetch(this);
   this.releaseTurnStart(params.turnId);
   clearBrowserTurnState(this.sessionId, params.turnId);
   this.finishActiveTurn(params.activeTurn);

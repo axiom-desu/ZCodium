@@ -36,6 +36,7 @@ import type {
   SkillPort,
   SupportedLocale,
   ToolArtifactStorePort,
+  TopicResourcePort,
   TraceContext,
   TurnId,
   TurnInputIntentMetadata,
@@ -123,6 +124,8 @@ export interface ZCodeAppOptions {
   imageProcessorPort?: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;
   artifactStore?: ToolArtifactStorePort;
+  /** Host 注入的话题资源读取端口：只在本任务已接纳 bot 输入时可用；缺省不注册该工具。 */
+  topicResourcePort?: TopicResourcePort;
   contextSourcePort?: ContextSourcePort;
   skillPort?: SkillPort;
   mcpPort?: McpPort;

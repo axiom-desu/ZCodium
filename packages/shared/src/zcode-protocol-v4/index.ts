@@ -53,6 +53,7 @@ export * from "./telemetry.js";
 export * from "./controller.js";
 export * from "./workspace-hook-review.js";
 export * from "./context-composition/contract.js";
+export * from "./input-prediction/contract.js";
 export * from "./cuaPermission.js";
 export * from "./session-data.js";
 

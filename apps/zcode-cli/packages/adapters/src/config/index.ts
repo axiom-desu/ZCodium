@@ -403,4 +403,20 @@ export {
   resolveWorkspaceStorageDir,
   type ConfigFactoryOptions,
   type ConfigResult,
+  type PluginOptionLayer,
 } from "./config-factory.js";
+export {
+  PLUGIN_SECRETS_FILE_NAME,
+  createEmptyPluginSecretsFile,
+  getPluginSecretsForScope,
+  normalizePluginConfigPathForComparison,
+  readPluginSecretsFile,
+  removePluginSecrets,
+  setPluginSecrets,
+  updatePluginSecretsFile,
+  type PluginSecretValue,
+  type PluginSecretValues,
+  type PluginSecretsFile,
+  type PluginSecretsReadResult,
+  type PluginSecretsScope,
+} from "./plugin-secrets.adapter.js";

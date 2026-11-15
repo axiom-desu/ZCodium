@@ -4,6 +4,7 @@ import type { ExtensionsSnapshot } from "@zcode/services";
 import { useOptionalPlatform } from "@/hooks/usePlatform.js";
 import { useOptionalBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { selectSlotView } from "@/extensions/domain/slotSelectors.js";
+import { consentGrantRequest } from "@/extensions/domain/consent.js";
 import type { ExtensionSlotActions, ExtensionSlotViewState } from "@/extensions/contract.js";
 
 /**
@@ -80,7 +81,15 @@ export function useExtensionSlots(
       const plugin = snapshot?.plugins.find((candidate) => candidate.pluginId === pluginId);
       if (!plugin) return;
       // 授权对话框展示的档位就是当前声明；声明变化则服务按过期请求拒绝。
-      await run(() => service.grant({ pluginId, grants: plugin.declared }));
+      await run(() =>
+        service.grant(
+          consentGrantRequest({
+            pluginId: plugin.pluginId,
+            name: plugin.name,
+            declared: plugin.declared,
+          }),
+        ),
+      );
     },
     revoke: async (pluginId) => {
       if (service) await run(() => service.revoke(pluginId));

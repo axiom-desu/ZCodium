@@ -14,6 +14,30 @@ const PLUGIN = {
 
 const AUTH = { token: "t".repeat(32), pluginId: "demo" };
 
+const SESSIONS_PLUGIN = {
+  ...PLUGIN,
+  capabilities: [
+    "settings.get",
+    "sessions.listProjects",
+    "sessions.listSessions",
+    "sessions.readSession",
+    "sessions.waitSessions",
+    "sessions.renameSession",
+  ],
+  protocols: { projects: 1, sessions: 1 },
+  declared: ["projects.read" as const, "sessions.write" as const],
+};
+
+function sessionListResult() {
+  return {
+    sessions: [],
+    searchScope: {
+      scopes: [{ kind: "app", scope: "host", sourceServerId: "local" }],
+      unavailableSources: [],
+    },
+  };
+}
+
 function request(overrides: Partial<ExtensionCapabilityRequest> = {}): ExtensionCapabilityRequest {
   return {
     v: 1,
@@ -97,6 +121,172 @@ describe("extension capability gateway", () => {
     const response = await gateway.call(request(), AUTH);
     expect(response).toEqual({ ok: true, result: [{ id: "p1", name: "Project One" }] });
     expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("admits session reads with the write grant and passes the authenticated identity down", async () => {
+    const dispatch = vi.fn(async () => sessionListResult());
+    const gateway = createCapabilityGateway(
+      ports({ plugin: () => SESSIONS_PLUGIN, granted: () => ["sessions.write"], dispatch }),
+    );
+    const response = await gateway.call(
+      request({ capabilityId: "sessions.listSessions", input: {} }),
+      AUTH,
+    );
+    expect(response.ok).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith({
+      pluginId: "demo",
+      generation: 2,
+      capabilityId: "sessions.listSessions",
+      input: expect.objectContaining({ archived: "exclude" }),
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("refuses session writes without the write grant", async () => {
+    const dispatch = vi.fn();
+    const gateway = createCapabilityGateway(
+      ports({ plugin: () => SESSIONS_PLUGIN, granted: () => ["sessions.read"], dispatch }),
+    );
+    const response = await gateway.call(
+      request({
+        capabilityId: "sessions.renameSession",
+        input: { sessionId: "sess_a", title: "Renamed", requestId: "req-1" },
+      }),
+      AUTH,
+    );
+    expect(response).toMatchObject({ ok: false, code: "not-granted" });
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a session projection whose declared version does not match", async () => {
+    const dispatch = vi.fn();
+    const gateway = createCapabilityGateway(
+      ports({
+        plugin: () => ({ ...SESSIONS_PLUGIN, protocols: { projects: 1, sessions: 99 } }),
+        granted: () => ["sessions.write"],
+        dispatch,
+      }),
+    );
+    const response = await gateway.call(
+      request({ capabilityId: "sessions.listSessions", input: {} }),
+      AUTH,
+    );
+    expect(response).toMatchObject({ ok: false, code: "incompatible" });
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("refuses session writes without the write grant", async () => {
+    const dispatch = vi.fn();
+    const gateway = createCapabilityGateway(
+      ports({ plugin: () => SESSIONS_PLUGIN, granted: () => ["sessions.read"], dispatch }),
+    );
+    const response = await gateway.call(
+      request({
+        capabilityId: "sessions.renameSession",
+        input: { sessionId: "sess_a", title: "Renamed", requestId: "req-1" },
+      }),
+      AUTH,
+    );
+    expect(response).toMatchObject({ ok: false, code: "not-granted" });
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("refuses undeclared session capabilities and session reads without any grant", async () => {
+    const dispatch = vi.fn();
+    const undeclared = createCapabilityGateway(
+      ports({
+        plugin: () => ({
+          ...SESSIONS_PLUGIN,
+          capabilities: SESSIONS_PLUGIN.capabilities.filter((id) => id !== "sessions.readSession"),
+        }),
+        granted: () => ["sessions.write"],
+        dispatch,
+      }),
+    );
+    expect(
+      await undeclared.call(
+        request({
+          capabilityId: "sessions.readSession",
+          input: { sessionId: "sess_a", view: "messages" },
+        }),
+        AUTH,
+      ),
+    ).toMatchObject({ ok: false, code: "not-declared" });
+    // 只有 projects.read：会话读/写都不能被它覆盖。
+    const unread = createCapabilityGateway(
+      ports({ plugin: () => SESSIONS_PLUGIN, granted: () => ["projects.read"], dispatch }),
+    );
+    expect(
+      await unread.call(request({ capabilityId: "sessions.listSessions", input: {} }), AUTH),
+    ).toMatchObject({ ok: false, code: "not-granted" });
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("validates session input and output with the shared canonical schemas", async () => {
+    const dispatch = vi.fn(async () => ({ status: "applied", requestId: "req-1" }));
+    const gateway = createCapabilityGateway(
+      ports({ plugin: () => SESSIONS_PLUGIN, granted: () => ["sessions.write"], dispatch }),
+    );
+    // strictObject：没在 canonical 输入里的字段直接拒绝，不能靠 unknown→cast 绕过。
+    expect(
+      await gateway.call(
+        request({
+          capabilityId: "sessions.renameSession",
+          input: { sessionId: "sess_a", title: "Renamed", requestId: "req-1", bypass: true },
+        }),
+        AUTH,
+      ),
+    ).toMatchObject({ ok: false, code: "invalid-input" });
+    expect(dispatch).not.toHaveBeenCalled();
+
+    // 输出同样按 canonical schema 复验：缺 requestId 的 mutation 回执不能当成功。
+    const invalidOutput = createCapabilityGateway(
+      ports({
+        plugin: () => SESSIONS_PLUGIN,
+        granted: () => ["sessions.write"],
+        dispatch: async () => ({ status: "applied" }),
+      }),
+    );
+    expect(
+      await invalidOutput.call(
+        request({
+          capabilityId: "sessions.renameSession",
+          input: { sessionId: "sess_a", title: "Renamed", requestId: "req-1" },
+        }),
+        AUTH,
+      ),
+    ).toMatchObject({ ok: false, code: "backend-error" });
+  });
+
+  it("cancels an in-flight waitSessions on stop and never publishes its result", async () => {
+    let seenSignal: AbortSignal | undefined;
+    let release: (() => void) | undefined;
+    const dispatch = vi.fn(
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise((resolve) => {
+          seenSignal = signal;
+          release = () =>
+            resolve({
+              status: "completed",
+              operations: [],
+            });
+        }),
+    );
+    const gateway = createCapabilityGateway(
+      ports({ plugin: () => SESSIONS_PLUGIN, granted: () => ["sessions.read"], dispatch }),
+    );
+    const pending = gateway.call(
+      request({
+        capabilityId: "sessions.waitSessions",
+        input: { operations: [{ sessionId: "sess_a", commandId: "cmd-1" }], mode: "any" },
+      }),
+      AUTH,
+    );
+    await vi.waitFor(() => expect(seenSignal).toBeDefined());
+    gateway.cancelAll();
+    expect(seenSignal?.aborted).toBe(true);
+    release?.();
+    expect(await pending).toMatchObject({ ok: false, code: "canceled" });
   });
 
   it("cancels in-flight calls on revoke and drops the late result", async () => {

@@ -71,6 +71,7 @@ export function createToolExecutionContext(input: {
     workflowEscalatePort: deps.workflowEscalatePort,
     webSearchBudget: deps.webSearchBudget,
     artifactStore: deps.artifactStore,
+    topicResourcePort: deps.topicResourcePort,
     automationPort: deps.automationPort,
     sessionStore: deps.sessionStore,
     sessionModePort: deps.sessionModePort,

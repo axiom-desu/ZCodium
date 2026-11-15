@@ -74,6 +74,7 @@ import {
   createHostApiNetworkTransport,
   createSettingService,
   createExtensionsService,
+  getAppControlServiceHandle,
   getAstrBotBridgeProvider,
   getAppConfigDir,
   createDeviceSyncStateService,
@@ -3291,6 +3292,9 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
         // 只有本地窗口 Host 注册，远程 workspace 集合与手机/Web 白名单都不包含此频道。
         const extensionWorkspaceIdentity =
           msg.workspaceIdentity?.trim() || msg.workspacePath || null;
+        // 会话能力只复用本窗口 Host 已装配的 App 控制 facade（十二个意图）；
+        // 没有装配时 extensions 保持缺省拒绝（host-unavailable），不新建第二 session owner。
+        const extensionAppControl = getAppControlServiceHandle(services);
         const extensionService = createExtensionsService({
           grantsFilePath: join(getAppConfigDir(), "extensions", "grants.json"),
           pluginDir: join(getAppConfigDir(), "extensions"),
@@ -3324,6 +3328,9 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               name: project.name,
             }));
           },
+          // 会话能力只复用本窗口 Host 已装配的 App 控制 facade（十二个意图）；
+          // 没有装配时 extensions 会保持缺省拒绝（host-unavailable）。
+          ...(extensionAppControl ? { appControl: extensionAppControl } : {}),
           logger: {
             info: (message) => logger.info(message),
             warn: (message) => logger.warn(message),

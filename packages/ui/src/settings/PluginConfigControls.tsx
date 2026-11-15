@@ -6,13 +6,14 @@ import { Input } from "@/components/ui/input.js";
 import { Switch } from "@/components/ui/switch.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { SettingsScopeBadge } from "@/settings/SettingsScopeBadge.js";
+import type { PluginOptionDisplayState } from "@/settings/pluginConfigPatch.js";
 
 interface PluginConfigControlsProps {
-  getValue: (
+  getOptionState: (
     plugin: ZCodePluginInfo,
     key: string,
     option: ZCodePluginUserConfigOption,
-  ) => string | number | boolean;
+  ) => PluginOptionDisplayState;
   isOptionClearPending?: (pluginId: string, key: string) => boolean;
   onClearOption?: (pluginId: string, key: string, clear: boolean) => void;
   onSave: (plugin: ZCodePluginInfo) => void;
@@ -23,7 +24,7 @@ interface PluginConfigControlsProps {
 }
 
 export function PluginConfigControls({
-  getValue,
+  getOptionState,
   isOptionClearPending,
   onClearOption,
   onSave,
@@ -52,7 +53,7 @@ export function PluginConfigControls({
         {entries.map(([key, option]) => {
           const label = option.title ?? key;
           const descriptionId = option.description ? `${descriptionPrefix}-${key}` : undefined;
-          const value = getValue(plugin, key, option);
+          const { value, hasStoredSecret: secretStored } = getOptionState(plugin, key, option);
           const clearPending = isOptionClearPending?.(plugin.id, key) ?? false;
           const canClearOption =
             onClearOption !== undefined &&
@@ -109,7 +110,15 @@ export function PluginConfigControls({
                     type={revealedSecrets[key] ? "text" : "password"}
                     data-testid="plugin-store-config-input"
                     data-config-key={key}
+                    data-secret-stored={secretStored ? "true" : undefined}
                     aria-describedby={descriptionId}
+                    placeholder={
+                      secretStored
+                        ? intl.formatMessage({
+                            id: "settings.plugins.config.secretStoredPlaceholder",
+                          })
+                        : undefined
+                    }
                     size="sm"
                     className="h-8 min-w-0 flex-1 rounded-lg"
                     value={String(value)}

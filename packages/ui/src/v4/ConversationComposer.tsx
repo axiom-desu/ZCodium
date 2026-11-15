@@ -89,8 +89,7 @@ import { usePromptEditorDragState } from "@/prompt-editor/usePromptEditorDragSta
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { advanceComposerDraftRevision } from "@/v4/composer/composerDraftRevision.js";
 import type { AppSlashCommand } from "@/slashCommandHelpers.js";
-import { useOptionalServices } from "@/hooks/useServices.js";
-import { useMobileWebViewport } from "@/hooks/useMobileWebViewport.js";
+import { ComposerInputPrediction } from "@/v4/ComposerInputPrediction.js";
 import { logger } from "@/logger.js";
 
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
@@ -135,6 +134,9 @@ import { isAppleKeyboardPlatform } from "@/lib/keyboardShortcuts.js";
 import { usePrimaryFollowupModifier } from "@/v4/composer/usePrimaryFollowupModifier.js";
 import { consumeV4ComposerDraftWorkspaceTransferRequest } from "@/v4/composer/composerDraftWorkspaceTransfer.js";
 import { useComposerAttachments } from "@/v4/composer/useComposerAttachments.js";
+import { useComposerInputPrediction } from "@/v4/composer/useComposerInputPrediction.js";
+import { useMobileWebViewport } from "@/hooks/useMobileWebViewport.js";
+import { useOptionalServices } from "@/hooks/useServices.js";
 import type { ConversationDropTargetController } from "@/v4/composer/conversationDropTarget.js";
 import { CodeCommentAttachmentChip } from "@/v4/composer/CodeCommentAttachmentChip.js";
 import { removeCodeCommentPreview } from "@/v4/composer/codeCommentPreviewSync.js";
@@ -560,9 +562,9 @@ function ConversationComposerImpl({
   onDropTargetControllerChange,
 }: ConversationComposerProps) {
   const { intl, locale } = useZCodeIntl();
-  const services = useOptionalServices();
-
   const draftScopeId = sessionId ?? V4_DRAFT_SCOPE_ROOT;
+  const services = useOptionalServices();
+  const isMobileViewport = useMobileWebViewport();
   const workspaceKey = workspaceIdentity?.trim() || workspacePath;
   const configPickerScopeKey = `${workspaceKey}\0${draftScopeId}`;
   const [text, setText] = useState("");
@@ -621,7 +623,17 @@ function ConversationComposerImpl({
   const pendingShareContext = activeShareContext?.status === "pending" ? activeShareContext : null;
   const inputApiRef = useRef<LexicalChatInputHandle | null>(null);
 
-  const isMobileViewport = useMobileWebViewport();
+  const prediction = useComposerInputPrediction({
+    // 发送 ACK 前草稿尚未清空，但它已交给提交路径，不能继续预测或交付旧提示。
+    disabled: disabled || pending,
+    draft: text,
+    remoteSessionId,
+    revisionFallback: contentRevisionRef.current,
+    sessionId,
+    snapshot,
+    workspaceIdentity,
+    workspacePath,
+  });
   const primaryModifierPressed = usePrimaryFollowupModifier();
   const appleKeyboardPlatform = isAppleKeyboardPlatform();
   const enterSubmits = true;
@@ -2200,6 +2212,23 @@ function ConversationComposerImpl({
               id: `chat.selections.limit.${conversationSelectionLimitReason}`,
             })}
           </div>
+        ) : null}
+        {prediction.hint ? (
+          <ComposerInputPrediction
+            draft={text}
+            text={prediction.hint.text}
+            onAccept={() => {
+              const suffix = prediction.hint?.text ?? "";
+              prediction.clear();
+              const inputApi = inputApiRef.current;
+              if (!inputApi) return;
+              inputApi.appendText(suffix, { exactSuffix: true, keepFocus: true });
+              // 修复依据：Lexical mention 节点可能自带尾随空格；草稿事实必须回读编辑器的 canonical markdown，
+              // 不能用普通文本拼接把结构节点/编辑器真实文本与 React 草稿分叉。
+              updateText(inputApi.getMarkdown());
+              persistDraftNow(draftScopeRef.current);
+            }}
+          />
         ) : null}
         <ChatPromptEditor
           workspacePath={workspacePath}

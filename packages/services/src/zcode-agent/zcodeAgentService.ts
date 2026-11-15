@@ -19,9 +19,10 @@ import {
   type LocalTtftFacts,
 } from "@zcode/shared";
 /* oxlint-disable eslint(max-lines) -- ZCode Protocol transport、通知 wiring 和 app-facing session 方法必须共享同一个 client/emitter 上下文。 */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { SessionControlError } from "@zcode/session-control/contracts";
 import { createAppControlRequestHandler } from "#src/app-control/rpc.js";
+import { createTopicResourceBridge } from "#src/zcode-agent/topicResourceBridge.js";
 import { ensureIndependentPlanSupport } from "./independentPlanSupport.js";
 import { reserveV4CreateSession } from "./v4CreateReservation.js";
 import type { ProjectSessionCreationPort } from "#src/project/app/sessionCreation.js";
@@ -52,6 +53,7 @@ import {
   zcodePluginsMarketplaceMutationResultSchema,
   zcodePluginsOverviewResultSchema,
   zcodeProcessChildProcessesResultSchema,
+  zcodeTopicResourceCancelParamsSchema,
   type ZCodeProcessChildProcess,
   zcodeSkillsReferenceCatalogResultSchema,
   zcodeMcpReadResourceResultSchema,
@@ -237,6 +239,8 @@ import type {
   ZCodeAgentConversationFileRewindPreviewParams,
   ZCodeAgentConversationRowsRangeParams,
   ZCodeAgentConversationPlansParams,
+  ZCodeAgentConversationInputPredictionParams,
+  ZCodeAgentConversationInputPredictionCancelParams,
   ZCodeAgentConversationWorkflowRunEventsParams,
   ZCodeAgentConversationWorkflowRunArtifactDataParams,
   ZCodeAgentConversationWorkflowRunArtifactReadParams,
@@ -287,6 +291,8 @@ import {
   v4ConversationFileRewindPreviewResultSchema,
   v4ConversationRowsRangeResultSchema,
   v4ConversationPlansResultSchema,
+  v4ConversationInputPredictionResultSchema,
+  emptyInputPredictionResult,
   v4ConversationWorkflowRunEventsResultSchema,
   v4ConversationWorkflowRunArtifactDataResultSchema,
   v4ConversationWorkflowRunArtifactReadResultSchema,
@@ -327,6 +333,7 @@ import { AutomationRepo } from "#src/session/automationRepo.js";
 import { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
 import { ZCodeAgentMcpStatusModeUnsupportedError } from "#src/zcode-agent/zcodeAgentErrors.js";
 import { ZCodeAgentProcessManager } from "./zcodeAgentProcessManager.js";
+import { isRemoteInputPredictionEnabled } from "./inputPredictionSwitch.js";
 import type { ZCodeAgentProcessManagerOptions } from "./zcodeAgentProcessManager.js";
 import {
   ZCodeProtocolRequestTimeoutError,
@@ -956,6 +963,13 @@ interface CreateZCodeAgentServiceOptions extends Omit<
   resolveAppControlService?: () =>
     | import("#src/app-control/contract.js").AppControlService
     | undefined;
+  /**
+   * 话题资源读取：只有持有 bot 接纳事实的 Host 注入（本进程 bots 服务）。
+   * 缺省即本 Host 没有话题资源能力，CLI 侧不注册 ReadTopicResource。
+   */
+  resolveBotsService?: () =>
+    | Pick<import("#src/bots/bots.js").IBotsService, "validateTopicResource" | "readTopicResource">
+    | undefined;
   /** App control 调用方所属窗口；由 Host 装配按窗口注入，模型不能提供。 */
   resolveAppControlUiTarget?: () => string | undefined;
   /** 本 Host 的稳定来源 id（缺省 local）；跨来源的 App 引用一律拒绝。 */
@@ -1022,6 +1036,80 @@ function toProtocolAutomation(automation: ZCodeAutomation) {
     scheduleRule: automation.scheduleRule,
   };
 }
+/** 单个 RPC 帧保持有界：附件按块回传，不把整个资源塞进一帧。 */
+const TOPIC_RESOURCE_UPLOAD_CHUNK_BYTES = 256 * 1024;
+
+/**
+ * 把已授权的历史资源字节经现有 v4 附件通道寄存到目标 CLI。
+ * 字节只走这条已鉴权连接；不在 Host 落文件，也不复用 Renderer 的附件入口。
+ */
+async function uploadTopicResourceToClient(
+  client: Pick<ZCodeProtocolClient, "request">,
+  connectionId: string,
+  request: { taskId: string; requestId: string },
+  payload: { fileName: string; mime: string; bytes: Uint8Array },
+  signal: AbortSignal,
+  trace?: import("@zcode/shared").ZCodeProtocolTrace,
+): Promise<{ ref: string; bytes: number }> {
+  const uploadId = randomUUID();
+  const totalChunks = Math.max(
+    1,
+    Math.ceil(payload.bytes.byteLength / TOPIC_RESOURCE_UPLOAD_CHUNK_BYTES),
+  );
+  const common = { connectionId, uploadId, sessionId: request.taskId };
+  try {
+    const begin = await client.request(
+      V4_METHODS.attachmentBegin,
+      {
+        ...common,
+        fileName: payload.fileName,
+        mime: payload.mime,
+        totalBytes: payload.bytes.byteLength,
+        totalChunks,
+        checksum: `sha256:${createHash("sha256").update(payload.bytes).digest("hex")}`,
+      },
+      v4AttachmentBeginResultSchema,
+      { signal, ...(trace ? { trace } : {}) },
+    );
+    signal.throwIfAborted();
+    if (begin.state === "committed") return { ref: begin.ref, bytes: payload.bytes.byteLength };
+    if (begin.nextChunkIndex > totalChunks) throw new Error("Invalid attachment upload progress");
+    for (let index = begin.nextChunkIndex; index < totalChunks; index++) {
+      signal.throwIfAborted();
+      await client.request(
+        V4_METHODS.attachmentChunk,
+        {
+          ...common,
+          chunkIndex: index,
+          dataBase64: Buffer.from(
+            payload.bytes.subarray(
+              index * TOPIC_RESOURCE_UPLOAD_CHUNK_BYTES,
+              (index + 1) * TOPIC_RESOURCE_UPLOAD_CHUNK_BYTES,
+            ),
+          ).toString("base64"),
+        },
+        v4AttachmentChunkResultSchema,
+        { signal, ...(trace ? { trace } : {}) },
+      );
+    }
+    signal.throwIfAborted();
+    const committed = await client.request(
+      V4_METHODS.attachmentCommit,
+      common,
+      v4AttachmentCommitResultSchema,
+      { signal, ...(trace ? { trace } : {}) },
+    );
+    signal.throwIfAborted();
+    return { ref: committed.ref, bytes: payload.bytes.byteLength };
+  } catch (error) {
+    // 取消/失败不保留半份寄存内容；清理失败不能覆盖原始错误。
+    await client
+      .request(V4_METHODS.attachmentAbort, common, v4AttachmentAbortResultSchema)
+      .catch(() => undefined);
+    throw error;
+  }
+}
+
 export function createZCodeAgentService(
   options?: CreateZCodeAgentServiceOptions,
 ): IZCodeAgentService & { disposeAllAndWait(): Promise<void> } {
@@ -1679,7 +1767,10 @@ export function createZCodeAgentService(
       service: () => options?.resolveAppControlService?.(),
       bind: async ({ callerSessionId, callId, turnId, signal }) => {
         const assertCurrent = () => {
-          if (client.isDisposed || signal.aborted)
+          // App-control 请求可能在同一 workspace 的新 CLI 接管后才完成 bind；不能让旧连接
+          // 借着未 disposed 的客户端继续操作。用 Host 当前连接表复核真实代际，拒绝 stale ACK。
+          const active = activeClientsByWorkspaceKey.get(resolveWorkspaceKey(workspace));
+          if (client.isDisposed || signal.aborted || active?.client !== client)
             throw new SessionControlError("forbidden", "App caller connection is no longer active");
         };
         assertCurrent();
@@ -1703,6 +1794,45 @@ export function createZCodeAgentService(
       },
       onResponseError: (error) =>
         logger.warn(undefined, "App control response failed", { error: String(error) }),
+    });
+    // 话题资源：本连接唯一的取消域与回传通道。只有真正持有 bot 接纳事实的 Host 才提供服务。
+    const topicResourceScope = () => ({
+      workspacePath: workspace.workspacePath,
+      ...(workspace.workspaceIdentity ? { workspaceIdentity: workspace.workspaceIdentity } : {}),
+      ...(workspace.remoteSessionId ? { remoteSessionId: workspace.remoteSessionId } : {}),
+    });
+    const activeTopicResourceClient = () => {
+      // 同一 workspace 可能已被新连接接管：旧连接的迟到请求不能再读资源。
+      if (client.isDisposed) throw new Error("Topic resource connection is no longer active");
+      const active = activeClientsByWorkspaceKey.get(resolveWorkspaceKey(workspace));
+      if (active?.client !== client)
+        throw new Error("Topic resource connection is no longer active");
+      const bots = options?.resolveBotsService?.();
+      if (!bots) throw new Error("Topic resource service is unavailable");
+      return bots;
+    };
+    const topicResourceBridge = createTopicResourceBridge({
+      validate: async (request, signal) => {
+        await activeTopicResourceClient().validateTopicResource({
+          ...request,
+          ...topicResourceScope(),
+          signal,
+        });
+      },
+      read: async (request, signal) => {
+        const result = await activeTopicResourceClient().readTopicResource({
+          ...request,
+          ...topicResourceScope(),
+          signal,
+        });
+        return {
+          fileName: result.attachment.filename,
+          mime: result.attachment.mimeType,
+          bytes: result.data,
+        };
+      },
+      upload: (request, payload, signal, trace) =>
+        uploadTopicResourceToClient(client, v4ConnectionId, request, payload, signal, trace),
     });
     const disposables = [
       client.onNotification((message) => {
@@ -1961,6 +2091,28 @@ export function createZCodeAgentService(
         // App control 反向 RPC：CLI 工具发来的十二个封闭意图落到唯一 Host 服务。
         // 身份只由这条实际连接构造；appControl/cancel 只取消观察，不中断目标任务。
         if (appControlRequests.handle(request)) return;
+        // 话题资源读取：CLI 只提供任务归属与资源索引，授权与下载都在本 Host 的 bot 接纳事实内。
+        if (request.method === zcodeProtocolMethods.topicResourceRead) {
+          void topicResourceBridge
+            .read(request.params, request.trace)
+            .then((result) => client.respond(request.id, result))
+            .catch((error: unknown) =>
+              client.respondError(request.id, {
+                code: -32603,
+                message: error instanceof Error ? error.message : "Topic resource read failed",
+              }),
+            );
+          return;
+        }
+        if (request.method === zcodeProtocolMethods.topicResourceCancel) {
+          const parsed = zcodeTopicResourceCancelParamsSchema.safeParse(request.params);
+          void client
+            .respond(request.id, {
+              cancelled: parsed.success && topicResourceBridge.cancel(parsed.data),
+            })
+            .catch(() => undefined);
+          return;
+        }
         if (request.method === zcodeProtocolMethods.sessionRequestRuntimePreferences) {
           const reportResponseFailure = (error: unknown): void => {
             logger.debug(undefined, "运行时偏好响应发送失败", {
@@ -2418,6 +2570,8 @@ export function createZCodeAgentService(
       client.onClose(() => {
         invalidateWorkspaceClient(resolveWorkspaceKey(workspace), client);
       }),
+      // 断连即取消本连接所有未完成的话题资源读取，不留下跨连接 pending。
+      { dispose: () => topicResourceBridge.dispose() },
     ];
     clientDisposables.set(client, disposables);
   }
@@ -5462,7 +5616,49 @@ export function createZCodeAgentService(
       );
     },
 
-    // workflow run 事件日志：同样是只读 query，沿现有 workspace attachment 透传。
+    // 输入预测：只读 query；绝不为它拉起运行时（existing-only）。开关关闭、无运行时、
+    // 旧 CLI 不认识方法、模型失败都降级为空结果——ghost hint 是可有可无的建议。
+    async conversationInputPredictionV4(params: ZCodeAgentConversationInputPredictionParams) {
+      if (!isRemoteInputPredictionEnabled()) {
+        return emptyInputPredictionResult("unavailable", params.requestId);
+      }
+      try {
+        const client = await getReadOnlyClient(params, "existing-only");
+        return await client.request(
+          V4_METHODS.conversationInputPrediction,
+          {
+            sessionId: params.sessionId,
+            revision: params.revision,
+            ...(params.draft !== undefined ? { draft: params.draft } : {}),
+            ...(params.requestId !== undefined ? { requestId: params.requestId } : {}),
+          },
+          v4ConversationInputPredictionResultSchema,
+        );
+      } catch {
+        return emptyInputPredictionResult("unavailable", params.requestId);
+      }
+    },
+
+    async cancelConversationInputPredictionV4(
+      params: ZCodeAgentConversationInputPredictionCancelParams,
+    ) {
+      if (!isRemoteInputPredictionEnabled()) return;
+      try {
+        const client = await getReadOnlyClient(params, "existing-only");
+        await client.request(
+          V4_METHODS.conversationInputPredictionCancel,
+          {
+            sessionId: params.sessionId,
+            requestId: params.requestId,
+          },
+          zcodeProtocolEmptyResultSchema,
+        );
+      } catch {
+        // 老 peer 没有取消方法：静默降级，UI 仍会丢弃迟到回包。
+      }
+    },
+
+    // workflow run 事件日志：同样是只读 query，沿现有 workspace attachment 透传.
     // 分页发生在存储层（JournalStorePort.listEvents 带 afterSequence/limit），这里不切片；
     // 在 RPC 层切等于每翻一页把整条 journal 读进内存。
     async conversationWorkflowRunEventsV4(params: ZCodeAgentConversationWorkflowRunEventsParams) {

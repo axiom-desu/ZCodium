@@ -7,30 +7,46 @@ import { z } from "zod";
  * 授权状态由 `services/extensions` 的授权存储唯一持有，扩展进程、Main 与 Renderer 都只读投影。
  * 默认拒绝：没有记录、记录与当前声明不一致、或进程代际/工作区不匹配都按未授权处理。
  */
-export const EXTENSION_GRANTS = ["projects.read"] as const;
+export const EXTENSION_GRANTS = ["projects.read", "sessions.read", "sessions.write"] as const;
 export const extensionGrantSchema = z.enum(EXTENSION_GRANTS);
 export type ExtensionGrant = z.infer<typeof extensionGrantSchema>;
+
+/** 会话档位链，低到高：高档包含低档（write ⊇ read）。 */
+const SESSION_GRANT_CHAIN: readonly ExtensionGrant[] = ["sessions.read", "sessions.write"];
 
 /** 能力表一行需要的档位。 */
 export type CapabilityGrant = "none" | ExtensionGrant;
 
-/** held 是否覆盖 needed；none 恒为覆盖。 */
-export function grantsCover(held: readonly ExtensionGrant[], needed: CapabilityGrant): boolean {
-  return needed === "none" || held.includes(needed);
+/** held 是否覆盖 needed：相同，或会话链上 held 不低于 needed。 */
+export function grantCovers(held: ExtensionGrant, needed: ExtensionGrant): boolean {
+  if (held === needed) return true;
+  const heldRank = SESSION_GRANT_CHAIN.indexOf(held);
+  const neededRank = SESSION_GRANT_CHAIN.indexOf(needed);
+  return heldRank >= 0 && neededRank >= 0 && heldRank > neededRank;
 }
 
-/** 去重并按声明顺序返回，保持授权文件可读、可对比。 */
+/** 一组档位是否覆盖 needed；none 恒为覆盖。 */
+export function grantsCover(held: readonly ExtensionGrant[], needed: CapabilityGrant): boolean {
+  return needed === "none" || held.some((grant) => grantCovers(grant, needed));
+}
+
+/** 去重并丢掉被会话链上更高档位覆盖的项，按 EXTENSION_GRANTS 顺序返回。 */
 export function normalizeGrants(grants: readonly ExtensionGrant[]): ExtensionGrant[] {
-  const unique = new Set(grants);
-  return EXTENSION_GRANTS.filter((grant) => unique.has(grant));
+  const unique = [...new Set(grants)];
+  return EXTENSION_GRANTS.filter(
+    (grant) =>
+      unique.includes(grant) &&
+      !unique.some((other) => other !== grant && grantCovers(other, grant)),
+  );
 }
 
 /** 插件可依赖的稳定投影版本。只加字段不升版；删字段或改含义才升版。 */
-export const EXTENSION_PROTOCOL_VERSIONS = { projects: 1 } as const;
+export const EXTENSION_PROTOCOL_VERSIONS = { projects: 1, sessions: 1 } as const;
 export type ExtensionProtocolName = keyof typeof EXTENSION_PROTOCOL_VERSIONS;
 
 export const extensionProtocolsSchema = z.strictObject({
   projects: z.number().int().positive().optional(),
+  sessions: z.number().int().positive().optional(),
 });
 export type ExtensionProtocols = z.infer<typeof extensionProtocolsSchema>;
 
@@ -46,7 +62,7 @@ export function isProtocolCompatible(
 /**
  * 一个插件的授权状态（唯一 owner：`services/extensions` 的授权存储）。
  * - granted：当前声明已被用户授予，能力调用可用 `granted` 里的档位。
- * - needs-consent：声明了档位但尚未授予，或插件更新后声明变多。
+ * - needs-consent：声明了档位但尚未授予，或插件更新后声明变多（含 read→write）。
  * - inactive：有记录但插件已不在静态表里；禁用不删除记录，便于撤销。
  */
 export const extensionGrantStatusSchema = z.enum(["granted", "needs-consent", "inactive"]);

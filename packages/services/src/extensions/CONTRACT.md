@@ -28,7 +28,18 @@ stop()   → 取消全部在途 → 失效全部 token → 关 loopback → Main
   同用户 Node 插件仍无 OS sandbox，本边界是不经 API/环境分发 peer credential，
   不是防御恶意同 UID 进程，也不等于 OS 隔离。
 - 每一次能力调用依次核对认证身份 → generation → workspaceIdentity → 同意/授权 → 清单声明 → 协议
-  → 后端；调用返回时再核对一次，撤销/换代后的迟到结果不写回。
+  → 后端；调用返回时再核对一次，撤销/换代后的迟到结果不写回，signal 已 abort 时永不发布结果。
+- 会话能力（E8）以客户端类调用方复用既有 `AppControlService.bindClient` 的十二个 App 意图：
+  不新建 session/task owner，不直接读 Repo 或操作 runtime；`clientId=extension:<plugin>` 只做归因，
+  `connectionId=extension-host:<generation>:<plugin>` 是 fence。没有装配 App 控制的 Host 返回
+  `host-unavailable`，不降级为直接读库。session-control 的 `forbidden`/`unavailable`/`conflict`/
+  `invalid_input`/`cancelled` 按名映射为扩展错误码，其它后端错误只报固定文案。
+- 会话写动作的幂等身份由 App control 按 `(callerId, requestId)` 生成，`callerId` 含插件身份；
+  两个插件对同一会话提交相同 `requestId` 是两条命令，同插件重放才命中同一命令。
+- `canceled` 只表示调用结果未交付（撤销/停止/换代），不代表后端未执行：迟到的 mutation ACK
+  不能反向宣称「未执行」；写操作需要重试时仍用同一 `requestId` 对账。
+- 授权请求必须与当前规范化声明完全一致；声明从 read 变 write（或新增档位）回到 `needs-consent`，
+  不会因为旧记录而隐式放宽。授权前不加载插件代码、不启动进程。
 - 撤销先取消在途、失效 token 并停止该插件进程，再落盘；落盘失败不发布撤回成功，
   运行时保持 fail closed，持久化与投影保留上一次成功状态。
 - loopback 只绑定 127.0.0.1，拒绝非回环来源、带 `Origin` 头的请求与未知路由；

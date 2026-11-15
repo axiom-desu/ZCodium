@@ -24,7 +24,12 @@ import { createConfigPort } from "./index.js";
 import { loadFileConfig, getDefaultConfigPath, type LoadedConfig } from "./file-config.adapter.js";
 import { parseEnvConfig } from "./env-config.adapter.js";
 import { mergeConfigs, createPrioritizedConfig } from "./config-merger.js";
-import { createNodeLoggerFactory } from "../logging/index.js";
+import {
+  resolvePluginConfigSources,
+  type PluginConfigSources,
+} from "./plugin-config-sources.js";
+export type { PluginOptionLayer } from "./plugin-config-sources.js";
+import { logConfigDiagnostics } from "./config-diagnostics.js";
 import {
   loadProjectConfigFile,
   loadProjectConfigs,
@@ -100,21 +105,6 @@ type OptionalPathLoadedConfig = Omit<LoadedConfig, "path"> & {
 };
 
 type McpServerConfigSource = "system" | "project" | "user" | "env" | "cli";
-type PluginConfigScope = "user" | "workspace";
-
-interface PluginConfigSources {
-  dirs: {
-    user: string[];
-    workspace: string[];
-  };
-  enabled: Record<string, PluginConfigScope>;
-  marketplaces: Record<string, PluginConfigScope>;
-  options: Record<string, Record<string, PluginConfigScope>>;
-  paths: {
-    user: string;
-    workspace: string | undefined;
-  };
-}
 
 /**
  * Create ConfigPort with all sources merged
@@ -232,7 +222,9 @@ export function createConfig(options: ConfigFactoryOptions = {}): ConfigResult {
   const merged = mergeConfigs(...configs);
   const pluginConfigSources = resolvePluginConfigSources({
     projectConfig: projectConfigResult.config,
+    projectFiles: projectConfigFiles,
     projectPath: projectConfigResult.path,
+    skipUserConfig: options.skipUserConfig === true,
     userConfig: userConfigResult.config,
     userPath: userConfigResult.path,
   });
@@ -283,52 +275,6 @@ export function createConfig(options: ConfigFactoryOptions = {}): ConfigResult {
       },
       env: Object.keys(envConfig).length > 0,
       cli: !!options.cliOverrides,
-    },
-  };
-}
-
-function resolvePluginConfigSources(input: {
-  projectConfig: RuntimeConfigPatch;
-  projectPath: string | undefined;
-  userConfig: RuntimeConfigPatch;
-  userPath: string;
-}): PluginConfigSources {
-  const enabled: Record<string, PluginConfigScope> = {};
-  const marketplaces: Record<string, PluginConfigScope> = {};
-  const options: Record<string, Record<string, PluginConfigScope>> = {};
-
-  for (const pluginId of Object.keys(input.userConfig.plugins?.enabledPlugins ?? {})) {
-    enabled[pluginId] = "user";
-  }
-  for (const pluginId of Object.keys(input.projectConfig.plugins?.enabledPlugins ?? {})) {
-    enabled[pluginId] = "workspace";
-  }
-
-  for (const marketplaceId of Object.keys(input.userConfig.plugins?.extraKnownMarketplaces ?? {})) {
-    marketplaces[marketplaceId] = "user";
-  }
-  for (const [pluginId, pluginOptions] of Object.entries(input.userConfig.plugins?.options ?? {})) {
-    options[pluginId] = {};
-    for (const key of Object.keys(pluginOptions)) options[pluginId][key] = "user";
-  }
-  for (const [pluginId, pluginOptions] of Object.entries(
-    input.projectConfig.plugins?.options ?? {},
-  )) {
-    const sourceByKey = (options[pluginId] ??= {});
-    for (const key of Object.keys(pluginOptions)) sourceByKey[key] = "workspace";
-  }
-
-  return {
-    dirs: {
-      user: input.userConfig.plugins?.dirs ?? [],
-      workspace: input.projectConfig.plugins?.dirs ?? [],
-    },
-    enabled,
-    marketplaces,
-    options,
-    paths: {
-      user: input.userPath,
-      workspace: input.projectPath,
     },
   };
 }
@@ -395,56 +341,6 @@ function resolveEffectiveMcpServers(input: {
   apply("env", input.envConfig);
   apply("cli", input.cliOverrides);
   return { servers, sources };
-}
-
-function logConfigDiagnostics(input: {
-  env?: Record<string, string | undefined>;
-  loggerFactory?: LoggerFactory;
-  projectDiagnostics: LoadedConfig["diagnostics"];
-  userDiagnostics: LoadedConfig["diagnostics"];
-}): void {
-  const diagnostics = [
-    ...input.userDiagnostics.map((diagnostic) => ({ ...diagnostic, configScope: "user" })),
-    ...input.projectDiagnostics.map((diagnostic) => ({ ...diagnostic, configScope: "project" })),
-  ];
-  if (diagnostics.length === 0) return;
-
-  const loggerFactory = input.loggerFactory ?? createNodeLoggerFactory({ env: input.env });
-  const logger = loggerFactory.createLogger("zcode").child({
-    module: "adapters.config",
-  });
-
-  for (const diagnostic of diagnostics) {
-    logger.warn(resolveConfigDiagnosticLogMessage(diagnostic.code), {
-      configPath: diagnostic.filePath,
-      configScope: diagnostic.configScope,
-      diagnosticCode: diagnostic.code,
-      diagnosticMessage: diagnostic.message,
-      diagnosticPath: diagnostic.path,
-      event: resolveConfigDiagnosticLogEvent(diagnostic.code),
-      severity: diagnostic.severity,
-    });
-  }
-}
-
-function resolveConfigDiagnosticLogMessage(
-  code: LoadedConfig["diagnostics"][number]["code"],
-): string {
-  if (code === "config_mcp_server_invalid") return "MCP server config skipped";
-  if (code === "config_project_hooks_pending_trust") {
-    return "Project hooks pending workspace trust";
-  }
-  return "Config file failed to load";
-}
-
-function resolveConfigDiagnosticLogEvent(
-  code: LoadedConfig["diagnostics"][number]["code"],
-): string {
-  if (code === "config_mcp_server_invalid") return "config.mcp_server.skipped";
-  if (code === "config_project_hooks_pending_trust") {
-    return "config.project_hooks.pending_trust";
-  }
-  return "config.file.invalid";
 }
 
 function summarizeOptionalProjectConfig(files: ProjectConfigFile[]): OptionalPathLoadedConfig {

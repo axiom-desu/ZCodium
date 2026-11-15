@@ -289,6 +289,39 @@ test("wait is cancelled by the caller signal without stopping the target", async
   assert.equal(result.operations[0]?.status, "running");
 });
 
+test("wait keeps the trusted context identity for access and observation", async () => {
+  // App control 用 WeakMap 保存可信连接；wait 若用 {...ctx} 派生上下文会丢失绑定，
+  // 导致客户端类 caller 的 waitSessions 完全不可用。
+  const operation = { session: TARGET, sessionId: TARGET.sessionId, commandId: "cmd-6" };
+  const bound = new WeakMap<object, string>();
+  const trusted = context();
+  bound.set(trusted, "connection-1");
+  const seen: string[] = [];
+  const feed = createOperationFeed(snapshot([operation], "completed", 1));
+  const { cli } = fixture({
+    access: {
+      async authorize(ctx, request) {
+        seen.push(bound.get(ctx) ?? "unbound");
+        return { scope: request.scope as CliScope, fence: GRANT.fence };
+      },
+    },
+    observations: {
+      async open(ctx) {
+        seen.push(bound.get(ctx) ?? "unbound");
+        return feed as OperationFeed;
+      },
+    },
+  });
+  const control = createCliSessionControl(cli);
+  const result = await control.waitSessions(trusted, {
+    operations: [{ sessionId: TARGET.sessionId, commandId: operation.commandId }],
+    mode: "any",
+    timeoutMs: 5_000,
+  });
+  assert.equal(result.status, "completed");
+  assert.deepEqual(seen, ["connection-1", "connection-1"]);
+});
+
 test("readSession rejects a different view or a substituted session", async () => {
   const { cli } = fixture({
     sessions: {

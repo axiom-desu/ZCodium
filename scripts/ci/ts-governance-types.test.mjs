@@ -29,10 +29,28 @@ const FORMER_PUBLIC_TYPES = [
   "MarketplaceRefreshFailure",
   "PluginValidationDiagnostic",
 ];
-const CONFIG_PRIVATE_TYPES = FORMER_PUBLIC_TYPES.slice(0, 3);
+const CONFIG_PRIVATE_TYPES = ["McpServerConfigSource"];
+const PLUGIN_CONFIG_SOURCES = `${SRC}/config/plugin-config-sources.ts`;
 // 内部类型必须有的真实跨文件类型消费（参数 / 返回类型 / typed array / 属性签名）；
 // 仅 import 符号、类型断言、`void x` 占位都不算。shape 取自 HEAD 的字段与可选标记。
 const INTERNAL_TYPES = [
+  {
+    consumers: ["config/config-factory.ts"],
+    definition: "config/plugin-config-sources.ts",
+    name: "PluginConfigSources",
+    shape: {
+      optional: [],
+      required: [
+        "dirs",
+        "enabled",
+        "marketplaces",
+        "options",
+        "paths",
+        "secretKeys",
+        "optionLayers",
+      ],
+    },
+  },
   {
     consumers: ["plugins/marketplace-authority.ts"],
     name: "MarketplaceRefreshFailure",
@@ -287,9 +305,16 @@ function assertNoInternalTypeShapeDrift(name, declarationNode, shape) {
 test("five former unused types stay nonpublic; internal types only with real consumers", async () => {
   const configFactory = await parseFile(CONFIG_FACTORY);
   for (const name of CONFIG_PRIVATE_TYPES) assertFilePrivateType(configFactory, name);
+  // 敏感选项新增了真正跨文件消费者；scope仍私有，sources仅在包内按唯一权威声明消费。
+  assertFilePrivateType(await parseFile(PLUGIN_CONFIG_SOURCES), "PluginConfigScope");
 
   const context = loadAdaptersProgram();
-  for (const { consumers, name, shape } of INTERNAL_TYPES) {
+  for (const {
+    consumers,
+    definition = "plugins/marketplace-types.ts",
+    name,
+    shape,
+  } of INTERNAL_TYPES) {
     const declarations = packageSourceFiles(context).flatMap(({ file, relative }) =>
       (typeDeclarations(file).get(name) ?? []).map((node) => ({ node, relative })),
     );
@@ -301,8 +326,8 @@ test("five former unused types stay nonpublic; internal types only with real con
     const [declaration] = declarations;
     assert.equal(
       declaration.relative,
-      "plugins/marketplace-types.ts",
-      `${name} 的唯一权威声明应留在内部类型模块 marketplace-types.ts（不得回退到 marketplace.ts）`,
+      definition,
+      `${name} 的唯一权威声明应留在内部类型模块 ${definition}`,
     );
     assert.equal(
       isExported(declaration.node),
@@ -331,7 +356,7 @@ test("five former unused types stay nonpublic; internal types only with real con
   }
 
   // 公开导出闭包：用 TypeChecker 展开 export * / barrel 链，而不是只看字面 export 名。
-  const publicEntries = [ADAPTERS_INDEX, MARKETPLACE, PLUGINS_INDEX];
+  const publicEntries = [ADAPTERS_INDEX, MARKETPLACE, PLUGINS_INDEX, `${SRC}/config/index.ts`];
   const closures = new Map(
     publicEntries.map((entry) => [entry, moduleExportNames(context, entry)]),
   );

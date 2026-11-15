@@ -22,6 +22,8 @@ import {
   normalizeReadFileStateMtimeMs,
 } from "../../tool/read-file-state.js";
 import { resolveEnabledProjectMemoryRoot } from "../helpers/project-memory.js";
+import { ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH } from "../../memory/project-memory-retrieval-branch.js";
+import type { ProjectMemoryRetrievalBranch } from "../../memory/project-memory-retrieval-branch.js";
 import { buildContextHistoryEntries } from "./context-history-entries.js";
 import { resolveRuntimeEmbeddedSearchEnabled } from "./embedded-search-branch.js";
 import { getContextSourceShellDisplayName } from "./session-shell-environment.js";
@@ -69,7 +71,11 @@ export async function ensureContextInitialized(
   this.startMcpStartup(traceContext);
   this.skillLoadOutcome = await this.discoverSkillsForContext(traceContext);
   this.memoryRoot = await this.loadProjectMemoryRoot(traceContext);
-  this.memoryIndexContent = await loadProjectMemoryIndexContent(this, this.memoryRoot);
+  this.memoryIndexContent = await loadProjectMemoryIndexContent(
+    this,
+    this.memoryRoot,
+    ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+  );
   await ensureGenUiOutputDirectory(this);
   this.contextBuilder = this.createContextBuilderFromSnapshot(snapshot, this.memoryRoot, {
     memoryIndexContent: this.memoryIndexContent,
@@ -190,7 +196,10 @@ export async function loadProjectMemoryRoot(
 async function loadProjectMemoryIndexContent(
   runtime: AgentRuntimeInternal,
   memoryRoot: string | undefined,
+  retrievalBranch: ProjectMemoryRetrievalBranch,
 ): Promise<string | undefined> {
+  // semantic-recall 分支不加载 MEMORY.md：pointer/index 与 Selector/Recall 互斥。
+  if (retrievalBranch !== "default-index") return undefined;
   const fileSystemPort = runtime.fileSystemPort;
   if (!fileSystemPort || !memoryRoot) return undefined;
   const indexPath = join(memoryRoot, "MEMORY.md");

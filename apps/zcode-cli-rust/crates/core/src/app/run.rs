@@ -127,6 +127,14 @@ impl Engine {
         history.automation_id = submission.automation_id;
         history.tool_filter = session.runtime.tools.clone();
         history.tool_search_mode = session.runtime.tool_search_mode;
+        // 3.18 App 会话控制：唯一结论来自本次激活的 Host 能力 + 本会话的 mainRoot 事实，
+        // 模型输入与工具参数不参与（子代理 run 另有 profile 门禁）。
+        history.app_control = crate::domain::app_control::granted(
+            session.runtime.app_control,
+            &session.task_type,
+            session.parent_id.is_some(),
+            session.agent_profile.is_some(),
+        );
         history.anomaly_guard = self.anomaly_guard;
         history.compact_failures = session.runtime.compact_failures;
         // Node turnNumber：本轮输入之前已有用户消息（或已压缩）即非首轮。

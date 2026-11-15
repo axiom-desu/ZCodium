@@ -1,4 +1,5 @@
 import { appToolSearchModeSchema } from "../app-runtime-preferences.js";
+import { PROTOCOL_V4_LIMITS } from "../zcode-protocol-v4/core.js";
 import { sharedContextImportProvenanceSchema } from "../zcode-protocol-v4/shared-context-import.js";
 import {
   databaseMigrationFactsSchema,
@@ -3810,6 +3811,9 @@ export const zcodeProtocolMethods = {
   interactionRequestPermission: "interaction/requestPermission",
   interactionRequestUserInput: "interaction/requestUserInput",
   // browser-use 反向请求由 agent 发起，host 转给 main 中的 CDP executor。
+  // 历史话题资源：CLI 只按任务已接纳快照的资源索引读取，下载与授权由 Host bot 服务负责。
+  topicResourceRead: "topic/resource/read",
+  topicResourceCancel: "topic/resource/cancel",
   interactionBrowserList: "interaction/browserList",
   interactionBrowserExecute: "interaction/browserExecute",
 } as const;
@@ -3817,6 +3821,33 @@ export const zcodeProtocolMethods = {
 export type ZCodeProtocolMethod = (typeof zcodeProtocolMethods)[keyof typeof zcodeProtocolMethods];
 
 export const zcodeProtocolEmptyResultSchema = z.object({}).strict();
+
+// 话题资源读取只能选择当前任务已接纳快照内的一条索引；模型不能提交 URL、路径或会话身份。
+export const zcodeTopicResourceReadParamsSchema = z
+  .object({
+    requestId: z.string().min(1).max(256),
+    taskId: z.string().min(1).max(256),
+    inputId: z.string().min(1).max(256).optional(),
+    messageId: z.string().min(1).max(256),
+    resourceIndex: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ZCodeTopicResourceReadParams = z.infer<typeof zcodeTopicResourceReadParamsSchema>;
+export const zcodeTopicResourceReadResultSchema = z
+  .object({
+    ref: z.string().min(1),
+    fileName: z.string().min(1).max(1024),
+    mime: z.string().min(1).max(256),
+    bytes: z.number().int().nonnegative().max(PROTOCOL_V4_LIMITS.attachmentMaxBytes),
+  })
+  .strict();
+export type ZCodeTopicResourceReadResult = z.infer<typeof zcodeTopicResourceReadResultSchema>;
+export const zcodeTopicResourceCancelParamsSchema = z
+  .object({ requestId: z.string().min(1).max(256), taskId: z.string().min(1).max(256) })
+  .strict();
+export type ZCodeTopicResourceCancelParams = z.infer<typeof zcodeTopicResourceCancelParamsSchema>;
+export const zcodeTopicResourceCancelResultSchema = z.object({ cancelled: z.boolean() }).strict();
+export type ZCodeTopicResourceCancelResult = z.infer<typeof zcodeTopicResourceCancelResultSchema>;
 
 // 最新 V4 主链已不再依赖旧版全量方法表；这里仅保留仍被兼容测试和 browser broker
 // 消费的最小契约集合，避免重新引入已移除的 legacy 方法。

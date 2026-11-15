@@ -21,6 +21,7 @@ import {
 } from "./plugin-data.js";
 import { updateZCodePluginMarketplace } from "./plugin-marketplace-actions.js";
 import { resolveZCodePlugins } from "./plugins.js";
+import { removeStoredPluginSecrets, resolvePluginSecretsPath } from "./plugin-secrets.js";
 import { rm } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -231,6 +232,12 @@ export async function uninstallZCodeMarketplacePlugin(
       if (!removed) return null;
       await removePluginFromFileConfig(configResult.sources.user.path, removed.id);
       await removeSuppressedBuiltinInFileConfig(configResult.sources.user.path, removed.id);
+      // 卸载是彻底清理：私有敏感值在 user 与全部 workspace 条目都要删，重装从干净状态开始。
+      await removeStoredPluginSecrets(
+        resolvePluginSecretsPath(pluginStorageRoot),
+        removed.id,
+        "all",
+      );
       return toInstalledPluginData(removed, false);
     }
 
@@ -252,6 +259,7 @@ export async function uninstallZCodeMarketplacePlugin(
       // 唯一真相源（写入用原子 temp+rename），即使后续删除抛错，下次 resolve 也会跳过并补删
       // 缓存；把 config 清理放在删除之前可保证「恢复时从干净状态开始」即便删除中途失败。
       await removePluginFromFileConfig(configResult.sources.user.path, pluginId);
+      await removeStoredPluginSecrets(resolvePluginSecretsPath(pluginStorageRoot), pluginId, "all");
       // 不删除官方 cache：它与 Marketplace Catalog 同属详情/恢复所需的只读资产。
       if (options.keepData !== true) {
         await rm(getPluginDataDir(pluginStorageRoot, pluginId), { force: true, recursive: true });

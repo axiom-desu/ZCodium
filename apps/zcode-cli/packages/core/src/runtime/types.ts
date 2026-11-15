@@ -80,6 +80,7 @@ import type {
   McpServerConfig,
   SubagentPort,
   ToolArtifactStorePort,
+  TopicResourcePort,
   ToolCallId,
   WorkflowPort,
   WorkflowEscalatePort,
@@ -393,6 +394,8 @@ export interface AgentRuntimeDeps {
   modelCatalogPort?: ModelCatalogPort;
   runtimeTaskRegistry?: RuntimeTaskRegistry;
   artifactStore?: ToolArtifactStorePort;
+  /** 只在 Host 注入时注册 ReadTopicResource；缺省即无 bot 接纳事实。 */
+  topicResourcePort?: TopicResourcePort;
   automationPort?: AutomationPort;
   contextSourcePort?: ContextSourcePort;
   eventSink?: SessionEventSink;
@@ -402,6 +405,8 @@ export interface AgentRuntimeDeps {
   now?: () => Date;
   isRemoteWorkspace?: () => boolean;
   memoryRoot?: string;
+  /** model-io transcript 目录（storage.dir 派生）；Dream gate 只读它，不建第二套 transcript。 */
+  modelIoDir?: string;
 }
 
 export interface RuntimeModelFactoryInput {

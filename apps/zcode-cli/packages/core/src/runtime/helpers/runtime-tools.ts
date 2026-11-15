@@ -74,6 +74,9 @@ function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentR
     includeEscalate: Boolean(deps.workflowEscalatePort),
     includeWorkflow: Boolean(deps.workflowPort),
     includeAutomation: Boolean(deps.automationPort) && runtime.config.taskType !== "subagent_child",
+    // 话题资源只在 Host 注入端口时注册；子代理执行面没有 bot 接纳事实，不提供。
+    includeTopicResource:
+      Boolean(deps.topicResourcePort) && runtime.config.taskType !== "subagent_child",
     // 动态工作流工具策略由 Host 决定。
     // 这里不能用端口在场做判据——十个工具的端口在任何 CLI 里都装配齐全，灰度是 Host 的决定。
     // 取值收在 tool-allowlist.ts，与分支刷新那个入口共用同一个推导。
@@ -193,6 +196,7 @@ function createRuntimeToolExecutor(
     workflowEscalatePort: deps.workflowEscalatePort,
     webSearchBudget: deps.webSearchBudget,
     artifactStore: deps.artifactStore,
+    topicResourcePort: deps.topicResourcePort,
     automationPort: deps.automationPort,
     sessionStore: deps.sessionStore,
     sessionModePort: createRuntimeSessionModePort(runtime),

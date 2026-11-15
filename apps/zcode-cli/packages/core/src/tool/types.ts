@@ -38,6 +38,7 @@ import type {
   SubagentPort,
   SubagentRunOptions,
   ToolArtifactStorePort,
+  TopicResourcePort,
   ToolCancellationPolicy,
   ToolContractDeclaration,
   ToolExecutionMode,
@@ -176,6 +177,8 @@ export interface ToolExecutionContext {
   /** 工作流 actor 升级阻塞问题并等待主代理作答的端口；仅在 workflow actor 会话注入。 */
   workflowEscalatePort?: WorkflowEscalatePort;
   artifactStore?: ToolArtifactStorePort;
+  /** 当前任务已接纳话题资源的读取端口；缺省即本执行面没有 bot 接纳事实，不注册该工具。 */
+  topicResourcePort?: TopicResourcePort;
   /** 本 actor 每个 ask 的 WebSearch 预算；缺席即无上限。 */
   webSearchBudget?: WorkflowWebSearchBudgetPort;
   automationPort?: AutomationPort;

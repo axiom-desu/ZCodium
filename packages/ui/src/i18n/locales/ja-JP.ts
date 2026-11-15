@@ -29,6 +29,7 @@ import chunk27 from "./ja-JP/messages-27.json" with { type: "json" };
 import chunk28 from "./ja-JP/messages-28.json" with { type: "json" };
 import chunk29 from "./ja-JP/messages-29.json" with { type: "json" };
 import chunk30 from "./ja-JP/messages-30.json" with { type: "json" };
+import chunk31 from "./ja-JP/messages-31.json" with { type: "json" };
 
 const messages: Record<string, string> = {
   ...chunk1,
@@ -61,6 +62,7 @@ const messages: Record<string, string> = {
   ...chunk28,
   ...chunk29,
   ...chunk30,
+  ...chunk31,
 };
 
 export default messages;

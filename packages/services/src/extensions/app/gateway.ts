@@ -13,6 +13,7 @@ import {
   sortSlotProjections,
 } from "@zcode/shared/extension-host";
 import { admitCapability, type DeclaredPlugin } from "./grantState.js";
+import { CapabilityDispatchError } from "./dispatch.js";
 
 /**
  * 能力网关：唯一准入点。
@@ -39,9 +40,10 @@ export interface GatewayPorts {
   consented(pluginId: string): boolean;
   plugin(pluginId: string): DeclaredPlugin | undefined;
   granted(pluginId: string): readonly import("@zcode/shared/extension-host").ExtensionGrant[];
-  /** 后端执行现有服务或投影泵；signal 在撤销/停止时 abort。 */
+  /** 后端执行现有服务或投影泵；signal 在撤销/停止时 abort。插件身份与代际由网关注入。 */
   dispatch(input: {
     pluginId: string;
+    generation: number;
     capabilityId: string;
     input: unknown;
     signal: AbortSignal;
@@ -129,11 +131,15 @@ export function createCapabilityGateway(ports: GatewayPorts): CapabilityGateway 
     try {
       const result = await ports.dispatch({
         pluginId: plugin.pluginId,
+        generation: request.generation,
         capabilityId: request.capabilityId,
         input: input.data,
         signal: controller.signal,
       });
       // 返回时复检：撤销、换代或工作区变化后迟到的结果不能写回调用方。
+      // signal 已 abort 就一律不发布（cancelAll/cancelPlugin 的取消语义不依赖后端配合）。
+      if (controller.signal.aborted)
+        return fail("canceled", "Extension request was canceled while running.");
       const after = staleReason(auth, request);
       if (after) return fail(after, "Extension request became stale while running.");
       if (!grantsCover(ports.granted(plugin.pluginId), def.grant)) {
@@ -142,9 +148,13 @@ export function createCapabilityGateway(ports: GatewayPorts): CapabilityGateway 
       const output = def.output.safeParse(result);
       if (!output.success) return fail("backend-error", "Extension backend result is invalid.");
       return { ok: true, result: output.data };
-    } catch {
+    } catch (error) {
       if (controller.signal.aborted) {
         return fail("canceled", "Extension request was canceled.");
+      }
+      // 后端只交出已分类的原因；原始错误文本不交给插件。
+      if (error instanceof CapabilityDispatchError) {
+        return fail(error.code, error.message);
       }
       return fail("backend-error", "Extension backend failed.");
     } finally {

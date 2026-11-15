@@ -27,13 +27,15 @@ function testAssetUrlPlugin() {
   };
 }
 
-export async function buildComposerFocusFixtureScript(root, cacheDir) {
+export async function buildComposerFocusFixtureScript(
+  root,
+  cacheDir,
+  fixturePath = "packages/ui/test/fixtures/conversation-composer-mobile-focus.jsx",
+) {
   const { build } = createRequire(resolve(root, "packages/services/package.json"))("esbuild");
   const output = await build({
     absWorkingDir: root,
-    entryPoints: [
-      resolve(root, "packages/ui/test/fixtures/conversation-composer-mobile-focus.jsx"),
-    ],
+    entryPoints: [resolve(root, fixturePath)],
     bundle: true,
     write: false,
     platform: "browser",

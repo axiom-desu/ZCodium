@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@zcode/model-option-map": "workspace:*",
+    "@zcode/session-control": "workspace:*",
     "zod": "4.6.5"
   },
   "devDependencies": {

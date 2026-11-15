@@ -45,6 +45,9 @@ pub(super) struct RunContext {
     pub tool_filter: crate::domain::session_runtime::ToolFilter,
     /// 启动偏好固定的 ToolSearch 模式（本次 run 的请求投影使用）。
     pub tool_search_mode: crate::domain::tool_search::Mode,
+    /// 3.18 App 会话控制授予结论（Host 能力 + mainRoot + 非子代理）。
+    /// 可见性与执行边界都只读这一份本轮副本。
+    pub app_control: bool,
     /// Engine-published permission inputs; `None` in tests that bypass the engine.
     pub permissions:
         Option<tokio::sync::watch::Receiver<std::sync::Arc<super::permissions::Snapshot>>>,
@@ -115,6 +118,7 @@ impl RunContext {
             plugin_references: vec![],
             tool_filter: Default::default(),
             tool_search_mode: Default::default(),
+            app_control: false,
             permissions: None,
             state,
             messages,

@@ -32,14 +32,18 @@ export const exampleReadySnapshot: ExtensionsSnapshot = {
   ],
 };
 
-/** 待授权插件的 UI 视图。 */
+/** 待授权插件的 UI 视图；声明的档位逐个给出人话说明（sessions.write 包含 read）。 */
 export const examplePendingSlotView: ExtensionSlotViewState = {
   available: true,
   loading: false,
   phase: "stopped",
   slots: [],
   pending: [
-    { pluginId: "example-extensions", name: "Example Extensions", declared: ["projects.read"] },
+    {
+      pluginId: "example-extensions",
+      name: "Example Extensions",
+      declared: ["projects.read", "sessions.write"],
+    },
   ],
   canStart: true,
 };

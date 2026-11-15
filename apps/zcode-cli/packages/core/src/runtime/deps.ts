@@ -219,6 +219,7 @@ export type {
   SubagentPort,
   SubagentTaskSnapshot,
   ToolArtifactStorePort,
+  TopicResourcePort,
   ToolCallId,
   WorkflowPort,
   WorkflowEscalatePort,

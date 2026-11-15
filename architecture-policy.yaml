@@ -46,6 +46,26 @@ modules:
     requires: [shared]
     publicEntrypoints: [packages/services/src/session/contract.ts]
     owner: conversation
+  # bot-topic-resource：话题资源接纳归档（唯一 owner）+ 授权/下载。只读当前任务已接纳快照，
+  # 字节只经 Host 反向 RPC 回 CLI，不落用户路径、不新建 bot 登录。
+  - id: bot-topic-resource
+    roots:
+      [
+        packages/services/src/bots/topic-resource,
+        packages/services/src/bots/topicArchive.ts,
+        packages/services/src/bots/topicResource.ts,
+      ]
+    managed: true
+    requires: [shared, services]
+    publicEntrypoints:
+      [
+        packages/services/src/bots/topicResource.ts,
+        packages/services/src/bots/topicArchive.ts,
+        packages/services/src/bots/topic-resource/contract.ts,
+      ]
+    layers:
+      adapters: "."
+    owner: bots
   - id: storage
     roots: [packages/services/src/storage]
     managed: true
@@ -191,6 +211,25 @@ modules:
     roots: [apps/zcode-cli]
     managed: false
 
+  # topic-resource-tool：ReadTopicResource 的 schema/reader/handler；只在 Host 注入
+  # topicResourcePort（本任务有 bot 接纳事实）时注册，不伪造本地下载。
+  - id: topic-resource-tool
+    roots:
+      [
+        apps/zcode-cli/packages/core/src/tool/topic-resource,
+        apps/zcode-cli/packages/core/src/tool/handlers/read-topic-resource.ts,
+      ]
+    managed: true
+    requires: [zcode-cli]
+    publicEntrypoints:
+      [
+        apps/zcode-cli/packages/core/src/tool/handlers/read-topic-resource.ts,
+        apps/zcode-cli/packages/core/src/tool/topic-resource/contract.ts,
+      ]
+    layers:
+      app: "."
+    owner: cli
+
   # office-runtime：四个文档插件共用的 MCP/面板运行时。domain=锚点/文本/模型，
   # app=DocumentOwner（唯一视图状态所有者），adapters=文件/解析/导入/MCP server，
   # ui=面板。产物由 scripts/build.mjs 打进各插件 dist/，运行时不加载 node_modules。
@@ -325,7 +364,8 @@ modules:
   - id: extension-host-protocol
     roots: [packages/shared/src/extension-host]
     managed: true
-    requires: [shared]
+    # sessions 能力表直接复用 session-control 的 canonical App 端口 schema（E8）。
+    requires: [shared, session-control]
     publicEntrypoints:
       [
         packages/shared/src/extension-host/index.ts,
@@ -341,7 +381,8 @@ modules:
   - id: extension-host-service
     roots: [packages/services/src/extensions]
     managed: true
-    requires: [services, shared, rpc, extension-host-protocol]
+    # 会话能力以客户端类调用方调 AppControlService.bindClient（E8）；不新增第二 session owner。
+    requires: [services, shared, rpc, extension-host-protocol, app-control, session-control]
     publicEntrypoints:
       [
         packages/services/src/extensions/index.ts,
@@ -364,6 +405,22 @@ modules:
       ui: components
     layerOrder: [domain, adapters, ui]
     owner: plugin
+
+  # remote-input-prediction：手机远控输入预测（ghost hint）的 v4 线格式与只读查询契约。
+  # 草稿仍归 composer；预测不写 transcript/accepted，不启动第二 runtime。
+  - id: remote-input-prediction
+    roots: [packages/shared/src/zcode-protocol-v4/input-prediction]
+    managed: true
+    requires: [shared, zcode-cli]
+    publicEntrypoints:
+      [
+        packages/shared/src/zcode-protocol-v4/input-prediction/contract.ts,
+        packages/services/src/zcode-agent/inputPredictionSwitch.ts,
+        apps/zcode-cli/packages/bootstrap/src/zcode-protocol/input-prediction-handler.ts,
+        apps/zcode-cli/packages/core/src/runtime/methods/input-prediction-sidecar.ts,
+      ]
+    layers: { domain: "." }
+    owner: conversation
 
   # settings-search：设置页搜索与定位（纯索引/匹配 + 一个结果面板），只依赖 ui 层。
   - id: settings-search

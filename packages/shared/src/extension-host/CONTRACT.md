@@ -7,6 +7,11 @@ loopback/stdio 帧 schema 与扩展侧 SDK 类型。
 
 - 能力表是唯一定义：表里没有的能力不存在；清单声明未知能力按 `unknown-capability` 拒绝，
   能力所需档位未在清单 `grants` 里声明按 `undeclared-grant` 拒绝。
+- 会话能力（`sessions.*`，十二个）的入参与返回直接引用 `@zcode/session-control/contracts`
+  的 canonical App schema（与模型会话控制工具同一份定义）；本模块不复制、不改写这些 DTO。
+- 档位链：`sessions.write` 包含 `sessions.read`；`grantsCover`/`normalizeGrants` 是唯一判定。
+  四项读要 `sessions.read`，八项写要 `sessions.write`；协议名 `sessions` v1 显式协商，不符报
+  `incompatible`。
 - 清单严格有界：schemaVersion=1、`id` 为小写 slug、`main` 只能是同目录单层文件、
   能力 ≤32、档位 ≤16、槽位 ≤16、标题 ≤80，未知键拒绝；不接受 HTML/SVG/URL/样式。
 - 槽位只接受固定枚举（`navigation.primary` / `status.composer`）与固定图标名；

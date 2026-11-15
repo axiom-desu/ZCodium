@@ -10,6 +10,7 @@ import type {
 import { toPluginDiagnostic } from "./plugin-data.js";
 import type { DescribeMarketplacePluginResult } from "@zcode/adapters/plugins";
 import { resolvePluginContext, resolvePluginConfigPath } from "./plugin-context.js";
+import { removeStoredPluginSecrets, resolvePluginSecretsPath, savePluginOptions } from "./plugin-secrets.js";
 import {
   normalizePluginOptions,
   normalizePluginOptionKeys,
@@ -21,7 +22,6 @@ import {
   removePluginEnabledFromFileConfig,
   removePluginFromFileConfig,
   updatePluginEnabledInFileConfig,
-  updatePluginOptionsInFileConfig,
 } from "@zcode/adapters/config";
 import {
   describeMarketplacePlugin,
@@ -78,26 +78,37 @@ export async function configureZCodePlugin(options: ConfigureZCodePluginOptions)
   });
   const plugin = resolvePluginSelector(options.pluginId, outcome.plugins);
   if (options.dryRun === true) return;
-  await updatePluginOptionsInFileConfig(
-    resolvePluginConfigPath(options, configResult, workingDirectory),
-    plugin.id,
-    normalizedOptions,
+  // 敏感键进私有文件、普通键进 config.json；两者由同一个 resolver 的 savePluginOptions 分流，
+  // 单一写入路径，不另建配置缓存。
+  await savePluginOptions({
     clearOptionKeys,
-  );
+    configPath: resolvePluginConfigPath(options, configResult, workingDirectory),
+    options: normalizedOptions,
+    plugin,
+    scope:
+      options.scope === "workspace"
+        ? { kind: "workspace", root: workingDirectory }
+        : { kind: "user" },
+    secretsPath: resolvePluginSecretsPath(pluginStorageRoot),
+  });
 }
 
 /** 删除指定 scope 的 Plugin 配置键，使 Workspace scope 回退到 User。 */
 export async function resetZCodePluginConfig(
   options: ResetZCodePluginConfigOptions,
 ): Promise<{ path: string; pluginId: string }> {
-  const { configResult, workingDirectory } = resolvePluginContext(options);
+  const { configResult, pluginStorageRoot, workingDirectory } = resolvePluginContext(options);
   const path = resolvePluginConfigPath(options, configResult, workingDirectory);
   if (options.scope === "workspace") {
     // “恢复继承”只删除 Workspace 的 enable override。options 是独立配置维度，
     // 不能因为用户恢复开关继承而把 Workspace options/secret 一并抹掉。
     await removePluginEnabledFromFileConfig(path, options.pluginId);
   } else {
+    // user reset 是彻底删除用户层足迹，敏感值也必须一起删；Workspace 层私有值不动。
     await removePluginFromFileConfig(path, options.pluginId);
+    await removeStoredPluginSecrets(resolvePluginSecretsPath(pluginStorageRoot), options.pluginId, {
+      kind: "user",
+    });
   }
   return { path, pluginId: options.pluginId };
 }

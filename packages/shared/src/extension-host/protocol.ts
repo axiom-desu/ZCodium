@@ -37,6 +37,10 @@ export const extensionErrorCodeSchema = z.enum([
   "incompatible",
   "invalid-input",
   "canceled",
+  // 会话 facade（E8）：按 session-control 同名错误映射，扩展按 code 判断而不是读文本。
+  "forbidden",
+  "unavailable",
+  "conflict",
   "backend-error",
   "invalid-contribution",
   "too-many-requests",

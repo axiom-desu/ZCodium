@@ -442,12 +442,16 @@ import {
 import { createRemoteProjectService, IRemoteProjectService } from "#src/remote-projects/index.js";
 import { createManagedWorktreeRepo } from "#src/git/managed-worktree/repo.js";
 import { createAppControlService } from "#src/app-control/index.js";
+import type { AppControlServiceHandle } from "#src/app-control/index.js";
 import { createGitCommandProvider } from "#src/git/providers/gitCommandProvider.js";
 import { getAppConfigDir as resolveProjectAppConfigDir, getWorkspaceHash } from "./paths.js";
 
 // Source Server 旧版本缺失 virtualProjects 时，Host 必须构造真实的只读 legacy 单 root 项目服务；
 // 该实现使用 node:crypto/node:path，只能从 Node 子路径导出。
 export { createLegacySingleRootProjectService } from "#src/project/index.js";
+// 扩展会话纵向下游（桌面扩展集成测试、同进程可信组件）需要构造真实 App 控制句柄；
+// 只从 Node 子路径导出，浏览器/root 入口仍不包含 Node 依赖。
+export { createAppControlService };
 export {
   createManagedWorktreeTaskService,
   createWorktreeLeaseGate,
@@ -571,6 +575,17 @@ const providerProvisioningTriggerDisposers = new WeakMap<
 // 与其它侧表一样按 ServiceCollection 登记并在 dispose 时统一 close。
 const sharedSqliteRepos = new WeakMap<ServiceCollection, ReadonlyArray<{ close(): void }>>();
 const projectSchedulers = new WeakMap<ServiceCollection, { dispose(): void }>();
+/**
+ * App 控制的进程内句柄：只交给同进程可信组件（扩展网关），不注册进 ServiceCollection，
+ * 也没有 RPC 频道；手机/Web/远端 Host 拿不到。
+ */
+const appControlHandles = new WeakMap<ServiceCollection, AppControlServiceHandle>();
+
+export function getAppControlServiceHandle(
+  services: ServiceCollection,
+): AppControlServiceHandle | undefined {
+  return appControlHandles.get(services);
+}
 /** Local Host 进程内的 Provisioning Source；不会把凭据通过通用 RPC 暴露给 Renderer。 */
 export function getProviderProvisioningSource(
   services: ServiceCollection,
@@ -1538,6 +1553,8 @@ export function createLocalServices(options: {
     });
   // App control 服务在项目/任务服务之后装配；这里只交出惰性读取，不提前持有引用。
   const appControlRef: { service?: import("#src/app-control/contract.js").AppControlService } = {};
+  // 话题资源反向请求要读取本进程 bot 接纳事实；bots 服务在同一 collection 内随后构建。
+  const botsServiceRef: { service?: IBotsService } = {};
   const zcodeAgentService = createZCodeAgentService({
     ...(options?.appControl
       ? {
@@ -1591,6 +1608,8 @@ export function createLocalServices(options: {
     spawnFallbackCwd: options?.zcodeAgentSpawnFallbackCwd,
     // browser-use：host→main 执行桥透传给 agent service 的 onRequest browserExecute 路由。
     browserControlExecutor: options?.browserControlExecutor,
+    // 只有持有 bot 接纳归档的 Host 才提供话题资源读取；缺失时 CLI 不注册该工具。
+    resolveBotsService: () => botsServiceRef.service,
     cuaOperationStateReporter: shouldEnableCuaOperationStateReporter({
       serviceAuthorityMode: options?.serviceAuthorityMode,
       hasReporter: Boolean(options?.cuaOperationStateReporter),
@@ -2184,6 +2203,15 @@ export function createLocalServices(options: {
       projectAutoArchiveScheduler.dispose();
     },
   });
+  // collection 组装完成后绑定：agent 反向请求在真实 CLI 连接上才会调用。
+  botsServiceRef.service = services.getOptional(IBotsService);
+  // 扩展网关只拿句柄，不复制会话状态；appControl 本身仍只在这里装配。
+  if (appControlRef.service) {
+    appControlHandles.set(services, {
+      service: appControlRef.service,
+      sourceServerId: options.appControl?.sourceServerId ?? "local",
+    });
+  }
   projectAutoArchiveScheduler.start();
   return services;
 }

@@ -13,16 +13,15 @@ import type { AppControlAgentPort, AppControlTaskPort } from "./ports.js";
  * 状态变化才发快照；任务消失/状态未知即显式结束，让 wait 得到确定结论。
  * 运行中额外读既有 runtime 的活动执行 id，作为调用方中断的凭据。
  */
-export function observeTask(
+export async function observeTask(
   tasks: AppControlTaskPort,
   operation: OperationRef<AppSessionRef>,
   signal: AbortSignal,
   live?: AppControlAgentPort,
-): OperationFeed<AppSessionRef> {
+): Promise<OperationFeed<AppSessionRef>> {
   const operationRef = { ...operation, sessionId: operation.sessionId } as AppOperationRef;
   let closed = false;
   let revision = 0;
-  let status: OperationSnapshot<AppSessionRef>["status"] = "unknown";
   const read = async (): Promise<OperationSnapshot<AppSessionRef>> => {
     const meta = await tasks.getTaskMeta({
       taskId: operation.session.sessionId,
@@ -31,7 +30,7 @@ export function observeTask(
         ? { workspaceIdentity: operation.session.workspaceIdentity }
         : {}),
     });
-    status = meta
+    const status: OperationSnapshot<AppSessionRef>["status"] = meta
       ? meta.status === "running"
         ? "running"
         : meta.status === "error"
@@ -59,14 +58,11 @@ export function observeTask(
       ...(executionId ? { executionId } : {}),
     };
   };
-  const initial = {
-    operation: operationRef,
-    epoch: "app-control",
-    revision: 0,
-    status: "unknown" as const,
-  };
+  // 初始水位必须是 owner 的真实快照：合成的 revision 0/unknown 会让 waitSessions 在
+  // 第一个 baseline 上就判定 unknown 并立即返回（扩展会话能力因此永远等不到终态）。
+  const initial = await read();
   const updates = (async function* (): AsyncIterable<OperationUpdate<AppSessionRef>> {
-    let last = await read();
+    let last = initial;
     while (!closed && !signal.aborted) {
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, 200);
@@ -85,8 +81,7 @@ export function observeTask(
     }
   })();
   return {
-    // initial 与 updates 必须同一水位：这里先给 0，第一条 update 是它之后的第一份事实。
-    initial: status === "unknown" ? initial : initial,
+    initial,
     updates,
     async close() {
       closed = true;

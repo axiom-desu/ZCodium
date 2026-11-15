@@ -1,5 +1,9 @@
 import { List, Puzzle, Sparkles } from "lucide-react";
-import type { ExtensionSlotIcon, ExtensionSlotProjection } from "@zcode/shared/extension-host";
+import type {
+  ExtensionGrant,
+  ExtensionSlotIcon,
+  ExtensionSlotProjection,
+} from "@zcode/shared/extension-host";
 import { cn } from "@/components/lib/utils.js";
 import { isSlotVisible } from "@/extensions/domain/slotSelectors.js";
 import type { ExtensionSlotActions, ExtensionSlotViewState } from "@/extensions/contract.js";
@@ -15,6 +19,8 @@ export interface ExtensionStatusSlotLabels {
   pending: string;
   loading: string;
   error: string;
+  /** 每个档位的人话说明；用户按它判断读/写会话的授权范围。 */
+  grants: Record<ExtensionGrant, string>;
   /** 明确授权语义：第三方 Node 代码以当前用户权限运行，不是 OS 隔离。 */
   notice: string;
 }
@@ -76,24 +82,39 @@ export function ExtensionStatusSlotView({
             {labels.notice}
           </p>
           {view.pending.map((plugin) => (
-            <div key={plugin.pluginId} className="flex items-center gap-1">
-              <span className="truncate" title={plugin.name}>
-                {plugin.name}
-              </span>
-              <button
-                type="button"
-                className="ml-auto underline"
-                onClick={() => void actions?.grant(plugin.pluginId)}
-              >
-                {labels.enable}
-              </button>
-              <button
-                type="button"
-                className="underline"
-                onClick={() => void actions?.revoke(plugin.pluginId)}
-              >
-                {labels.revoke}
-              </button>
+            <div key={plugin.pluginId} className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1">
+                <span className="truncate" title={plugin.name}>
+                  {plugin.name}
+                </span>
+                <button
+                  type="button"
+                  className="ml-auto underline"
+                  onClick={() => void actions?.grant(plugin.pluginId)}
+                >
+                  {labels.enable}
+                </button>
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => void actions?.revoke(plugin.pluginId)}
+                >
+                  {labels.revoke}
+                </button>
+              </div>
+              {plugin.declared.length > 0 ? (
+                <ul
+                  className="text-muted-foreground"
+                  data-testid="extension-consent-grants"
+                  aria-label={labels.pending}
+                >
+                  {plugin.declared.map((grant) => (
+                    <li key={grant} data-testid={`extension-consent-grant-${grant}`}>
+                      {labels.grants[grant]}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           ))}
         </div>

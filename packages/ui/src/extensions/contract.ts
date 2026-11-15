@@ -1,4 +1,4 @@
-import type { ExtensionSlotProjection } from "@zcode/shared/extension-host";
+import type { ExtensionGrant, ExtensionSlotProjection } from "@zcode/shared/extension-host";
 import type { ExtensionsSnapshot } from "@zcode/services";
 
 /**
@@ -13,7 +13,7 @@ export interface ExtensionSlotViewState {
   /** 与当前 generation 匹配的槽位（已按 order/pluginId/id 排序）。 */
   slots: ExtensionSlotProjection[];
   /** 待用户确认授权的插件（needs-consent）。 */
-  pending: Array<{ pluginId: string; name: string; declared: string[] }>;
+  pending: Array<{ pluginId: string; name: string; declared: ExtensionGrant[] }>;
   canStart: boolean;
   error?: string;
 }

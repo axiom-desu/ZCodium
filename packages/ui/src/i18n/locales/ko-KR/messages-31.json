@@ -1,0 +1,6 @@
+{
+  "extensions.status.grant.projects.read": "프로젝트 목록 읽기",
+  "extensions.status.grant.sessions.read": "이 창의 대화 읽기: 세션 목록, 메시지 읽기, 실행 완료 대기",
+  "extensions.status.grant.sessions.write": "이 창의 대화 읽기 및 변경: 메시지 전송, 생성, 분기, 이름 변경, 보관, 고정, 중단, 열기. 세션 읽기 권한을 포함합니다.",
+  "extensions.status.notice": "확장 프로그램은 사용자 권한으로 타사 Node.js 코드를 실행합니다. 활성화해도 OS 수준의 격리는 제공되지 않습니다."
+}

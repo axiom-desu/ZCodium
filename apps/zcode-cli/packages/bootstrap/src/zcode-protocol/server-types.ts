@@ -34,6 +34,7 @@ import type { V4InteractionRegistry } from "../zcode-protocol-v4/interaction-reg
 import type { ConversationV4Gateway } from "../zcode-protocol-v4/v4-gateway.js";
 import type { SessionResidentPool, SessionResidentPoolOptions } from "./session-resident-pool.js";
 import type { ContextCompositionRevisionTracker } from "./context-composition/tracker.js";
+import type { ConversationInputPredictionHandler } from "./input-prediction-handler.js";
 
 export interface ParamsSchema<T> {
   parse(input: unknown): T;
@@ -165,6 +166,11 @@ export interface ZCodeProtocolAgentServerContext {
    * 只在内存里计数并发通知，不缓存组成。
    */
   contextCompositionTracker?: ContextCompositionRevisionTracker;
+  /**
+   * 手机远控输入预测的唯一 owner（in-flight + 结果缓存）。每协议 server 一份，
+   * 惰性创建；不持有会话事实，不进入 CommandInbox。
+   */
+  inputPrediction?: ConversationInputPredictionHandler;
   /** 正在 materialize 的预占 sessionId（native/V4 并发去重）。 */
   sessionCreationIds?: Set<string>;
   sessions: Map<string, ZCodeProtocolSessionRecord>;

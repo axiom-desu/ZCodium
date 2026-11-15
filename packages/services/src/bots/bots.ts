@@ -5,6 +5,7 @@ import type {
   ZCodeProvider,
   BotConfig,
   BotContextState,
+  BotInboundAttachment,
   BotInboundMessage,
   BotOutboundMessage,
   BotProvider,
@@ -124,11 +125,31 @@ export type BotFeishuRegistrationPollResult =
       domain: "feishu" | "lark";
     };
 
+/** 只由 Host 连接身份补齐 workspace/task；模型不能提交这些字段。 */
+export interface BotTopicResourceReadParams {
+  taskId: string;
+  inputId?: string;
+  messageId: string;
+  resourceIndex: number;
+  workspacePath: string;
+  workspaceIdentity?: string;
+  remoteSessionId?: string;
+  signal?: AbortSignal;
+}
+
 export interface IBotsService {
   /**
    * 将 App 全局交互偏好同步给 Bot 已持有的远端 runtime；不得为此建立新的远端连接。
    */
   syncAppRuntimePreferences(preferences: ZCodeAgentAppRuntimePreferences): Promise<void>;
+  /**
+   * 话题资源只读当前任务已接纳快照；授权来自 bot 入站接纳事实，不来自调用方参数。
+   * validate 用于传输前的廉价复核，read 返回字节（由 Host 反向 RPC 回传 CLI）。
+   */
+  validateTopicResource(params: BotTopicResourceReadParams): Promise<void>;
+  readTopicResource(
+    params: BotTopicResourceReadParams,
+  ): Promise<{ attachment: BotInboundAttachment; data: Uint8Array }>;
   getStatus(): Promise<BotServiceStatus>;
   getConfig(): Promise<BotsConfigFile>;
   listWorkspaceRefs(params?: BotListWorkspaceRefsParams): Promise<BotWorkspaceRef[]>;
@@ -161,5 +182,30 @@ export interface IBotsService {
     payload: unknown,
   ): Promise<BotProviderCallbackResult>;
 }
+
+/**
+ * Web replayable clients may manage configured Bots, but never invoke Host-only resource or ingress methods.
+ * Keep this pure contract shared by Desktop attachments and the server-core HTTP RPC facade.
+ */
+export const WEB_REMOTE_BOTS_ALLOWED_METHODS = [
+  "syncAppRuntimePreferences",
+  "getStatus",
+  "getConfig",
+  "listWorkspaceRefs",
+  "getUserConfigOptions",
+  "beginFeishuRegistration",
+  "pollFeishuRegistration",
+  "beginWeixinRegistration",
+  "pollWeixinRegistration",
+  "saveConfig",
+  "listBots",
+  "saveBot",
+  "removeBotSecret",
+  "deleteBot",
+  "testBot",
+  "createBindCode",
+  "getBotStates",
+  "resetBotState",
+] as const satisfies ReadonlyArray<keyof IBotsService>;
 
 export const IBotsService = createServiceDescriptor<IBotsService>(ServiceChannels.Bots);

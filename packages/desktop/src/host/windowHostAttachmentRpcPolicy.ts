@@ -1,5 +1,6 @@
 import { ProxyChannel, type IChannelServer } from "@zcode/rpc";
 import {
+  IBotsService,
   IGenUiService,
   IMcpSyncService,
   ISettingService,
@@ -7,6 +8,7 @@ import {
   type ServiceCollection,
   type ServiceExposurePolicy,
   type ZCodeAgentV4ClientMode,
+  WEB_REMOTE_BOTS_ALLOWED_METHODS,
 } from "@zcode/services";
 import { ServiceChannels } from "@zcode/shared";
 
@@ -120,6 +122,16 @@ const MOBILE_ZCODE_AGENT_DENIED_METHODS = new Set<string>([
   "setWorkspaceMcpTrust",
 ] satisfies ReadonlyArray<keyof IZCodeAgentService>);
 
+/**
+ * 手机/Web attachment 只发布 Bot 管理与读取面；未来新增方法默认拒绝。
+ *
+ * 原因：Bots 通道过去以完整服务面发布。`readTopicResource`/`validateTopicResource` 是
+ * Host 反向 RPC 的字节下载入口，`handleProviderCallback*`/`handleInboundMessage` 是只有
+ * 受信 provider 回调与桥接才可调用的入站面；任意配对客户端直接调用就绕过 CLI 任务归属、
+ * 工具权限与 callback 鉴权。收窄白名单而不是逐条拒绝，保证以后新增的 Bots 方法不会自动开放。
+ */
+const MOBILE_BOTS_ALLOWED_METHODS = new Set<string>(WEB_REMOTE_BOTS_ALLOWED_METHODS);
+
 function rejectRemoteMethod(): Promise<never> {
   return Promise.reject(
     Object.assign(new Error("Remote sync is only available from Desktop"), {
@@ -203,6 +215,17 @@ export function exposeWindowHostAttachmentServices(params: {
       scopedOverrides.set(
         IZCodeAgentService.channelName,
         denyServiceMethodsForRemote(agent, MOBILE_ZCODE_AGENT_DENIED_METHODS),
+      );
+    }
+    const bots =
+      (scopedOverrides.get(IBotsService.channelName) as IBotsService | undefined) ??
+      services.getOptional(IBotsService);
+    if (bots) {
+      // 话题资源字节与 bot 入站回调只允许 Host 内部/受信 provider 调用，
+      // 不能成为配对手机或 Web 客户端的直接下载/注入入口。
+      scopedOverrides.set(
+        IBotsService.channelName,
+        scopeServiceMethods(bots, MOBILE_BOTS_ALLOWED_METHODS),
       );
     }
     overrides = scopedOverrides;

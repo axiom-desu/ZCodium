@@ -105,6 +105,16 @@ export interface BotProviderAdapter {
     actor?: BotActor,
   ): Promise<BotProviderDownloadedAttachment | null>;
   /**
+   * 话题资源读取（可选）：从已接纳输入的原消息里按 provider 资源键重新下载。
+   * 与 `downloadAttachment` 分开——历史资源不落 Bot 附件缓存，字节只回给 Host 反向 RPC。
+   */
+  downloadTopicResource?(
+    bot: BotConfig,
+    attachment: BotInboundAttachment,
+    target: { botId: string; provider: BotConfig["provider"]; chatId: string; providerMessageId: string },
+    signal?: AbortSignal,
+  ): Promise<BotProviderDownloadedAttachment | null>;
+  /**
    * 任务流生命周期通知（可选）。仅在 provider 需要把官方轮次映射成自有传输信号时实现，
    * 不改变任何业务状态。
    */

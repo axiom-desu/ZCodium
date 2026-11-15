@@ -172,6 +172,60 @@ function randomRequestId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `req-${Math.random().toString(36).slice(2)}`;
 }
 
+/** 写动作在 ctx 上 requestId 可选；线上帧仍必填，由这里补 UUID（幂等键）。 */
+type WithOptionalRequestId<T> = T extends { requestId: string }
+  ? Omit<T, "requestId"> & { requestId?: string }
+  : T;
+
+function withRequestId<T extends { requestId?: string }>(input: T): T & { requestId: string } {
+  return { ...input, requestId: input.requestId ?? randomRequestId() };
+}
+
+/**
+ * 会话 facade：上游十二个既有 App 意图，入参/返回直接复用 session-control 的 canonical schema
+ * （`CapabilityInput`/`CapabilityOutput` 由能力表推导），不新增 DTO。
+ * 读需要 sessions.read，写需要 sessions.write（write 包含 read）；未声明/未授予由网关注绝。
+ * 身份、代际与取消全部由网关注入：ctx 不暴露插件 id、token 或 service 引用。
+ */
+export interface ExtensionSessionsContext {
+  listProjects(
+    input: CapabilityInput<"sessions.listProjects">,
+  ): Promise<CapabilityOutput<"sessions.listProjects">>;
+  listSessions(
+    input: CapabilityInput<"sessions.listSessions">,
+  ): Promise<CapabilityOutput<"sessions.listSessions">>;
+  readSession(
+    input: CapabilityInput<"sessions.readSession">,
+  ): Promise<CapabilityOutput<"sessions.readSession">>;
+  waitSessions(
+    input: CapabilityInput<"sessions.waitSessions">,
+  ): Promise<CapabilityOutput<"sessions.waitSessions">>;
+  createSession(
+    input: WithOptionalRequestId<CapabilityInput<"sessions.createSession">>,
+  ): Promise<CapabilityOutput<"sessions.createSession">>;
+  forkSession(
+    input: WithOptionalRequestId<CapabilityInput<"sessions.forkSession">>,
+  ): Promise<CapabilityOutput<"sessions.forkSession">>;
+  sendToSession(
+    input: WithOptionalRequestId<CapabilityInput<"sessions.sendToSession">>,
+  ): Promise<CapabilityOutput<"sessions.sendToSession">>;
+  interruptSession(
+    input: WithOptionalRequestId<CapabilityInput<"sessions.interruptSession">>,
+  ): Promise<CapabilityOutput<"sessions.interruptSession">>;
+  renameSession(
+    input: WithOptionalRequestId<CapabilityInput<"sessions.renameSession">>,
+  ): Promise<CapabilityOutput<"sessions.renameSession">>;
+  openSession(
+    input: CapabilityInput<"sessions.openSession">,
+  ): Promise<CapabilityOutput<"sessions.openSession">>;
+  setSessionArchived(
+    input: WithOptionalRequestId<CapabilityInput<"sessions.setSessionArchived">>,
+  ): Promise<CapabilityOutput<"sessions.setSessionArchived">>;
+  setSessionPinned(
+    input: WithOptionalRequestId<CapabilityInput<"sessions.setSessionPinned">>,
+  ): Promise<CapabilityOutput<"sessions.setSessionPinned">>;
+}
+
 /** 插件作者入口：`activate` 收到的 ctx 只有能力与槽位，没有宿主对象引用。 */
 export interface ExtensionContext {
   pluginId: string;
@@ -181,6 +235,7 @@ export interface ExtensionContext {
     get(): Promise<CapabilityOutput<"context.get">>;
     onDidChange(listener: (revision: number) => void): () => void;
   };
+  sessions: ExtensionSessionsContext;
   slots: { contribute(slots: ExtensionSlotContribution[]): Promise<number> };
 }
 
@@ -203,6 +258,21 @@ export function createExtensionContext(
     context: {
       get: () => client.call("context.get", undefined as never),
       onDidChange: (listener) => client.onContextChanged(listener),
+    },
+    sessions: {
+      listProjects: (input) => client.call("sessions.listProjects", input),
+      listSessions: (input) => client.call("sessions.listSessions", input),
+      readSession: (input) => client.call("sessions.readSession", input),
+      waitSessions: (input) => client.call("sessions.waitSessions", input),
+      createSession: (input) => client.call("sessions.createSession", withRequestId(input)),
+      forkSession: (input) => client.call("sessions.forkSession", withRequestId(input)),
+      sendToSession: (input) => client.call("sessions.sendToSession", withRequestId(input)),
+      interruptSession: (input) => client.call("sessions.interruptSession", withRequestId(input)),
+      renameSession: (input) => client.call("sessions.renameSession", withRequestId(input)),
+      openSession: (input) => client.call("sessions.openSession", input),
+      setSessionArchived: (input) =>
+        client.call("sessions.setSessionArchived", withRequestId(input)),
+      setSessionPinned: (input) => client.call("sessions.setSessionPinned", withRequestId(input)),
     },
     slots: { contribute: (slots) => client.contribute(slots) },
   };

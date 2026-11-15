@@ -48,6 +48,7 @@ import { cleanupTurnExecution } from "./turn-cleanup.js";
 import { failTurnExecution } from "./turn-failure.js";
 import { startRegularTurn } from "./turn-start.js";
 import { startTargetRunHeartbeat } from "./turn-target-heartbeat.js";
+import { startActiveProjectMemoryRecallPrefetch } from "../helpers/project-memory-recall.js";
 
 const TARGET_RUN_HEARTBEAT_MS = 15_000;
 
@@ -342,6 +343,12 @@ export async function executeTurnCommand(
           turnMachine,
           turnTraceContext,
           userMessageId,
+        });
+        // Recall prefetch 在用户输入已进入历史后启动；同一 turn abort 传播，但不阻塞首轮请求。
+        startActiveProjectMemoryRecallPrefetch(this, {
+          model: loopModel,
+          traceContext: turnTraceContext,
+          turnAbortSignal,
         });
 
         openGoalStateChangeReminderDeferral(activeTurn);

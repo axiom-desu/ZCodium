@@ -26,6 +26,7 @@ import type {
   SubagentPort,
   SubagentRunOptions,
   ToolArtifactStorePort,
+  TopicResourcePort,
   ToolSearchExecutionContext,
   TraceContext,
   TurnId,
@@ -105,6 +106,7 @@ export interface ToolExecutorOptions {
   /** actor 每个 ask 的 WebSearch 预算；缺席即无上限。 */
   webSearchBudget?: WorkflowWebSearchBudgetPort;
   artifactStore?: ToolArtifactStorePort;
+  topicResourcePort?: TopicResourcePort;
   automationPort?: AutomationPort;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
@@ -224,6 +226,7 @@ export interface ToolExecutorDeps {
   /** actor 每个 ask 的 WebSearch 预算；缺席即无上限。 */
   webSearchBudget?: WorkflowWebSearchBudgetPort;
   artifactStore?: ToolArtifactStorePort;
+  topicResourcePort?: TopicResourcePort;
   automationPort?: AutomationPort;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;

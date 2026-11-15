@@ -69,6 +69,9 @@ import { InMemoryRuntimeTaskRegistry, type RuntimeTaskRegistry } from "../runtim
 import type { WorkflowBlockedReminderClock } from "../runtime-task/workflow-blocked-reminder.js";
 import type { BackgroundSubagentStallClock } from "../subagent/background-stall.js";
 import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
+import type { ProjectMemoryRecallPrefetch } from "./helpers/project-memory-recall.js";
+import type { ProjectMemoryUpdate } from "./helpers/project-memory-dream.js";
+import { createMemoryRecallState, type MemoryRecallState } from "../memory/recall/index.js";
 import { projectPersistentAgentMemoryTools } from "../subagent/persistent-memory.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
 import { disposeNodeReplSession } from "../tool/handlers/node-repl.js";
@@ -98,6 +101,7 @@ export class AgentRuntime {
   private eventSinks = new Set<SessionEventSink>();
   private now: () => Date;
   private isRemoteWorkspace: () => boolean;
+  private modelIoDir?: string;
   private registry: ToolRegistry;
   private executor: ToolExecutor;
   private hookRunner?: HookRunner;
@@ -119,6 +123,10 @@ export class AgentRuntime {
   private latestContextBuildResult?: ContextBuildResult;
   private memoryRoot?: string;
   private memoryIndexContent?: string;
+  private memoryRecallState: MemoryRecallState;
+  private memoryRecallPrefetch?: ProjectMemoryRecallPrefetch;
+  private memoryDreamLastScanAtMs = 0;
+  private pendingMemoryUpdate?: ProjectMemoryUpdate;
   private memoryExtractionScheduler?: ProjectMemoryExtractionScheduler;
   private contextSourcePort?: ContextSourcePort;
   private skillPort?: SkillPort;
@@ -231,6 +239,7 @@ export class AgentRuntime {
     }
     this.now = deps.now ?? (() => new Date());
     this.isRemoteWorkspace = deps.isRemoteWorkspace ?? (() => false);
+    this.modelIoDir = deps.modelIoDir;
     this.modelFactory = deps.modelFactory;
     this.browserControlPort = deps.browserControlPort;
     this.modelRequestAdmission = deps.modelRequestAdmission;
@@ -239,6 +248,7 @@ export class AgentRuntime {
       config.modelSelection && cloneModelSelection(config.modelSelection);
     this.messageHistory = new MessageHistoryImpl();
     this.readFileState = new Map();
+    this.memoryRecallState = createMemoryRecallState();
     this.runtimeCommandQueue = createRuntimeCommandQueue();
     this.workingDirectory = config.workingDirectory ?? ".";
     this.contextSourcePort = deps.contextSourcePort;
@@ -301,6 +311,7 @@ export class AgentRuntime {
     // 关闭单个 session 后进程仍存活，
     // 因此必须先终止该 runtime 的 Extraction，不能只在超时后放弃等待。
     this.memoryExtractionScheduler?.shutdown();
+    this.memoryRecallPrefetch?.abortController.abort();
   }
 }
 

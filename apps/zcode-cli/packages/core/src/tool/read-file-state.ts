@@ -8,7 +8,7 @@ import type { ReadFileStateEntry, ReadFileStateMap } from "./types.js";
 
 type ReadFileStatePlatform = NodeJS.Platform;
 
-function createReadFileStatePathKey(
+export function createReadFileStatePathKey(
   filePath: string,
   platform: ReadFileStatePlatform = currentPlatform,
 ): string {

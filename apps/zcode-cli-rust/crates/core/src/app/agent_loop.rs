@@ -337,6 +337,7 @@ pub(super) async fn run(
             hooks: turn.as_ref().map(|t| &t.hooks),
             model,
             automation_id: automation_id.as_deref(),
+            app_control: history.app_control,
         };
         let called = output.calls.clone();
         // 与 Node turnControl 一致：结果要求停轮时，其后的工具取消且本轮不再请求模型。

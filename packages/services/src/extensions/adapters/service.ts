@@ -1,25 +1,21 @@
 import { Emitter } from "@zcode/rpc";
 import {
   EXTENSION_SHUTDOWN_TIMEOUT_MS,
-  normalizeGrants,
   sortSlotProjections,
   type ExtensionGrant,
   type ExtensionGrantRecord,
   type ExtensionSlotProjection,
 } from "@zcode/shared/extension-host";
 import type { ExtensionsSnapshot, IExtensionsService } from "../contract.js";
+import type { AppControlServiceHandle } from "#src/app-control/index.js";
 import { createCapabilityGateway, type GatewayPorts } from "../app/gateway.js";
 import { createExtensionCredentials } from "../app/credentials.js";
 import { createCapabilityDispatcher } from "../app/dispatch.js";
 import { createLifecycleQueue } from "../app/lifecycleQueue.js";
-import { buildPluginStates, type ProjectedExtension } from "../app/projection.js";
-import {
-  decideGrant,
-  isGrantRunnable,
-  resolveGrantState,
-  type DeclaredPlugin,
-} from "../app/grantState.js";
+import { buildPluginStates } from "../app/projection.js";
+import { decideGrant } from "../app/grantState.js";
 import { createGrantStore } from "./grantStore.js";
+import { createGrantView } from "./grantView.js";
 import { discoverExtensions, type DiscoveredExtension } from "./discovery.js";
 import { createExtensionViewServer, type ExtensionViewServer } from "./loopbackServer.js";
 import {
@@ -38,6 +34,11 @@ export interface ExtensionsServiceOptions {
   processSupervisor: ExtensionsProcessSupervisor;
   readSettings(): Promise<{ locale: string }>;
   readProjects?(): Promise<Array<{ id: string; name: string }>>;
+  /**
+   * 既有 App 控制的进程内句柄（十二个意图的唯一 facade）。
+   * 缺省时会话能力报 host-unavailable；不降级为直接读库，也不新建 session owner。
+   */
+  appControl?: AppControlServiceHandle;
   now?(): number;
   logger?: { info(message: string): void; warn(message: string): void };
 }
@@ -73,64 +74,44 @@ export function createExtensionsService(options: ExtensionsServiceOptions): Exte
   let revision = 0;
   let stopRequested = false;
   const queue = createLifecycleQueue();
+  /** 清单/记录的唯一解释入口；记录写入仍由本文件的 grantStore 负责。 */
+  const grants = createGrantView({ loaded: () => loaded, records: () => records });
   const dispatch = createCapabilityDispatcher({
     readSettings: options.readSettings,
     ...(options.readProjects ? { readProjects: options.readProjects } : {}),
     workspaceIdentity: options.workspaceIdentity,
     currentRevision: () => revision,
+    ...(options.appControl
+      ? {
+          sessions: {
+            appControl: options.appControl,
+            // 撤销/停止/换代后旧绑定立即失效；凭据仍必须属于同一插件。
+            isCurrent: (pluginId, generation) =>
+              activeGeneration === generation &&
+              generation > 0 &&
+              grants.consented(pluginId) &&
+              credentials.has(pluginId),
+          },
+        }
+      : {}),
   });
 
   const gateway = createCapabilityGateway(buildPorts());
-
-  function declaredPlugin(extension: ProjectedExtension): DeclaredPlugin {
-    return {
-      pluginId: extension.manifest.id,
-      name: extension.manifest.name,
-      version: extension.manifest.version,
-      capabilities: extension.capabilities,
-      slotIds: extension.manifest.slots.map((slot) => slot.id),
-      protocols: extension.manifest.protocols,
-      declared: normalizeGrants(extension.manifest.grants),
-    };
-  }
-
-  function recordFor(pluginId: string): ExtensionGrantRecord | undefined {
-    return (records ?? []).find((item) => item.pluginId === pluginId);
-  }
-
-  function stateFor(extension: DiscoveredExtension) {
-    return resolveGrantState(declaredPlugin(extension), recordFor(extension.manifest.id));
-  }
-
-  /** 只有存在用户同意记录且与当前声明/版本一致时才允许加载插件代码。 */
-  function isRunnable(extension: DiscoveredExtension): boolean {
-    return isGrantRunnable(stateFor(extension));
-  }
-
-  function consented(pluginId: string): boolean {
-    const extension = loaded.find((item) => item.manifest.id === pluginId);
-    return extension ? isRunnable(extension) : false;
-  }
-
-  function grantedFor(pluginId: string): ExtensionGrant[] {
-    const extension = loaded.find((item) => item.manifest.id === pluginId);
-    return extension ? stateFor(extension).granted : [];
-  }
 
   function buildPorts(): GatewayPorts {
     return {
       currentGeneration: () => activeGeneration,
       currentWorkspaceIdentity: () => options.workspaceIdentity(),
       authenticate: (token) => credentials.authenticate(token),
-      consented,
+      consented: grants.consented,
       plugin: (pluginId) => {
         const extension = loaded.find((item) => item.manifest.id === pluginId);
-        return extension ? declaredPlugin(extension) : undefined;
+        return extension ? grants.declaredPlugin(extension) : undefined;
       },
-      granted: grantedFor,
+      granted: grants.grantedFor,
       onContribution: (pluginId, slots) => {
         // 网关入口已核对同意；这里再复检，撤销后的迟到贡献不能重新写回槽位。
-        if (!consented(pluginId)) {
+        if (!grants.consented(pluginId)) {
           projectedSlots.delete(pluginId);
           return revision;
         }
@@ -142,7 +123,7 @@ export function createExtensionsService(options: ExtensionsServiceOptions): Exte
         publish();
         return revision;
       },
-      dispatch: ({ capabilityId, input, signal }) => dispatch(capabilityId, input, signal),
+      dispatch: (call) => dispatch(call),
     };
   }
 
@@ -153,7 +134,7 @@ export function createExtensionsService(options: ExtensionsServiceOptions): Exte
       workspaceIdentity: options.workspaceIdentity(),
       phase,
       ...(error ? { error } : {}),
-      plugins: buildPluginStates(loaded, records, declaredPlugin),
+      plugins: buildPluginStates(loaded, records, grants.declaredPlugin),
       slots: sortSlotProjections([...projectedSlots.values()].flat()),
     };
   }
@@ -258,7 +239,7 @@ export function createExtensionsService(options: ExtensionsServiceOptions): Exte
         gateway,
       });
       // 只启动用户已明确同意的插件；未同意的发现结果保持 needs-consent，不执行其 JS。
-      for (const extension of loaded.filter(isRunnable)) {
+      for (const extension of loaded.filter(grants.isRunnable)) {
         if (stopRequested) throw new Error("Extension host start was stopped.");
         await startPlugin(generation, extension);
       }
@@ -306,7 +287,7 @@ export function createExtensionsService(options: ExtensionsServiceOptions): Exte
     const extension = loaded.find((item) => item.manifest.id === input.pluginId);
     if (!extension) throw new Error("extension.not-found");
     const decision = decideGrant({
-      declared: declaredPlugin(extension),
+      declared: grants.declaredPlugin(extension),
       requested: input.grants,
       now: now(),
     });
@@ -320,7 +301,7 @@ export function createExtensionsService(options: ExtensionsServiceOptions): Exte
     records = next;
     revision += 1;
     publish();
-    if (activeGeneration > 0 && !credentials.has(input.pluginId) && isRunnable(extension)) {
+    if (activeGeneration > 0 && !credentials.has(input.pluginId) && grants.isRunnable(extension)) {
       try {
         await startPlugin(activeGeneration, extension);
       } catch (cause) {

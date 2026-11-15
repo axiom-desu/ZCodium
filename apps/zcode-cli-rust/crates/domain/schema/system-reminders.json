@@ -168,6 +168,22 @@
       "midConversation": true,
       "trailingNewline": false
     },
+    "memory_update": {
+      "channel": "current_turn",
+      "lifecycle": "per_current_turn",
+      "isMeta": true,
+      "providerVisibility": "provider_visible",
+      "midConversation": true,
+      "trailingNewline": false
+    },
+    "relevant_memory": {
+      "channel": "current_turn",
+      "lifecycle": "per_current_turn",
+      "isMeta": true,
+      "providerVisibility": "provider_visible",
+      "midConversation": true,
+      "trailingNewline": false
+    },
     "runtime_mode": {
       "channel": "current_turn",
       "lifecycle": "per_current_turn",

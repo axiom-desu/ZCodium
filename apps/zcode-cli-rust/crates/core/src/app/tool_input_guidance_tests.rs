@@ -60,6 +60,7 @@ async fn decode_is_typed_but_executor_never_revalidates_the_tool_schema() {
         hooks: None,
         model: &Model,
         automation_id: None,
+        app_control: false,
     };
     let (tx, mut rx) = tokio::sync::mpsc::channel(16);
     let sink = EventSink {

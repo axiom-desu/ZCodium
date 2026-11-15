@@ -7,6 +7,7 @@ export type {
   ExtensionContext,
   ExtensionHostClient,
   ExtensionHostError,
+  ExtensionSessionsContext,
 } from "@zcode/shared/extension-host/sdk";
 export type {
   ExtensionCapabilityTable,

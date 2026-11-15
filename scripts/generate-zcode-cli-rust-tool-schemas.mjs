@@ -19,6 +19,8 @@ import { deferredToolCallEntry } from "../apps/zcode-cli/packages/core/src/tool/
 import { toolSearchToolEntry } from "../apps/zcode-cli/packages/core/src/tool/handlers/tool-search.ts";
 import { builtInTools } from "../apps/zcode-cli/packages/core/src/tool/handlers/index.ts";
 import { LOCAL_TOOL_SEARCH_DESCRIPTION } from "../apps/zcode-cli/packages/core/src/tool/search/description.ts";
+// 3.18 App 会话控制十二工具：schema 与文案都是 TS 契约的投影（Rust 不手写第二份）。
+import { appSessionControlToolContracts } from "../packages/session-control/src/app-tool-contracts.ts";
 
 const toolSchemas = [
   ["Agent", "agent", "AgentInputJsonSchema"],
@@ -119,6 +121,16 @@ const assets = [
     },
   ],
   ["tools", "question_description.json", askUserQuestionToolEntry.metadata.description],
+  [
+    "tools",
+    "app_session_control_tools.json",
+    Object.fromEntries(
+      appSessionControlToolContracts.map((contract) => [
+        contract.name,
+        { description: contract.description, parameters: contract.inputSchema },
+      ]),
+    ),
+  ],
   [
     "tools",
     "web_descriptions.json",

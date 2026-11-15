@@ -1,6 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { exampleExtensionManifest, exampleExtensionManifestInput } from "./contract.example.js";
-import { isCapabilityId, getCapabilityDef } from "./capabilities.js";
+import {
+  appCreateSessionInputSchema,
+  appForkSessionInputSchema,
+  appInterruptSessionInputSchema,
+  appListProjectsInputSchema,
+  appListSessionsInputSchema,
+  appListSessionsResultSchema,
+  appOpenSessionInputSchema,
+  appReadSessionInputSchema,
+  appRenameSessionInputSchema,
+  appSendToSessionInputSchema,
+  appSetSessionArchivedInputSchema,
+  appSetSessionPinnedInputSchema,
+  appWaitSessionsInputSchema,
+  createSessionResultSchema,
+  forkSessionResultSchema,
+  listProjectsResultSchema,
+  mutationResultSchema,
+  openSessionResultSchema,
+  readSessionResultSchema,
+  sendToSessionResultSchema,
+  waitSessionsResultSchema,
+} from "@zcode/session-control/contracts";
+import {
+  exampleExtensionManifest,
+  exampleExtensionManifestInput,
+  exampleSessionExtensionManifest,
+  exampleSessionExtensionManifestInput,
+} from "./contract.example.js";
+import { EXTENSION_CAPABILITIES, isCapabilityId, getCapabilityDef } from "./capabilities.js";
 import {
   EXTENSION_PROTOCOL_VERSIONS,
   grantsCover,
@@ -44,6 +72,26 @@ describe("extension manifest validation", () => {
     if (!result.ok) expect(result.code).toBe("undeclared-grant");
   });
 
+  it("accepts a session write grant that covers the declared reads", () => {
+    expect(exampleSessionExtensionManifest.grants).toEqual(["sessions.write"]);
+    expect(exampleSessionExtensionManifest.protocols).toEqual({ sessions: 1 });
+    // 只声明 sessions.read 档位却不能调用会话写。
+    const readGrantWithWrite = validateExtensionManifest({
+      ...exampleSessionExtensionManifestInput,
+      grants: ["sessions.read"],
+      capabilities: ["sessions.readSession", "sessions.sendToSession"],
+    });
+    expect(readGrantWithWrite.ok).toBe(false);
+    if (!readGrantWithWrite.ok) expect(readGrantWithWrite.code).toBe("undeclared-grant");
+    // 只读档位配合四个读是合法的最小白名单。
+    const readOnly = validateExtensionManifest({
+      ...exampleSessionExtensionManifestInput,
+      grants: ["sessions.read"],
+      capabilities: ["sessions.readSession", "sessions.listSessions"],
+    });
+    expect(readOnly.ok).toBe(true);
+  });
+
   it("rejects duplicate slot ids and unsafe main paths", () => {
     const duplicate = validateExtensionManifest({
       ...exampleExtensionManifestInput,
@@ -68,10 +116,79 @@ describe("extension grants and protocols", () => {
     expect(grantsCover(["projects.read"], "projects.read")).toBe(true);
   });
 
+  it("treats sessions.write as covering sessions.read but not the reverse", () => {
+    expect(grantsCover(["sessions.write"], "sessions.read")).toBe(true);
+    expect(grantsCover(["sessions.write"], "sessions.write")).toBe(true);
+    expect(grantsCover(["sessions.read"], "sessions.write")).toBe(false);
+    expect(grantsCover(["projects.read"], "sessions.read")).toBe(false);
+    // 规范化只保留最小集合：write 存在时丢掉被它覆盖的 read。
+    expect(normalizeGrants(["sessions.read", "sessions.write"])).toEqual(["sessions.write"]);
+    expect(normalizeGrants(["projects.read", "sessions.read", "sessions.read"])).toEqual([
+      "projects.read",
+      "sessions.read",
+    ]);
+  });
+
   it("declares only known capabilities", () => {
     expect(isCapabilityId("projects.list")).toBe(true);
     expect(isCapabilityId("files.readAny")).toBe(false);
     expect(getCapabilityDef("projects.list")?.grant).toBe("projects.read");
+  });
+
+  it("exposes the twelve session facade intents with canonical app schemas", () => {
+    const sessions = Object.keys(EXTENSION_CAPABILITIES).filter((id) => id.startsWith("sessions."));
+    expect(sessions.sort()).toEqual(
+      [
+        "sessions.createSession",
+        "sessions.forkSession",
+        "sessions.interruptSession",
+        "sessions.listProjects",
+        "sessions.listSessions",
+        "sessions.openSession",
+        "sessions.readSession",
+        "sessions.renameSession",
+        "sessions.sendToSession",
+        "sessions.setSessionArchived",
+        "sessions.setSessionPinned",
+        "sessions.waitSessions",
+      ].sort(),
+    );
+    for (const id of sessions) {
+      const def = getCapabilityDef(id);
+      expect(def?.backend).toBe("service");
+      expect(def?.protocol).toBe("sessions");
+      expect(def?.grant === "sessions.read" || def?.grant === "sessions.write").toBe(true);
+    }
+    expect(getCapabilityDef("sessions.readSession")?.grant).toBe("sessions.read");
+    expect(getCapabilityDef("sessions.waitSessions")?.grant).toBe("sessions.read");
+    expect(getCapabilityDef("sessions.renameSession")?.grant).toBe("sessions.write");
+    // 写动作带幂等身份；openSession 没有 requestId。
+    expect(getCapabilityDef("sessions.renameSession")?.requestIdentity).toBe(true);
+    expect(getCapabilityDef("sessions.openSession")?.requestIdentity).toBeUndefined();
+  });
+
+  it("reuses the canonical app schemas by reference instead of copying DTOs", () => {
+    // 入参与返回必须是 session-control 的同一份 schema 对象：复制一份会让扩展面与
+    // 模型会话控制工具的字段悄悄分叉（这里比对象身份，不比“形状相似”）。
+    const shared = {
+      "sessions.listProjects": [appListProjectsInputSchema, listProjectsResultSchema],
+      "sessions.listSessions": [appListSessionsInputSchema, appListSessionsResultSchema],
+      "sessions.readSession": [appReadSessionInputSchema, readSessionResultSchema],
+      "sessions.waitSessions": [appWaitSessionsInputSchema, waitSessionsResultSchema],
+      "sessions.createSession": [appCreateSessionInputSchema, createSessionResultSchema],
+      "sessions.forkSession": [appForkSessionInputSchema, forkSessionResultSchema],
+      "sessions.sendToSession": [appSendToSessionInputSchema, sendToSessionResultSchema],
+      "sessions.interruptSession": [appInterruptSessionInputSchema, mutationResultSchema],
+      "sessions.renameSession": [appRenameSessionInputSchema, mutationResultSchema],
+      "sessions.openSession": [appOpenSessionInputSchema, openSessionResultSchema],
+      "sessions.setSessionArchived": [appSetSessionArchivedInputSchema, mutationResultSchema],
+      "sessions.setSessionPinned": [appSetSessionPinnedInputSchema, mutationResultSchema],
+    } as const;
+    for (const [id, [input, output]] of Object.entries(shared)) {
+      const def = getCapabilityDef(id);
+      expect(def?.input, `${id} input`).toBe(input);
+      expect(def?.output, `${id} output`).toBe(output);
+    }
   });
 
   it("rejects incompatible projection versions only when declared", () => {
@@ -80,6 +197,11 @@ describe("extension grants and protocols", () => {
       isProtocolCompatible({ projects: EXTENSION_PROTOCOL_VERSIONS.projects }, "projects"),
     ).toBe(true);
     expect(isProtocolCompatible({ projects: 99 }, "projects")).toBe(false);
+    expect(isProtocolCompatible({}, "sessions")).toBe(true);
+    expect(
+      isProtocolCompatible({ sessions: EXTENSION_PROTOCOL_VERSIONS.sessions }, "sessions"),
+    ).toBe(true);
+    expect(isProtocolCompatible({ sessions: 99 }, "sessions")).toBe(false);
   });
 });
 

@@ -21,6 +21,7 @@ export type {
   ExtensionContext,
   ExtensionHostClient,
   ExtensionHostError,
+  ExtensionSessionsContext,
 } from "@zcode/shared/extension-host/sdk";
 export { defineExtension } from "@zcode/shared/extension-host/sdk";
 export { validateExtensionManifest } from "@zcode/shared/extension-host";

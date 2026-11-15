@@ -24,6 +24,10 @@ import {
   sessionControlToolsByKind,
 } from "../session-control/index.js";
 import { toolSearchToolEntry } from "./tool-search.js";
+import {
+  READ_TOPIC_RESOURCE_TOOL_NAME,
+  readTopicResourceToolEntry,
+} from "./read-topic-resource.js";
 import type { AgentProfile } from "../../subagent/profile.js";
 import { readToolEntry } from "./read.js";
 import { writeToolEntry } from "./write.js";
@@ -102,6 +106,8 @@ export const builtInTools: ToolEntry[] = [
   grepToolEntry,
   webFetchToolEntry,
   webSearchToolEntry,
+  // 话题资源：只有注入 topicResourcePort（本任务有 bot 接纳事实）的运行时注册。
+  readTopicResourceToolEntry,
   // 插件发现：注册面按端口在场收口（includePluginDiscovery），与执行面的 requirePort 同门。
   searchPluginsToolEntry,
   suggestPluginInstallToolEntry,
@@ -220,6 +226,8 @@ interface RegisterBuiltInToolsOptions {
   includePluginDiscovery?: boolean;
   includeWorkflow?: boolean;
   includeAutomation?: boolean;
+  /** 只在 Host 注入话题资源端口时注册 ReadTopicResource；缺省即本执行面无 bot 接纳事实。 */
+  includeTopicResource?: boolean;
   /**
    * 动态工作流灰度门。**只有显式 false
    * 才下架** DYNAMIC_WORKFLOW_TOOL_NAMES：缺席代表调用方不参与灰度（TUI、headless、
@@ -320,6 +328,9 @@ export function registerBuiltInTools(
       continue;
     }
     if (entry.metadata.name === "js" && options.includeNodeRepl !== true) {
+      continue;
+    }
+    if (entry.metadata.name === READ_TOPIC_RESOURCE_TOOL_NAME && options.includeTopicResource !== true) {
       continue;
     }
     registry.register(resolveBuiltInToolEntryForBranch(entry, options), {

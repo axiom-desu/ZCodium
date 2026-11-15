@@ -15,9 +15,11 @@ import {
 } from "@zcode/rpc";
 import {
   createZCodeAgentConnectionScope,
+  IBotsService,
   IProjectService,
   IZCodeAgentService,
   ServiceCollection,
+  WEB_REMOTE_BOTS_ALLOWED_METHODS,
 } from "@zcode/services";
 import { createServiceLogger } from "@zcode/services/node";
 import {
@@ -88,6 +90,26 @@ function wrapWebSocket(ws: WebSocket): ISocket {
   };
 }
 
+function scopeReplayableBotsService(service: IBotsService): IBotsService {
+  const allowed = new Set<string>(WEB_REMOTE_BOTS_ALLOWED_METHODS);
+  return new Proxy(Object.create(null) as IBotsService, {
+    get: (_target, key) => {
+      if (typeof key !== "string" || key === "then") return undefined;
+      if (!allowed.has(key)) {
+        // HTTP /ws is a replayable remote client too; never expose Host resource or ingress methods.
+        return () =>
+          Promise.reject(
+            Object.assign(new Error("Remote sync is only available from Desktop"), {
+              kind: "feature_disabled" as const,
+            }),
+          );
+      }
+      const method = service[key as keyof IBotsService];
+      return typeof method === "function" ? method.bind(service) : undefined;
+    },
+  });
+}
+
 function exposeWebSocket(
   ws: WebSocket,
   services: ServiceCollection,
@@ -107,10 +129,13 @@ function exposeWebSocket(
         role: clientMode === "desktop-continuous" ? "trusted-host-relay" : "terminal-client",
       })
     : undefined;
-  services.exposeOnChannelServer(
-    server,
-    scope ? new Map([[IZCodeAgentService.channelName, scope.service]]) : new Map(),
-  );
+  const overrides = new Map<string, unknown>();
+  if (scope) overrides.set(IZCodeAgentService.channelName, scope.service);
+  if (clientMode === "web-remote-replayable") {
+    const bots = services.getOptional(IBotsService);
+    if (bots) overrides.set(IBotsService.channelName, scopeReplayableBotsService(bots));
+  }
+  services.exposeOnChannelServer(server, overrides);
   socket.onClose(() => {
     void scope?.dispose();
     rawServer.dispose();

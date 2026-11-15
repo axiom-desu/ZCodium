@@ -78,6 +78,9 @@ pub struct RuntimeOptions {
     pub legacy_tokens: u64,
     /// 启动偏好确定的 ToolSearch 模式（创建/冷恢复时固定，不写 session 配置）。
     pub tool_search_mode: crate::tool_search::Mode,
+    /// 本次激活的 App 会话控制能力（3.18）：只由 Host 偏好回包置位，
+    /// 与 `toolSearch.mode` 同一次 materialization，不落库、不跨冷恢复继承。
+    pub app_control: bool,
 }
 
 /// A transient reminder kept in the process history (never persisted).

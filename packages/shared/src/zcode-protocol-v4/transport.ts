@@ -35,6 +35,11 @@ export const hostCapabilitiesSchema = z.object({
    * `state.updated`，并且先经 `clampWorkflowRunsForLegacy` 裁到旧界。
    */
   workflowRunDeltas: z.boolean().optional(),
+  /**
+   * 本 Host 开启并转发 `v4/conversation/inputPrediction`。旧 Host 缺失等价于 false，
+   * 调用方必须用 === true 判断；字段与服务方法门禁共用同一开关判定。
+   */
+  inputPrediction: z.boolean().optional(),
 });
 export type HostCapabilities = z.infer<typeof hostCapabilitiesSchema>;
 
@@ -392,6 +397,10 @@ export const V4_METHODS = {
   // context 组成查询：只读、无状态、超时重发安全；existing-only，不冷启动会话。
   // 线格式在 ./context-composition/contract.ts（细类别 → 圆环粗类别的唯一投影）。
   conversationContextComposition: "v4/conversation/contextComposition",
+  // 输入预测（ghost hint）：只读、无状态、existing-only；会话不在内存时不冷启动。
+  // 线格式在 ./input-prediction/contract.ts。
+  conversationInputPrediction: "v4/conversation/inputPrediction",
+  conversationInputPredictionCancel: "v4/conversation/inputPrediction/cancel",
 } as const;
 export type V4Method = (typeof V4_METHODS)[keyof typeof V4_METHODS];
 

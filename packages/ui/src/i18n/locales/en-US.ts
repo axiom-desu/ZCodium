@@ -4468,6 +4468,8 @@ const enUS: Record<string, string> = {
   "settings.plugins.config.undoClearSecret": "Keep saved secret",
   "settings.plugins.config.restoreOption": "Restore inherited value",
   "settings.plugins.config.undoRestoreOption": "Keep workspace override",
+  "settings.plugins.config.secretStoredPlaceholder":
+    "Saved securely. Leave blank to keep the current value.",
   "settings.plugins.config.sensitiveUnavailable":
     "Secure storage is required before this value can be configured.",
   "settings.plugins.import.open": "Import plugins from external agents",
@@ -6968,6 +6970,11 @@ const enUS: Record<string, string> = {
   "extensions.status.pending": "Extension permissions pending",
   "extensions.status.loading": "Loading extensions…",
   "extensions.status.error": "Extensions unavailable",
+  "extensions.status.grant.projects.read": "Read the project list",
+  "extensions.status.grant.sessions.read":
+    "Read conversations in this window: list sessions, read messages, wait for runs",
+  "extensions.status.grant.sessions.write":
+    "Read and change conversations in this window: send messages, create, fork, rename, archive, pin, interrupt, and open them. Includes session read access.",
   "extensions.status.notice":
     "Extensions run third-party Node.js code with your user permissions. Enabling does not provide OS-level isolation.",
 };

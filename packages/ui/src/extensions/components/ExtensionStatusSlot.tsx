@@ -1,4 +1,5 @@
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import type { ExtensionGrant } from "@zcode/shared/extension-host";
 import {
   ExtensionStatusSlotView,
   type ExtensionStatusSlotLabels,
@@ -21,6 +22,11 @@ export function ExtensionStatusSlot({ className }: { className?: string }) {
     pending: intl.formatMessage({ id: "extensions.status.pending" }),
     loading: intl.formatMessage({ id: "extensions.status.loading" }),
     error: intl.formatMessage({ id: "extensions.status.error" }),
+    grants: {
+      "projects.read": intl.formatMessage({ id: "extensions.status.grant.projects.read" }),
+      "sessions.read": intl.formatMessage({ id: "extensions.status.grant.sessions.read" }),
+      "sessions.write": intl.formatMessage({ id: "extensions.status.grant.sessions.write" }),
+    } satisfies Record<ExtensionGrant, string>,
     notice: intl.formatMessage({ id: "extensions.status.notice" }),
   };
   return (

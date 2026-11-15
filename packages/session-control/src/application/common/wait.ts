@@ -57,7 +57,9 @@ export async function waitForOperations<R extends SessionRef, S extends Scope>(
   // timeout=0 不订阅未来变化，但授权和快照获取仍需有界；先建 deadline，失败时不留下监听器。
   const deadline = ports.deadlines.create(timeoutMs || DEFAULT_WAIT_TIMEOUT_MS);
   const controller = new AbortController();
-  const callContext = { ...ctx, signal: controller.signal };
+  // 不能用 {...ctx} 派生上下文：可信上下文是身份（App control 用 WeakMap 绑定连接事实），
+  // 复制对象会丢失绑定，使 waitSessions 对客户端类 caller 直接失败。取消改为显式传递
+  // controller.signal 给 observation port（它已经接收 signal），授权仍用原 ctx。
   const feeds = new Set<OperationFeed<R>>();
   const closed = new Map<OperationFeed<R>, Promise<void>>();
   let finished = false;
@@ -114,7 +116,7 @@ export async function waitForOperations<R extends SessionRef, S extends Scope>(
     let feed: OperationFeed<R>;
     try {
       if (finished) return;
-      feed = await ports.observations.open(callContext, operation, controller.signal, grant);
+      feed = await ports.observations.open(ctx, operation, controller.signal, grant);
     } catch (error) {
       fail(error);
       return;
@@ -198,7 +200,7 @@ export async function waitForOperations<R extends SessionRef, S extends Scope>(
       target,
       grant: await authorize(
         ports.access,
-        callContext,
+        ctx,
         "waitSessions",
         sessionScope(target.operation.session) as S,
         target.operation.session,

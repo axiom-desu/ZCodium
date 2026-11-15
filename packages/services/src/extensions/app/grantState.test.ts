@@ -52,4 +52,33 @@ describe("extension grant state", () => {
     const upgraded = { ...declared, version: "2.0.0" };
     expect(resolveGrantState(upgraded, decision.record).status).toBe("needs-consent");
   });
+
+  it("does not keep an old grant when the same version adds a session write", () => {
+    // 同版本 read → write 也是权限扩张：旧记录必须回到 needs-consent，不能被沿用。
+    const readDeclared = { ...PLUGIN, declared: ["sessions.read" as const] };
+    const decision = decideGrant({ declared: readDeclared, requested: ["sessions.read"], now: 1 });
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) return;
+    const writeDeclared = { ...readDeclared, declared: ["sessions.write" as const] };
+    const state = resolveGrantState(writeDeclared, decision.record);
+    expect(state.status).toBe("needs-consent");
+    expect(state.granted).toEqual([]);
+    // 过期对话框里的 read 请求也不能用来批准 write 声明。
+    expect(
+      decideGrant({ declared: writeDeclared, requested: ["sessions.read"], now: 2 }),
+    ).toMatchObject({ ok: false, code: "stale-approval" });
+  });
+
+  it("lets a recorded session write cover a later read-only declaration", () => {
+    const writeDeclared = { ...PLUGIN, declared: ["sessions.write" as const] };
+    const decision = decideGrant({
+      declared: writeDeclared,
+      requested: ["sessions.write"],
+      now: 1,
+    });
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) return;
+    const readDeclared = { ...writeDeclared, declared: ["sessions.read" as const] };
+    expect(resolveGrantState(readDeclared, decision.record).status).toBe("granted");
+  });
 });

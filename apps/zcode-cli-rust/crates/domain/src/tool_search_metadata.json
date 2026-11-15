@@ -153,6 +153,13 @@
     "concurrentSafe": true,
     "providerVisible": true
   },
+  "ReadTopicResource": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
   "SearchPlugins": {
     "shouldDefer": true,
     "alwaysLoad": false,

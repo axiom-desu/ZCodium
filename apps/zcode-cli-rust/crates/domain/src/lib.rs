@@ -1,5 +1,6 @@
 // ZCodium 下游修改，契约/存储/安全边界适配，来源及许可见 Rust 根 NOTICE.md
 pub mod agent_profile;
+pub mod app_control;
 pub mod attachment_upload;
 pub mod automation;
 pub mod background;
@@ -43,6 +44,7 @@ pub mod path_names;
 pub mod permission;
 pub mod persisted_output;
 pub mod plan_mode;
+pub mod plugin_discovery;
 pub mod plugin_reference;
 pub mod prompt;
 pub mod prompt_env;

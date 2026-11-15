@@ -185,9 +185,11 @@ export function createExecutionPort(options: {
         };
       }
     },
-    async sendToSession(_ctx, input) {
+    async sendToSession(ctx, input) {
       const task = await requireTask(input.session);
-      const commandId = `app-control-${input.requestId}`;
+      // 幂等键必须按调用方命名空间：create/fork 已用 appControlCommandId(callerId, requestId),
+      // 这里若只用 requestId，两个插件对同一会话的相同 requestId 会撞到同一条命令/接收回执。
+      const commandId = appControlCommandId(ctx.callerId, input.requestId);
       await deps.tasks.sendPrompt({
         taskId: task.taskId,
         traceId: commandId as never,

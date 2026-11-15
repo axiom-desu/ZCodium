@@ -115,6 +115,7 @@ import { createProtocolInteractionBroker } from "./interaction-broker.js";
 import { createProtocolAutomationPort } from "./automation-port.js";
 import { resolveAppControlEnabledBinding } from "../app-control/index.js";
 import { createProtocolBrowserControlBroker } from "./browser-control-broker.js";
+import { createProtocolTopicResourcePort } from "./topic-resource-port.js";
 import { mapComputerUseOperationEvent } from "./computer-use-operation-event.js";
 import { protocolMcpServersToRuntimeMcpConfig } from "./protocol-mcp-config.js";
 import { projectIdFromDirectory } from "../app/paths.js";
@@ -3532,6 +3533,8 @@ async function createRecord(
     },
     sessionId,
     sessionStore: context.deps.sessionStore,
+    // 话题资源：只为 bot 接纳过的任务提供；未注入即 CLI 不注册 ReadTopicResource。
+    topicResourcePort: createProtocolTopicResourcePort(context),
     traceContext,
     version: context.deps.version,
   });

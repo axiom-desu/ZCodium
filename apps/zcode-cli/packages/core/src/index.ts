@@ -14,6 +14,54 @@ export * from "./compact/index.js";
 // Memory paths
 export { resolveProjectMemoryRoot } from "./memory/project-root.js";
 
+// Project Memory semantic recall / Dream（上游 3.18.2 §5/§7）。分支常量是唯一开关。
+export {
+  ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+  resolveProjectMemoryRetrievalBranch,
+} from "./memory/project-memory-retrieval-branch.js";
+export type { ProjectMemoryRetrievalBranch } from "./memory/project-memory-retrieval-branch.js";
+export {
+  consumeSettledProjectMemoryRecall,
+  disposeProjectMemoryRecallPrefetch,
+  invalidateProjectMemoryRecallPaths,
+  resetProjectMemoryRecall,
+  startProjectMemoryRecallPrefetch,
+} from "./runtime/helpers/project-memory-recall.js";
+export {
+  consumePendingProjectMemoryUpdate,
+  runProjectMemoryDream,
+  selectProjectDreamSessions,
+} from "./runtime/helpers/project-memory-dream.js";
+export {
+  acquireDreamLock,
+  buildMemoryDreamPrompt,
+  collectDreamTouchedPaths,
+  evaluateAutoDreamTiming,
+  readDreamLastConsolidatedAt,
+  restoreDreamLockAfterFailure,
+} from "./memory/dream.js";
+export {
+  canStartMemoryRecall,
+  createMemoryRecallState,
+  filterMemorySelections,
+  findLatestMemoryRecallQuery,
+  formatMemoryManifest,
+  formatRelevantMemoryAttachment,
+  getMemoryRecallManifest,
+  isMemoryRecallQueryEligible,
+  MEMORY_RECALL_SESSION_CHARACTER_LIMIT,
+  readRecalledMemories,
+  recordRecalledMemories,
+  runMemorySelector,
+  scanMemoryManifest,
+} from "./memory/recall/index.js";
+export type {
+  MemoryManifestEntry,
+  MemoryRecallState,
+  MemorySelectorResult,
+  RecalledMemory,
+} from "./memory/recall/index.js";
+
 // Tool components
 export { ToolScheduler, defaultToolScheduler, READ_ONLY_TOOLS } from "./tool/scheduler.js";
 export type { ToolSchedule, ToolScheduleItem, ToolDependency } from "./tool/scheduler.js";
@@ -118,6 +166,9 @@ export * from "./subagent/index.js";
 
 // Runtime task components
 export * from "./runtime-task/index.js";
+
+// 手机远控输入预测 sidecar（纯函数 + 模型调用编排壳，供 bootstrap handler 使用）。
+export * from "./runtime/methods/input-prediction-sidecar.js";
 
 // Workflow components
 export * from "./workflow/definition.js";

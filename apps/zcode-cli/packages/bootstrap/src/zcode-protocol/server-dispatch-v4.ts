@@ -17,6 +17,7 @@ import {
   purgeSessionData,
 } from "./session-data/index.js";
 import { getConversationContextComposition } from "./context-composition/index.js";
+import { getConversationInputPredictionHandler } from "./input-prediction/index.js";
 import {
   UNHANDLED_REQUEST,
   requireV4Gateway,
@@ -139,6 +140,12 @@ export async function dispatchV4Request(
     // context 组成查询（existing-only，只读、无状态）：不经 v4Gateway，也不冷启动会话。
     case V4_METHODS.conversationContextComposition:
       return await getConversationContextComposition(host.context, request.params);
+    // 输入预测（ghost hint）：只读、existing-only；不进入 CommandInbox，也不冷启动会话。
+    case V4_METHODS.conversationInputPrediction:
+      return await getConversationInputPredictionHandler(host.context).handle(request.params);
+    case V4_METHODS.conversationInputPredictionCancel:
+      getConversationInputPredictionHandler(host.context).cancel(request.params);
+      return {};
     // 项目数据彻底删除（docs/superpowers/specs/2026-10-24-project-management.md「彻底删除数据」）：
     // 会话行与 cli/* 文件的唯一删除者是 CLI；Host 只是发起方。旧 CLI 未实现时返回 method-not-found。
     case V4_METHODS.sessionDataMeasure:

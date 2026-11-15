@@ -8,6 +8,7 @@ import {
 } from "@zcode/rpc";
 import {
   createServiceDescriptor,
+  IBotsService,
   IClientConfigService,
   IConversationShareService,
   IGenUiService,
@@ -148,13 +149,15 @@ describe("Host attachment authorization over real RPC", () => {
       ServiceChannels.PromptAttachmentTransfer,
     ];
     const services = new ServiceCollection();
-    // Setting/ZCodeAgent 已方法级收窄：用各自允许的既有方法验证频道仍发布，不用未来 probe 名字。
+    // Setting/ZCodeAgent/Bots 已方法级收窄：用各自允许的既有方法验证频道仍发布，不用未来 probe 名字。
     const allowedProbeMethod = (channel: string) =>
       channel === ServiceChannels.Setting
         ? "get"
         : channel === ServiceChannels.ZCodeAgent
           ? "listSessions"
-          : "probe";
+          : channel === ServiceChannels.Bots
+            ? "getStatus"
+            : "probe";
     for (const channel of channels) {
       const method = allowedProbeMethod(channel);
       const probe = vi.fn(async () => channel);
@@ -268,6 +271,53 @@ describe("Host attachment authorization over real RPC", () => {
     await expect(
       desktop.client.getChannel(IMcpSyncService.channelName).call("importMcpServers", [{}]),
     ).resolves.toEqual({ marker: "attachment", args: [{}] });
+  });
+
+  it("keeps topic-resource bytes and bot ingress callbacks off remote attachments", async () => {
+    const calls: string[] = [];
+    const method = (name: string) =>
+      vi.fn(async () => {
+        calls.push(name);
+        return name;
+      });
+    const bots = {
+      getStatus: method("getStatus"),
+      saveBot: method("saveBot"),
+      readTopicResource: method("readTopicResource"),
+      validateTopicResource: method("validateTopicResource"),
+      handleInboundMessage: method("handleInboundMessage"),
+      handleProviderCallback: method("handleProviderCallback"),
+      handleProviderCallbackResponse: method("handleProviderCallbackResponse"),
+      watchAutomationRun: method("watchAutomationRun"),
+      futureBotsMethod: method("futureBotsMethod"),
+    };
+    const services = new ServiceCollection().register(IBotsService, bots as never);
+    // 手机与浏览器 Web 都只能看到 Bot 管理与读取面；字节下载与入站回调必须留在 Host 内部。
+    for (const surface of ["mobile", "web-client"] as const) {
+      const { client } = attach(services, "web-remote-replayable", undefined, surface);
+      const channel = client.getChannel(ServiceChannels.Bots);
+      await expect(channel.call("getStatus")).resolves.toBe("getStatus");
+      await expect(channel.call("saveBot", [{}])).resolves.toBe("saveBot");
+      for (const denied of [
+        "readTopicResource",
+        "validateTopicResource",
+        "handleInboundMessage",
+        "handleProviderCallback",
+        "handleProviderCallbackResponse",
+        "watchAutomationRun",
+        "futureBotsMethod",
+      ]) {
+        await expect(channel.call(denied, [{}])).rejects.toMatchObject({
+          kind: "feature_disabled",
+        });
+      }
+    }
+    expect(calls).toEqual(["getStatus", "saveBot", "getStatus", "saveBot"]);
+    // 桌面本地 attachment 仍是完整服务面（CLI 反向 RPC 走同一 in-process 服务）。
+    const desktop = attach(services, "desktop-continuous").client;
+    await expect(
+      desktop.getChannel(ServiceChannels.Bots).call("readTopicResource", [{}]),
+    ).resolves.toBe("readTopicResource");
   });
 
   it("scopes Setting user instructions and Agent trust grants for remote attachments", async () => {

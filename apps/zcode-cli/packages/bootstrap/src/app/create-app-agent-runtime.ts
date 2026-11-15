@@ -94,6 +94,7 @@ export function createAppAgentRuntime(input: AppAgentRuntimeInput): AgentRuntime
     imageProcessorPort,
     pdfDocumentPort,
     artifactStore,
+    topicResourcePort: options.topicResourcePort,
     contextSourcePort:
       options.contextSourcePort ?? createNodeContextSourceAdapter({ env: options.env }),
     skillPort:

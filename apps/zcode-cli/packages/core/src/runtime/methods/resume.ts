@@ -35,6 +35,7 @@ import {
   restoreWorkspaceFileRewindEntries,
 } from "./workspace-checkpoint-persistence.js";
 import { mainTurnCacheHitAggregateFromMessages } from "./turn-model-step-usage.js";
+import { resetProjectMemoryRecall } from "../helpers/project-memory-recall.js";
 import {
   createTotalTokensBudgetState,
 } from "../helpers/total-tokens-budget.js";
@@ -133,6 +134,8 @@ export async function resumeFromStore(
   this.instructionRefreshReason = undefined;
   // token 预算计数器只在内存：恢复从零开始，下一条真实用户消息重新起算。
   this.totalTokensBudget = createTotalTokensBudgetState();
+  // Recall 状态是 session-local 内存事实：恢复丢弃 manifest/selector conversation/prefetch。
+  resetProjectMemoryRecall(this);
   // 冷恢复的指令公告与 prompt 快照必须在 Context 初始化前装好：
   // 初始化会用已公告正文重建前缀，并避免把当前文件内容当成首次公告重新记录。
   await loadInstructionAnnouncement(this, traceContext);

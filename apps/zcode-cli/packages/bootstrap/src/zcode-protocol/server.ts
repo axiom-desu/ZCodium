@@ -282,6 +282,8 @@ export class ZCodeProtocolAgentServer {
   /** app drain 有界结束后释放投影；即使某个 app.close 挂起也必须执行。 */
   disposeProjections(): void {
     this.context.v4Gateway?.dispose();
+    // 连接断开/进程关闭：中止全部在途预测并清空结果缓存。
+    this.context.inputPrediction?.dispose();
     this.context.sessions.clear();
   }
 
