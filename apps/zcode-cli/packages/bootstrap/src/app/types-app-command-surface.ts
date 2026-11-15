@@ -174,11 +174,15 @@ export interface ZCodeAppCommandSurface {
     reservationId: string,
     options?: { traceContext?: TraceContext },
   ): Promise<boolean>;
-  /** v4 queue 单项编辑：按 pendingInputId 替换排队输入文本（保位）。返回是否命中。 */
+  /** v4 queue 单项编辑：按 pendingInputId 替换排队输入文本与选区引用（保位）。返回是否命中。 */
   editQueueItem(
     pendingInputId: string,
     newText: string,
-    options?: { traceContext?: TraceContext },
+    options?: {
+      /** undefined = 保留原 quotes；[] = 清空。 */
+      conversationQuotes?: TurnInputIntentMetadata["conversationQuotes"];
+      traceContext?: TraceContext;
+    },
   ): Promise<boolean>;
   /** v4 queue 重排：移动 pendingInputId 到 beforePendingInputId 之前（null=队尾）。 */
   reorderQueueItem(

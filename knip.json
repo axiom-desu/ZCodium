@@ -13,7 +13,12 @@
         "scripts/zcode-cli-rust-workbench-smoke.mjs",
         "scripts/ci/fixtures/mcp-workbench.mjs",
         "scripts/ci/plugin-ui-recommendations-smoke.mjs",
-        "scripts/ci/workbench-split-guard-smoke.mjs"
+        "scripts/ci/workbench-split-guard-smoke.mjs",
+        "scripts/ci/data-sync-ui-smoke.mjs",
+        "scripts/ci/sync318-u4-project-remote-smoke.mjs",
+        "scripts/ci/locale-switcher-smoke.mjs",
+        "scripts/ci/managed-worktree-ui-smoke.mjs",
+        "scripts/ci/remote-projects-ui-smoke.mjs"
       ]
     },
     "packages/ui": {
@@ -42,7 +47,44 @@
         "src/project-sidebar/contract.ts",
         "src/project-sidebar/module.ts",
         "src/project-sidebar/contract.example.ts",
-        "test/projectSidebarView.test.ts"
+        "test/projectSidebarView.test.ts",
+        "test/fixtures/upstream-318-ui.jsx",
+        "src/settings-scope/index.ts",
+        "src/settings-scope/contract.ts",
+        "src/settings-scope/module.ts",
+        "src/settings-scope/contract.example.ts",
+        "src/settings-search/module.ts",
+        "src/settings-search/contract.example.ts",
+        "src/file-menu/module.ts",
+        "src/file-menu/contract.example.ts",
+        "src/data-sync/index.ts",
+        "src/data-sync/contract.ts",
+        "src/data-sync/module.ts",
+        "src/data-sync/contract.example.ts",
+        "src/settings-search/index.ts",
+        "src/file-menu/index.ts",
+        "src/extensions/index.ts",
+        "src/extensions/contract.ts",
+        "src/extensions/module.ts",
+        "src/extensions/contract.example.ts",
+        "test/extensionStatusSlot.test.tsx",
+        "test/personalizationSection.test.tsx",
+        "test/browserDesignInspector.test.tsx",
+        "test/browserDesignExport.test.ts",
+        "test/settingsSearch.test.tsx",
+        "test/fixtures/data-sync-ui.jsx",
+        "test/fixtures/upstream-318-project-remote-ui.jsx",
+        "test/fixtures/managed-worktree-dialog.jsx",
+        "test/fixtures/remote-projects-dialog.jsx"
+      ]
+    },
+    "packages/session-control": {
+      "entry": [
+        "src/contract.ts",
+        "src/application/cli/index.ts",
+        "src/application/app/index.ts",
+        "src/testing/index.ts",
+        "src/module.ts"
       ]
     },
     "packages/desktop": {
@@ -51,7 +93,20 @@
         "scripts/sign-windows-hook.cjs",
         "src/renderer/*.html",
         "src/renderer/cuaPermissionPanel.ts",
-        "src/renderer/src/resource-manager.tsx"
+        "src/renderer/src/resource-manager.tsx",
+        "src/main/file-open-apps/module.ts",
+        "src/main/file-open-apps/contract.example.ts",
+        "src/main/extensionHost/supervisor.ts",
+        "src/app-control-navigation/module.ts",
+        "src/app-control-navigation/index.ts",
+        "src/app-control-navigation/contract.ts",
+        "src/app-control-navigation/contract.example.ts",
+        "src/host/electronPort.ts",
+        "src/renderer/src/assets.d.ts",
+        "src/renderer/src/clientGlobals.d.ts",
+        "src/scheduler/schedulerProtocol.ts",
+        "test/extensionHostIntegration.test.ts",
+        "test/extensionHostSupervisor.test.ts"
       ]
     },
     "packages/server": {
@@ -75,7 +130,23 @@
         "src/task-facts/index.ts",
         "src/task-facts/contract.ts",
         "src/task-facts/module.ts",
-        "src/task-facts/contract.example.ts"
+        "src/task-facts/contract.example.ts",
+        "src/extensions/index.ts",
+        "src/extensions/contract.ts",
+        "src/extensions/module.ts",
+        "src/extensions/node.ts",
+        "src/extensions/contract.example.ts",
+        "src/app-control/index.ts",
+        "src/app-control/contract.ts",
+        "src/app-control/module.ts",
+        "src/app-control/contract.example.ts",
+        "src/managed-worktree-tasks/index.ts",
+        "src/managed-worktree-tasks/contract.ts",
+        "src/managed-worktree-tasks/module.ts",
+        "src/managed-worktree-tasks/contract.example.ts",
+        "src/remote-projects/index.ts",
+        "src/remote-projects/contract.ts",
+        "src/remote-projects/module.ts"
       ]
     },
     "packages/shared": {
@@ -83,7 +154,9 @@
         "src/sqlite-migrations/module.ts",
         "src/sqlite-migrations/contract.example.ts",
         "src/source-server/module.ts",
-        "src/source-server/contract.example.ts"
+        "src/source-server/contract.example.ts",
+        "src/extension-host/module.ts",
+        "src/extension-host/contract.example.ts"
       ]
     },
     "apps/zcode-cli/packages/browser-use-plugin": {
@@ -101,6 +174,14 @@
     "apps/zcode-cli/packages/superpowers-plugin": {
       "entry": [
         "skills/brainstorming/scripts/server.cjs"
+      ]
+    },
+    "packages/plugin-api": {
+      "entry": [
+        "src/index.ts",
+        "src/manifest.ts",
+        "src/module.ts",
+        "src/contract.ts"
       ]
     },
     "packages/relay": {
@@ -136,7 +217,35 @@
         "src/main.ts",
         "src/index.ts"
       ]
+    },
+    "apps/zcode-cli/packages/design-plugin": {
+      "project": [
+        "skills/design/scripts/*.mjs",
+        "test/*.test.ts"
+      ],
+      "entry": [
+        "skills/design/scripts/*.mjs",
+        "test/*.test.ts"
+      ],
+    },
+    "apps/zcode-cli/packages/node-repl-host": {
+      "project": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "scripts/**/*.mjs"
+      ],
+      "entry": [
+        "src/server.ts",
+        "src/call-ledger/contract.ts",
+        "src/call-ledger/contract.example.ts",
+        "test/**/*.test.ts"
+      ]
     }
+  },
+  "ignoreIssues": {
+    "apps/zcode-cli/packages/design-plugin/test/fixtures/frontend/tailwind.config.js": [
+      "unlisted"
+    ]
   },
   "ignore": [
     ".agents/**",

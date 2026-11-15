@@ -140,10 +140,39 @@ jobs:
           node scripts/ci/local-context-smoke.mjs
           node scripts/ci/session-local-errors-smoke.mjs
           node scripts/ci/local-onboarding-smoke.mjs
+      - name: Session control package tests
+        # 3.18.2 同步新增的 workspace 包（node:test 而非 vitest，不在上面的 vitest 清单里）。
+        if: ${{ !cancelled() && steps.agent-build.outcome == 'success' }}
+        run: pnpm test:session-control
+      - name: Settings, personalization and data sync UI regressions
+        # 4 个新 UI 套件（设置搜索、个性化指令、文件另存菜单、数据同步）+ 真实浏览器守卫。
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          pnpm vitest run --config packages/ui/vitest.config.ts packages/ui/test/settingsSearch.test.tsx packages/ui/test/personalizationSection.test.tsx packages/ui/test/fileMenu.test.ts packages/ui/test/dataSync.test.ts
+          pnpm test:upstream-318-ui
+          pnpm test:settings-search
+          pnpm test:settings-personalization
+          pnpm test:data-sync-ui
+          pnpm test:project-remote-ui
+      - name: Managed worktree, locale, extension host and browser design regressions
+        # W5/W6 managed worktree + remote project entries、L1 locale、E6 extension host、BUI5/B6 browser design。
+        # 全部按现有脚本/测试真实执行：loopback + 临时 HOME/XDG，不连真实远端。
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          pnpm test:managed-worktree
+          pnpm test:remote-projects-ui
+          pnpm test:locale-switcher
+          pnpm test:extension-host
+          pnpm test:browser-design
       - name: Side pane full view browser checks
         run: node scripts/ci/side-pane-full-view-smoke.mjs
       - name: File manager navigation browser checks
         run: node scripts/ci/file-manager-navigation-smoke.mjs
+      - name: Services safety, admission and storage regressions
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm test:services-safety
+      - name: Browser-safe services public entry
+        run: pnpm test:services-browser-entry
       - name: App shell full view guard
         run: node scripts/ci/app-shell-full-view-smoke.mjs
       - name: Web profile mobile layout and composer focus

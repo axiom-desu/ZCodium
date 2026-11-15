@@ -56,6 +56,7 @@ import {
   zcodeSessionListParamsSchema,
   zcodeSessionMessagesParamsSchema,
   zcodeSessionReadParamsSchema,
+  zcodeSessionReleaseUnderDirectoryParamsSchema,
   zcodeSessionRuntimePreferencesResultSchema,
   zcodeSessionResumeParamsSchema,
   zcodeSessionSendParamsSchema,
@@ -112,6 +113,7 @@ import { createWorkspaceZCodeApp, ensureSessionModelAvailable } from "./workspac
 import { buildAppUsageSnapshot, resolveTzOffsetMs } from "./usage-stats-builder.js";
 import { createProtocolInteractionBroker } from "./interaction-broker.js";
 import { createProtocolAutomationPort } from "./automation-port.js";
+import { resolveAppControlEnabledBinding } from "../app-control/index.js";
 import { createProtocolBrowserControlBroker } from "./browser-control-broker.js";
 import { mapComputerUseOperationEvent } from "./computer-use-operation-event.js";
 import { protocolMcpServersToRuntimeMcpConfig } from "./protocol-mcp-config.js";
@@ -122,7 +124,13 @@ import {
   projectSessionSubagents,
 } from "./subagent-session-query.js";
 import { runSessionModelConfigMutation } from "../zcode-protocol-v4/model-config-mutation.js";
-import { runWithSessionResidencyFinalization } from "./session-residency.js";
+import {
+  deactivateSessionRecord,
+  readSessionBusyState,
+  runWithSessionResidencyFinalization,
+} from "./session-residency.js";
+import { isAbsolute, relative, resolve } from "node:path";
+import { subscribeSessionContextComposition } from "./context-composition/index.js";
 import { abortMcpUiToolCallsForSession, clearMcpUiAppToolsForSession } from "./mcp-ui/index.js";
 
 const PLAN_MODE_GOAL_CONTINUATION_SKIPPED_MESSAGE = "Plan mode 下已记录 goal，但不会自动继续。";
@@ -146,6 +154,8 @@ type ZCodeSessionRecordParams = (
 ) & { taskType?: SessionTaskType };
 
 interface SessionStartupPreferences {
+  /** 只接受当前 Host 的能力响应；旧 Host 与独立 app-server 缺省关闭。 */
+  appControlEnabled?: boolean;
   additionalDirectories?: readonly string[];
   toolSearchMode: AppToolSearchMode;
   memoryEnabled: boolean;
@@ -1261,7 +1271,20 @@ async function createSessionWithProjection<T>(
   try {
     if (await context.deps.sessionStore?.getSession(sessionId))
       throw new ProtocolRequestError(-32602, "sessionId already exists");
-    return await materializeCreatedSession(context, { ...params, sessionId }, trace, project);
+    const materialize = () =>
+      materializeCreatedSession(context, { ...params, sessionId }, trace, project);
+    // 创建也归生命周期 owner：与 ensureReady/stop/restart 串行，不能出现第二个 runtime。
+    if (!context.sessionLifecycle) return await materialize();
+    let result!: T;
+    await context.sessionLifecycle.initialize(
+      sessionId,
+      async () => {
+        result = await materialize();
+      },
+      params.workspace,
+      "create",
+    );
+    return result;
   } finally {
     claims.delete(sessionId);
   }
@@ -1432,6 +1455,26 @@ interface ActivatedSessionForResume {
  * snapshot 之前的原有顺序与副作用，让 V4 随后用自己的 durable projection 水合。
  */
 export async function activateSessionForResume(
+  context: ZCodeProtocolAgentServerContext,
+  params: ZCodeSessionResumeParams,
+  options: { reusePersistedMessages?: boolean } = {},
+): Promise<ActivatedSessionForResume> {
+  if (!context.sessionLifecycle) return await activateSessionRuntime(context, params, options);
+  let activated: ActivatedSessionForResume | undefined;
+  await context.sessionLifecycle.initialize(
+    params.sessionId,
+    async () => {
+      activated = await activateSessionRuntime(context, params, options);
+    },
+    params.workspace,
+  );
+  const record = activated?.record ?? context.sessions.get(params.sessionId);
+  if (!record) throw new Error("Session runtime unavailable after initialization");
+  return activated ?? { record };
+}
+
+/** 生命周期 owner 专用的初始化执行面；外部恢复必须调用 activateSessionForResume。 */
+export async function activateSessionRuntime(
   context: ZCodeProtocolAgentServerContext,
   params: ZCodeSessionResumeParams,
   options: { reusePersistedMessages?: boolean } = {},
@@ -2321,6 +2364,8 @@ export async function registerForkedSession(
       followupMode?: "queue" | "guide";
     };
     inheritLatestTarget: boolean;
+    /** worktree fork 的子会话 workspace；缺省继承父会话。 */
+    workspace?: ZCodeWorkspaceRef;
   },
 ) {
   const parentMode = options.runtimeConfig.mode;
@@ -2340,7 +2385,7 @@ export async function registerForkedSession(
       model: optionalModelSelectionFromString(parentModel),
       ...(fork.parentSessionId ? { parentSessionId: fork.parentSessionId } : {}),
       taskType: forkedSession.taskType,
-      workspace: record.workspace,
+      workspace: options.workspace ?? record.workspace,
     },
     fork.forkedSessionId as SessionId,
     true,
@@ -2736,22 +2781,55 @@ export async function closeSession(context: ZCodeProtocolAgentServerContext, raw
     // immediate；条件关闭必须在 Agent record 上原子判断，不能依赖 renderer 的旧快照。
     return { closed: false };
   }
-  record.unsubscribe?.();
-  // 会话关闭时 abort 仍在进行的插件 UI 工具调用，登记表不留孤儿。
-  abortMcpUiToolCallsForSession(params.sessionId);
-  // App-Provided Tools：结束本会话全部待执行的页面调用并丢弃登记。
-  clearMcpUiAppToolsForSession(context, params.sessionId);
-  // 清掉本会话全部资源订阅（refcount 归零的 uri 才真正向 server 退订）。
-  await record.app.unsubscribeMcpResourcesForUi?.(`${params.sessionId}|`).catch(() => 0);
-  await record.app.close?.();
-  // v4 通道：会话关闭同时清 publisher / 订阅调度；重开会话走 snapshot 冷启动。
-  // dispose 必须先于注册表删除——gateway 靠 getSessionWorkspaceId
-  // （读 context.sessions）定位 workspace 才能推 session.removed 给 sessions-index 订阅者。
-  context.v4Gateway?.disposeSession(params.sessionId);
-  context.sessions.delete(params.sessionId);
-  // 内存 event store 随 record 释放。
-  await record.eventStore.deleteSession(params.sessionId as SessionId);
+  const close = async () => {
+    record.unsubscribe?.();
+    // 会话关闭时 abort 仍在进行的插件 UI 工具调用，登记表不留孤儿。
+    abortMcpUiToolCallsForSession(params.sessionId);
+    // App-Provided Tools：结束本会话全部待执行的页面调用并丢弃登记。
+    clearMcpUiAppToolsForSession(context, params.sessionId);
+    // 清掉本会话全部资源订阅（refcount 归零的 uri 才真正向 server 退订）。
+    await record.app.unsubscribeMcpResourcesForUi?.(`${params.sessionId}|`).catch(() => 0);
+    await record.app.close?.();
+    // v4 通道：会话关闭同时清 publisher / 订阅调度；重开会话走 snapshot 冷启动。
+    // dispose 必须先于注册表删除——gateway 靠 getSessionWorkspaceId
+    // （读 context.sessions）定位 workspace 才能推 session.removed 给 sessions-index 订阅者。
+    context.v4Gateway?.disposeSession(params.sessionId);
+    context.sessions.delete(params.sessionId);
+    // 内存 event store 随 record 释放。
+    await record.eventStore.deleteSession(params.sessionId as SessionId);
+  };
+  // 关闭走同一生命周期 owner，stop/restart 不能与 close 并行创建实例。
+  if (context.sessionLifecycle)
+    await context.sessionLifecycle.dispose(params.sessionId, close);
+  else await close();
   return { closed: true };
+}
+
+/**
+ * 卸载 cwd 位于 directory 内的全部驻留会话（Host 删除受管 worktree 前使用）。
+ * 会话选择与忙闲都以本进程驻留表为准（含 tasks-index 尚未镜像的同目录 fork 子会话）；
+ * 任一会话忙时全部不卸载。只做驻留去激活，不删除持久会话、不发 session.removed。
+ * 判断与开始卸载之间没有 await；之后的删除由 Host 租约/任务闸门拦截。
+ */
+export async function releaseSessionsUnderDirectory(
+  context: ZCodeProtocolAgentServerContext,
+  rawParams: unknown,
+) {
+  const params = parseParams(zcodeSessionReleaseUnderDirectoryParamsSchema, rawParams);
+  const sessionIds = [...context.sessions]
+    .filter(([, record]) => isPathWithin(params.directory, record.workspace.workspacePath))
+    .map(([sessionId]) => sessionId);
+  const busy = sessionIds.filter(
+    (sessionId) => readSessionBusyState(context, sessionId) === "busy",
+  );
+  if (busy.length > 0) return { released: [], busy };
+  for (const sessionId of sessionIds) await deactivateSessionRecord(context, sessionId);
+  return { released: sessionIds, busy: [] };
+}
+
+function isPathWithin(parent: string, candidate: string): boolean {
+  const rel = relative(resolve(parent), resolve(candidate));
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
 function shouldCloseSessionForExpectedPersistence(
@@ -3263,6 +3341,7 @@ async function resolveSessionStartupPreferences(
   if (source.kind === "inherit") {
     const inheritedShellSelection = source.parent.app.runtime.getSessionShellSelection();
     return {
+      appControlEnabled: source.parent.appControlEnabled === true,
       additionalDirectories: source.parent.additionalDirectories,
       toolSearchMode: source.parent.toolSearchMode,
       memoryEnabled: source.parent.memoryEnabled,
@@ -3283,6 +3362,7 @@ async function resolveSessionStartupPreferences(
     runtimePreferences.askUserQuestionAutoResolutionEnabled,
   );
   return {
+    appControlEnabled: runtimePreferences.appControlEnabled === true,
     additionalDirectories: runtimePreferences.additionalDirectories,
     toolSearchMode: runtimePreferences.toolSearchMode,
     memoryEnabled: runtimePreferences.memoryEnabled,
@@ -3311,13 +3391,21 @@ async function materializeSessionRecord(
   source: SessionStartupPreferencesSource,
   trace?: ZCodeProtocolTrace,
 ): Promise<ZCodeProtocolSessionRecord> {
-  const startupPreferences = await resolveSessionStartupPreferences(
-    context,
-    sessionId,
-    source,
-    trace,
-  );
-  return createRecord(context, params, sessionId, resume, startupPreferences, trace);
+  // 先登记跨进程驻留，再做异步物化：永久删除与新 runtime 不能越过同一个 SQLite 屏障。
+  await context.deps.sessionStore?.registerSessionRuntime?.(sessionId);
+  try {
+    const startupPreferences = await resolveSessionStartupPreferences(
+      context,
+      sessionId,
+      source,
+      trace,
+    );
+    return await createRecord(context, params, sessionId, resume, startupPreferences, trace);
+  } catch (error) {
+    // 物化失败不能留下“活跃但不存在”的运行态行。
+    await context.deps.sessionStore?.unregisterSessionRuntime?.(sessionId);
+    throw error;
+  }
 }
 
 async function createRecord(
@@ -3355,6 +3443,15 @@ async function createRecord(
   // automation-port 需要读取「本会话」的实时 model/mode/thought；record 在 app 之后才建。
   // 用可变持有者做惰性绑定：CronCreate 在 turn 中调用 create() 时 record 早已就绪。
   let ownSessionRecord: ZCodeProtocolSessionRecord | undefined;
+  const appControlBinding = resolveAppControlEnabledBinding({
+    appControlEnabled: startupPreferences.appControlEnabled === true,
+    ...(taskType ? { taskType } : {}),
+    ...(parentSessionId ? { parentSessionId } : {}),
+    requestClient: context.requestClient.bind(context),
+    sessionId,
+    workspacePath: workspace.workspacePath,
+    ...(workspace.workspaceIdentity ? { workspaceIdentity: workspace.workspaceIdentity } : {}),
+  });
   const app = await createWorkspaceZCodeApp(context, workspace, {
     env: context.deps.env,
     eventStore,
@@ -3417,6 +3514,9 @@ async function createRecord(
     resolveInitialBashShellSelection: startupPreferences.resolveInitialBashShellSelection,
     // browser-use：agent.browsers.* 经此把命令转成 interaction/browserExecute 反向请求。
     browserControlPort: createProtocolBrowserControlBroker(context),
+    // App 控制：只有 Host 能力回包开启、且本次是主根会话时才装配 App 绑定；
+    // 子代理/子会话没有绑定，独立 CLI 也不写该字段（自己走 8 个 CLI 工具）。
+    ...(appControlBinding ? { sessionControl: appControlBinding } : {}),
     // Protocol server 是受信任的 Desktop/Web/Mobile Host；灰度开关由这里显式注入，
     // 不从 workspace/project 配置或环境变量读取，关闭时仍可通过删掉该字段回滚到 hard block。
     workspaceHookTrustEnabled: true,
@@ -3438,6 +3538,7 @@ async function createRecord(
   const now = Date.now();
   const record: ZCodeProtocolSessionRecord = {
     app,
+    appControlEnabled: startupPreferences.appControlEnabled === true,
     createdAt: now,
     eventStore,
     toolSearchMode: startupPreferences.toolSearchMode,
@@ -3458,8 +3559,16 @@ async function createRecord(
   const unsubscribeSessionEvents = app.runtime.subscribeEvents({
     onSessionEvent: (event) => onSessionEvent(context, record, event),
   });
+  // context 组成变更 → 协议 tracker（修订号 owner）。record 重建（冷恢复）不重置修订号；
+  // 去激活时随同一 unsubscribe 退订，旧 runtime 的迟到通知不能写进新 record。
+  const unsubscribeContextComposition = subscribeSessionContextComposition(
+    context,
+    sessionId,
+    app.runtime,
+  );
   record.unsubscribe = () => {
     unsubscribeSessionEvents();
+    unsubscribeContextComposition();
   };
   // 绑定归属会话，供 automation-port 读取本会话实时 model/mode/thought。
   ownSessionRecord = record;
@@ -3836,7 +3945,11 @@ async function readSessionRewindEvents(
   return events.filter((event) => event.type === SessionEventType.RewindTriggered);
 }
 
-function projectActiveSessionMessages(
+/**
+ * 活动分支投影：读取侧的唯一裁剪点。rewind 账本保留被回滚的旧分支，任何
+ * 「读会话消息」的调用方都必须经过这里，否则旧分支会通过工具结果复活。
+ */
+export function projectActiveSessionMessages(
   messages: MessageWithParts[],
   session: SessionInfo | null | undefined,
   rewindEvents: readonly SessionEvent[],

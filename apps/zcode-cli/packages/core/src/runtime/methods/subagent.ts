@@ -36,6 +36,7 @@ import {
   matchesRequiredMcpServer,
 } from "../../subagent/mcp-config.js";
 import { mirrorSubagentToolEvent } from "../../subagent/tool-event-mirror.js";
+import { noteSubagentActivity } from "../../subagent/background-stall.js";
 import { isBuiltInExploreAgentProfile } from "../../subagent/profile.js";
 import {
   buildSubagentChildDisallowRules,
@@ -343,6 +344,8 @@ export function createDefaultSubagentPort(
           eventSink: {
             onSessionEvent: async (event) => {
               request.reportActivity?.();
+              // 后台 Agent 的进展事实写进 registry（唯一 owner）：停滞钟与 TaskOutput 读同一份。
+              noteSubagentActivity(this.runtimeTaskRegistry, request.agentId, event);
               // child runtime 的事件已经按 childSessionId 落库，但旧链路只把
               // 少量工具事件镜像给 parent sink，导致 UI 订阅 child topic 后只能拿到打开时
               // 的 hydration，后续流式内容不会更新。raw child event 只通知父 runtime 的

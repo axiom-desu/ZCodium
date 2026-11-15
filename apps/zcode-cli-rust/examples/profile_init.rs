@@ -24,6 +24,7 @@ async fn main() -> anyhow::Result<()> {
         PathBuf::from(std::env::var("HOME")?),
         false,
         std::env::vars().collect(),
+        None,
     );
     let start = Instant::now();
     let _ = tools.discover_skills(&cancel, &[]).await?;

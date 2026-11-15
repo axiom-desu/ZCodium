@@ -17,7 +17,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { SettingsFormTextarea } from "@/settings/SettingsFormTextarea.js";
 import { SettingsFormActions } from "@/settings/SettingsFormActions.js";
 import { PluginScopeMenu, getPluginWorkspaceKey } from "@/settings/PluginScopeMenu.js";
-import type { WorkspaceTabState } from "@/store/tabStore.js";
+import type { PluginWorkspaceTarget } from "@/lib/configDirectoryCatalog.js";
 
 interface HookFormProps {
   hook?: Hook;
@@ -27,7 +27,8 @@ interface HookFormProps {
   onCancel: () => void;
   onDelete?: (hook: Hook) => void;
   isEditing?: boolean;
-  workspaceTabs?: WorkspaceTabState[];
+  /** 当前设备上的可选项目（settings-scope `deviceTargets`）；不含其他设备的目标。 */
+  workspaceTabs?: PluginWorkspaceTarget[];
   selectedScopeKey?: string;
   onScopeKeyChange?: (scopeKey: string) => void;
 }
@@ -54,7 +55,7 @@ function HookScopeMenu({
 }: {
   disabled: boolean;
   scopeKey: string;
-  workspaceTabs: WorkspaceTabState[];
+  workspaceTabs: PluginWorkspaceTarget[];
   onChange: (scopeKey: string) => void;
 }) {
   const { intl } = useZCodeIntl();

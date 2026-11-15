@@ -50,6 +50,11 @@ interface PendingRequest<T> {
 interface ZCodeProtocolClientRequestOptions {
   /** 观测不得参与 runtime 健康判定或业务空闲续期；默认保持业务请求语义。 */
   lifecycle?: "operation" | "observation";
+  /**
+   * 单次超时是否升级为「连接不可信」并交给 owner 淘汰进程。
+   * 默认 true 保持既有业务语义；只读查询可显式关闭，避免一次短超时误杀仍存活的 CLI。
+   */
+  invalidateConnectionOnTimeout?: boolean;
   signal?: AbortSignal;
   trace?: ZCodeProtocolTrace;
   timeoutMs?: number;
@@ -145,7 +150,7 @@ export class ZCodeProtocolClient implements IDisposable {
         // process manager 仍复用这个 stale client，导致后续 plugins/list 等请求连续卡在超时窗口。
         // 超时事件把“连接已不可信”的事实上抛给 owner，由 owner 负责淘汰进程。
         // 资源查询的短超时只表示本轮无数据，不能被升级成整个 Agent 的故障回收。
-        if (!observation) {
+        if (!observation && options?.invalidateConnectionOnTimeout !== false) {
           this.requestTimeoutEmitter.fire({ method, requestId: id, timeoutMs: requestTimeoutMs });
         }
         reject(error);

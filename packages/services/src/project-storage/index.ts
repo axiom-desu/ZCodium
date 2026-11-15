@@ -12,6 +12,7 @@ import {
   migrateInitialWorkspaceOrder,
 } from "#src/project-storage/migration-order/migration.js";
 import { ProjectRepository } from "#src/project-storage/project-repository.js";
+import { RemoteProjectRepository } from "#src/project-storage/remote-repository.js";
 export { ungroupTaskGroup } from "#src/project-storage/app/task-group-move.js";
 import {
   PROJECT_MIGRATION_TABLES,
@@ -61,6 +62,47 @@ export const projectStorage: ProjectStorageContract = {
         touchedTables: TASK_RESERVATION_TABLES,
         sql: TASK_RESERVATION_SCHEMA_SQL,
       },
+      {
+        // 缓存远端项目删除态是 UI 离线投影事实，不改变远端项目真实数据或连接事实。
+        id: "0009_remote_project_deleted_cache",
+        appVersion: "3.18.2",
+        touchedTables: ["remote_project_entries"],
+        sql: "ALTER TABLE remote_project_entries ADD COLUMN cached_deleted INTEGER NOT NULL DEFAULT 0",
+        apply: (database) => {
+          const columns = new Set(
+            (
+              database.prepare("PRAGMA table_info(remote_project_entries)").all() as {
+                name: string;
+              }[]
+            ).map((column) => column.name),
+          );
+          if (!columns.has("cached_deleted"))
+            database.exec(
+              "ALTER TABLE remote_project_entries ADD COLUMN cached_deleted INTEGER NOT NULL DEFAULT 0",
+            );
+        },
+      },
+      {
+        // 受管 worktree 的任务关系：只有 tasks-index 这一列是删除闸门读取的唯一事实。
+        id: "0010_task_worktree_root",
+        appVersion: "3.18.2",
+        touchedTables: ["tasks"],
+        sql: "ALTER TABLE tasks ADD COLUMN worktree_root TEXT; CREATE INDEX IF NOT EXISTS idx_tasks_host_worktree ON tasks(host_id,worktree_root)",
+        apply: (database) => {
+          const columns = new Set(
+            (
+              database.prepare("PRAGMA table_info(tasks)").all() as {
+                name: string;
+              }[]
+            ).map((column) => column.name),
+          );
+          if (!columns.has("worktree_root"))
+            database.exec("ALTER TABLE tasks ADD COLUMN worktree_root TEXT");
+          database.exec(
+            "CREATE INDEX IF NOT EXISTS idx_tasks_host_worktree ON tasks(host_id,worktree_root)",
+          );
+        },
+      },
     ];
     const result = await sqliteMigrations.migrate(db, migrations, {
       database: "tasks_index",
@@ -73,4 +115,5 @@ export const projectStorage: ProjectStorageContract = {
   },
   admitTaskIdentity,
   repository: (db, hostId) => new ProjectRepository(db, hostId),
+  remoteProjects: (db, hostId) => new RemoteProjectRepository(db, hostId),
 };

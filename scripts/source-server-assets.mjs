@@ -7,7 +7,7 @@ const { SOURCE_SERVER_RELEASE_DESCRIPTOR_FILE_NAME, sourceServerReleaseDescripto
   await tsImport("@zcode/shared", import.meta.url);
 export const SOURCE_SERVER_DESCRIPTOR = SOURCE_SERVER_RELEASE_DESCRIPTOR_FILE_NAME;
 
-export async function containedAssetFile(directory, path) {
+async function containedAssetFile(directory, path) {
   const root = await realpath(directory);
   const file = await realpath(join(root, path));
   const rel = relative(root, file);

@@ -17,7 +17,7 @@ import {
 } from "@/settings/McpFailurePresentation.js";
 import { SettingsResourceList } from "@/settings/SettingsResourceGroup.js";
 
-import { CircleIcon, Cable, Loader2Icon, ExternalLink, Plus } from "lucide-react";
+import { CircleIcon, Cable, Loader2Icon, ExternalLink, Plus, ShieldCheck } from "lucide-react";
 
 export function McpStatusDot({
   status,
@@ -66,12 +66,16 @@ function McpServerItem({
   onEdit,
   onToggle,
   onOpenAuthorization,
+  onTrustWorkspaceServer,
+  trusting = false,
   hideMetadata,
 }: {
   server: ZCodeMcpServer;
   onEdit: (server: ZCodeMcpServer) => void;
   onToggle: (id: string, enabled: boolean) => void;
   onOpenAuthorization?: (server: ZCodeMcpServer) => void;
+  onTrustWorkspaceServer?: (server: ZCodeMcpServer) => void;
+  trusting?: boolean;
   hideMetadata: boolean;
 }) {
   const { intl } = useZCodeIntl();
@@ -101,6 +105,10 @@ function McpServerItem({
     : server.config.command
       ? `${typeLabel} · ${server.config.command} ${(server.config.args ?? []).join(" ")}`
       : typeLabel;
+
+  const workspaceTrust = server.workspaceTrust;
+  const requiresWorkspaceTrust = Boolean(workspaceTrust && !workspaceTrust.trusted);
+  const workspaceTrustSources = workspaceTrust?.sourcePaths.join(", ") ?? "";
 
   return (
     <div
@@ -133,11 +141,36 @@ function McpServerItem({
           )}
         </div>
         <div className="mt-1 truncate text-ui-sm text-foreground-subtle">{description}</div>
+        {requiresWorkspaceTrust ? (
+          <div
+            className="mt-1 flex items-start gap-1 text-ui-sm text-foreground-subtle"
+            data-mcp-workspace-trust="pending"
+            title={workspaceTrustSources}
+          >
+            <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-yellow-500" aria-hidden="true" />
+            <span>{intl.formatMessage({ id: "settings.mcp.workspaceTrust.pending" })}</span>
+          </div>
+        ) : null}
         {server.status === "error" ? (
           <McpFailurePresentation error={server.error} failureKind={server.failureKind} />
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {requiresWorkspaceTrust && onTrustWorkspaceServer ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={trusting}
+            title={workspaceTrustSources}
+            data-mcp-workspace-trust-action="trust"
+            onClick={() => onTrustWorkspaceServer(server)}
+          >
+            <ShieldCheck className="size-4" aria-hidden="true" />
+            <span className="hidden sm:inline">
+              {intl.formatMessage({ id: "settings.mcp.workspaceTrust.review" })}
+            </span>
+          </Button>
+        ) : null}
         {canOpenAuthorization && (
           <Button
             variant="link"
@@ -164,6 +197,8 @@ export function McpServerList({
   onEdit,
   onToggle,
   onOpenAuthorization,
+  onTrustWorkspaceServer,
+  trustingServerName,
   emptyTitle,
   emptyDescription,
   hideMetadata = false,
@@ -173,6 +208,8 @@ export function McpServerList({
   onEdit: (server: ZCodeMcpServer) => void;
   onToggle: (id: string, enabled: boolean) => void;
   onOpenAuthorization?: (server: ZCodeMcpServer) => void;
+  onTrustWorkspaceServer?: (server: ZCodeMcpServer) => void;
+  trustingServerName?: string | null;
   emptyTitle: string;
   emptyDescription: string;
   hideMetadata?: boolean;
@@ -206,6 +243,8 @@ export function McpServerList({
           onEdit={onEdit}
           onToggle={onToggle}
           onOpenAuthorization={onOpenAuthorization}
+          onTrustWorkspaceServer={onTrustWorkspaceServer}
+          trusting={trustingServerName === server.name}
           hideMetadata={hideMetadata}
         />
       )}

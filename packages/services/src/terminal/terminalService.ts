@@ -11,6 +11,11 @@ import {
   type TerminalFontFamilySource,
   type TerminalThemeProfile,
 } from "./terminalProfile.js";
+import {
+  isPathWithin,
+  isTerminalHoldingDirectory,
+  snapshotTerminalProcess,
+} from "./terminalCwd.js";
 import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
 
 const require = createRequire(import.meta.url);
@@ -19,6 +24,7 @@ type PtySpawnOptions = Parameters<NodePtyModule["spawn"]>[2];
 
 interface TerminalInstance {
   pty: IPty;
+  cwd: string;
   dataEmitter: Emitter<string>;
   exitEmitter: Emitter<number>;
 }
@@ -400,7 +406,7 @@ export function createTerminalService(dependencies: {
         terminals.delete(id);
       });
 
-      terminals.set(id, { pty: p, dataEmitter, exitEmitter });
+      terminals.set(id, { pty: p, cwd, dataEmitter, exitEmitter });
       return {
         id,
         shell,
@@ -422,6 +428,33 @@ export function createTerminalService(dependencies: {
 
     async dispose(params: { id: string }): Promise<void> {
       cleanupTerminal(params.id);
+    },
+
+    async listTerminalIdsUnderPath(params: { path: string }): Promise<string[]> {
+      // 只看创建时 cwd 会漏掉 `cd` 进受管目录的终端；Linux 读真实 PTY 进程/后代 cwd，
+      // 其他平台无法证明时由 isTerminalHoldingDirectory 保守视为占用（不关闭用户终端）。
+      const held: string[] = [];
+      for (const [id, terminal] of terminals) {
+        if (isPathWithin(params.path, terminal.cwd)) {
+          held.push(id);
+          continue;
+        }
+        if (process.platform !== "linux") {
+          held.push(id);
+          continue;
+        }
+        const snapshot = await snapshotTerminalProcess(terminal.pty.pid);
+        if (
+          isTerminalHoldingDirectory({
+            platform: process.platform,
+            initialCwd: terminal.cwd,
+            directory: params.path,
+            snapshot,
+          })
+        )
+          held.push(id);
+      }
+      return held;
     },
 
     onDynamicData(id: string): Event<string> {

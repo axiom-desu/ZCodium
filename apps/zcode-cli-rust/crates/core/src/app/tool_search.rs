@@ -5,104 +5,20 @@
 //! 既有提醒通道提交公告。`Glob`/`Grep` 的 `tool_search` 模块与本模块无关。
 use super::compaction::Request;
 use super::context::RunContext;
-use crate::contract::{Event, EventSink, ModelPort, ModelRequestOptions, ToolOutput, ToolPort};
+use crate::contract::{Event, EventSink, ModelPort, ModelRequestOptions, ToolPort};
 use crate::domain::tool_search::{
-    self, ANNOUNCEMENT_KEY, ANNOUNCEMENT_SOURCE, Candidate, DEFERRED_TOOL_CALL_NAME, Metadata,
-    ResolvedMode, TOOL_SEARCH_NAME, WRAPPER_KEY,
+    self, ANNOUNCEMENT_KEY, ANNOUNCEMENT_SOURCE, DEFERRED_TOOL_CALL_NAME, Metadata, ResolvedMode,
+    TOOL_SEARCH_NAME, WRAPPER_KEY,
 };
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
-/// 请求内可执行的搜索上下文（不跨请求缓存）。
-#[derive(Clone)]
-pub(super) struct SearchContext {
-    pub enabled: bool,
-    pub mode: ResolvedMode,
-    pub catalog: Vec<Candidate>,
-    pub discovered: BTreeSet<String>,
-    pub definitions: Vec<Value>,
-}
-
-impl SearchContext {
-    /// Node `toolSearchToolEntry.handler`：只读搜索，输出真实引用。
-    pub(super) fn execute(&self, args: &Value) -> Result<ToolOutput> {
-        if !self.enabled {
-            bail!("ToolSearch is not enabled for this request.");
-        }
-        args.as_object()
-            .context("ToolSearch input must be an object")?;
-        let query = args["query"]
-            .as_str()
-            .context("ToolSearch query must be a string")?;
-        // Node `z.number().optional().default(5)`：缺省补 5，null 不是数字；
-        // 小数按 `Array#slice` 向零截断，负数从末尾倒数。未知键按非 strict zod 剥掉。
-        let max_results = match args.get("max_results") {
-            None => tool_search::DEFAULT_RESULTS as i64,
-            Some(Value::Number(number)) => number
-                .as_f64()
-                .filter(|value| value.is_finite())
-                .map(|value| value.trunc() as i64)
-                .context("ToolSearch max_results must be a number")?,
-            Some(_) => bail!("ToolSearch max_results must be a number"),
-        };
-        let matches = tool_search::search_tools(query, &self.catalog, max_results);
-        let total_deferred = self.catalog.iter().filter(|tool| tool.deferred).count();
-        let data = json!({
-            "matches": matches,
-            "query": query,
-            "total_deferred_tools": total_deferred,
-        });
-        let mut output = ToolOutput::new(display_text(&matches), data);
-        if !matches.is_empty() {
-            // 原始历史保存真实引用，不保存 schema 快照或展开正文。
-            output.model_content = Some(Value::Array(
-                matches
-                    .iter()
-                    .map(|name| json!({"type": "tool_reference", "toolName": name}))
-                    .collect(),
-            ));
-        }
-        Ok(output)
-    }
-
-    /// `DeferredToolCall` 解包：只接受当前请求允许的 client-executed deferred 工具。
-    pub(super) fn unwrap_call(&self, args: &Value) -> Result<(String, Value)> {
-        if !self.enabled || self.mode != ResolvedMode::Local {
-            bail!("DeferredToolCall is not available for this request.");
-        }
-        let Some((name, input)) = tool_search::deferred_input(args) else {
-            bail!("Invalid DeferredToolCall input.");
-        };
-        let Some(candidate) = self.catalog.iter().find(|tool| tool.name == name) else {
-            bail!("Tool not available in this request: {name}");
-        };
-        if name == TOOL_SEARCH_NAME
-            || name == DEFERRED_TOOL_CALL_NAME
-            || candidate.provider_native
-            || !candidate.deferred
-        {
-            bail!(
-                "Call {name} directly using its normal tool call; DeferredToolCall only accepts deferred tools."
-            );
-        }
-        Ok((name, input))
-    }
-}
-
-fn display_text(matches: &[String]) -> String {
-    if matches.is_empty() {
-        "No matching deferred tools found".into()
-    } else {
-        format!(
-            "Found {} matching deferred tools: {}",
-            matches.len(),
-            matches.join(", ")
-        )
-    }
-}
+#[path = "tool_search_context.rs"]
+mod context;
+pub(super) use context::SearchContext;
 
 /// 一次请求的暴露决策（不依赖最终请求消息投影）。
 pub(super) struct Plan {
@@ -110,11 +26,18 @@ pub(super) struct Plan {
     pub options: ModelRequestOptions,
     pub search: Option<SearchContext>,
     pub mode: ResolvedMode,
+    /// ToolSearch 本身是否启用（`mode != off` 且存在 deferred 工具）。
+    pub enabled: bool,
     projection_tools: Vec<Value>,
     deferred: BTreeSet<String>,
 }
 
 impl Plan {
+    /// 3.18 F12：本次请求准备的真实生效模式（`auto` 解析后），不是设置值。
+    pub(super) fn session_feature(&self) -> Option<&'static str> {
+        crate::domain::session_features::from_tool_search_exposure(self.enabled, self.mode.as_str())
+    }
+
     /// 对最终请求消息做引用投影（含续写/临时提醒与前缀）。
     pub(super) fn project(&self, messages: &[Value]) -> Vec<Value> {
         tool_search::project_messages(messages, self.mode, &self.projection_tools, &self.deferred)
@@ -167,9 +90,11 @@ pub(super) fn plan(
         tools: exposure.tools,
         options: ModelRequestOptions {
             tool_search_enabled: exposure.native,
+            session_features: history.session_features.iter().cloned().collect(),
         },
         search,
         mode: exposure.mode,
+        enabled: exposure.enabled,
         projection_tools: exposure.projection_tools,
         deferred: exposure.deferred,
     })

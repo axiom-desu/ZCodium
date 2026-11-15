@@ -53,6 +53,7 @@ impl Driver for Replay {
         if let Some(failure) = spec["failure"].as_str() {
             let (kind, message) = failure.split_once(':').unwrap();
             return Err(match kind {
+                "cancelled" => Failure::cancelled(),
                 "timeout" => Failure::timeout(1000),
                 "execution" => Failure {
                     code: Some("TOOL_EXECUTION_FAILED"),
@@ -130,6 +131,7 @@ fn runner_merges_and_reports_like_node() {
                 status_message: None,
                 timeout_ms: 1000,
                 max_output_bytes: 32768,
+                on_error: super::OnErrorPolicy::Allow,
                 review: None,
             })
             .collect();
@@ -162,6 +164,52 @@ fn runner_merges_and_reports_like_node() {
             want.sort_by_key(key);
         }
         assert_eq!(json!(got), json!(want), "{}", case["name"]);
+    }
+}
+
+#[test]
+fn on_error_deny_blocks_failed_pre_tool_hook_but_not_cancellation() {
+    for (outcome, should_block) in [("execution:failed", true), ("cancelled:cancelled", false)] {
+        let hook = Registration {
+            event: HookEvent::PreToolUse,
+            matcher: None,
+            program: Program::Command {
+                command: "hook".into(),
+                shell: Shell::Unset,
+                background: false,
+            },
+            source: "config.PreToolUse.0.0".into(),
+            source_kind: SourceKind::User,
+            source_path: None,
+            plugin: None,
+            status_message: None,
+            timeout_ms: 1000,
+            max_output_bytes: 32768,
+            on_error: OnErrorPolicy::Deny,
+            review: None,
+        };
+        let mut replay = Replay {
+            specs: vec![json!({"failure":outcome})],
+            hooks: vec![hook.clone()],
+            ids: 0,
+            events: vec![],
+            spawned: vec![],
+        };
+        let result = block_on(run(
+            &mut replay,
+            &[hook],
+            &json!({"hookEventName":"PreToolUse","toolName":"Read"}),
+            &["Read".into()],
+        ));
+        assert_eq!(result.prevent_continuation, should_block);
+        assert_eq!(
+            replay.events.last().unwrap().kind,
+            if should_block {
+                Kind::Blocked
+            } else {
+                Kind::Failed
+            }
+        );
     }
 }
 

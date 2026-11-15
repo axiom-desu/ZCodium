@@ -12,14 +12,19 @@ impl HttpModel {
         key: Option<&str>,
         auth: &Value,
         origin: &RequestOrigin,
+        options: &ModelRequestOptions,
         attempt: &mut Attempt,
     ) -> Result<Headers> {
         let mut resolved = self.egress.identity().clone();
         headers::with_openrouter(&mut resolved, &self.config.base_url);
+        // 3.18 F12：`x-zcode-session-features` 由调用上下文独占，provider 静态配置同名头一律剔除。
         resolved.extend(
             self.config
                 .headers
                 .iter()
+                .filter(|(name, _)| {
+                    !name.eq_ignore_ascii_case(zcode_cli_domain::session_features::HEADER)
+                })
                 .map(|(k, v)| (k.as_str(), v.as_str())),
         );
         if let Some(extra) = auth["requestAuth"]["headers"].as_object() {
@@ -55,6 +60,10 @@ impl HttpModel {
             base_url: &self.config.base_url,
         });
         headers.extend(attribution.iter());
+        // 会话能力标签：只增不减的会话事实，不由 provider 配置决定；非法/超长整头省略。
+        if let Some(value) = options.session_features_header() {
+            headers.set(zcode_cli_domain::session_features::HEADER, value);
+        }
         attempt.request_headers =
             network_status::sanitize(resolved.iter().chain(attribution.iter()));
         if self.via_gateway {

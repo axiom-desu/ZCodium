@@ -638,6 +638,12 @@ export class TaskIndexRepo {
     return projectStorage.repository(this.getDatabase(), this.projectMigration?.hostId);
   }
 
+  /** 远端项目入口 intent 与项目同库同 owner；不创建第二个 entry 数据库。 */
+  async getRemoteProjectRepository() {
+    await this.ensureReady();
+    return projectStorage.remoteProjects(this.getDatabase(), this.projectMigration?.hostId);
+  }
+
   /**
    * 存量回填（幂等，每次 bootstrap 自愈）：打点上线前产生的 off-peak 会话行没有
    * offPeakTaskId。off_peak_tasks 与 tasks 同库（tasks-index.sqlite），按 session 绑定

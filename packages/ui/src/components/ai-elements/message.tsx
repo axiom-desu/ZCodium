@@ -71,7 +71,7 @@ import {
 import { STREAMDOWN_CONTROLS } from "@/components/ai-elements/streamdown-controls.js";
 import { resolveMessageLinkOpenTarget } from "@/embeddedBrowserHelpers.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
-import { persistLastSelectedEditorId, readLastSelectedEditorId } from "@/lib/editorPreference.js";
+import { persistLastSelectedEditorId } from "@/lib/editorPreference.js";
 import {
   FileDisplayIcon,
   FOLDER_FILE_ICON_SRC,
@@ -91,9 +91,11 @@ import type { CodePreviewSettings } from "@/lib/codePreviewSettings.js";
 import { DEFAULT_CODE_PREVIEW_SETTINGS } from "@/lib/codePreviewSettings.js";
 import { useZCodeStore } from "@/store/StoreProvider.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+import { toast } from "@/components/ui/toast.js";
 import { useOptionalPlatform, usePlatform } from "@/hooks/usePlatform.js";
 import { useFileContextActions } from "@/hooks/useFileContextActions.js";
 import { useWorkspaceOpenInEditorTarget } from "@/hooks/useWorkspaceOpenInEditorTarget.js";
+import { FileApplicationChoices, FileSaveAsMenuItem } from "@/file-menu/index.js";
 import { useOptionalServices } from "@/hooks/useServices.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
@@ -1137,13 +1139,6 @@ function MessageFileLink({ className, fileIconSrc, fileLink, onOpen }: MessageFi
           }).availableEditors,
     [editors, openInEditorContext],
   );
-  const selectedEditor = useMemo(() => {
-    const selectedEditorId = readLastSelectedEditorId();
-    return (
-      sortedEditors.find((editor) => editor.id === selectedEditorId) ?? sortedEditors[0] ?? null
-    );
-  }, [sortedEditors]);
-
   const loadEditors = useCallback(async () => {
     if (editorsLoaded || loadingEditors) {
       return;
@@ -1202,6 +1197,25 @@ function MessageFileLink({ className, fileIconSrc, fileLink, onOpen }: MessageFi
       });
   };
 
+  const openWithDefaultApp = () => {
+    if (
+      openInEditorContext.isRemoteWorkspace ||
+      !platform.canOpenLocalFiles ||
+      !platform.openExternalFile
+    ) {
+      return;
+    }
+    const filePath = fileLink.path;
+    void platform.openExternalFile(filePath).then((result) => {
+      if (result.success) return;
+      logger.warn("[MessageResponse] 默认应用打开 markdown 文件链接失败", {
+        path: filePath,
+        error: result.error ?? "unknown-error",
+      });
+      toast(intl.formatMessage({ id: "chat.previewCards.openFileFailed" }));
+    });
+  };
+
   return (
     <ContextMenu onOpenChange={(open) => open && void loadEditors()}>
       <ContextMenuTrigger asChild>
@@ -1219,20 +1233,25 @@ function MessageFileLink({ className, fileIconSrc, fileLink, onOpen }: MessageFi
           {intl.formatMessage({ id: "common.open" })}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        {selectedEditor ? (
-          sortedEditors.map((editor) => (
-            <ContextMenuItem key={editor.id} onSelect={() => handleOpenInEditor(editor)}>
-              <img src={editor.iconDataUrl} alt={editor.name} className="size-4 shrink-0" />
-              <span>{editor.name}</span>
-            </ContextMenuItem>
-          ))
-        ) : (
-          <ContextMenuItem disabled>
-            {intl.formatMessage({
-              id: loadingEditors ? "common.loading" : "chat.previewCards.noOpenApps",
-            })}
-          </ContextMenuItem>
-        )}
+        {/* 打开方式/另存为共用 file-menu 公开组件；消息链接的编辑器解析仍走原路径。 */}
+        <FileApplicationChoices
+          variant="context"
+          applications={sortedEditors}
+          loading={loadingEditors}
+          onSelect={(application) => void handleOpenInEditor(application)}
+          onOpenDefault={
+            openInEditorContext.isRemoteWorkspace || !platform.canOpenLocalFiles
+              ? undefined
+              : openWithDefaultApp
+          }
+        />
+        <FileSaveAsMenuItem
+          variant="context"
+          path={fileLink.path}
+          workspacePath={fileLink.workspacePath}
+          workspaceIdentity={fileLink.workspaceIdentity}
+          workspaceRemoteSessionId={fileLink.workspaceRemoteSessionId}
+        />
         <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() => void fileActions.copyAbsolutePath({ path: fileLink.path })}

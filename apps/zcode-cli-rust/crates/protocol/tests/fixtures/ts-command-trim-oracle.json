@@ -1,6 +1,6 @@
 {
-  "uniquePaths": 63,
-  "leafBranches": 70,
+  "uniquePaths": 65,
+  "leafBranches": 72,
   "leaves": [
     {
       "path": "envelope.baseLogEpoch",
@@ -1229,6 +1229,78 @@
     },
     {
       "path": "forkAssistant.target.entityId",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "forkAssistant.targetCwd.cwd",
+      "branch": 1,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "x-zcode-trim": true
+      },
+      "cases": [
+        {
+          "raw": " ﻿AbC  ",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " \t﻿ \n ",
+          "ok": false
+        },
+        {
+          "raw": "a  B",
+          "ok": true,
+          "parsed": "a  B"
+        },
+        {
+          "raw": "AbC",
+          "ok": true,
+          "parsed": "AbC"
+        },
+        {
+          "raw": " AbC﻿",
+          "ok": true,
+          "parsed": "AbC"
+        }
+      ]
+    },
+    {
+      "path": "forkAssistant.targetCwd.childSessionId",
       "branch": 1,
       "schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

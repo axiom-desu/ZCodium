@@ -23,7 +23,7 @@ export interface SourceServerReleaseFetchResponse {
 /** 生产走全局 fetch；测试注入 loopback fixture fetch。 */
 export type SourceServerReleaseFetch = (url: string) => Promise<SourceServerReleaseFetchResponse>;
 
-export interface SourceServerReleaseRuntimeOptions {
+interface SourceServerReleaseRuntimeOptions {
   expectedVersion: string;
   /** Main 已按开发/安装布局解析的资产根目录；Host 不猜 resourcesPath。 */
   bundledRemoteAssetsDir?: string;

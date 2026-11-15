@@ -37,25 +37,29 @@ Goal: Gain a comprehensive understanding of the user's request by reading throug
    - If using multiple agents: Provide each agent with a specific search focus or area to explore. Example: One agent searches for existing implementations, another explores related components, a third investigating testing patterns
 
 ### Phase 2: Design
-Goal: Design an implementation approach.
+Goal: Design an implementation approach based on the user's intent and your exploration results from Phase 1.
 
-**Guidelines:**
-- Use the context gathered in Phase 1, including relevant files and code paths.
-- Account for the user's requirements and constraints.
-- Produce a concrete implementation plan that is detailed enough to execute.
-- Consider useful perspectives for the task type:
-  - New feature: simplicity vs performance vs maintainability
-  - Bug fix: root cause vs workaround vs prevention
-  - Refactoring: minimal change vs clean architecture
+- Provide comprehensive background context from Phase 1 exploration including filenames and code path traces
+- Describe requirements and constraints
+- Produce a detailed implementation plan
 
 ### Phase 3: Review
 Goal: Review the plan(s) from Phase 2 and ensure alignment with the user's intentions.
-1. Read the critical files to deepen your understanding
+1. Read the critical files you identified during exploration to deepen your understanding
 2. Ensure that the plans align with the user's original request
 3. Use ${ASK_USER_QUESTION_TOOL_NAME} to clarify any remaining questions with the user
 
-### Phase 4: Call ${EXIT_PLAN_MODE_TOOL_NAME}
-At the very end of your turn, once you have asked the user questions and are happy with your final plan - you should always call ${EXIT_PLAN_MODE_TOOL_NAME} to indicate to the user that you are done planning.
+### Phase 4: Final Plan
+Goal: Prepare your complete final plan for the \`plan\` parameter of ${EXIT_PLAN_MODE_TOOL_NAME}.
+- Begin with a **Context** section: explain why this change is being made — the problem or need it addresses, what prompted it, and the intended outcome
+- Include only your recommended approach, not all alternatives
+- Ensure that the final plan is concise enough to scan quickly, but detailed enough to execute effectively
+- Name the critical files to be modified. For changes that repeat a pattern across many files, describe the pattern once and list a few representative paths — do not enumerate every file or line number
+- Reference existing functions and utilities you found that should be reused, with their file paths
+- Include a verification section describing how to test the changes end-to-end (run the code, use MCP tools, run tests)
+
+### Phase 5: Call ${EXIT_PLAN_MODE_TOOL_NAME}
+At the very end of your turn, once you have asked the user questions and are happy with your final plan - you should always call ${EXIT_PLAN_MODE_TOOL_NAME} to indicate to the user that you are done planning. When calling ${EXIT_PLAN_MODE_TOOL_NAME}, pass the complete final plan in its \`plan\` parameter.
 This is critical - your turn should only end with either using the ${ASK_USER_QUESTION_TOOL_NAME} tool OR calling ${EXIT_PLAN_MODE_TOOL_NAME}. Do not stop unless it's for these 2 reasons
 
 **Important:** Use ${ASK_USER_QUESTION_TOOL_NAME} ONLY to clarify requirements or choose between approaches. Use ${EXIT_PLAN_MODE_TOOL_NAME} to request plan approval. Do NOT ask about plan approval in any other way - no text questions, no AskUserQuestion. Phrases like "Is this plan okay?", "Should I proceed?", "How does this plan look?", "Any changes before we start?", or similar MUST use ${EXIT_PLAN_MODE_TOOL_NAME}.
@@ -69,7 +73,7 @@ const PLAN_MODE_FULL_REMINDER = [
 ];
 
 const PLAN_MODE_SPARSE_REMINDER = [
-  `Plan mode still active (see full instructions earlier in conversation). Read-only. Follow 4-phase workflow. End turns with ${ASK_USER_QUESTION_TOOL_NAME} (for clarifications) or ${EXIT_PLAN_MODE_TOOL_NAME} (for plan approval). Never ask about plan approval via text or AskUserQuestion.`,
+  `Plan mode still active (see full instructions earlier in conversation). Read-only. Follow 5-phase workflow. End turns with ${ASK_USER_QUESTION_TOOL_NAME} (for clarifications) or ${EXIT_PLAN_MODE_TOOL_NAME} (for plan approval). Never ask about plan approval via text or AskUserQuestion.`,
 ];
 
 const PLAN_MODE_EXIT_REMINDER = [
@@ -113,6 +117,12 @@ export function runtimeMetadataForSyntheticUserMessageSource(
   }
   if (source === "tool_search_announcement") {
     return systemReminderRuntimeMetadata("tool_search_announcement");
+  }
+  if (source === "context_prefix") {
+    return systemReminderRuntimeMetadata("context_prefix");
+  }
+  if (source === "environment_announcement") {
+    return systemReminderRuntimeMetadata("environment_announcement");
   }
   if (source === "plugin_reference") {
     return systemReminderRuntimeMetadata("plugin_reference");

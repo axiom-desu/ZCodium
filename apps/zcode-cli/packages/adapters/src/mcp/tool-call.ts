@@ -11,6 +11,8 @@ import type { McpClient } from "./adapter-types.js";
 
 export interface McpToolCallHost {
   readonly activeCallTraces: Map<string, McpElicitationTrace>;
+  /** 当前工具调用的取消信号；server 提问（elicitation）跟随该调用一起取消。 */
+  readonly activeCallSignals: Map<string, AbortSignal>;
   readonly logger?: Logger;
 }
 
@@ -28,10 +30,12 @@ export async function callToolOnClient(
     ...(request.trace?.turnId ? { turnId: String(request.trace.turnId) } : {}),
     ...(request.trace?.traceId ? { traceId: String(request.trace.traceId) } : {}),
   });
+  if (signal) host.activeCallSignals.set(request.serverName, signal);
   try {
     return await callToolOnClientInner(host, client, request, timeoutMs, signal, onProgress);
   } finally {
     host.activeCallTraces.delete(request.serverName);
+    host.activeCallSignals.delete(request.serverName);
   }
 }
 

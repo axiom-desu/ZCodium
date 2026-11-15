@@ -259,6 +259,10 @@ export interface V4CommandCoreHost {
       goalBoundary: StableForkGoalBoundaryMetadata;
       sourceCommandId: string;
       revisionAtDecision: number;
+      /** Host 预分配的子会话 ID；缺省由 CLI 生成。 */
+      forkedSessionId?: string;
+      /** 受管 worktree 子会话 cwd；缺省 = 父会话目录。 */
+      targetCwd?: { cwd: string };
     },
   ): Promise<{ forkedSessionId: string }>;
   /** @deprecated 仅旧宿主结构兼容；新 editUserQuery 永不调用，显式 forkAssistant 不受影响。 */

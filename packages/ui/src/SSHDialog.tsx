@@ -42,6 +42,13 @@ import {
   shouldAutoAdvanceRemoteCompletion,
 } from "@/lib/sourceServerManagement.js";
 import {
+  getRemoteServiceLifecycleDescription,
+  getSourceServerDowngradeConfirmation,
+  getSourceServerForceUpdateDescription,
+  readSourceServerRunningTasksForConfirmation,
+  runSourceServerUpdate,
+} from "@/lib/sourceServerUpdateAction.js";
+import {
   buildRemoteTarget,
   getRemoteWizardStepCopy,
   withDefaultRemoteResourcePackages,
@@ -616,6 +623,151 @@ export function RemoteConnectionDialog({
     [applySourceSnapshot, confirmDialog, intl, sourceManagement],
   );
 
+  /**
+   * 停止 / 重启远端服务：先按设备读取运行中任务，再弹危险确认，确认后交给 Host。
+   * 版本未知或低于生命周期合同时 Host 也会 typed 拒绝；UI 只做显式禁用，不把缺方法当成功。
+   */
+  const runSavedProfileLifecycle = useCallback(
+    async (row: SourceProfileRow, action: "stop" | "restart") => {
+      if (!sourceManagement || !row.sourceServerId) return;
+      setBusySourceProfileId(row.profileId);
+      setError("");
+      try {
+        const runningTasks = await readSourceServerRunningTasksForConfirmation(
+          sourceManagement,
+          row.sourceServerId,
+        );
+        const confirmed = await confirmDialog({
+          title: intl.formatMessage({
+            id:
+              action === "restart" ? "source.lifecycle.restartTitle" : "source.lifecycle.stopTitle",
+          }),
+          description: getRemoteServiceLifecycleDescription({
+            action,
+            runningTasks,
+            startupAutoReconnect: false,
+            formatMessage: (id) => intl.formatMessage({ id }),
+          }),
+          confirmLabel: intl.formatMessage({
+            id: action === "restart" ? "source.lifecycle.restart" : "source.lifecycle.stop",
+          }),
+          cancelLabel: intl.formatMessage({ id: "common.cancel" }),
+          confirmVariant: "destructive",
+        });
+        if (!confirmed) return;
+        const next =
+          action === "restart"
+            ? await sourceManagement.restartSource(row.sourceServerId)
+            : await sourceManagement.stopSource(row.sourceServerId);
+        applySourceSnapshot(next);
+        toast(
+          intl.formatMessage(
+            {
+              id:
+                action === "restart"
+                  ? "source.lifecycle.restartCompleted"
+                  : "source.lifecycle.stopCompleted",
+            },
+            { source: row.displayName },
+          ),
+          { variant: "info" },
+        );
+      } catch (lifecycleError) {
+        setError(getErrorMessage(lifecycleError));
+      } finally {
+        setBusySourceProfileId(null);
+      }
+    },
+    [applySourceSnapshot, confirmDialog, intl, sourceManagement],
+  );
+
+  const handleRestartSavedProfile = useCallback(
+    (row: SourceProfileRow) => runSavedProfileLifecycle(row, "restart"),
+    [runSavedProfileLifecycle],
+  );
+  const handleStopSavedProfile = useCallback(
+    (row: SourceProfileRow) => runSavedProfileLifecycle(row, "stop"),
+    [runSavedProfileLifecycle],
+  );
+
+  /** 只有本机阶段可取消；服务返回 canceled:false 时不提示已取消。 */
+  const handleCancelSavedProfileUpdate = useCallback(
+    async (row: SourceProfileRow) => {
+      if (!sourceManagement) return;
+      setBusySourceProfileId(row.profileId);
+      try {
+        const result = await sourceManagement.cancelSourceUpdate(row.profileId);
+        applySourceSnapshot(await sourceManagement.getSnapshot());
+        toast(
+          intl.formatMessage({
+            id: result.canceled
+              ? "source.lifecycle.updateCanceled"
+              : "source.lifecycle.updateNotCanceled",
+          }),
+          { variant: result.canceled ? "info" : "warning" },
+        );
+      } catch (cancelError) {
+        setError(getErrorMessage(cancelError));
+      } finally {
+        setBusySourceProfileId(null);
+      }
+    },
+    [applySourceSnapshot, intl, sourceManagement],
+  );
+
+  /** 显式降级：版本取 Host 快照，Renderer 不自行比较；确认后才带 allowDowngrade。 */
+  const handleDowngradeSavedProfile = useCallback(
+    async (row: SourceProfileRow) => {
+      if (!sourceManagement) return;
+      const confirmed = await confirmDialog(
+        getSourceServerDowngradeConfirmation(
+          {
+            ...(row.currentVersion ? { currentVersion: row.currentVersion } : {}),
+            ...(row.availableVersion ? { availableVersion: row.availableVersion } : {}),
+          },
+          intl.formatMessage,
+        ),
+      );
+      if (!confirmed) return;
+      setBusySourceProfileId(row.profileId);
+      setError("");
+      try {
+        // 降级仍走同一更新链：先受运行中任务 guard，用户确认后才发 force；不做旁路写入。
+        const next = await runSourceServerUpdate({
+          management: sourceManagement,
+          profileId: row.profileId,
+          allowDowngrade: true,
+          confirmForce: async () =>
+            confirmDialog({
+              title: intl.formatMessage({ id: "source.lifecycle.forceDescription" }),
+              description: await getSourceServerForceUpdateDescription(
+                sourceManagement,
+                row.profileId,
+                (id) => intl.formatMessage({ id }),
+              ),
+              confirmLabel: intl.formatMessage({ id: "source.lifecycle.forceConfirm" }),
+              cancelLabel: intl.formatMessage({ id: "common.cancel" }),
+              confirmVariant: "destructive",
+            }),
+        });
+        if (!next) return;
+        applySourceSnapshot(next);
+        toast(
+          intl.formatMessage(
+            { id: "source.lifecycle.downgradeCompleted" },
+            { version: row.currentVersion?.replace(/^v/iu, "") ?? "" },
+          ),
+          { variant: "info" },
+        );
+      } catch (downgradeError) {
+        setError(getErrorMessage(downgradeError));
+      } finally {
+        setBusySourceProfileId(null);
+      }
+    },
+    [applySourceSnapshot, confirmDialog, intl, sourceManagement],
+  );
+
   const handleBackToConnection = useCallback(async () => {
     if (!connectedSessionId) {
       return;
@@ -814,6 +966,18 @@ export function RemoteConnectionDialog({
                     }}
                     onRemove={(row) => {
                       void handleRemoveSavedProfile(row);
+                    }}
+                    onStop={(row) => {
+                      void handleStopSavedProfile(row);
+                    }}
+                    onRestart={(row) => {
+                      void handleRestartSavedProfile(row);
+                    }}
+                    onCancelUpdate={(row) => {
+                      void handleCancelSavedProfileUpdate(row);
+                    }}
+                    onDowngrade={(row) => {
+                      void handleDowngradeSavedProfile(row);
                     }}
                   />
                 ) : null}

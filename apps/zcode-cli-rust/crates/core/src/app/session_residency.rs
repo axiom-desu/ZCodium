@@ -10,6 +10,22 @@ impl Engine {
         self.access_seq += 1;
         self.session_access.insert(id.into(), self.access_seq);
     }
+    /// 本进程已加载的会话是否在忙：与 resident 淘汰保护同一组事实，不另建 busy 权威。
+    pub(super) fn session_busy(&self, id: &str) -> bool {
+        let Some(s) = self.sessions.get(id) else {
+            return false;
+        };
+        self.active.contains_key(id)
+            || s.phase == crate::domain::execution::Phase::Draft
+            || !s.queue.is_empty()
+            || !s.pending.is_empty()
+            || !s.mailbox.is_empty()
+            || s.children
+                .values()
+                .any(|task| task.running() || !task.notified)
+            || s.background.values().any(|task| task.status == "running")
+            || s.runtime.legacy.kind().is_some()
+    }
     pub(super) async fn cached_ack(&mut self, key: &str) -> Result<Option<Value>> {
         if let Some(ack) = self.acks.get(key) {
             return Ok(Some(ack.clone()));
@@ -114,6 +130,7 @@ impl Engine {
             bytes = bytes.saturating_sub(size);
             self.tools.evict_session(&id).await?;
             self.sessions.remove(&id);
+            self.store.session_presence_unregister(&id).await?;
             self.hooks.sessions.remove(&id);
             self.hooks.without.remove(&id);
             self.hooks.plugins.remove(&id);

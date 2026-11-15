@@ -5,7 +5,10 @@ Renderer 模块，层序 `domain → app → adapters → components`；公开�
 - 窗口唯一页面管理器统一管理 MCP 与 Gen UI 的容量和回收；`createPage` 持有 MCP controller、AppBridge、独立 workspace/session lease、通知 feed 和内存快照。卡片、侧栏只登记锚点。内联页面位于滚动容器内部，侧栏单独定位；原子移动保留同一 guest，不重读资源、不重新握手。解绑必须在 DOM 卸载前同步移入隐藏承载区。
 - 逻辑键包含 workspace identity（本地 fallback 为路径）、session、plugin、server、resource 和逻辑视图。surface 显式共享；普通工具只按明确的 widgetSessionId 与相同权限范围共享，否则按 toolCallId 隔离。禁止同回合同资源推断合并。
 - UI 不接触插件 HTML、数据库和连接凭据。经 `IPluginUiBridgeService` 获取句柄，平台端口只校验 sandboxId/initId；请求与 live 通知绑定 Agent runtimeId/generation/token/appIdentity。
-- 官方 ext-apps 2.0.0 每活页面一个 AppBridge；握手期限 15 秒。保留 `experimental["zcode/…"]` 的 widgetState、resourceSubscribe、surface、CSP 扩展；不模拟完整 OpenAI API。
+- 官方 ext-apps 2.0.0 每活页面一个 AppBridge；握手期限 15 秒。保留 `experimental["zcode/…"]` 的 widgetState、resourceSubscribe、surface、CSP、nestedFrames 扩展；不模拟完整 OpenAI API。
+- owner 准入后立即启动；能力握手前临时提供非零承载面让 guest 首次挂载，握手后只有资源 `_meta.ui.backgroundRetention: true` 的声明页保留 inert 后台表面。只有声明页申请目标 guest 活动。可见期、模型/App 工具、sampling 与交付真实工作的 `_meta["zcode/activity"]: true` 更新活跃时间；空轮询、绘制与重复结果不续期。新工具结果可恢复已回收页面，重复投影不能复活它。
+- 保留策略是窗口级的软阈值：后台声明页超过 4 个时，按最久未活跃优先回收 30 分钟未活跃且不忙的页面；回收前先预占名额，避免并发淘汰到 4 以下；没有可回收候选时等待下一次状态事件，不用零延时重试。未声明的页面继续走既有五分钟/容量回收，30 任务/64 活页面的准入不变。
+- 嵌套 frame：只有 shell 主 frame 或插件 frame 自身（`zcode-sandbox:` 文档）的跳文档导航才是重载；插件文档内部的子 frame（srcdoc / about:blank / 声明的 frameDomains）导航不 dispose 实例。层级由 Main 的 guest 策略判定，renderer 仅按 URL 兜底；旧宿主未宣告 `nestedFrames` 时插件自行降级。
 - App-provided tools 在 initialized 后发现与登记；认领后用官方 SDK AbortSignal 执行，模型取消沿 live-only delta 到页面。callId 去重，终态结果不可再写入。页面调用 MCP 的目标由宿主固定，复用 Agent 的权限和审批路径，原始结果直接返回。
 - 页面 `availableDisplayModes` 是硬约束；inline/fullscreen 对应内联/侧栏，pip 保持当前模式。高度默认 240px、范围 [80,1200]，hostContext 只回传 width/maxHeight，避免高度回环。布局按帧合并。
 - widgetState 仅接受页面主动提交，唯一内存 store 按逻辑键隔离；重建时在 `hostContext["zcode/widgetState"]` 下发。切位置不复制；手动重试、任务淘汰、来源撤销清除；应用重启为空。

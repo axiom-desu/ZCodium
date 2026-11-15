@@ -348,6 +348,8 @@ interface ConversationTimelineProps {
   selectionActions?: {
     enabled: boolean;
     sideActionDisabled?: boolean;
+    /** 当前投影代际；选区捕获时记入引用，发送前准入据此判定锚点是否还属于同一代。 */
+    logEpoch?: string;
     onAddToCurrentTask: (reference: ConversationSelectionReference) => void;
     onAskInSideChat: (reference: ConversationSelectionReference) => void;
   };
@@ -1802,6 +1804,7 @@ function ConversationTimelineImpl({
           rootRef={scrollRef}
           rows={rows}
           sourceSessionId={sessionKey}
+          sourceLogEpoch={selectionActions.logEpoch}
           enabled={selectionActions.enabled}
           sideActionDisabled={selectionActions.sideActionDisabled}
           onAddToCurrentTask={selectionActions.onAddToCurrentTask}

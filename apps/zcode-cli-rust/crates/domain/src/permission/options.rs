@@ -32,6 +32,12 @@ fn data() -> &'static Data {
 
 /// Static capability of a built-in tool as Node declares it.
 pub fn tool_capability(name: &str) -> Option<&'static ToolCapability> {
+    let name = if name == crate::tool_search::LOCAL_TOOL_SEARCH_NAME {
+        crate::tool_search::TOOL_SEARCH_NAME
+    } else {
+        name
+    };
+    // 生成表是唯一声明来源（含 3.18 CronPauseSelf）；不在 dispatcher 里另写兜底能力。
     data().tools.get(name)
 }
 

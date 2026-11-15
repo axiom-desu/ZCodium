@@ -47,6 +47,7 @@ export type ContextSource =
   | "session_guidance" // 当前可用内置能力指导
   | "output_style" // 输出风格
   | "context_management" // 长上下文管理提示
+  | "total_tokens" // 固定的 token 预算行
   | "desktop_context"; // ZCode Desktop 渲染与交互协议
 
 export type ContextInjectionTarget = "system" | "meta_user";
@@ -68,6 +69,29 @@ export interface ContextSection {
   tokens: number; // 估算 token 数
   content: string; // 完整内容
   preview: string; // 前 100 字符预览
+  /** request_user_context 的逐文件块；指令变化公告按它比较。 */
+  instructionFiles?: InstructionFile[];
+}
+
+/** 指令公告里的一个文件块：`Contents of <path> (<type>):`、空行、正文（已 trim）。 */
+export interface InstructionFile {
+  path: string;
+  type: string;
+  body: string;
+  /** body 的 sha256；构建文件时算一次（createInstructionFile），请求前的比较直接用它。 */
+  hash: string;
+}
+
+export type InstructionRefreshReason = "session_start" | "compaction";
+
+/**
+ * 已公告的指令文件记录（不发给 provider）。
+ * 没有 reason 的是完整公告；有 reason 的是增量，files 只含变化或新增的文件。
+ */
+export interface InstructionAnnouncement {
+  files: { path: string; type: string; hash: string }[];
+  removed?: string[];
+  reason?: InstructionRefreshReason;
 }
 
 export type ContextMetaUserAttachmentSource = "skills_listing" | "context_prefix";
@@ -75,6 +99,8 @@ export type ContextMetaUserAttachmentSource = "skills_listing" | "context_prefix
 export interface ContextMetaUserAttachment {
   source: ContextMetaUserAttachmentSource;
   content: string;
+  /** 只有 context_prefix 有：组成 content 的指令文件。 */
+  files?: InstructionFile[];
 }
 
 // -----------------------------------------------
@@ -128,6 +154,11 @@ export interface ContextBuilderConfig {
   outputStyle?: OutputStylePromptConfig;
   compact?: AutoCompactPolicyConfig;
   guidanceToolNames?: readonly string[];
+  /**
+   * 已公告的完整指令正文（runtime 冻结字节）。在场时 request_user_context 用它渲染，
+   * 当前文件只用于统计与增量比较。
+   */
+  instructionAnnouncementContent?: string;
 }
 
 /**

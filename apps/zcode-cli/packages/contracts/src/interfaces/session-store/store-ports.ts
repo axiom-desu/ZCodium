@@ -39,7 +39,41 @@ export interface LocalSettingStorePort {
   }): CollaborationMode | Promise<CollaborationMode>;
 }
 
+/** 永久删除只保留身份与附件引用元数据，不备份会话正文。 */
+export interface SessionDeletionReference {
+  sessionId: SessionId;
+  artifactId: string;
+  referrers: Array<{ sessionId: SessionId; title: string }>;
+}
+export interface SessionDeletionSnapshot {
+  workspacePath?: string;
+  workspaceIdentity?: string;
+  revision: string;
+  sessionIds: SessionId[];
+  forks: Array<{ sessionId: SessionId; title: string }>;
+  references: SessionDeletionReference[];
+  foreignRuntime: boolean;
+  localRuntimeIds: SessionId[];
+  pendingWork: boolean;
+  deleting: boolean;
+  completed: boolean;
+}
+
 export interface SessionStorePort {
+  /** 只读预检：owned tree、fork、附件引用、跨进程运行态与删除凭据。 */
+  inspectSessionDeletion?(sessionID: SessionId): Promise<SessionDeletionSnapshot>;
+  /** 准入删除：同一事务内复查快照，写入跨进程/跨重启凭据；旧 revision 一律拒绝。 */
+  beginSessionDeletion?(
+    sessionID: SessionId,
+    revision: string,
+    operationId: string,
+    retained: Array<{ sessionId: SessionId; artifactId: string }>,
+  ): Promise<void>;
+  /** 文件清理完成后删正文并把凭据标记为 deleted；重复调用幂等。 */
+  completeSessionDeletion?(sessionID: SessionId): Promise<void>;
+  /** 本进程持有会话运行时；与删除凭据互斥，跨进程可见。 */
+  registerSessionRuntime?(sessionID: SessionId): Promise<void>;
+  unregisterSessionRuntime?(sessionID: SessionId): Promise<void>;
   createSession(input: CreateSessionInput): Promise<SessionInfo>;
   /** legacy 兼容原语；V4 stable/compact-edit fork 禁止调用，统一走 commitForkBundle。 */
   createForkedSessionWithMetadata?(
@@ -53,6 +87,12 @@ export interface SessionStorePort {
   updateSession(input: UpdateSessionInput): Promise<SessionInfo>;
   /** 只写一次删除时间（首时间保持）；正文保留，普通列表永不返回软删除行。 */
   softDeleteSession?(sessionID: SessionId, timeDeleted?: number): Promise<void>;
+  /** 每个根会话 → 根自身与附属后代（subagent / workflow / 侧边问答，不含 fork）；根不存在为空数组。 */
+  listOwnedSessionTrees?(sessionIDs: SessionId[]): Promise<Map<SessionId, SessionId[]>>;
+  /** 每个目标会话 → part 中仍引用其附件（`zcode-artifact://<目标>/…`）的其他未删除会话；无引用的目标不出现。 */
+  listArtifactReferrers?(sessionIDs: SessionId[]): Promise<Map<SessionId, SessionId[]>>;
+  /** 彻底删除会话及附属后代的全部行；只用于用户确认的「删除数据」，已不存在的会话是空操作。 */
+  purgeSessions?(sessionIDs: SessionId[]): Promise<void>;
   getSession(sessionID: SessionId): Promise<SessionInfo | null>;
   listSessions(input?: ListSessionsInput): Promise<SessionInfo[]>;
   /**

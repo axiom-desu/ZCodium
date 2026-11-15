@@ -333,6 +333,26 @@ export const TID_SETTINGS_PAGE = "settings-page";
 export const TID_SETTINGS_BACK_BUTTON = "settings-back-button";
 /** 设置页左侧分区入口（动态后缀为 section id） */
 export const TID_SETTINGS_SECTION_NAV = "settings-section-nav";
+/** 设置页搜索入口按钮（打开搜索对话框） */
+export const TID_SETTINGS_SEARCH_OPEN = "settings-search-open";
+/** 设置页搜索对话框 */
+export const TID_SETTINGS_SEARCH_DIALOG = "settings-search-dialog";
+/** 设置页搜索输入框 */
+export const TID_SETTINGS_SEARCH_INPUT = "settings-search-input";
+/** 设置页搜索清空按钮 */
+export const TID_SETTINGS_SEARCH_CLEAR = "settings-search-clear";
+/** 设置页搜索空结果提示 */
+export const TID_SETTINGS_SEARCH_EMPTY = "settings-search-empty";
+/** 设置页搜索「更多打开方式」子菜单触发器（动态后缀为应用/编辑器 id） */
+export const TID_FILE_MENU_MORE_OPEN_WITH = "file-menu-more-open-with";
+/** 个性化（用户自定义指令）编辑器 */
+export const TID_SETTINGS_PERSONALIZATION_EDITOR = "settings-personalization-editor";
+/** 个性化保存按钮 */
+export const TID_SETTINGS_PERSONALIZATION_SAVE = "settings-personalization-save";
+/** 个性化取消按钮 */
+export const TID_SETTINGS_PERSONALIZATION_CANCEL = "settings-personalization-cancel";
+/** 个性化超限提示 */
+export const TID_SETTINGS_PERSONALIZATION_SIZE_HINT = "settings-personalization-size-hint";
 /** 常规设置中的增强 Find/Grep 开关 */
 export const TID_SETTINGS_NATIVE_SEARCH_SWITCH = "settings-native-search-switch";
 /** 常规设置中的工具搜索模式下拉触发器（off/auto/local；native 仅 CLI 内部使用） */

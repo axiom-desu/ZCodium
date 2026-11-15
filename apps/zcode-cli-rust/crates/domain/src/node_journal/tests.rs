@@ -311,3 +311,6 @@ fn a_model_switch_is_stored_as_a_separator_when_the_next_turn_starts() {
     assert!(matches!(&writes[2].op, Op::Message(m) if m["id"] == "msg_u2"));
     assert!(s.node.model_change.is_none());
 }
+
+#[path = "tests_features.rs"]
+mod features;

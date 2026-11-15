@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConversationShareReadonlyTimeline } from "@zcode/ui/conversation-share-readonly";
-import type { Locale } from "@zcode/shared";
+import { toZhOrEnLocale, type Locale } from "@zcode/shared";
 import type { ConversationRow } from "@zcode/shared/zcode-protocol-v4";
 
 import {
@@ -21,7 +21,7 @@ import { createConversationShareArtifactReader } from "./conversationShareArtifa
 
 type LandingCopy = Readonly<Record<string, string>>;
 
-const COPY: Readonly<Record<Locale, LandingCopy>> = {
+const COPY: Readonly<Record<"en-US" | "zh-CN", LandingCopy>> = {
   "en-US": {
     "conversationShare.landing.loading": "Loading shared conversation…",
     "conversationShare.landing.error": "This share could not be loaded",
@@ -105,7 +105,7 @@ function ConversationShareLandingPage({
   baseUrl: string;
   fetchImpl?: typeof fetch;
 }) {
-  const copy = COPY[locale];
+  const copy = COPY[toZhOrEnLocale(locale)];
   const [state, setState] = useState<LandingState>({ status: "loading" });
   const [retryToken, setRetryToken] = useState(0);
   // 每个分享范围/重试一代一个新的匿名 reader；旧代次的迟到 artifact 结果不会进入当前卡片。
@@ -267,7 +267,7 @@ export function ConversationShareLandingLoader({
         className="mx-auto mt-16 w-full max-w-lg rounded-xl border border-border/60 bg-card px-4 py-3 text-ui-sm text-foreground-subtle"
         data-conversation-share-error="invalid_contract"
       >
-        {COPY[locale]["conversationShare.landing.invalidCode"]}
+        {COPY[toZhOrEnLocale(locale)]["conversationShare.landing.invalidCode"]}
       </section>
     );
   }

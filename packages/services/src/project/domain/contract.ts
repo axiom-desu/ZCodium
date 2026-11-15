@@ -1,6 +1,7 @@
 import type { FileEntry } from "@zcode/shared";
 import { ServiceChannels } from "@zcode/shared";
 import { createServiceDescriptor } from "#src/descriptors.js";
+import type { IProjectDataService } from "#src/project/domain/data-contract.js";
 import type {
   ProjectDirectories,
   ProjectTaskGroupMoveInput,
@@ -10,6 +11,7 @@ import type {
   VirtualProject,
 } from "#src/project-storage/contract.js";
 
+export type { IProjectDataService } from "#src/project/domain/data-contract.js";
 export type {
   ProjectDirectories,
   ProjectRoot,
@@ -28,7 +30,7 @@ export type {
 } from "#src/project-storage/contract.js";
 
 /** 当前 Host 的权威项目服务；远端通过现有 attachment 的服务代理调用。 */
-export interface IProjectService {
+export interface IProjectService extends IProjectDataService {
   /** 项目选目录只访问所属 Host 的文件服务；不建立 workspace 或启动 Agent。 */
   readDirectory(params?: {
     hostId?: string;
@@ -47,6 +49,11 @@ export interface IProjectService {
   saveProject(input: SaveProjectInput): Promise<VirtualProject>;
   /** 幂等软删除容器，保留任务归属与 roots。 */
   deleteProject(id: string, hostId?: string): Promise<void>;
+  /**
+   * 撤销软删除（与 deleteProject 对称）：幂等、不存在报 `project.not-found`、跨 Host 拒绝。
+   * 不校验目录存在（否则「文件夹不存在」的项目永远无法撤销）；名称按保存规则重新派生。
+   */
+  restoreProject(id: string, hostId?: string): Promise<VirtualProject>;
   /** 跨 host 拒绝；缺 root 时必须明确 addMissingRoot 才原子加入并移动。 */
   moveTask(input: {
     task: ProjectTaskRef;

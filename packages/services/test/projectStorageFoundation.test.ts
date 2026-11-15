@@ -83,7 +83,19 @@ describe("project-storage migration", () => {
       "0006_default_workspace_tasks",
       "0007_initial_workspace_order",
       "0008_task_creation_reservations",
+      "0009_remote_project_deleted_cache",
+      "0010_task_worktree_root",
     ]);
+    expect(
+      (db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]).some(
+        (column) => column.name === "worktree_root",
+      ),
+    ).toBe(true);
+    expect(
+      (db.prepare("PRAGMA table_info(remote_project_entries)").all() as { name: string }[]).some(
+        (column) => column.name === "cached_deleted",
+      ),
+    ).toBe(true);
     // 预留 receipt 表只追加、不并入 0005；空库也必须有它，否则预占写入会静默降级。
     expect(
       db

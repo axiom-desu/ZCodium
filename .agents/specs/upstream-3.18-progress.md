@@ -64,6 +64,8 @@ Rust参考为 `MBearo/ZCode-rs@a7a980de`，不是产品上游。**本检查点�
 - 初次Services Vitest误匹配`.cache`参考源码且隔离HOME找不到浏览器binary；纠正为仅当前源、
   排除`.cache/**`/`**/dist/**`，显式指向已安装工具binary缓存后原185项全部通过，追加receipt负向回归后186项通过。未改断言隐藏失败。
 - licenses基础标识/新鲜度通过；**仍有16项材料待发布前严格核验**，不能宣称完整合规验收。
+- 0025迁移SQL按上游原字节/已锁checksum镜像，design vendored内容也保留原字节；两者自带的
+  尾随空白不为git diff检查擅改。其余自有源码的staged whitespace检查通过，未放宽任何lint/架构棘轮。
 
 ## 剩余，不能宣称“代码全部搬完”
 

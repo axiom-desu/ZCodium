@@ -58,7 +58,9 @@ export async function drainPendingRuntimeCommandsForActiveLoop(
     // active-loop 不会创建新的 TurnStarted；这里把已消费事实带到当前 turn 的终态，且只认结构化 subagent 来源，避免 Bash 混入。
     if (
       removed.mode === "task-notification" &&
-      removed.originMeta?.backgroundSource === "subagent"
+      removed.originMeta?.backgroundSource === "subagent" &&
+      // 无进展提醒不是后台结果：不能把这一轮记成「由 subagent completion 唤起」。
+      removed.originMeta.subagentStall === undefined
     ) {
       backgroundSubagentResultConsumed = true;
     }

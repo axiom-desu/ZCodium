@@ -1,6 +1,6 @@
 // MCP Port - Model Context Protocol adapter boundary
 
-import type { McpServerFailureKind } from "@zcode/shared";
+import type { McpServerFailureKind, WorkspaceMcpTrustReview } from "@zcode/shared";
 import type { McpAppsToolVisibility, McpToolUiDescriptor } from "@zcode/shared/mcp-apps";
 import type { JsonSchema } from "../model/index.js";
 import type { TraceContext } from "../tracing/tracer.js";
@@ -11,7 +11,7 @@ export type McpServerIsolation = "session" | "workspace";
 
 /** 公共 MCP 配置校验完成后由宿主附加的运行时来源。 */
 export interface McpServerRuntimeSource {
-  kind: "builtin" | "plugin";
+  kind: "builtin" | "plugin" | "workspace" | "user";
 }
 
 export interface McpServerConfigBase {
@@ -77,6 +77,8 @@ export type McpServerStatusKind =
   | "untrusted";
 
 export interface McpServerStatus {
+  /** 工作区声明审核投影；只读，不参与连接状态判定。 */
+  workspaceTrust?: WorkspaceMcpTrustReview;
   status: McpServerStatusKind;
   transport: McpServerTransportType;
   toolCount: number;
@@ -114,6 +116,19 @@ export const ZCODE_MCP_BROWSER_SCREENSHOT_CONTENT_INDICES_META_KEY =
  * `ZCODE_MCP_BROWSER_SCREENSHOT_CONTENT_INDICES_META_KEY` 的处置）。
  */
 export const ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY = "zcode/nodeReplCuaApp";
+/**
+ * 本次 node_repl cell 调用过浏览器运行时（list/execute 请求到达主线程的浏览器代理 broker，不论成败），
+ * 值为 `true`。会话能力标签 `browser_use` 据此派生（docs/design/v2/model/session-features-header.md）。
+ *
+ * **只能由 node-repl-host 写入**：只由主线程 broker 记进调用账本，`toMcpRunResult` 先删掉 cell 经
+ * sandbox API 写入的同名键，再只按账本 facts 写回；Worker 的结果消息不采信（MR !3207 评审 CR-01）。
+ */
+export const ZCODE_MCP_NODE_REPL_BROWSER_USE_META_KEY = "zcode/nodeReplBrowserUse";
+/**
+ * 本次 node_repl cell 调用过 Computer Use 运行时（任一 CUA 方法的请求到达主线程的 CUA broker，含失败和
+ * broker 侧拒绝），值为 `true`。写入规则同 `ZCODE_MCP_NODE_REPL_BROWSER_USE_META_KEY`。
+ */
+export const ZCODE_MCP_NODE_REPL_COMPUTER_USE_META_KEY = "zcode/nodeReplComputerUse";
 export interface McpToolDescriptor {
   alwaysLoad?: boolean;
   searchHint?: string;
@@ -333,6 +348,8 @@ export interface McpElicitationPort {
 }
 
 export interface McpPort {
+  /** 只读重算工作区准入并通知会话投影，不连接、不授权或重放工具。 */
+  refreshWorkspaceTrustAdmission?(reannounce?: boolean): Promise<void>;
   /** 可信配置派生的稳定来源与现有连接代际。断线时不签发新页面凭证。 */
   onAppConnectionInvalidated?(serverName: string, listener: () => void): () => void;
   appConnectionSnapshot?(serverName: string): { identity: string; generation: number } | null;

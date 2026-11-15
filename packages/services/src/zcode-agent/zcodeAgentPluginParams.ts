@@ -109,6 +109,20 @@ export interface ZCodeAgentSkillReferenceCatalogParams extends ZCodeAgentWorkspa
   sessionId?: string;
 }
 
+// Plugin composer.mention tool target：只在已驻留会话上执行；连接 existing-only。
+export interface ZCodeAgentPluginMentionItemsParams extends ZCodeAgentWorkspaceTarget {
+  sessionId: string;
+  pluginId: string;
+  /** 插件 MCP server 上的原始工具名（不是模型可见的 `mcp__…` 名）。 */
+  tool: string;
+  query: string;
+}
+
+/** `supported: false`：旧 CLI 没有 `plugins/mentionItems`，`@` 面板不显示该组。 */
+export type ZCodeAgentPluginMentionItemsResult =
+  | { supported: true; items: import("@zcode/shared").ZCodePluginMentionItem[] }
+  | { supported: false };
+
 /** 插件 UI：UI 发起的 `ui://` 资源读取。 */
 export interface ZCodeAgentReadMcpResourceParams extends ZCodeAgentWorkspaceTarget {
   instance: import("@zcode/shared/mcp-apps").McpAppInstance;

@@ -21,6 +21,8 @@ export interface PluginUiHostAppHandlerDeps {
   /** 进行中的页面工具调用 id；controller dispose 时逐个取消到 agent。 */
   activeCalls: Set<string>;
   onBusyChange?(): void;
+  /** 工具结果声明交付了真实工作（`_meta["zcode/activity"] === true`）时续期。 */
+  onActivity?(): void;
   onOpenExternal(url: string): void;
 }
 
@@ -59,6 +61,8 @@ export function installPluginUiHostAppHandlers(
         ...(params.arguments ? { arguments: params.arguments } : {}),
         callId,
       });
+      // 长轮询只有交付实际工作才续期；必须先标记活动再解除 busy，避免回收撞上任务交付。
+      if (result._meta?.["zcode/activity"] === true) deps.onActivity?.();
       return result as CallToolResult;
     } finally {
       signal?.removeEventListener("abort", onAbort);

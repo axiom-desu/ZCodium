@@ -1,5 +1,7 @@
 /* oxlint-disable eslint(max-lines) -- AppSettings schema 聚合历史迁移、默认值和 patch 校验，拆分会削弱设置迁移的单一入口。 */
 import { z } from "zod";
+import { SUPPORTED_LOCALES } from "./protocol.js";
+import { resolvePersistedUiLocale, resolvePersistedUiLocalePreference } from "./locale.js";
 import { appToolSearchModeSchema } from "./app-runtime-preferences.js";
 import { DYNAMIC_WORKFLOW_MODES } from "./dynamic-workflow-feature.js";
 import { isKnownRemoteResourcePackageId } from "./remoteResourcePackages.js";
@@ -38,8 +40,8 @@ export const appSettingsOccupationEnum = appSettingsOccupationSchema;
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 
-export const localeSchema = z.enum(["zh-CN", "en-US"]);
-const localePreferenceSchema = z.enum(["system", "zh-CN", "en-US"]);
+export const localeSchema = z.enum(SUPPORTED_LOCALES);
+const localePreferenceSchema = z.enum(["system", ...SUPPORTED_LOCALES]);
 const zcodeInteractionBehaviorSchema = z.enum(["queue", "guide"]);
 // launch.md「The user's choice」：读文件时未知取值（降级后读到新版本写的值）按「跟随」处理，
 // 不能让一个偏好字段把整份设置读坏。
@@ -469,6 +471,7 @@ const appSettingsObjectSchema = z.object({
   closeToTrayOnWindows: z.boolean().default(true),
   closeToTrayOnWindowsMigrationInitialized: z.boolean().default(true),
   keepAwakeWhileRunning: z.boolean().default(false),
+  fileTreeHtmlClickOpensBrowser: z.boolean().default(false),
   desktopZoomLevel: desktopZoomLevelSchema.optional(),
   desktopWindowSize: desktopWindowSizeSchema.optional(),
   desktopChromiumHardwareAccelerationEnabled: z.boolean().default(true),
@@ -530,23 +533,29 @@ const appSettingsObjectSchema = z.object({
   webRemoteControlDeviceMid: nonEmptyStringSchema.optional(),
 });
 
-export const appSettingsSchema = z.preprocess(
-  (value) =>
-    sanitizeEmbeddedBrowserViewportPreference(
-      sanitizeDesktopWindowSize(
-        migrateMessageStreamShowReasoningDefault(
-          migrateCloseToTrayOnWindowsDefault(
-            migrateLegacyLocalePreference(
-              sanitizeZCodeEndpointOrigin(
-                migrateLegacyWorkspaceSession(migrateTaskAutoArchiveReset(value)),
-              ),
+export const appSettingsSchema = z.preprocess((value) => {
+  const localeNormalized =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? {
+          ...value,
+          locale: resolvePersistedUiLocale(value as Record<string, unknown>),
+          localePreference: resolvePersistedUiLocalePreference(value as Record<string, unknown>),
+        }
+      : value;
+  return sanitizeEmbeddedBrowserViewportPreference(
+    sanitizeDesktopWindowSize(
+      migrateMessageStreamShowReasoningDefault(
+        migrateCloseToTrayOnWindowsDefault(
+          migrateLegacyLocalePreference(
+            sanitizeZCodeEndpointOrigin(
+              migrateLegacyWorkspaceSession(migrateTaskAutoArchiveReset(localeNormalized)),
             ),
           ),
         ),
       ),
     ),
-  appSettingsObjectSchema,
-);
+  );
+}, appSettingsObjectSchema);
 
 export const appSettingsPatchSchema = z.object({
   recentProjects: z.array(z.string()).optional(),
@@ -567,6 +576,7 @@ export const appSettingsPatchSchema = z.object({
   taskAutoArchiveOlderThanDays: z.number().int().positive().max(365).optional(),
   closeToTrayOnWindows: z.boolean().optional(),
   keepAwakeWhileRunning: z.boolean().optional(),
+  fileTreeHtmlClickOpensBrowser: z.boolean().optional(),
   closeToTrayOnWindowsMigrationInitialized: z.boolean().optional(),
   desktopZoomLevel: desktopZoomLevelSchema.optional(),
   desktopWindowSize: desktopWindowSizeSchema.optional(),

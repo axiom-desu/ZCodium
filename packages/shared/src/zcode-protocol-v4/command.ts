@@ -27,6 +27,7 @@ import {
 } from "../zcode-protocol/index.js";
 import { sharedContextRefSchema } from "./shared-context-ref.js";
 import { conversationInputSourceSchema } from "./input-intent.js";
+import { conversationQuotesSchema } from "../conversationSelection.js";
 export type { SharedContextRef } from "./shared-context-ref.js";
 
 const createSessionRequestedConfigSchema = z.object({
@@ -41,6 +42,18 @@ const createSessionRequestedConfigSchema = z.object({
   mode: z.string().optional(),
   planEnabled: z.boolean().optional(),
 });
+
+/**
+ * forkAssistant 把子会话放到另一个受管 worktree cwd（仍复制同一会话历史）。
+ * childSessionId 由 Host 预分配；旧 CLI 会静默丢弃该字段，Host 先确认 worktreeCwd 能力。
+ */
+export const forkTargetCwdSchema = z
+  .object({
+    cwd: z.string().trim().min(1),
+    childSessionId: z.string().trim().min(1),
+  })
+  .strict();
+export type ForkTargetCwd = z.infer<typeof forkTargetCwdSchema>;
 
 // ── 命令 payload 全集 ──
 export const commandPayloadSchemas = {
@@ -58,6 +71,8 @@ export const commandPayloadSchemas = {
         modelSelection: modelSelectionSchema.optional(),
         mode: submissionModeSchema.optional(),
         planEnabled: z.boolean().optional(),
+        // 首发 body 同样承载结构化选区引用，避免草稿会话的引用只能拼进正文。
+        conversationQuotes: conversationQuotesSchema.optional(),
       })
       .optional(),
     config: createSessionRequestedConfigSchema.optional(),
@@ -109,6 +124,8 @@ export const commandPayloadSchemas = {
       automationId: z.string().min(1).optional(),
       // Bot 来源只由 Host 注入，用于 CronCreate 在当前 turn 内读取并持久化回推地址。
       botDeliveryTarget: zcodeAutomationBotDeliveryTargetSchema.optional(),
+      // 会话选区引用：随 sendText 作为 turn metadata 传输，不拼进可见正文。
+      conversationQuotes: conversationQuotesSchema.optional(),
       // 定时任务会话的后续用户输入也必须保持 turn-scoped 工具面隔离；不能借用
       // automationId，否则会把普通用户输入误标成一次 automation 派发。
       toolDisallowlist: z.array(z.string().min(1)).optional(),
@@ -144,12 +161,19 @@ export const commandPayloadSchemas = {
   // 因为 admission 与当前 revision 无关，不走 CAS；sourceCommandId 提供幂等边界。
   compact: z.object({}),
   // running 时对稳定 assistant row 可用。
-  forkAssistant: z.object({ target: conversationRowTargetSchema }),
+  forkAssistant: z.object({
+    target: conversationRowTargetSchema,
+    // 缺省 = 父会话 cwd；受管 worktree fork 时由 Host 指定子会话 cwd。
+    targetCwd: forkTargetCwdSchema.optional(),
+  }),
   applyFileRewind: z.object({ target: conversationRowTargetSchema }),
   editUserQuery: z.object({
     target: conversationRowTargetSchema,
     newText: z.string(),
     attachments: z.array(attachmentRefSchema).optional(),
+    // 编辑重发是本轮新的提交：显式 quotes 覆盖 canonical 值，缺省沿用原值，[] 表示清空。
+    // 与 sendText 共用同一 strict 契约，避免编辑后批注只留在旧行。
+    conversationQuotes: conversationQuotesSchema.optional(),
     // 缺省 preserve：仅切 conversation branch；rewind 会先安全恢复该轮文件。
     workspaceMode: z.enum(["preserve", "rewind"]).optional(),
   }),
@@ -161,7 +185,12 @@ export const commandPayloadSchemas = {
     feedback: z.enum(["like", "dislike"]).nullable(),
   }),
   sendQueuedNow: z.object({ queueItemId: z.string() }),
-  editQueueItem: z.object({ queueItemId: z.string(), newText: z.string() }),
+  editQueueItem: z.object({
+    queueItemId: z.string(),
+    newText: z.string(),
+    // 队列原地编辑同样只能改文本与引用材料；缺省保留原 quotes，[] 表示清空。
+    conversationQuotes: conversationQuotesSchema.optional(),
+  }),
   // beforeQueueItemId = null → 移到队尾。
   reorderQueueItem: z.object({
     queueItemId: z.string(),

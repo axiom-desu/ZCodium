@@ -95,6 +95,9 @@ pub struct Entry {
     pub resolved_timeout_ms: u64,
     pub resolved_max_output_bytes: u64,
     pub status_message: Option<String>,
+    /// 声明里的 `onError`（`None` = 未声明，等价 allow）。它是每 Hook 的失败处置策略，
+    /// 不是事件；进声明摘要，所以加/改它必须重新信任。执行语义仍按 TS：项目 hook 缺省 allow。
+    pub on_error: Option<super::OnErrorPolicy>,
     pub source_root_enabled: bool,
     pub declaration_enabled: bool,
     pub runtime_hooks_enabled: bool,
@@ -218,6 +221,11 @@ pub fn snapshot(
                         resolved_timeout_ms: timeout_ms(raw, root.timeout_ms as f64),
                         resolved_max_output_bytes: root.max_output_bytes,
                         status_message: raw["statusMessage"].as_str().map(trimmed),
+                        // Node canonical entry 只在实际声明时带 `onError`。
+                        on_error: raw
+                            .get("onError")
+                            .and_then(Value::as_str)
+                            .map(|_| super::OnErrorPolicy::from_config(raw)),
                         source_root_enabled: source_enabled,
                         declaration_enabled,
                         runtime_hooks_enabled: root.enabled,
@@ -326,6 +334,9 @@ pub fn registrations(snapshot: &Snapshot) -> Vec<Registration> {
             status_message: entry.status_message.clone(),
             timeout_ms: entry.resolved_timeout_ms,
             max_output_bytes: entry.resolved_max_output_bytes as usize,
+            // Node `workspaceEntryToHookConfig` 不把 entry 的 `onError` 转给注册：
+            // 项目 hook 的执行失败语义仍按缺省 allow，本字段只参与摘要/审核。
+            on_error: super::OnErrorPolicy::Allow,
             review: Some((entry.review_item_id.clone(), entry.digest.clone())),
         })
         .collect()

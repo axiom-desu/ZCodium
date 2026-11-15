@@ -86,6 +86,42 @@ impl Session {
         }
     }
 
+    /// 3.18 F3：主会话 system 字节快照的 session_entry（每个会话一行，覆盖写）。
+    pub fn node_prompt_system(&mut self, now: u64, data: Value) {
+        if !self.node.created {
+            return;
+        }
+        let entry = super::records::entry(
+            format!("{}:runtime-prompt-snapshot", self.id),
+            &self.id,
+            super::records::PROMPT_SNAPSHOT_ENTRY,
+            now,
+            data,
+            false,
+        );
+        self.node.push(now, Op::Entry(entry));
+    }
+
+    /// 3.18 F12：会话能力标签 entry（last-wins，`features` 字典序）。
+    /// 只增不减：compact / rewind / 冷恢复都不撤销。
+    pub fn node_session_features(&mut self, now: u64) {
+        if !self.node.created || self.session_features.is_empty() {
+            return;
+        }
+        let data = super::super::session_features::entry_data(
+            self.session_features.iter().map(String::as_str),
+        );
+        let entry = super::records::entry(
+            format!("{}:runtime-session-features", self.id),
+            &self.id,
+            super::records::SESSION_FEATURES_ENTRY,
+            now,
+            data,
+            false,
+        );
+        self.node.push(now, Op::Entry(entry));
+    }
+
     /// Node `persistExecutionState`.
     pub fn node_execution_state(&mut self, now: u64) {
         if !self.node.created {

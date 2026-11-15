@@ -48,6 +48,27 @@ export function getZCodeDataRootDir(): string {
   return join(getDataBaseDir(), ZCODE_USER_DATA_DIR_NAME);
 }
 
+/**
+ * 用户级默认指令文件所在的 home 目录。
+ *
+ * 走 `HOME`/`USERPROFILE`/`homedir()`，**不读** `ZCODE_DATA_BASE_DIR`/桌面 home 覆盖：
+ * CLI 的 `findDefaultUserInstructionFile` 用同一规则解析少数用户级指令文件，
+ * 设置页写的文件必须是 Agent 实际读取的那个。
+ */
+function resolveAgentUserInstructionsHomeDir(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  const envHome = env.HOME?.trim() || env.USERPROFILE?.trim();
+  return envHome && envHome.length > 0 ? envHome : homedir();
+}
+
+/** `{home}/.zcodium/AGENTS.md`：个性化指令的唯一事实源（与 CLI 读取路径一致）。 */
+export function getAgentUserInstructionsFilePath(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return join(resolveAgentUserInstructionsHomeDir(env), ZCODE_USER_DATA_DIR_NAME, "AGENTS.md");
+}
+
 /** 非项目对话共享的真实工作目录；默认 ~/.zcodium/workspace/default。 */
 export function getConversationWorkspaceDir(): string {
   return join(getZCodeDataRootDir(), "workspace", "default");

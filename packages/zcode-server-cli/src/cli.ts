@@ -29,7 +29,12 @@ import {
   removeRunContentsExceptLock,
 } from "./runtime/uninstallGuard.js";
 import { readPersistedStatus, readPersistedStatusDetailed } from "./runtime/statusSnapshot.js";
-import { waitForServerStopped } from "./runtime/shutdownWait.js";
+import {
+  isStoppedServerStatus,
+  readStatusForStopWithoutControl,
+  stopSupervisorAndWait,
+  waitForServerStopped,
+} from "./runtime/shutdownWait.js";
 export { readPersistedStatus } from "./runtime/statusSnapshot.js";
 import {
   hasLegacyServiceRegistration,
@@ -101,8 +106,9 @@ export async function runServerCli(
     // 同一物理 data-root 的符号链接别名会派生不同 control endpoint 和 OS service
     // identity。生命周期命令统一在 IO 前收敛 root，避免第二个 Supervisor 绕过探测重复注册。
     const layout =
-      ["serve", "status", "stop", "restart", "update", "uninstall"].includes(command) ||
-      proxyStdioRequested
+      ["serve", "status", "running-tasks", "stop", "restart", "update", "uninstall"].includes(
+        command,
+      ) || proxyStdioRequested
         ? await resolveCanonicalServerLayout(parsed.layout.serverRoot)
         : parsed.layout;
     if (proxyStdioRequested) {
@@ -126,9 +132,15 @@ export async function runServerCli(
       case "serve":
         return await runServe(parsed.argv.slice(1), io, json, layout, runtimeOptions);
       case "status":
-      case "stop":
-      case "restart":
+      case "running-tasks":
         return await runControl(command, io, json, {}, layout);
+      case "stop":
+        // Bug 原因：runControl 不接收 argv，`stop --wait` 曾被当成 ack 型 stop 立即返回，
+        // 桌面端会在远端仍持锁时报告“已停止”。--wait 必须走统一的停止等待。
+        if (parsed.argv.includes("--wait")) return await runStopAndWait(io, json, layout);
+        return await runControl("stop", io, json, {}, layout);
+      case "restart":
+        return await runRestart(io, json, layout, runtimeOptions);
       case "update":
         if (parsed.argv.includes("--from-archive")) {
           return await runLocalArchiveUpdateCommand(parsed.argv, io, json, layout, () =>
@@ -387,21 +399,11 @@ async function runControl(
     if (command === "status") {
       const persisted = await readPersistedStatusDetailed(layout);
       result = persisted.status ?? createStoppedServerStatus(ZCODE_VERSION);
-    } else if (command === "stop" && isControlEndpointUnavailable(error)) {
-      const persisted = await readPersistedStatusDetailed(layout);
-      if (persisted.state === "invalid" || persisted.state === "unreadable") {
-        throw error;
-      }
-      if (
-        persisted.status &&
-        persisted.status.state !== "stopped" &&
-        persisted.status.state !== "uninstalled"
-      ) {
-        throw error;
-      }
-      // Supervisor 停止时会先关闭 control socket，再由 CLI 落盘 stopped 状态。
-      // 重复 stop 发生在这个窗口后不应因为 socket 不存在而变成失败。
-      result = persisted.status ?? createStoppedServerStatus(ZCODE_VERSION);
+    } else if (command === "stop") {
+      // 快照缺失表示 daemon 从未写出过状态，按已停止输出。
+      result =
+        (await readStatusForStopWithoutControl(layout, error)) ??
+        createStoppedServerStatus(ZCODE_VERSION);
     } else {
       throw error;
     }
@@ -411,9 +413,45 @@ async function runControl(
   return 0;
 }
 
-function isControlEndpointUnavailable(error: unknown): boolean {
-  if (typeof error !== "object" || error === null || !("code" in error)) return false;
-  return error.code === "ENOENT" || error.code === "ECONNREFUSED" || error.code === "EINVAL";
+/**
+ * `stop --wait`：data-root 锁释放且 status 为比基线新的 stopped 后才输出最终 ServerStatus（R2 §8.1）。
+ * daemon 未运行（锁缺失或 stale）时立即成功；stop-failed 与 control 超时以公开错误码失败。
+ */
+async function runStopAndWait(
+  io: CliIO,
+  json: boolean,
+  layout: ReturnType<typeof resolveServerLayout>,
+): Promise<number> {
+  await stopSupervisorAndWait(layout, "stop");
+  const persisted = await readPersistedStatusDetailed(layout);
+  const status = persisted.status;
+  // Supervisor 已死时快照可能仍停在死前的 ready；输出只表达“已停止”这一最终事实。
+  const finalStatus = isStoppedServerStatus(status)
+    ? status
+    : createStoppedServerStatus(ZCODE_VERSION, {
+        serviceRegistered: status?.serviceRegistered ?? false,
+      });
+  if (json) stdout(io, finalStatus);
+  else stdout(io, finalStatus);
+  return 0;
+}
+
+/**
+ * 整棵进程树重启（R2 §8.1），由发起命令的 CLI 协调，不在持锁的 Supervisor 内自举。
+ *
+ * Bug 原因：旧 `restart` 只经 control 让 Supervisor 在进程内换 Core，Supervisor 与崩溃预算不变；
+ * daemon 未运行或 Supervisor 已死但残留 socket 时直接报错，`crash-loop-stopped` 也无法自救。
+ * 现在先用统一停止等待收口现有 Supervisor（锁缺失或 stale 即视为未运行，跳过停止；新的
+ * `stop-failed` 以公开码失败且不启动新实例），再按 `serve --daemon` 启动并等 ready。
+ */
+async function runRestart(
+  io: CliIO,
+  json: boolean,
+  layout: ReturnType<typeof resolveServerLayout>,
+  runtimeOptions: ServerCliRuntimeOptions,
+): Promise<number> {
+  await stopSupervisorAndWait(layout, "restart");
+  return await runServe(["--daemon"], io, json, layout, runtimeOptions);
 }
 
 async function runUninstall(

@@ -22,7 +22,8 @@ pub(super) async fn run(
     let bound = model.bind();
     let model = bound.as_deref().unwrap_or(model);
     let (prefix, _) =
-        super::context::step_prefix(model, context, history, (skills, profile), cancel).await?;
+        super::context::step_prefix(model, context, history, sink, (skills, profile), cancel)
+            .await?;
     // compact 候选目录按 Node `compact-active.ts` 策略裁剪，发送 tools 用暴露结果。
     let prepared = super::tool_search::compact_preparation(
         model,

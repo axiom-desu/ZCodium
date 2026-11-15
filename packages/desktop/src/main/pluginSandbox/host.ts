@@ -4,7 +4,7 @@ import type { PluginSandboxHandle, PluginSandboxRegisterInput } from "@zcode/sha
 import {
   BrowserWindow,
   clipboard,
-  nativeImage,
+  ClipboardItem,
   MessageChannelMain,
   app,
   dialog,
@@ -55,7 +55,11 @@ export function installPluginSandboxHost(input: {
   aliasDir: string;
   /** vite dev server 地址；有值时 shell 资源从它代理（见 PluginSandboxAssetSource）。 */
   devServerUrl?: string;
-  logger?: { warn: (...args: unknown[]) => void; info?: (...args: unknown[]) => void };
+  logger?: {
+    warn: (...args: unknown[]) => void;
+    info?: (...args: unknown[]) => void;
+    debug?: (...args: unknown[]) => void;
+  };
   registry?: PluginSandboxRegistryPort;
   /** 注册表容量（缺省 64）；e2e L05 用 1 验证配额拒绝。 */
   registryMaxEntries?: number;
@@ -271,11 +275,12 @@ export function installPluginSandboxHost(input: {
     // 截图期间页面可能释放或换代；旧请求不得把错误页面的图像写入剪贴板。
     if (!isCurrent()) throw new Error("Sandbox capture is no longer available");
     const cropped = captured.crop(scaleCaptureRect(request, captured.getSize()));
-    clipboard.writeImage(
-      process.platform === "win32"
-        ? nativeImage.createFromBitmap(cropped.toBitmap(), cropped.getSize())
-        : cropped,
-    );
+    // Electron 44 移除同步 writeImage；以 PNG 保留图像编码，等待原生写入后才确认复制成功。
+    await clipboard.write([
+      new ClipboardItem({
+        "image/png": new Blob([Uint8Array.from(cropped.toPNG())], { type: "image/png" }),
+      }),
+    ]);
   });
   ipcMain.handle(
     PlatformChannels.PluginSandboxDispose,
@@ -301,6 +306,21 @@ export function installPluginSandboxHost(input: {
     if (!record || record.ownerWebContentsId !== event.sender.id) return false;
     return registry.consumeUserGesture(sandboxId);
   });
+  // 后台保留页执行：Chromium 默认节流隐藏窗口的 rAF/timer。只对已登记且 owner 匹配的
+  // 当前 guest 生效；旧 sandboxId 的迟到请求不能影响换代后的 guest。
+  ipcMain.handle(
+    PlatformChannels.PluginSandboxExecutionActive,
+    (event, sandboxId: unknown, active: unknown) => {
+      if (typeof sandboxId !== "string" || typeof active !== "boolean") return;
+      const record = registry.get(sandboxId);
+      if (!record || record.ownerWebContentsId !== event.sender.id || event.sender.isDestroyed())
+        return;
+      const guest = guests.get(sandboxId);
+      if (!guest || guest.isDestroyed() || guests.get(sandboxId) !== guest) return;
+      guest.setBackgroundThrottling(!active);
+      input.logger?.debug?.("[plugin-sandbox] execution state", { sandboxId, active });
+    },
+  );
 
   installedHost = host;
   return host;

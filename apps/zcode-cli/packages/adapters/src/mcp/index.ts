@@ -151,6 +151,8 @@ class NodeMcpAdapter
   readonly resourceSubscriptions = new McpResourceSubscriptionRegistry();
   /** 每个 server 当前正在执行的工具调用 trace；elicitation 借此归属到会话 / 工具行。 */
   readonly activeCallTraces = new Map<string, McpElicitationTrace>();
+  /** 同一工具调用的取消信号；lease 关闭/caller 取消时 elicitation 等待随之结束。 */
+  readonly activeCallSignals = new Map<string, AbortSignal>();
   readonly appConnectionListeners = new Map<string, Set<() => void>>();
   private credentialStore?: SharedZCodeCredentialStore;
   /** tools/list_changed 累计次数，runtime 按此判断是否需要重注册。 */

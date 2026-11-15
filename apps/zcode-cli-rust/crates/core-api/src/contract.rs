@@ -217,7 +217,7 @@ pub trait ContextPort: Send + Sync {
     async fn instructions(
         &self,
         cancel: &CancellationToken,
-    ) -> Result<Vec<zcode_cli_domain::prompt::InstructionSource>>;
+    ) -> Result<zcode_cli_domain::prompt::InstructionRead>;
 }
 pub struct RuntimePorts {
     pub context: Arc<dyn ContextPort>,

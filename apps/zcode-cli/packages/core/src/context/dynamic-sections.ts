@@ -1,4 +1,5 @@
 import type { ContextBuilderConfig, ContextSection } from "./types.js";
+import { TOTAL_TOKENS_SYSTEM_LINE } from "./total-tokens.js";
 import { estimateTokens } from "./utils.js";
 
 const COMMUNICATION_PROMPTS = {
@@ -105,6 +106,14 @@ export function buildContextManagementSection(): ContextSection {
     "context_management",
     [CONTEXT_MANAGEMENT_PROMPTS.default, "", CONTEXT_MANAGEMENT_PROMPTS.additional].join("\n"),
   );
+}
+
+/**
+ * 固定的 token 预算行，放在 system 末尾（上游 3.18.2 语义）。
+ * 每次请求的倒数由 total_tokens_reminder 附件表达，本段只声明预算总量。
+ */
+export function buildTotalTokensSection(): ContextSection {
+  return createDynamicSection("Total Tokens", "total_tokens", TOTAL_TOKENS_SYSTEM_LINE);
 }
 
 function createDynamicSection(

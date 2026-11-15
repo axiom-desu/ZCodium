@@ -1,5 +1,8 @@
 use zcode_cli_core_api as contract;
 use zcode_cli_domain as domain;
+mod anthropic_rounds;
+#[cfg(test)]
+mod anthropic_server_tools_tests;
 mod anthropic_stream;
 pub mod config;
 #[cfg(test)]

@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   convertToZCodeAgentMcpServer,
+  parseRemoteWorkspaceIdentity,
   TID_MCP_OPEN_AUTHORIZATION_BUTTON,
   TID_PLUGIN_MCP_SERVER_ROW,
   testId,
@@ -60,7 +61,8 @@ import {
   SettingsResourceList,
 } from "@/settings/SettingsResourceGroup.js";
 import { McpServersImportDialog } from "@/settings/ExternalAgentImportDialog.js";
-import { RemoteSyncDialogs, shouldShowRemoteSyncActions } from "@/settings/RemoteSyncActions.js";
+import { shouldShowRemoteSyncActions } from "@/settings/RemoteSyncActions.js";
+import { openDataSyncDialog } from "@/data-sync/index.js";
 import { useMcpStore } from "@/store/mcpStore.js";
 import { usePluginManagementStore } from "@/store/pluginManagementStore.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
@@ -618,7 +620,6 @@ export function McpSettingsSection({
   const [formScopeKey, setFormScopeKey] = useState(parentScopeKey);
   const [editingServer, setEditingServer] = useState<ZCodeMcpServer | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [remoteMcpSyncOpen, setRemoteMcpSyncOpen] = useState(false);
   const query = searchQuery;
   const [editorMode, setEditorMode] = useState<McpEditorMode>("form");
   const [mcpConfigReadyWorkspaceKey, setMcpConfigReadyWorkspaceKey] = useState("");
@@ -823,6 +824,7 @@ export function McpSettingsSection({
   );
 
   const [refreshingStatusList, setRefreshingStatusList] = useState(false);
+  const [trustingWorkspaceMcp, setTrustingWorkspaceMcp] = useState<string | null>(null);
   // 刷新按钮过去点了没有任何可见反馈——请求可能被 guard 静默丢弃，也可能在飞行中。
   // 这里统一：先确保配置已加载，再以 manual 触发发一次请求，期间按钮进入 loading 态。
   const handleManualRefresh = useCallback(async () => {
@@ -1146,13 +1148,18 @@ export function McpSettingsSection({
     () => filterLocalMcpServers(scopedServers, query),
     [query, scopedServers],
   );
+  const syncSourceServerId = activeWorkspaceIdentity
+    ? parseRemoteWorkspaceIdentity(activeWorkspaceIdentity)?.sourceServerId
+    : undefined;
   const connectedRemoteSyncTarget =
+    syncSourceServerId &&
     shouldShowRemoteSyncActions({
       remoteSessionId,
       remoteTarget,
       clientMode: "desktop-continuous" as const,
       hasLocalSourceService: Boolean(baseServices.mcpSyncService),
-    }) && activeWorkspacePath
+    }) &&
+    activeWorkspacePath
       ? remoteTarget
       : null;
   const isRemoteSyncContext = Boolean(connectedRemoteSyncTarget);
@@ -1325,6 +1332,46 @@ export function McpSettingsSection({
     setShowForm(true);
   }
 
+  async function handleTrustWorkspaceServer(server: ZCodeMcpServer) {
+    const review = server.workspaceTrust;
+    if (!review || review.trusted || !activeWorkspacePath) return;
+    if (trustingWorkspaceMcp) return;
+    setTrustingWorkspaceMcp(server.name);
+    try {
+      const result = await services.mcpSyncService.setWorkspaceMcpTrust({
+        workspacePath: activeWorkspacePath,
+        ...(activeWorkspaceIdentity ? { workspaceIdentity: activeWorkspaceIdentity } : {}),
+        serverName: server.name,
+        declarationDigest: review.declarationDigest,
+        trusted: true,
+      });
+      if (!result.accepted) {
+        toast(
+          intl.formatMessage({
+            id:
+              result.reasonCode === "workspace_mcp_declaration_changed"
+                ? "settings.mcp.workspaceTrust.changed"
+                : "settings.mcp.workspaceTrust.failed",
+          }),
+          { durationMs: 8_000 },
+        );
+        return;
+      }
+      // 信任落盘后由同一条 mcp/list connect 路径重新探测；不在这里伪造 connected。
+      await handleManualRefresh();
+    } catch (error) {
+      toast(
+        intl.formatMessage(
+          { id: "settings.mcp.workspaceTrust.failedWithError" },
+          { error: error instanceof Error ? error.message : String(error) },
+        ),
+        { durationMs: 8_000 },
+      );
+    } finally {
+      setTrustingWorkspaceMcp(null);
+    }
+  }
+
   function handleOpenAuthorization(server: ZCodeMcpServer) {
     const authorizationUrl = server.authorization?.authorizationUrl;
     if (!authorizationUrl) {
@@ -1434,7 +1481,21 @@ export function McpSettingsSection({
               aria-label={intl.formatMessage({
                 id: "settings.mcp.remoteSync.open",
               })}
-              onClick={() => setRemoteMcpSyncOpen(true)}
+              onClick={() => {
+                if (!syncSourceServerId) return;
+                openDataSyncDialog({
+                  sourceServerId: syncSourceServerId,
+                  category: "mcp",
+                  ...(localWorkspacePath
+                    ? {
+                        workspace: {
+                          sourceWorkspacePath: localWorkspacePath,
+                          targetWorkspacePath: activeWorkspacePath ?? "",
+                        },
+                      }
+                    : {}),
+                });
+              }}
             >
               <UploadCloud className="size-3.5" aria-hidden="true" />
             </Button>
@@ -1494,6 +1555,8 @@ export function McpSettingsSection({
               onEdit={handleEdit}
               onToggle={handleToggle}
               onOpenAuthorization={handleOpenAuthorization}
+              onTrustWorkspaceServer={(server) => void handleTrustWorkspaceServer(server)}
+              trustingServerName={trustingWorkspaceMcp}
               emptyTitle={intl.formatMessage({ id: "settings.mcp.emptyTitle" })}
               emptyDescription={intl.formatMessage({
                 id: "settings.mcp.emptyDescription",
@@ -1570,30 +1633,6 @@ export function McpSettingsSection({
         onOpenChange={setImportDialogOpen}
         onImported={async () => {
           await loadMcpFromUserDirectory(services.mcpSyncService, activeWorkspaceIdentity);
-        }}
-      />
-      <RemoteSyncDialogs
-        canSyncSkills={false}
-        canSyncMcp={Boolean(connectedRemoteSyncTarget && activeWorkspacePath)}
-        skillOpen={false}
-        mcpOpen={remoteMcpSyncOpen}
-        onSkillOpenChange={() => {}}
-        onMcpOpenChange={setRemoteMcpSyncOpen}
-        localMcpSyncService={baseServices.mcpSyncService}
-        remoteMcpSyncService={services.mcpSyncService}
-        remoteTarget={connectedRemoteSyncTarget}
-        skillWorkspacePath=""
-        mcpWorkspacePath={activeWorkspacePath ?? ""}
-        mcpLocalWorkspacePath={localWorkspacePath}
-        onSkillsSynced={() => {}}
-        onMcpSynced={async () => {
-          const loaded = await loadMcpFromUserDirectory(
-            services.mcpSyncService,
-            activeWorkspaceIdentity,
-          );
-          if (loaded) {
-            await requestMcpServerStatusList();
-          }
         }}
       />
     </div>

@@ -23,6 +23,7 @@ import { completedToolPartMetadata, mcpToolPartMetadata } from "./tool-part-meta
 import type { RegularTurnLoopState } from "./turn-loop-state.js";
 import { recordToolUsageFromResult } from "./turn-tool-usage.js";
 import { createRuntimeToolResultEntry } from "../../agent/message-history.js";
+import { recordSessionFeaturesFromToolResults } from "../session-features/contract.js";
 import { commitTurnRequestEntries } from "./turn-output-token-continuation.js";
 import { enqueueFollowUpUserInputFromToolResult } from "./turn-tools-follow-up-input.js";
 import type { ToolPartHandle } from "./turn-tools-declaration.js";
@@ -188,5 +189,7 @@ export async function settleToolResults(
       options.modelTraceContext,
     );
   }
+  // 结果已进入历史后同步打能力标签，下一次模型请求就带上（session-features 只读结果）。
+  recordSessionFeaturesFromToolResults.call(this, results, options.modelTraceContext);
   return deferredCheckpointCancellation;
 }

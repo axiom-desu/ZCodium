@@ -18,6 +18,7 @@ interface CanonicalCommandIntent {
   fallbackReasonCode?: string;
   attachmentRefs?: readonly AttachmentRef[];
   sharedContextRefs?: TurnInputIntentMetadata["sharedContextRefs"];
+  conversationQuotes?: TurnInputIntentMetadata["conversationQuotes"];
   provenance?: TurnInputIntentMetadata["provenance"];
   source?: TurnInputIntentMetadata["source"];
 }
@@ -34,6 +35,7 @@ export function inputIntentMetadata(
     mode?: SubmissionMode;
     planEnabled?: boolean;
     sharedContextRefs?: TurnInputIntentMetadata["sharedContextRefs"];
+    conversationQuotes?: TurnInputIntentMetadata["conversationQuotes"];
     source?: TurnInputIntentMetadata["source"];
   },
 ): TurnInputIntentMetadata {
@@ -67,6 +69,7 @@ export function inputIntentMetadata(
     ...(options.fallbackReasonCode ? { fallbackReasonCode: options.fallbackReasonCode } : {}),
     ...(options.attachmentRefs ? { attachmentRefs: [...options.attachmentRefs] } : {}),
     ...(options.sharedContextRefs ? { sharedContextRefs: [...options.sharedContextRefs] } : {}),
+    ...(options.conversationQuotes ? { conversationQuotes: [...options.conversationQuotes] } : {}),
     ...(options.source ? { source: options.source } : {}),
   };
 }
@@ -96,6 +99,9 @@ export function inputIntentMetadataFromCanonical(
     ...(canonical.fallbackReasonCode ? { fallbackReasonCode: canonical.fallbackReasonCode } : {}),
     ...(canonical.attachmentRefs ? { attachmentRefs: [...canonical.attachmentRefs] } : {}),
     ...(canonical.sharedContextRefs ? { sharedContextRefs: [...canonical.sharedContextRefs] } : {}),
+    ...(canonical.conversationQuotes
+      ? { conversationQuotes: [...canonical.conversationQuotes] }
+      : {}),
     ...(canonical.source ? { source: canonical.source } : {}),
     ...(originalSourceCommandId
       ? {
@@ -107,6 +113,29 @@ export function inputIntentMetadataFromCanonical(
         }
       : {}),
   };
+}
+
+/**
+ * 编辑/重试重放时的选区引用解析（唯一规则）：
+ * - 编辑显式携带（含 `[]`）时以本次提交为准：`[]` 是用户清空引用，不是“没修改”。
+ * - 未携带时沿用 canonical intent 的值（retry 总是走这一支）。
+ * 不读 Composer，也不从正文尾块反推：引用只能来自本轮 intent 事实。
+ */
+export function resolveEditedConversationQuotes(
+  explicit: TurnInputIntentMetadata["conversationQuotes"] | undefined,
+  canonical: TurnInputIntentMetadata["conversationQuotes"] | undefined,
+): TurnInputIntentMetadata["conversationQuotes"] | undefined {
+  if (explicit !== undefined) return explicit.length > 0 ? [...explicit] : [];
+  return canonical ? [...canonical] : undefined;
+}
+
+/** 正文/附件/引用三者全空才算空输入：只清空正文但保留引用仍是合法编辑。 */
+export function hasEditedPromptInput(
+  text: string,
+  attachments: readonly unknown[] | undefined,
+  quotes: TurnInputIntentMetadata["conversationQuotes"] | undefined,
+): boolean {
+  return text.trim().length > 0 || Boolean(attachments?.length) || Boolean(quotes?.length);
 }
 
 /** sendQueuedNow 只能转换原 QueueItem，禁止用 promotion commandId 重建来源。 */
@@ -133,6 +162,8 @@ export function inputIntentMetadataFromQueueItem(
       : {}),
     attachmentRefs: item.attachments,
     ...(item.sharedContextRefs ? { sharedContextRefs: [...item.sharedContextRefs] } : {}),
+    // 队列项提升后仍要用入队时固定的选区引用，不重读 Composer。
+    ...(item.conversationQuotes ? { conversationQuotes: [...item.conversationQuotes] } : {}),
     ...(item.source ? { source: item.source } : {}),
     // 提升只改变调度状态；重试／编辑原始输入的来源关联不能在此丢失。
     ...(item.provenance ? { provenance: { ...item.provenance } } : {}),

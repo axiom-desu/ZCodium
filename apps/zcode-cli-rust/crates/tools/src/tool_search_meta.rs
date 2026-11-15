@@ -44,6 +44,7 @@ pub fn concurrent_safe(name: &str) -> bool {
 
 /// 内置工具注册元数据（deferred / alwaysLoad / searchHint）。
 pub fn metadata(name: &str) -> crate::domain::tool_search::Metadata {
+    // 生成资产是唯一事实来源（含 3.18 CronPauseSelf），不在此处另写兜底元数据。
     crate::domain::tool_search::builtin_metadata(name)
 }
 

@@ -58,6 +58,14 @@ function createDirectory(input: {
     async resolveProfileTarget(profile: ConnectionProfile) {
       return structuredClone(input.resolveTarget?.(profile) ?? profile.target);
     },
+    async resolveSourceLifecycleRoute(sourceServerId: string) {
+      const found = profiles.find((profile) => profile.sourceServerId === sourceServerId);
+      if (!found) throw new Error("missing profile");
+      return {
+        profile: structuredClone(found),
+        target: structuredClone(input.resolveTarget?.(found) ?? found.target),
+      };
+    },
     async recordHandshake(profileId: string, handshake: { sourceServerId: string }) {
       handshakes.push({ profileId, sourceServerId: handshake.sourceServerId });
       return { identityChanged: false, effectiveProfileId: profileId, effectiveProfile: profile };
@@ -133,6 +141,16 @@ function runtime(
     },
     async update() {
       return { sourceServerId: "11111111-1111-4111-8111-111111111111", version: "3.16.2" };
+    },
+    cancelUpdate() {
+      return false;
+    },
+    async stopSource() {},
+    async restartSource() {
+      return { sourceServerId: "11111111-1111-4111-8111-111111111111", version: "3.16.2" };
+    },
+    async getSourceRunningTasks() {
+      return { available: false as const };
     },
     async disconnect() {},
     isOnline() {
@@ -417,6 +435,85 @@ describe("SourceServerManagementService", () => {
     expect(snapshot.profiles).toHaveLength(1);
     // 口令只交给 directory/credential port；管理快照不包含明文。
     expect(JSON.stringify(snapshot)).not.toContain("secret-password");
+    service.dispose();
+  });
+
+  it("stopSource 走设备路由并在成功后投影未连接", async () => {
+    const directory = createDirectory({
+      profiles: [profile("ssh", { kind: "ssh", host: "example.test", username: "alice" })],
+    });
+    let stoppedId: string | undefined;
+    const service = createSourceServerManagementService({
+      directory,
+      runtime: runtime({
+        async stopSource(input) {
+          stoppedId = input.profile.sourceServerId;
+        },
+      }),
+    });
+    const snapshot = await service.stopSource("11111111-1111-4111-8111-111111111111");
+    expect(stoppedId).toBe("11111111-1111-4111-8111-111111111111");
+    expect(snapshot.states[0]?.state).toBe("offline");
+    service.dispose();
+  });
+
+  it("已知远端版本低于生命周期合同门禁时 typed 拒绝，不执行命令", async () => {
+    const directory = createDirectory({
+      profiles: [profile("ssh", { kind: "ssh", host: "example.test", username: "alice" })],
+    });
+    let stopped = false;
+    const service = createSourceServerManagementService({
+      directory,
+      runtime: runtime({
+        currentVersion: () => "3.16.2",
+        async stopSource() {
+          stopped = true;
+        },
+      }),
+    });
+    await expect(service.stopSource("11111111-1111-4111-8111-111111111111")).rejects.toMatchObject({
+      code: "source-server-upgrade-required",
+    });
+    expect(stopped).toBe(false);
+    service.dispose();
+  });
+
+  it("getSourceRunningTasks 原样返回不可信清单，不伪造空任务", async () => {
+    const directory = createDirectory({
+      profiles: [profile("ssh", { kind: "ssh", host: "example.test", username: "alice" })],
+    });
+    const service = createSourceServerManagementService({
+      directory,
+      runtime: runtime({
+        async getSourceRunningTasks() {
+          return { available: false };
+        },
+      }),
+    });
+    await expect(
+      service.getSourceRunningTasks("11111111-1111-4111-8111-111111111111"),
+    ).resolves.toEqual({ available: false });
+    service.dispose();
+  });
+
+  it("cancelSourceUpdate 只把线路身份交给既有 runtime flight", async () => {
+    const directory = createDirectory({
+      profiles: [profile("ssh", { kind: "ssh", host: "example.test", username: "alice" })],
+    });
+    let canceledProfile: string | undefined;
+    const service = createSourceServerManagementService({
+      directory,
+      runtime: runtime({
+        cancelUpdate(profileId) {
+          canceledProfile = profileId;
+          return true;
+        },
+      }),
+    });
+    await expect(
+      service.cancelSourceUpdate("22222222-2222-4222-8222-222222222222"),
+    ).resolves.toEqual({ canceled: true });
+    expect(canceledProfile).toBe("22222222-2222-4222-8222-222222222222");
     service.dispose();
   });
 

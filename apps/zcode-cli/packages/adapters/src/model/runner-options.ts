@@ -3,6 +3,7 @@ import type { ModelToolChoice } from "@zcode/contracts";
 import type { EnvRecord } from "./model-execution.js";
 import { toAiSdkMessages } from "./transform.js";
 import { toolSearchHeaders } from "./tool-search.js";
+import { withModelSessionFeaturesHeader } from "./model-request-headers.js";
 import { toAiSdkTools } from "./tool-transform.js";
 import type {
   AiSdkGenerateTextOptions,
@@ -54,9 +55,11 @@ export function createGenerateTextOptions(input: {
       : undefined,
     providerOptions: requestProviderOptions,
     abortSignal: input.request.abortSignal,
-    // 会话/请求/trace 标识只用于本地执行，不能自动作为归因头发送给模型服务。
-    // beta 大小写无关合并去重，不覆盖调用方已有的 anthropic-beta 内容。
-    headers: toolSearchHeaders(input.resolved.headers, input.request.toolSearchEnabled),
+    // 会话能力和请求用途由调用上下文拥有；toolSearch 只控制协议 beta。
+    headers: withModelSessionFeaturesHeader(
+      toolSearchHeaders(input.resolved.headers, input.request.toolSearchEnabled),
+      input.request.modelRequestSessionFeatures,
+    ),
     // ZCode owns system-message construction in core/context. Keep AI SDK from
     // printing its generic system-message warning to process stderr.
     allowSystemInMessages: true,
@@ -100,8 +103,11 @@ export function createStreamTextOptions(input: {
     seed: input.request.seed,
     providerOptions: requestProviderOptions,
     abortSignal: input.request.abortSignal,
-    // beta 大小写无关合并去重，不覆盖调用方已有的 anthropic-beta 内容。
-    headers: toolSearchHeaders(input.resolved.headers, input.request.toolSearchEnabled),
+    // beta 大小写无关合并去重；会话能力标签来自调用上下文，同名静态头被剔除。
+    headers: withModelSessionFeaturesHeader(
+      toolSearchHeaders(input.resolved.headers, input.request.toolSearchEnabled),
+      input.request.modelRequestSessionFeatures,
+    ),
     // ZCode owns system-message construction in core/context. Keep AI SDK from
     // printing its generic system-message warning to process stderr.
     allowSystemInMessages: true,

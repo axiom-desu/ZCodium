@@ -19,6 +19,8 @@ export interface McpHandlerHost {
   readonly records: Map<string, McpServerRecord>;
   readonly resourceSubscriptions: McpResourceSubscriptionRegistry;
   readonly activeCallTraces: Map<string, McpElicitationTrace>;
+  /** 当前工具调用的取消信号；存在时 elicitation 等待跟随该调用取消。 */
+  readonly activeCallSignals?: Map<string, AbortSignal>;
   readonly elicitation?: McpElicitationPort;
   readonly logger?: Logger;
   readonly notifications?: McpNotificationPort;
@@ -106,12 +108,18 @@ export function installElicitationHandler(
       return { action: "decline" };
     }
     const trace = host.activeCallTraces.get(serverName);
-    const result = await port.requestElicitation({
-      serverName,
-      message: request.params.message,
-      requestedSchema: request.params.requestedSchema,
-      ...(trace ? { trace } : {}),
-    });
+    const callSignal = host.activeCallSignals?.get(serverName);
+    // 工具调用被取消（caller/lease/entry 任一）时，用户已经在界面上看到的提问也一起结束，
+    // 不留下无主的待答权限行。
+    const result = await port.requestElicitation(
+      {
+        serverName,
+        message: request.params.message,
+        requestedSchema: request.params.requestedSchema,
+        ...(trace ? { trace } : {}),
+      },
+      callSignal ? { signal: callSignal } : undefined,
+    );
     return result.action === "accept"
       ? { action: "accept", content: result.content ?? {} }
       : { action: result.action };

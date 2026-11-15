@@ -47,6 +47,10 @@ fn snapshot_value(s: &Snapshot) -> Value {
             if let Some(status) = &e.status_message {
                 v["statusMessage"] = status.clone().into();
             }
+            // Node canonical entry 只在实际声明 `onError` 时带该键（allow / deny）。
+            if let Some(on_error) = e.on_error {
+                v["onError"] = on_error.as_str().into();
+            }
             match &e.program {
                 Program::Command { command, shell, background } => {
                     v["command"] = command.clone().into();
@@ -262,4 +266,69 @@ fn project_hooks_go_after_user_hooks() {
     use super::SourceKind::*;
     assert_eq!(order, [User, Project, Plugin]);
     assert_eq!(merged.last().unwrap().event, HookEvent::Stop);
+}
+
+#[test]
+fn declared_on_error_changes_the_declaration_digest_but_not_project_execution() {
+    // `onError` 是每 Hook 的失败策略（不是事件）。它必须进声明摘要：加/改都要重新审核；
+    // 但 TS `workspaceEntryToHookConfig` 不把它转给注册，所以项目 hook 执行仍按缺省 allow。
+    let default = json!({"enabled":false,"timeoutMs":60000,"maxOutputBytes":32768});
+    let source_of = |hook: Value| {
+        workspace::source(
+            "/w/.zcodium/config.json",
+            "/w",
+            json!({"enabled":true,"events":{"PreToolUse":[{"hooks":[hook]}]}}),
+            0,
+        )
+    };
+    let root = workspace::runtime_root(&[&default]);
+    let plain = workspace::snapshot(
+        "id",
+        "/w",
+        &[source_of(json!({"type":"command","command":"echo hi"}))],
+        root,
+    )
+    .unwrap();
+    let deny = workspace::snapshot(
+        "id",
+        "/w",
+        &[source_of(
+            json!({"type":"command","command":"echo hi","onError":"deny"}),
+        )],
+        root,
+    )
+    .unwrap();
+    assert_eq!(deny.hooks[0].on_error, Some(super::OnErrorPolicy::Deny));
+    assert_eq!(plain.hooks[0].on_error, None);
+    assert_ne!(plain.hooks[0].digest, deny.hooks[0].digest);
+    assert_ne!(plain.bundle_digest, deny.bundle_digest);
+    // 摘要变化让旧信任变 stale（trust 层按 digest 判定，无需新事件）。
+    let granted = super::trust::parse_record(&json!({
+        "workspaceIdentity": "id",
+        "hookDeclarationDigest": plain.hooks[0].digest,
+        "digestAlgorithm": "sha256",
+        "decision": "trusted",
+        "grantedAt": "2026-01-01T00:00:00.000Z",
+        "eventAtGrant": "PreToolUse",
+        "displayCommandAtGrant": "echo hi",
+        "sourcePathAtGrant": ".zcodium/config.json",
+        "sourceDiscoveryOrderAtGrant": 0,
+        "matcherAtGrant": null,
+        "matcherIndexAtGrant": 0,
+        "hookIndexAtGrant": 0,
+    }))
+    .unwrap();
+    let items = super::trust::evaluate(
+        &deny,
+        super::trust::Policy::UserDecides,
+        &[granted],
+        &BTreeSet::new(),
+        false,
+    );
+    assert_eq!(items[0].trust_state, super::trust::TrustState::StaleDigest);
+    // 注册表仍只给 allow：没有第二条执行路径，也没有伪 OnError 事件。
+    for registration in workspace::registrations(&deny) {
+        assert_eq!(registration.on_error, super::OnErrorPolicy::Allow);
+    }
+    assert!(super::HookEvent::parse("OnError").is_none());
 }

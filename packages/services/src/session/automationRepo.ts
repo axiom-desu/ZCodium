@@ -580,6 +580,32 @@ export class AutomationRepo {
       });
   }
 
+  /**
+   * 条件暂停（CronPauseSelf）：只有 active 且 enabled 的任务会转 paused；
+   * 已 paused / completed / failed / deleted 不改变状态。返回是否真的发生了变更，
+   * 由唯一的数据库 owner 决定，调用方不得用先读后写替代。
+   */
+  async pause(automationId: string, workspaceKey?: string): Promise<boolean> {
+    await this.ensureReady();
+    const result = this.getDatabase()
+      .prepare(
+        `UPDATE automations
+        SET enabled = 0,
+            lifecycle_status = 'paused',
+            updated_at = @now
+        WHERE automation_id = @id
+          AND (@workspace_key IS NULL OR workspace_key = @workspace_key)
+          AND enabled = 1
+          AND lifecycle_status = 'active'`,
+      )
+      .run({
+        id: automationId,
+        now: Date.now(),
+        workspace_key: workspaceKey ?? null,
+      });
+    return result.changes > 0;
+  }
+
   /** 终态任务手动重跑：回 active、清计数与重试态，nextRunAt 由调用方重算传入。 */
   async restart(
     automationId: string,

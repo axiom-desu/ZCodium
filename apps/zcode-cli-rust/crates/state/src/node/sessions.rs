@@ -246,6 +246,8 @@ pub fn list(conn: &Connection, input: &List) -> rusqlite::Result<Vec<SessionRow>
     // Node `listSessions`: a soft-deleted row is never returned. `includeArchived` is a
     // deprecated no-op; the historical `time_archived` column no longer filters anything.
     let mut clauses: Vec<String> = vec!["time_deleted is null".into()];
+    // 永久删除凭据写入后行仍在（等文件清理/重试），列表必须立刻隐藏它。
+    clauses.push("not exists(select 1 from session_purge where session_id=session.id)".into());
     let mut values: Vec<Sql> = vec![];
     let text = |v: &str| Sql::Text(v.to_owned());
     if let Some(project) = input.project_id.as_deref().filter(|p| !p.is_empty()) {

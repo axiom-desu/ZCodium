@@ -1,11 +1,22 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "noEmit": true,
     "outDir": "out/main",
     "rootDir": "src/main",
-    "lib": ["es2025"]
+    // main 里有在隔离浏览器页面上下文执行的序列化函数（playwright runtime），需要 DOM 类型；
+    // 这是上游 3.18.2 同等配置，只为类型检查，不改变 main 的运行环境。
+    "lib": ["es2025", "dom"],
+    "types": ["node", "electron"]
   },
   "include": ["src/main"],
-  // main 直接依赖 shared 和 services；把引用补齐后，desktop 子工程也能稳定复用上游声明产物。
-  "references": [{ "path": "../shared" }, { "path": "../services" }]
+  // main 直接 import 了 scheduler / host 的登录点；用 references 复用它们自己的工程产物，
+  // 避免 TS6059/TS6307 把 .js/.d.ts 回写到 src/scheduler、src/host。
+  "references": [
+    { "path": "../shared" },
+    { "path": "../services" },
+    { "path": "./tsconfig.app-navigation.json" },
+    { "path": "./tsconfig.host.json" },
+    { "path": "./tsconfig.scheduler.json" }
+  ]
 }

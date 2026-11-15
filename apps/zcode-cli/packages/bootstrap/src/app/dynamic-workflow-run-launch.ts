@@ -271,6 +271,7 @@ export function launchDynamicWorkflowRun(
       submitPort,
       submitProfile,
       modelRequestAdmission,
+      webSearchBudgetPort,
     }) => {
       const runtime = deps.createActorRuntime({
         runId,
@@ -284,6 +285,8 @@ export function launchDynamicWorkflowRun(
         ...(modelRequestAdmission === undefined ? {} : { modelRequestAdmission }),
         // 升级端口与 submit 端口同路下传：core 侧的注册门以端口存在为准，所以恒传。
         escalatePort,
+        // 每 ask 的 WebSearch 预算端口：与升级端口同族，恒在场。
+        webSearchBudgetPort,
         // resume 的 pin：这个 actor 上一次跑在哪个模型上。必须在**造 runtime 之前**读，
         // 因为下面那行 journalActorResolvedModel 会把这一轮的解析结果写回同一个字段。
         //

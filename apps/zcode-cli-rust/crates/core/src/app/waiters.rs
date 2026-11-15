@@ -21,6 +21,9 @@ pub(super) struct WaitingQuestion {
 pub(super) struct HostWait {
     pub owner: String,
     pub workspace: Value,
+    /// 释放时要公告的取消方法；`None` 表示该请求没有对应的取消通知
+    /// （如 `automation/pause`，Host 只按回执收口）。
+    pub announce: Option<&'static str>,
     pub reply: oneshot::Sender<Value>,
 }
 
@@ -178,6 +181,7 @@ mod tests {
             HostWait {
                 owner: "s1".into(),
                 workspace: Value::Null,
+                announce: Some("interaction/requestProviderRuntimeHeadersCancelled"),
                 reply: host,
             },
         );

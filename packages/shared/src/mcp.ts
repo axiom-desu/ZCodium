@@ -4,7 +4,7 @@
  */
 
 import type { SettingsDirectoryLocation } from "./settings-source.js";
-import type { McpServerFailureKind } from "./zcode-protocol/index.js";
+import type { McpServerFailureKind, WorkspaceMcpTrustReview } from "./zcode-protocol/index.js";
 
 // CUA official plugin 身份常量（port 自 feat；UI 设置面板 + bootstrap 复用以避免字面量漂移）。
 export const ZCODE_CUA_OFFICIAL_PLUGIN_ID = "computer-use@zcode-plugins-official";
@@ -122,6 +122,7 @@ export interface ZCodeMcpServer {
   failureKind?: McpServerFailureKind;
   serverRequestId?: string;
   toolCount?: number;
+  workspaceTrust?: WorkspaceMcpTrustReview;
   authorization?: {
     type: "oauth_authorization_code";
     authorizationUrl: string;

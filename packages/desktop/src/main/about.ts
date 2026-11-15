@@ -4,6 +4,7 @@ import { arch, hostname, platform, release, type, version as osVersion } from "n
 import { join } from "node:path";
 import {
   DEFAULT_LOCALE,
+  toZhOrEnLocale,
   type Locale,
   ZCODE_BUILD_TIME,
   ZCODE_COMMIT,
@@ -65,7 +66,7 @@ const ABOUT_WINDOW_HEIGHT = 312;
 const ABOUT_APPLICATION_NAME_FALLBACK = "ZCodium Exp";
 
 const ABOUT_MESSAGES: Record<
-  Locale,
+  "zh-CN" | "en-US",
   {
     aboutTitle: (applicationName: string) => string;
     buildLabel: string;
@@ -104,8 +105,9 @@ function normalizePackageVersion(version: string | undefined): string {
   return normalized === "unknown" ? normalized : normalized.replace(/^[^\d]*/, "") || normalized;
 }
 
-function getAboutMessages(locale: Locale): (typeof ABOUT_MESSAGES)[Locale] {
-  return ABOUT_MESSAGES[locale] ?? ABOUT_MESSAGES[DEFAULT_LOCALE];
+function getAboutMessages(locale: Locale): (typeof ABOUT_MESSAGES)[keyof typeof ABOUT_MESSAGES] {
+  // About 弹窗只内置中英；其它界面语言回退英文，避免回退 DEFAULT_LOCALE 时意外显示中文。
+  return ABOUT_MESSAGES[toZhOrEnLocale(locale)];
 }
 
 /**

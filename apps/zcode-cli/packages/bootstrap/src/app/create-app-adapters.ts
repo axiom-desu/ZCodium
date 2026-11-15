@@ -12,6 +12,7 @@ import { createPopplerPdfDocumentAdapter } from "@zcode/adapters/pdf";
 import { createNodeSessionMailboxAdapter } from "@zcode/adapters/mailbox";
 import { createMcpAdapter } from "@zcode/adapters/mcp";
 
+import { createWorkspaceMcpTrust } from "../workspace-mcp-trust/index.js";
 import type { ZCodeAppOptions } from "./types.js";
 import { isMessageEnabled } from "./app-config-options.js";
 import { asInputHistoryStore } from "./session-store.js";
@@ -62,7 +63,7 @@ export function createAppAdapterPorts(
         })
       : undefined);
   afterSessionMailbox();
-  const mcpPort =
+  const rawMcpPort =
     options.mcpPort ??
     (runtimeConfig.mcp?.enabled === false
       ? undefined
@@ -78,6 +79,17 @@ export function createAppAdapterPorts(
           },
           workingDirectory,
         })));
+  // 工作区 MCP 声明准入必须包住真实 lease，而不是只在设置页 UI 上隐藏。
+  const mcpPort = rawMcpPort
+    ? createWorkspaceMcpTrust({
+        workingDirectory,
+        workspaceIdentity: runtimeConfig.memory?.workspaceIdentity,
+        userConfigPath: options.userConfigPath,
+        projectConfigPath: options.projectConfigPath,
+        skipUserConfig: options.skipUserConfig,
+        env: options.env,
+      }).guard(rawMcpPort)
+    : undefined;
   const ownsMcpPort = options.mcpPort === undefined && mcpPort !== undefined;
   const executionPort =
     options.executionPort ??

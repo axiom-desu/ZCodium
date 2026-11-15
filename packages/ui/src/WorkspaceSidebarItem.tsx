@@ -58,6 +58,7 @@ import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.j
 import { ReconnectingRemoteWorkspaceLogTooltip } from "@/WorkspaceSidebar/ReconnectingRemoteWorkspaceLogTooltip.js";
 import { cn } from "@/components/lib/utils.js";
 import {
+  parseRemoteWorkspaceIdentity,
   TID_WORKSPACE_CLOSE,
   TID_WORKSPACE_FILE_TREE_BUTTON,
   TID_WORKSPACE_ITEM,
@@ -72,15 +73,8 @@ import {
 import { useRemotePinnedTaskStore } from "@/store/remotePinnedTaskStore.js";
 import { useRemoteTimelineTaskStore } from "@/store/remoteTimelineTaskStore.js";
 import { logger } from "@/logger.js";
-import {
-  RemoteSyncDialogs,
-  RemoteSyncMenuItems,
-  shouldShowRemoteSyncActions,
-} from "@/settings/RemoteSyncActions.js";
-import { invalidateDeferredDraftSessionForSkillChange } from "@/lib/zcodeDraftSkillInvalidation.js";
-import { refreshSharedSkillStoreForWorkspace } from "@/lib/skillStoreRefresh.js";
-import { refreshWorkspacePluginCapabilitiesAfterRemoteSync } from "@/lib/remotePluginSyncRefresh.js";
-import { useMcpStore } from "@/store/mcpStore.js";
+import { RemoteSyncMenuItems, shouldShowRemoteSyncActions } from "@/settings/RemoteSyncActions.js";
+import { openDataSyncDialog } from "@/data-sync/index.js";
 import { TaskRowActionButton } from "@/workspace-grouped-tasks/task-row-action-button.js";
 import { releaseWorkspaceRuntimeAfterProjectRemoval } from "@/lib/workspaceRuntimeRelease.js";
 import {
@@ -244,21 +238,38 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   );
   const showReconnectAction = Boolean(isDisconnectedRemoteWorkspace);
   const showFileTreeAction = Boolean(onOpenFileTree && !isDisconnectedRemoteWorkspace);
-  const showRemoteSkillSyncAction = shouldShowRemoteSyncActions({
-    remoteSessionId: tab.remoteSessionId,
-    remoteTarget: tab.remoteTarget,
-    clientMode: "desktop-continuous" as const,
-    hasLocalSourceService: Boolean(baseServices.skillSyncService),
-  });
+  const syncSourceServerId = tab.workspaceIdentity
+    ? parseRemoteWorkspaceIdentity(tab.workspaceIdentity)?.sourceServerId
+    : undefined;
+  const showRemoteSkillSyncAction = Boolean(
+    shouldShowRemoteSyncActions({
+      remoteSessionId: tab.remoteSessionId,
+      remoteTarget: tab.remoteTarget,
+      clientMode: "desktop-continuous" as const,
+      hasLocalSourceService: Boolean(baseServices.skillSyncService),
+    }) && syncSourceServerId,
+  );
+  const openLegacyDataSyncEntry = (category: "skills" | "mcp" | "plugins") => {
+    if (!syncSourceServerId) return;
+    openDataSyncDialog({
+      sourceServerId: syncSourceServerId,
+      category,
+      ...(tab.localWorkspacePath
+        ? {
+            workspace: {
+              sourceWorkspacePath: tab.localWorkspacePath,
+              targetWorkspacePath: tab.workspacePath,
+            },
+          }
+        : {}),
+    });
+  };
   // 远端工作区在“重连中”时，之前只有轻微背景呼吸效果，
   // 在侧边栏高密度列表里不够醒目，用户很难快速判断哪个容器仍在连接。
   // 这里复用 BorderBeam，只在重连进行中激活，让连接态反馈更清晰，
   // 同时避免在普通空闲态或断连态误显示为“仍在运行”。
   const shouldShowRemoteConnectingBorderBeam = isReconnectPending;
   const [isRemoteErrorCopied, setIsRemoteErrorCopied] = useState(false);
-  const [remoteSkillSyncOpen, setRemoteSkillSyncOpen] = useState(false);
-  const [remoteMcpSyncOpen, setRemoteMcpSyncOpen] = useState(false);
-  const [remotePluginSyncOpen, setRemotePluginSyncOpen] = useState(false);
   const [workspaceRowHovered, setWorkspaceRowHovered] = useState(false);
   const [workspaceRowFocusWithin, setWorkspaceRowFocusWithin] = useState(false);
   const [workspaceActionMenuOpen, setWorkspaceActionMenuOpen] = useState(false);
@@ -926,9 +937,9 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
                             canSyncMcp={showRemoteSkillSyncAction}
                             canSyncPlugins={showRemoteSkillSyncAction}
                             stopMouseDownPropagation
-                            onOpenSkillSync={() => setRemoteSkillSyncOpen(true)}
-                            onOpenMcpSync={() => setRemoteMcpSyncOpen(true)}
-                            onOpenPluginSync={() => setRemotePluginSyncOpen(true)}
+                            onOpenSkillSync={() => openLegacyDataSyncEntry("skills")}
+                            onOpenMcpSync={() => openLegacyDataSyncEntry("mcp")}
+                            onOpenPluginSync={() => openLegacyDataSyncEntry("plugins")}
                           />
                           <DropdownMenuItem
                             data-testid={testId(TID_WORKSPACE_CLOSE, tab.workspacePath)}
@@ -1136,66 +1147,6 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
           />
         </CollapsibleContent>
       </Collapsible>
-      <RemoteSyncDialogs
-        canSyncSkills={showRemoteSkillSyncAction}
-        canSyncMcp={showRemoteSkillSyncAction}
-        canSyncPlugins={showRemoteSkillSyncAction}
-        skillOpen={remoteSkillSyncOpen}
-        mcpOpen={remoteMcpSyncOpen}
-        pluginOpen={remotePluginSyncOpen}
-        onSkillOpenChange={setRemoteSkillSyncOpen}
-        onMcpOpenChange={setRemoteMcpSyncOpen}
-        onPluginOpenChange={setRemotePluginSyncOpen}
-        localSkillSyncService={baseServices.skillSyncService}
-        remoteSkillSyncService={services.skillSyncService}
-        localMcpSyncService={baseServices.mcpSyncService}
-        remoteMcpSyncService={services.mcpSyncService}
-        localPluginSyncService={baseServices.pluginSyncService}
-        remotePluginSyncService={services.pluginSyncService}
-        localZCodeAgentService={baseServices.zcodeAgentService}
-        remoteZCodeAgentService={services.zcodeAgentService}
-        remoteTarget={tab.remoteTarget}
-        skillWorkspacePath={tab.workspacePath}
-        mcpWorkspacePath={tab.workspacePath}
-        pluginWorkspacePath={tab.workspacePath}
-        pluginLocalWorkspacePath={tab.localWorkspacePath}
-        mcpLocalWorkspacePath={tab.localWorkspacePath}
-        workspaceIdentity={tab.workspaceIdentity}
-        onSkillsSynced={async () => {
-          await invalidateDeferredDraftSessionForSkillChange({
-            zcodeSessionService: services.zcodeSessionService,
-            workspacePath: tab.workspacePath,
-            workspaceIdentity: tab.workspaceIdentity,
-            reason: "sidebar-remote-skill-sync",
-          });
-          await refreshSharedSkillStoreForWorkspace({
-            workspacePath: tab.workspacePath,
-            workspaceIdentity: tab.workspaceIdentity,
-            skillsService: services.skillsService,
-          });
-        }}
-        onMcpSynced={async () => {
-          await useMcpStore
-            .getState()
-            .ensureLoadedForWorkspace(
-              tab.workspacePath,
-              services.mcpSyncService,
-              tab.workspaceIdentity,
-            );
-        }}
-        onPluginsSynced={async () => {
-          await refreshWorkspacePluginCapabilitiesAfterRemoteSync({
-            commandsService: services.commandsService,
-            mcpSyncService: services.mcpSyncService,
-            reason: "sidebar-remote-plugin-sync",
-            skillsService: services.skillsService,
-            workspaceIdentity: tab.workspaceIdentity,
-            workspacePath: tab.workspacePath,
-            zcodeAgentService: services.zcodeAgentService,
-            zcodeSessionService: services.zcodeSessionService,
-          });
-        }}
-      />
     </li>
   );
 });

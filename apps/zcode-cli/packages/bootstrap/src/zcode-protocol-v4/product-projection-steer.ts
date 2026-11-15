@@ -94,6 +94,10 @@ export function onTurnSteerDrained(
       ...(rootSourceCommandId ? { rootSourceCommandId } : {}),
       ...(item.intent?.clientId ? { clientId: item.intent.clientId } : {}),
       ...(item.intent?.attachmentRefs?.length ? { attachments: item.intent.attachmentRefs } : {}),
+      // queue/guide 消费的引用与 intent 同源：不重读 Composer，也不拼正文尾块。
+      ...(item.intent?.conversationQuotes
+        ? { conversationQuotes: item.intent.conversationQuotes }
+        : {}),
       ...(item.intent?.source ? { source: item.intent.source } : {}),
     };
     // queue/guide 消费后的 real-user row 与普通 TurnStarted 共用完整 canonical target；
@@ -131,6 +135,9 @@ export function onTurnSteerDrained(
                 : {}),
               ...(item.intent?.fallbackReasonCode
                 ? { fallbackReasonCode: item.intent.fallbackReasonCode }
+                : {}),
+              ...(item.intent?.conversationQuotes
+                ? { conversationQuotes: item.intent.conversationQuotes }
                 : {}),
               ...(item.intent?.modelSelection
                 ? { modelSelection: item.intent.modelSelection }

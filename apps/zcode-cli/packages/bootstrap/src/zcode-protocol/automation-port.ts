@@ -11,6 +11,7 @@ import {
   zcodeAutomationCreateResultSchema,
   zcodeAutomationDeleteResultSchema,
   zcodeAutomationListResultSchema,
+  zcodeAutomationPauseResultSchema,
   zcodeAutomationUpdateResultSchema,
   zcodeProtocolMethods,
   type ZCodeAutomationProtocol,
@@ -218,6 +219,16 @@ export function createProtocolAutomationPort(
         zcodeAutomationDeleteResultSchema,
       );
       return result.deleted;
+    },
+    async pause(input) {
+      // 目标 id 由 core 执行器从 loop automationId 注入，这里只透传给 Host 做条件暂停；
+      // 旧 Host 不认识 automation/pause 时返回 -32601，直接作为工具错误冒泡，不做兜底。
+      const result = await context.requestClient(
+        zcodeProtocolMethods.automationPause,
+        { automationId: input.id },
+        zcodeAutomationPauseResultSchema,
+      );
+      return result.paused;
     },
   };
 }

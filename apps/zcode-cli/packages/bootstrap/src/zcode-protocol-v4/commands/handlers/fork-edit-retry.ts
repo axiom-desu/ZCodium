@@ -13,19 +13,20 @@ import {
   RewindStrategy,
   traceContextToLogContext,
   type MessageId,
+  type SessionId,
   type TurnId,
 } from "@zcode/contracts";
 import { mapAttachmentRefsToTurnAttachments } from "../attachment-refs.js";
-import { inputIntentMetadataFromCanonical } from "../input-intent.js";
+import {
+  hasEditedPromptInput,
+  inputIntentMetadataFromCanonical,
+  resolveEditedConversationQuotes,
+} from "../input-intent.js";
 import { startPromptTurn } from "../prompt-turn.js";
 import { commandAdmissionOf } from "../executor.js";
 import { requireRecord } from "../record-access.js";
 import type { V4CommandCoreHost, V4SessionRecordView } from "../types.js";
-import {
-  hasPromptInput,
-  preemptActiveTurnAndWait,
-  V4InputAdmissionRejectedError,
-} from "./session-flow.js";
+import { preemptActiveTurnAndWait, V4InputAdmissionRejectedError } from "./session-flow.js";
 import { applyGoalCommand } from "./goal-compact.js";
 import type { ConversationEditTarget } from "../../product-projection.js";
 
@@ -133,9 +134,14 @@ async function editUserQuery(
   }
   const editTarget = resolution.editTarget;
   const attachmentRefs = payload.attachments ?? stableAttachmentRefs(editTarget);
+  // 选择引用与附件同语义：缺省沿用 canonical；显式 [] 才是用户清空。
+  const conversationQuotes = resolveEditedConversationQuotes(
+    payload.conversationQuotes,
+    editTarget.intent.conversationQuotes,
+  );
   // attachments 缺省与 [] 语义不同；必须基于 effective refs 校验，
-  // 才能同时允许 attachment-only edit，并在正文和附件都被清空时于 rewind 前拒绝。
-  if (!hasPromptInput(payload.newText, attachmentRefs)) {
+  // 才能同时允许 attachment-only edit，并在正文、附件和引用都被清空时于 rewind 前拒绝。
+  if (!hasEditedPromptInput(payload.newText, attachmentRefs, conversationQuotes)) {
     throw new V4InputAdmissionRejectedError("proto.invalidPayload", "input must not be empty");
   }
   // 附件映射在 rewind 前完成：引用失效要在截断历史之前暴露，避免半程失败。
@@ -214,6 +220,7 @@ async function editUserQuery(
     payload.newText,
     attachmentRefs,
     attachments,
+    conversationQuotes,
   );
   // 生产 renderer 不落日志，过去只能从通用 rewind + send 猜测发生过编辑，
   // 无法与 retry 稳定区分。命令副作用完成后由 Agent server 写低频 info 审计索引。
@@ -268,6 +275,8 @@ async function retryTurn(
     resolution.editTarget.intent.text,
     attachmentRefs,
     attachments,
+    // retry 不改用户内容：引用必须沿用 canonical 值，否则重试会静默丢掉批注。
+    resolveEditedConversationQuotes(undefined, resolution.editTarget.intent.conversationQuotes),
   );
   return undefined;
 }
@@ -306,6 +315,14 @@ async function forkAssistant(
     goalBoundary: resolution.goalBoundary,
     sourceCommandId: envelope.commandId,
     revisionAtDecision: envelope.baseRevision ?? 0,
+    // Host 预分配 childSessionId 并预留任务归属；CLI 必须使用同一 ID，
+    // 否则任务行与真实子会话不一致。targetCwd 决定子会话工作目录。
+    ...(payload.targetCwd
+      ? {
+          forkedSessionId: payload.targetCwd.childSessionId as SessionId,
+          targetCwd: { cwd: payload.targetCwd.cwd },
+        }
+      : {}),
   });
   // fork 完成事实过去只在 session event/debug 中，生产默认 JSONL 无法直接检索。
   // child 已创建并完成宿主注册后再写 info，避免把被拒绝或失败的请求误记为成功。
@@ -342,6 +359,7 @@ async function startCanonicalIntent(
   text: string,
   attachmentRefs: ReturnType<typeof stableAttachmentRefs>,
   attachments: Awaited<ReturnType<typeof mapAttachmentRefsToTurnAttachments>>,
+  conversationQuotes: ReturnType<typeof resolveEditedConversationQuotes>,
 ): Promise<void> {
   const intent = inputIntentMetadataFromCanonical(
     envelope,
@@ -358,6 +376,7 @@ async function startCanonicalIntent(
       mode: editTarget.intent.mode,
       planEnabled: editTarget.intent.planEnabled,
       attachmentRefs,
+      ...(conversationQuotes ? { conversationQuotes } : {}),
       provenance: editTarget.intent.provenance,
     },
     text,

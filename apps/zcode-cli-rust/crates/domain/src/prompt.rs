@@ -22,11 +22,22 @@ pub struct GitSnapshot {
     pub status: String,
     pub recent_commits: String,
 }
+/// 读取到的指令文件（`ContextPort` 的投影）。3.18 起由公告渲染，不再嵌入请求前缀。
 pub struct InstructionSource {
     pub path: String,
     pub user: bool,
     pub content: String,
     pub truncated: bool,
+    /// 显式公告类型（auto-memory 用）；缺省按 `user` 推 project/user。
+    pub kind: Option<String>,
+}
+
+/// 一次指令来源读取：成功读到的文件，以及**存在但读不出来**的路径。
+/// 读不出来的路径不算删除（安全修复 F1）：模型保留已宣告的副本。
+#[derive(Default)]
+pub struct InstructionRead {
+    pub sources: Vec<InstructionSource>,
+    pub unreadable: Vec<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,19 +61,15 @@ pub fn user_steer(text: &str) -> String {
         .user_steer
         .replacen("{zcode_input_text}", text, 1)
 }
-pub fn prefix(
-    snapshot: &PromptSnapshot,
-    sources: &[InstructionSource],
-    model: Option<(&str, &str)>,
-    desktop: bool,
-) -> Vec<Value> {
-    prefix_with_chars(snapshot, sources, model, desktop, &[]).0
+pub fn prefix(snapshot: &PromptSnapshot, model: Option<(&str, &str)>, desktop: bool) -> Vec<Value> {
+    prefix_with_chars(snapshot, model, desktop, &[]).0
 }
 /// The request prefix and the characters of its system and meta-user context
 /// sections (Node `ContextSection.chars`, spec rust-m9-usage-logs §4.2).
+/// 指令文件不在请求前缀里：3.18 起由 `instruction_files` 公告（含 preamble）作为
+/// provider 可见的 model-only notice 落库，见 `.agents/specs/upstream-3.18-rust-context.md`。
 pub fn prefix_with_chars(
     snapshot: &PromptSnapshot,
-    sources: &[InstructionSource],
     model: Option<(&str, &str)>,
     desktop: bool,
     additional_directories: &[String],
@@ -144,33 +151,14 @@ pub fn prefix_with_chars(
         ));
         chars.system += js_len(&dynamic[start..]);
     }
+    // system 末尾的固定余额行（官方 `TOTAL_TOKENS_SYSTEM_LINE`）。
+    dynamic.push_str("\n\n");
+    dynamic.push_str(&crate::total_tokens::system_line());
+    chars.system += crate::usage::js_len(&crate::total_tokens::system_line());
     let mut messages = [&templates.cli, &stable, &dynamic].map(|content| {
         json!({"role":"system","content":content,"_zcode_cache_control":{"type":"ephemeral"}})
     }).to_vec();
-    let mut sections = vec![];
-    for source in sources {
-        let body = if source.truncated {
-            format!("{}\n\n[File truncated: AGENTS.md]", source.content)
-        } else {
-            source.content.clone()
-        };
-        let body = body.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
-        if !body.is_empty() {
-            sections.push(format!(
-                "Contents of {} ({}):\n\n{body}",
-                source.path,
-                if source.user {
-                    "user default instructions"
-                } else {
-                    "workspace instructions"
-                }
-            ));
-        }
-    }
     let mut context = vec![];
-    if !sections.is_empty() {
-        context.push(format!("# agentsMd\nCodebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n\n{}", sections.join("\n\n")));
-    }
     if !snapshot.current_date.is_empty() {
         context.push(format!(
             "# currentDate\nToday's date is {}.",
@@ -207,18 +195,13 @@ mod additional_directory_tests {
             os_version: "linux".into(),
             ..Default::default()
         };
-        let (prefix, _) = prefix_with_chars(
-            &snapshot,
-            &[],
-            None,
-            false,
-            &["/shared".into(), "/other".into()],
-        );
+        let (prefix, _) =
+            prefix_with_chars(&snapshot, None, false, &["/shared".into(), "/other".into()]);
         let rendered = serde_json::to_string(&prefix).unwrap();
         assert!(rendered.contains("Additional directories"));
         assert!(rendered.contains("/shared"));
         assert!(rendered.contains("/other"));
-        let (empty, _) = prefix_with_chars(&snapshot, &[], None, false, &[]);
+        let (empty, _) = prefix_with_chars(&snapshot, None, false, &[]);
         assert!(
             !serde_json::to_string(&empty)
                 .unwrap()

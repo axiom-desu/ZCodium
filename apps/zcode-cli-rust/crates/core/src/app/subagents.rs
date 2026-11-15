@@ -131,6 +131,7 @@ impl Engine {
         // Node 把会话级工具 allow/deny 传给子代理 runtime。
         session.runtime.tools = self.sessions[parent].runtime.tools.clone();
         self.sessions.insert(child.clone(), session);
+        self.store.session_presence_register(&child).await?;
         let prompt = args["prompt"].as_str().unwrap();
         self.node_child_created(&child, prompt);
         let c = child_command(&child, &self.clock.id(), prompt);

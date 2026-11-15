@@ -2,13 +2,8 @@ import { beginLocalTurnPreparation } from "@zcode/contracts";
 import { runWithModelInvocationContext, traceContextToLogContext } from "../deps.js";
 import type { ModelReasoningContentBlock, ModelToolCall, ModelUsage, ToolCallId } from "../deps.js";
 import {
-  buildSuspiciousEmptyDiagnostics,
-  finalizeSuspiciousEmptyModelResult,
-  isContextExceededFinishReason,
-  isSuspiciousEmptyModelResult,
   normalizeStreamError,
   normalizeModelToolCallsForRuntime,
-  readRawFinishReason,
 } from "../helpers/index.js";
 import type { RunModelTextRequestOptions, RuntimeModelTextResult } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
@@ -18,7 +13,18 @@ import { createToolInputDeltaBuffer } from "./model-tool-input-delta.js";
 import { projectModelRequestInput } from "./model-request-projection.js";
 import { getOrCreateReasoningBlock } from "./reasoning-stream.js";
 import { resolveModelRequestSessionTypeFromTaskType } from "./model-request-session-type.js";
-import { isOutputTokenLimitFinishReason } from "./turn-output-token-continuation.js";
+import { reportModelStreamFinishDiagnostics } from "./model-stream-diagnostics.js";
+import {
+  captureProviderToolCall,
+  completeProviderToolResult,
+  createProviderToolStreamState,
+  settleProviderToolStream,
+} from "../provider-tool-rounds/stream.js";
+import { readSessionFeatures } from "../session-features/contract.js";
+import {
+  recordRequestContextComposition,
+  recordRequestContextCompositionUsage,
+} from "../context-composition/state.js";
 
 export async function runModelTextRequest(
   this: AgentRuntimeInternal,
@@ -36,6 +42,8 @@ export async function runModelTextRequest(
   const modelInvocationContext = {
     metadata: traceContextToLogContext(projectedOptions.traceContext),
     modelRequestSessionType: resolveModelRequestSessionTypeFromTaskType(this.config.taskType),
+    // 会话能力标签是 runtime 字段，不是 config：workflow 子 actor 展开父 config 时不会继承。
+    modelRequestSessionFeatures: readSessionFeatures(this),
     // 重试预算与准入端口不在这里设：它们是 runtime 层字段，由 createRuntimeModel 绑在句柄上，turn step 与工具内部的模型调用同一来源。
     modelCall: {
       // 普通 Agent Step 以前只靠 metadata.querySource 在 Adapter 中反推
@@ -96,6 +104,11 @@ export async function runModelTextRequest(
   const contextUsageSnapshot = this.buildContextUsageSnapshot(projectedOptions);
   const contextUsageBreakdown = this.buildContextUsageBreakdownFromSnapshot(contextUsageSnapshot);
   this.logContextUsageSnapshot(projectedOptions, contextUsageSnapshot);
+  // context 组成的「请求」相位与圆环来自同一次分解（子 spec §2.1）。
+  recordRequestContextComposition(this, {
+    model,
+    breakdown: contextUsageSnapshot.composition,
+  });
 
   if (!this.shouldStreamModelText()) {
     const result = await runWithModelInvocationContext(modelInvocationContext, () =>
@@ -107,6 +120,7 @@ export async function runModelTextRequest(
       source: "generateText",
       traceContext: projectedOptions.traceContext,
     });
+    recordRequestContextCompositionUsage(this, contextUsageSnapshot.composition, result.usage);
     return {
       ...result,
       ...(contextUsageBreakdown.length > 0 ? { contextUsageBreakdown } : {}),
@@ -118,10 +132,16 @@ export async function runModelTextRequest(
   let finishReason = "unknown";
   let usage: ModelUsage = {};
   let providerMetadata: Record<string, unknown> | undefined;
-  const reasoning: ModelReasoningContentBlock[] = [];
+  let reasoning: ModelReasoningContentBlock[] = [];
   const reasoningById = new Map<string, ModelReasoningContentBlock>();
   const toolCalls: ModelToolCall[] = [];
   const toolCallIds = new Set<string>();
+  // 服务端内置工具把一次响应切成多轮：text/reasoning 只属于当前轮，遇到 provider 调用就收起。
+  const providerToolStream = createProviderToolStreamState({
+    assistantMessageId: options.assistantMessageId,
+    events: options.events,
+    traceContext: options.traceContext,
+  });
   const publishStreamSnapshot = () => options.onStreamSnapshot?.({ reasoning, text });
   const {
     drain: drainStreamingEvents,
@@ -331,6 +351,24 @@ export async function runModelTextRequest(
             toolName: toolCall.name,
           });
           options.onStreamToolCall?.(toolCall);
+          if (toolCall.providerExecuted) {
+            await captureProviderToolCall(this, providerToolStream, { reasoning, text, toolCall });
+            text = "";
+            reasoning = [];
+            reasoningById.clear();
+            publishStreamSnapshot();
+          }
+          break;
+        }
+
+        case "provider_tool_result": {
+          await completeProviderToolResult(
+            this,
+            providerToolStream,
+            event,
+            drainStreamingEvents,
+            publishStreamSnapshot,
+          );
           break;
         }
 
@@ -364,62 +402,23 @@ export async function runModelTextRequest(
     }
   } catch (error) {
     await drainStreamingEvents();
+    await settleProviderToolStream(this, providerToolStream, publishStreamSnapshot, "failure");
     throw error;
   }
   await drainStreamingEvents();
+  await settleProviderToolStream(this, providerToolStream, publishStreamSnapshot, "end");
 
-  const rawFinishReason = readRawFinishReason(providerMetadata);
-  const outputTokenLimit = isOutputTokenLimitFinishReason(finishReason, rawFinishReason);
-  const contextExceeded =
-    toolCalls.length === 0 &&
-    !outputTokenLimit &&
-    isContextExceededFinishReason(finishReason, rawFinishReason);
-  if (contextExceeded) {
-    // 这里若把 HTTP 200 + finish metadata 提前抛成流异常，会先被通用断流恢复接管，
-    // 从而绕过 turn 层的 Reactive Compact。保留原始结果，由 turn 层统一处理超窗语义。
-    this.logger?.warn("Model stream ended with provider context overflow", {
-      ...traceContextToLogContext(options.traceContext),
-      event: "model.runtime.stream.context_exceeded",
-      finishReason,
-      module: "core.runtime",
-      modelProviderId: executionModelSelection.providerId,
-      modelId: executionModelSelection.modelId,
-      rawFinishReason,
-      textLength: text.length,
-      toolCallCount: toolCalls.length,
-    });
-  }
+  reportModelStreamFinishDiagnostics(this, {
+    finishReason,
+    model: executionModelSelection,
+    providerMetadata,
+    textLength: text.length,
+    toolCallCount: toolCalls.length,
+    traceContext: options.traceContext,
+    usage,
+  });
 
-  // 流在只发出 start/prelude 后以 finishReason=unknown 结束时，会被记到 turn-model-step
-  // 的 suspicious empty。这里在返回 result 前再扫一遍 providerMetadata/空 completion。
-  if (
-    !contextExceeded &&
-    !outputTokenLimit &&
-    isSuspiciousEmptyModelResult(finishReason, text.length, toolCalls.length, usage)
-  ) {
-    // zcode-plan 常返回 HTTP 200 空 SSE，需在抛错前打出 finish/providerMetadata 摘要，避免只能看到 UI 泛化文案。
-    this.logger?.warn("Model stream ended with suspicious empty completion", {
-      ...traceContextToLogContext(options.traceContext),
-      event: "model.runtime.stream.suspicious_empty",
-      module: "core.runtime",
-      modelProviderId: executionModelSelection.providerId,
-      modelId: executionModelSelection.modelId,
-      textLength: text.length,
-      toolCallCount: toolCalls.length,
-      ...buildSuspiciousEmptyDiagnostics({
-        finishReason,
-        providerMetadata,
-        rawFinishReason,
-      }),
-    });
-    finalizeSuspiciousEmptyModelResult({
-      finishReason,
-      model: executionModelSelection,
-      providerMetadata,
-      rawFinishReason,
-    });
-  }
-
+  recordRequestContextCompositionUsage(this, contextUsageSnapshot.composition, usage);
   return {
     ...(contextUsageBreakdown.length > 0 ? { contextUsageBreakdown } : {}),
     finishReason,
@@ -427,6 +426,9 @@ export async function runModelTextRequest(
     reasoning: reasoning.length > 0 ? reasoning : undefined,
     text,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    ...(providerToolStream.rounds.length > 0
+      ? { providerToolRounds: providerToolStream.rounds }
+      : {}),
     usage,
   };
 }

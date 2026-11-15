@@ -23,6 +23,9 @@ pub mod open;
 mod open_error;
 pub mod reconcile;
 pub mod resume;
+pub mod session_data;
+pub mod session_data_files;
+pub mod session_data_inspect;
 pub mod sessions;
 mod sessions_write;
 pub mod settings;
@@ -42,6 +45,9 @@ mod fixture_tests;
 mod listing_tests;
 #[cfg(test)]
 mod repo_tests;
+#[cfg(test)]
+#[path = "session_data_tests.rs"]
+mod session_data_tests;
 #[cfg(test)]
 #[path = "session_soft_delete_tests.rs"]
 mod session_soft_delete_tests;

@@ -24,6 +24,12 @@ export function createDesktopPluginSandboxPlatform(): PluginSandboxPlatformPort 
     getOwnerWebContentsId: () => bridge.getOwnerWebContentsId(),
     disposeSandbox: (sandboxId, initId) => bridge.disposeSandbox(sandboxId, initId),
     consumeUserGesture: (sandboxId) => bridge.consumeUserGesture(sandboxId),
+    ...(bridge.setExecutionActive
+      ? {
+          setExecutionActive: (sandboxId: string, active: boolean) =>
+            bridge.setExecutionActive!(sandboxId, active),
+        }
+      : {}),
     onPorts(handler) {
       const listener = (event: MessageEvent) => {
         const parsed = parsePluginSandboxPortsMessage(event);

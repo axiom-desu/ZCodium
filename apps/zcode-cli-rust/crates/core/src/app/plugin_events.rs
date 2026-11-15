@@ -25,6 +25,8 @@ impl Engine {
         let wait = super::waiters::HostWait {
             owner: method.into(),
             workspace: params["workspace"].clone(),
+            // plugins/* 请求没有会话级取消通知；释放只解析等待方。
+            announce: None,
             reply,
         };
         self.waiters.add_host(id.clone(), wait);

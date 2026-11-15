@@ -71,6 +71,10 @@
     "packages/ui/src/components/ai-elements",
     ".agents/skills",
     "packages/formal-proof",
-    "docs/electron"
+    "docs/electron",
+    // 内置 design 插件的技能、设计资源与随包脚本是逐字节随包的上游内容（Open Design 0.7.0 及
+    // 各子技能，来源与许可见 third-party/copied-components.json 与 design-resources/NOTICE.md）。
+    // 与上面的 vendored UI 子树同理：改写它们会破坏许可出处与上游哈希比对，所以不进 lint 范围。
+    "apps/zcode-cli/packages/design-plugin/skills/design"
   ]
 }

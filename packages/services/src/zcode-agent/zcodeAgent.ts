@@ -76,6 +76,7 @@ import type {
   ZCodeWorkspaceGenerateTextResult,
   ZCodeWorkspaceGenerateTextParams,
   ZCodeWorkspaceHookTrustGrantResult,
+  ZCodeWorkspaceMcpTrustResult,
   ZCodeAutomationBotDeliveryTarget,
 } from "@zcode/shared";
 import type {
@@ -112,6 +113,9 @@ import type {
   V4ConversationResyncResult,
   V4ConversationSubscribeResult,
   V4SessionsIndexSubscribeResult,
+  V4SessionDataMeasureResult,
+  V4SessionDataParams,
+  V4SessionDataPurgeResult,
   V4WorkspaceConfigSubscribeResult,
   WorkspaceConfigTopicWireCandidate,
 } from "@zcode/shared/zcode-protocol-v4";
@@ -132,6 +136,8 @@ import type {
   ZCodeAgentListMcpServerStatusesParams,
   ZCodeAgentPluginViewParams,
   ZCodeAgentPluginReferenceCatalogParams,
+  ZCodeAgentPluginMentionItemsParams,
+  ZCodeAgentPluginMentionItemsResult,
   ZCodeAgentSkillReferenceCatalogParams,
   ZCodeAgentReadMcpResourceParams,
   ZCodeAgentReadMcpResourceForUiParams,
@@ -239,6 +245,11 @@ export interface ZCodeAgentCreateSessionParams extends ZCodeAgentWorkspaceTarget
   importedHistory?: ZCodeSessionImportHistory;
   /** Host 项目组织态 id；由项目服务/UI 显式给出，不由 cwd 推断。 */
   projectId?: string | null;
+  /**
+   * 受管 worktree 任务：workspace 已是 worktree 根目录，本字段只交给 Host 的项目预占入口
+   * 记录 tasks.worktree_root；不进入 CLI wire（buildSessionCreateParams 不转发）。
+   */
+  worktreeRoot?: string;
   /** prepareSession/reserve 冻结的附加目录；S8-C runtime 消费，Host 不改 cwd。 */
   additionalDirectories?: string[];
 }
@@ -288,6 +299,13 @@ export type ZCodeAgentReadWorkspacePresentationParams = ZCodeAgentWorkspaceTarge
 export interface ZCodeAgentGrantWorkspaceHookTrustParams extends ZCodeAgentWorkspaceTarget {
   bundleDigest: string;
   hookDeclarationDigest: string;
+}
+
+/** 工作区 MCP 声明审核：摘要来自 mcp/list 的只读 workspaceTrust，不能由 UI 自行计算。 */
+export interface ZCodeAgentSetWorkspaceMcpTrustParams extends ZCodeAgentWorkspaceTarget {
+  serverName: string;
+  declarationDigest: string;
+  trusted: boolean;
 }
 
 export interface ZCodeAgentSendPromptParamsBase extends ZCodeAgentSessionTarget {
@@ -646,6 +664,18 @@ export interface IZCodeAgentService {
     params: ZCodeAgentListSessionSubagentsParams,
   ): Promise<ZCodeSessionSubagentsResult>;
   getAppUsageStats(params: ZCodeAgentAppUsageParams): Promise<AppUsageSnapshot>;
+  /**
+   * 项目数据删除前的测量：只读，用本机已有 runtime 或管理面进程，不为某个项目拉起 Agent。
+   * 旧 CLI（含 Rust CLI）没有 V4 方法时表现为 method-not-found，调用方必须报不可用而非 0 字节。
+   */
+  measureSessionData?(params: V4SessionDataParams): Promise<V4SessionDataMeasureResult>;
+  /**
+   * 彻底删除会话与目录记忆。workspace 已有 Agent 进程时交给它（它持有会话运行态，能判断运行中
+   * 并释放已加载会话）；否则交给管理面进程。只用于本机。
+   */
+  purgeSessionData?(
+    params: V4SessionDataParams & { workspace: ZCodeAgentWorkspaceTarget },
+  ): Promise<V4SessionDataPurgeResult>;
   getTaskTokenUsage(params: ZCodeAgentTaskTokenUsageParams): Promise<ZCodeTaskTokenUsageResult>;
   readSession(params: ZCodeAgentReadSessionParams): Promise<ZCodeSessionStateSnapshot>;
   readSessionMessages(
@@ -661,6 +691,10 @@ export interface IZCodeAgentService {
     params: ZCodeAgentGrantWorkspaceHookTrustParams,
   ): Promise<ZCodeWorkspaceHookTrustGrantResult>;
   listMcpServerStatuses(params: ZCodeAgentListMcpServerStatusesParams): Promise<ZCodeMcpListResult>;
+  /** 工作区 MCP 审核决定；走只读控制面 client，不连接其它 server。 */
+  setWorkspaceMcpTrust(
+    params: ZCodeAgentSetWorkspaceMcpTrustParams,
+  ): Promise<ZCodeWorkspaceMcpTrustResult>;
   listPlugins(params: ZCodeAgentPluginViewParams): Promise<ZCodePluginsListResult>;
   /**
    * Plugin 对话引用 catalog：session-scoped 只读投影。
@@ -669,6 +703,13 @@ export interface IZCodeAgentService {
   getPluginReferenceCatalog(
     params: ZCodeAgentPluginReferenceCatalogParams,
   ): Promise<ZCodePluginsReferenceCatalogResult>;
+  /**
+   * `plugins/mentionItems`：`@` 面板里 Plugin tool target 的候选项。
+   * existing-only：会话必须已在 CLI 内存；旧 CLI（method not found）返回 `supported:false`。
+   */
+  getPluginMentionItems(
+    params: ZCodeAgentPluginMentionItemsParams,
+  ): Promise<ZCodeAgentPluginMentionItemsResult>;
   /** Composer Skill 引用 catalog；带 sessionId 时读取该 runtime 的冻结快照。 */
   getSkillReferenceCatalog(
     params: ZCodeAgentSkillReferenceCatalogParams,
@@ -815,6 +856,15 @@ export interface IZCodeAgentService {
   closeSession(
     params: ZCodeAgentSessionTarget & { expectedPersistence?: "deferred" | "immediate" },
   ): Promise<boolean>;
+  /** CLI 是否声明受管 worktree cwd 能力（forkAssistant.targetCwd）；旧 CLI 返回 false。 */
+  supportsWorktreeCwd(params: ZCodeAgentWorkspaceTarget): Promise<boolean>;
+  /**
+   * 只卸载 cwd 位于 directory 内的驻留会话，不删除持久会话。
+   * 任一会话忙时返回 busy；绝不为此启动新 CLI 进程。
+   */
+  releaseSessionsUnderDirectory(
+    params: ZCodeAgentWorkspaceTarget & { directory: string },
+  ): Promise<{ released: string[]; busy: string[] }>;
   setModel(params: ZCodeAgentSetModelParams): Promise<ZCodeSessionStateSnapshot>;
   setThoughtLevel(params: ZCodeAgentSetThoughtLevelParams): Promise<ZCodeSessionStateSnapshot>;
   setMode(params: ZCodeAgentSetModeParams): Promise<ZCodeSessionStateSnapshot>;

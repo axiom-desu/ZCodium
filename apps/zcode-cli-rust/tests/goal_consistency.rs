@@ -83,7 +83,12 @@ impl ModelPort for Model {
         _: &EventSink,
         _: &CancellationToken,
     ) -> std::result::Result<ModelOutput, ModelFailure> {
-        let verify = messages.last().unwrap()["content"]
+        // 3.18：请求末尾的余额提醒不属于脚本判定的输入。
+        let verify = messages
+            .iter()
+            .rev()
+            .find(|m| m["_zcode_source"] != "total_tokens_reminder")
+            .unwrap()["content"]
             .as_str()
             .unwrap()
             .starts_with("Verify whether");
@@ -141,6 +146,7 @@ async fn goal_start_and_verdict_are_durable_barriers_and_failure_stops_the_next_
                         std::env::temp_dir().join("fixture-empty-home"),
                         false,
                         std::env::vars().collect(),
+                        None,
                     )),
                     store: Arc::new(Store {
                         gate,

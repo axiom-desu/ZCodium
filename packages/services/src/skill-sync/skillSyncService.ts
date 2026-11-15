@@ -23,6 +23,7 @@ import {
   walkSkillMarkdownPaths,
 } from "../skills/skillDiscoveryWalk.js";
 import { checkRemoteSyncDirectoryWriteAccess } from "../remote-sync/remoteSyncWriteAccess.js";
+import { createSkillDataSyncMethods } from "../data-sync/skillDataSync.js";
 
 const SKILL_FILE_NAME = "SKILL.md";
 const DEFAULT_MAX_ARCHIVE_BYTES = 20 * 1024 * 1024;
@@ -30,6 +31,8 @@ const DEFAULT_MAX_ARCHIVE_BYTES = 20 * 1024 * 1024;
 export function createSkillSyncService(options?: { maxArchiveBytes?: number }): ISkillSyncService {
   const maxArchiveBytes = options?.maxArchiveBytes ?? DEFAULT_MAX_ARCHIVE_BYTES;
   return {
+    // 数据同步五方法（IDataSyncCategoryService）：同一服务同时是旧归档同步的 owner。
+    ...createSkillDataSyncMethods({ maxItemBytes: maxArchiveBytes }),
     async listLocalUserSkillCandidates(): Promise<SkillSyncCandidateListResult> {
       return {
         candidates: await collectUserSkillCandidates(),
@@ -127,11 +130,11 @@ export function createSkillSyncService(options?: { maxArchiveBytes?: number }): 
   };
 }
 
-function resolveUserHomeDir(): string {
+export function resolveUserHomeDir(): string {
   return process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || homedir();
 }
 
-function getUserZcodeSkillRoot(): string {
+export function getUserZcodeSkillRoot(): string {
   return join(resolveUserHomeDir(), ZCODE_USER_DATA_DIR_NAME, "skills");
 }
 
@@ -139,7 +142,7 @@ function getUserAgentsSkillRoot(): string {
   return join(resolveUserHomeDir(), ".agents", "skills");
 }
 
-async function collectUserSkillCandidates(): Promise<SkillSyncCandidate[]> {
+export async function collectUserSkillCandidates(): Promise<SkillSyncCandidate[]> {
   const seenSkillRealpaths = new Set<string>();
   const userZcodeSkillRoot = getUserZcodeSkillRoot();
   const rawZcodeCandidates = await collectUserSkillCandidatesInRoot(userZcodeSkillRoot);
@@ -267,7 +270,7 @@ function normalizeSkillDirectoryRelativePath(root: string, directoryPath: string
   return relative(root, directoryPath).replaceAll("\\", "/");
 }
 
-function normalizeSkillNameKey(name: string): string {
+export function normalizeSkillNameKey(name: string): string {
   return name.trim().toLowerCase();
 }
 
@@ -275,7 +278,7 @@ function joinSkillRelativePath(parent: string, child: string): string {
   return parent ? `${parent}/${child}` : child;
 }
 
-async function readSkillFileOrNull(skillPath: string): Promise<string | null> {
+export async function readSkillFileOrNull(skillPath: string): Promise<string | null> {
   try {
     return await readFile(skillPath, "utf-8");
   } catch (error) {
@@ -286,7 +289,7 @@ async function readSkillFileOrNull(skillPath: string): Promise<string | null> {
   }
 }
 
-function parseSkillMetadata(
+export function parseSkillMetadata(
   content: string,
   fallbackName: string,
 ): {

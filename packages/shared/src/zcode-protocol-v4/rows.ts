@@ -5,6 +5,7 @@ import { z } from "zod";
 import { executionOutputPreviewSchema } from "../execution-output-preview.js";
 import { timestampSchema } from "./core.js";
 import { conversationInputSourceSchema } from "./input-intent.js";
+import { conversationQuotesSchema } from "../conversationSelection.js";
 import { backgroundResultOriginMetaSchema, workflowLaunchMetaSchema } from "./workflow-row-meta.js";
 
 // RowBase。rowId：session 内单调、永不复用、事件日志的确定性纯函数。
@@ -151,6 +152,8 @@ export const userInputRowSchema = z.object({
     .optional(),
   // 插件 UI 代发的消息带来源；卡片显示"来自插件 X"。旧 transcript 可缺省。
   source: conversationInputSourceSchema.optional(),
+  // 会话选区引用（含用户批注）：结构化 metadata，不再藏在正文尾块里。旧 transcript 可缺省。
+  conversationQuotes: conversationQuotesSchema.optional(),
 });
 export type UserInputRow = z.infer<typeof userInputRowSchema>;
 

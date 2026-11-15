@@ -44,6 +44,76 @@ impl Engine {
                 let _ = committed.send(self.sessions[id].skills.clone().unwrap());
                 return Ok(());
             }
+            // 3.18 F1：读取结果只做进程内缓存（会话开始与 compaction 后重读）。
+            Event::InstructionsLoaded {
+                files,
+                unreadable,
+                boundary,
+                committed,
+            } => {
+                let session = self.sessions.get_mut(id).unwrap();
+                session.instructions = Some(files);
+                session.instructions_unreadable = Some(unreadable);
+                session.instructions_boundary = Some(boundary);
+                let _ = committed.send(());
+                return Ok(());
+            }
+            // 3.18 F3：system 字节快照落库（覆盖写；compaction 成功时写 cleared）。
+            Event::PromptSystem { data, committed } => {
+                let now = self.clock.now();
+                let cleared = data["cleared"] == true;
+                let session = self.sessions.get_mut(id).unwrap();
+                session.prompt_system = Some(data.clone());
+                session.node_prompt_system(now, data);
+                self.persist(id, None).await?;
+                let _ = committed.send(());
+                let _ = cleared;
+                return Ok(());
+            }
+            // 3.18 F4：composition 只记录最近一次请求；revision 每会话递增（不落库）。
+            Event::ContextComposition {
+                categories,
+                model,
+                context_window,
+            } => {
+                let now = self.clock.now();
+                let session = self.sessions.get_mut(id).unwrap();
+                session.context_composition_revision += 1;
+                let total: u64 = categories
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|category| category["tokens"].as_u64().unwrap_or(0))
+                    .sum();
+                session.context_composition = Some(serde_json::json!({
+                    "sessionId": id,
+                    "revision": session.context_composition_revision,
+                    "phase": "request",
+                    "measuredAt": now,
+                    "model": {
+                        "providerId": model.as_ref().and_then(|m| m["providerId"].as_str()).unwrap_or(""),
+                        "modelId": model.as_ref().and_then(|m| m["modelId"].as_str()).unwrap_or(""),
+                        "contextWindow": context_window,
+                    },
+                    "tokenMethod": "estimated",
+                    "estimatedTokens": total,
+                    "freeTokens": context_window.map(|window| window.saturating_sub(total)),
+                    "categories": categories,
+                }));
+                return Ok(());
+            }
+            // 3.18 F12：能力标签只增不减，owner 并集后写 session_entry（last-wins）。
+            Event::SessionFeatures { features } => {
+                let now = self.clock.now();
+                let session = self.sessions.get_mut(id).unwrap();
+                let before = session.session_features.len();
+                session.session_features.extend(features);
+                if session.session_features.len() != before {
+                    session.node_session_features(now);
+                    self.persist(id, None).await?;
+                }
+                return Ok(());
+            }
             Event::RequestContext { window, breakdown } => {
                 if let Some(active) = self.active.get_mut(id) {
                     active.request = Some(super::usage_state::StepRequest { window, breakdown });
@@ -122,6 +192,11 @@ impl Engine {
                 if changed {
                     super::usage_state::compacted(session, tokens, window);
                     compact_complete = Some((body, usage));
+                    // 3.18 F3：压缩成功后 system 必须重建；内存为空也要写清除标记，
+                    // 否则冷恢复会拿到压缩前那一行（上游 clearPromptSnapshot 的修复原因）。
+                    let cleared = super::prompt_system::cleared();
+                    session.prompt_system = Some(cleared.clone());
+                    session.node_prompt_system(self.clock.now(), cleared);
                 }
                 let row = session
                     .rows

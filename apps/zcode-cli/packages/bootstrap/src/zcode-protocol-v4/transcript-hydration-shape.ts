@@ -58,6 +58,11 @@ export function inputIntentOfMessage(
         ? { fallbackReasonCode: value.delivery.fallbackReasonCode }
         : {}),
       ...(value.attachments.length > 0 ? { attachmentRefs: value.attachments } : {}),
+      // 选区引用是 intent 的一部分：冷恢复必须原样带出，否则历史芯片与 edit/retry 重放
+      // 都会丢掉批注（正文里没有引用材料，丢了就无法从 transcript 反推）。
+      ...(value.conversationQuotes
+        ? { conversationQuotes: value.conversationQuotes.map((quote) => ({ ...quote })) }
+        : {}),
       ...(value.provenance ? { provenance: value.provenance } : {}),
       ...(value.source ? { source: value.source } : {}),
     };

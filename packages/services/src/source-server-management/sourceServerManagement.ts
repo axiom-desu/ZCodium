@@ -6,6 +6,7 @@ import type {
   SourceServerManagementSnapshotRequest,
   SourceServerManagementStateDelta,
   SourceServerOperationLog,
+  SourceServerRunningTasksResult,
   SourceServerUpdateRequest,
   SourceServerUpdateTarget,
 } from "@zcode/shared";
@@ -67,6 +68,26 @@ export interface ISourceServerManagementService {
   confirmIdentityChange(profileId: string): Promise<SourceServerManagementSnapshot>;
   /** expectedTarget 在 await 前后各校验一次；force 只影响 running-task busy guard。 */
   updateSource(input: SourceServerUpdateRequest): Promise<SourceServerManagementSnapshot>;
+  /**
+   * 取消该线路处于本机阶段（快照带 `updateCancelable`）的更新；已进入远端阶段或没有更新时
+   * 为空操作并返回 false。被取消的 `updateSource` 以 `remote-connection-canceled` 拒绝。
+   */
+  cancelSourceUpdate(profileId: string): Promise<{ canceled: boolean }>;
+  /**
+   * 停止设备上的远端服务（RDLC-01）：先断开并删除恢复意图，再在远端执行 `stop --wait`。
+   * 成功和失败后设备都保持未连接；失败抛出带 code 的错误。
+   */
+  stopSource(sourceServerId: string): Promise<SourceServerManagementSnapshot>;
+  /**
+   * 重启设备上的远端服务（RDLC-01）：登记生命周期操作 flight（期间显示连接中），在远端执行
+   * `restart`，成功后走现有连接流程并发出重连。失败抛出带 code 的错误。
+   */
+  restartSource(sourceServerId: string): Promise<SourceServerManagementSnapshot>;
+  /**
+   * 停止 / 重启确认前读取设备上的运行中任务（RDLC-01）。设备未提供可信清单时返回
+   * `{ available: false }`，不当作没有任务；凭据不可静默取得时抛 `credentials-required`。
+   */
+  getSourceRunningTasks(sourceServerId: string): Promise<SourceServerRunningTasksResult>;
   renameSource(
     sourceServerId: string,
     displayName: string,

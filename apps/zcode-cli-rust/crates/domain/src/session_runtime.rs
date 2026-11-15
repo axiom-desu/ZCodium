@@ -118,13 +118,18 @@ impl ToolFilter {
 
     /// MCP tools (`mcp__<server>__<tool>`) also match by their declared name.
     pub fn allows(&self, name: &str) -> bool {
-        let declared = name
+        let canonical = if name == crate::tool_search::LOCAL_TOOL_SEARCH_NAME {
+            crate::tool_search::TOOL_SEARCH_NAME
+        } else {
+            name
+        };
+        let declared = canonical
             .strip_prefix("mcp__")
             .and_then(|rest| rest.split_once("__"))
             .map(|(_, tool)| tool);
         let hit = |list: &[String]| {
             list.iter()
-                .any(|n| n == name || Some(n.as_str()) == declared)
+                .any(|n| n == canonical || Some(n.as_str()) == declared)
         };
         self.allowlist.as_deref().is_none_or(hit) && !hit(&self.denylist)
     }

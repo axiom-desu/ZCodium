@@ -1,7 +1,9 @@
 //! Opening the shared Node database: Node `SqliteSessionStore.openStartup`
 //! with `runSqliteSessionMigrationsAsync` (`migration-runner.ts`).
 //! Spec rust-m11-node-storage §2.2, §8.
-use super::migrations::{MIGRATIONS, SOFT_DELETE_OUTCOME_MIGRATION, checksum};
+use super::migrations::{
+    MIGRATIONS, PERMANENT_DELETION_MIGRATION, SOFT_DELETE_OUTCOME_MIGRATION, checksum,
+};
 use super::open_error::Attempt;
 pub use super::open_error::StartupError;
 use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
@@ -228,6 +230,9 @@ impl Runner<'_> {
             let sql = if migration.id == SOFT_DELETE_OUTCOME_MIGRATION {
                 let present = self.session_columns()?;
                 super::migrations::missing_soft_delete_ddl(migration.sql, &present)
+            } else if migration.id == PERMANENT_DELETION_MIGRATION {
+                // 结构已存在但账本缺失：只补缺失对象，保留凭据和已有触发器。
+                super::migrations::idempotent_ddl(migration.sql)
             } else {
                 migration.sql.to_owned()
             };

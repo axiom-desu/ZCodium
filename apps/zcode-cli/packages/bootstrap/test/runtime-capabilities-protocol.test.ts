@@ -30,5 +30,9 @@ it("runtime/capabilities 声明 legacy 协议身份且不读取 host 数据", as
   assert.deepEqual(result, {
     protocol: { name: "ZCode Protocol", version: 1 },
     independentPlanState: true,
+    // 本 CLI 实现受管 worktree 的 cwd 语义与会话选区引用材料渲染；
+    // 未声明 conversationQuotes 的 runtime 会被 Host 剔除批注（见 spec）。
+    worktreeCwd: true,
+    conversationQuotes: true,
   });
 });

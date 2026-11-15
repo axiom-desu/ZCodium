@@ -310,7 +310,15 @@ function handleServicePortMessage(event: MessageEvent): void {
 
 function initializeBusinessRoot(port: MessagePort): void {
   appInitialized = true;
-  const services = connectViaMessagePort(port, { logger: logger.lifecycle.warn });
+  const services = connectViaMessagePort(port, {
+    logger: logger.lifecycle.warn,
+    // 数据同步页的设备同步状态 / Provisioning lane 只在本机 Host 注册，只有 base attachment 声明。
+    dataSyncServices: true,
+    // 扩展投影只属于桌面本地 base attachment；远程 workspace 与手机/Web 不创建代理。
+    localExtensions: true,
+    // 受管 worktree / 远端项目入口 intent 同样只在本机 Host 注册。
+    localHostServices: true,
+  });
   baseServicesForRemoteSessions = services;
   registerBaseWorkspaceServices(services);
   flushPendingRemoteWorkspaceServicePorts();

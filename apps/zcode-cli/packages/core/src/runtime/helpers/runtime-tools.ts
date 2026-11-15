@@ -20,6 +20,7 @@ import {
   resolveRuntimeDynamicWorkflowToolsIncluded,
 } from "./tool-allowlist.js";
 import { isStaleBranchRuntimeTaskEvent } from "../methods/runtime-command-generation.js";
+import { sessionControlForRuntime } from "../../tool/session-control/contract.js";
 import { resolveEnabledProjectMemoryRoot } from "./project-memory.js";
 import { sessionHasLoadedSkill } from "../../agent/loaded-skills.js";
 
@@ -47,7 +48,15 @@ export function initializeRuntimeTooling(
 function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentRuntimeDeps): void {
   const nodeReplEnabled = runtime.config.runtimeFeatures?.nodeRepl === true;
   const browserUseEnabled = resolveRuntimeBrowserUseEnabled(runtime, deps);
+  // 注册面与执行面共用同一份绑定推导：能力缺席时 register与 handler 都不会假装可用。
+  const sessionControl = resolveSessionControl(runtime, deps);
+  // 注册面与执行面共用同一份绑定/变体：App 绑定只出 12 个 App 工具，CLI 绑定只出 8 个。
+  runtime.sessionControlKind = sessionControl?.kind;
+  // 插件发现与 8 个会话工具同一套口径：端口在场、且不是子代理执行面才注册。
+  const pluginDiscoveryPort = resolvePluginDiscovery(runtime, deps);
   registerBuiltInTools(runtime.registry, {
+    ...(sessionControl ? { sessionControlKind: sessionControl.kind } : {}),
+    includePluginDiscovery: pluginDiscoveryPort !== undefined,
     bashTimeoutPolicy: runtime.config.bashTimeoutPolicy,
     includeSkill: Boolean(runtime.skillPort),
     includeAgent: Boolean(runtime.subagentPort),
@@ -182,11 +191,14 @@ function createRuntimeToolExecutor(
     coordinatorResponsePort: deps.coordinatorResponsePort,
     workflowSubmitPort: deps.workflowSubmitPort,
     workflowEscalatePort: deps.workflowEscalatePort,
+    webSearchBudget: deps.webSearchBudget,
     artifactStore: deps.artifactStore,
     automationPort: deps.automationPort,
     sessionStore: deps.sessionStore,
     sessionModePort: createRuntimeSessionModePort(runtime),
     workflowPort: deps.workflowPort,
+    sessionControl: resolveSessionControl(runtime, deps),
+    pluginDiscoveryPort: resolvePluginDiscovery(runtime, deps),
     dynamicWorkflowRunPort: deps.dynamicWorkflowRunPort,
     dynamicWorkflowSnippetPort: deps.dynamicWorkflowSnippetPort,
     modelCatalogPort: deps.modelCatalogPort,
@@ -223,6 +235,23 @@ function createRuntimeToolExecutor(
     getMode: () => runtime.config.mode ?? "build",
     maxConcurrency: runtime.config.toolConcurrency?.maxConcurrency,
   });
+}
+
+/**
+ * 插件发现的注册面与执行面共用这一份推导：端口缺席或子代理执行面都没有业务价值——
+ * 子代理没有审批窗，SuggestPluginInstall 在那里只能 fail closed。
+ */
+function resolvePluginDiscovery(runtime: AgentRuntimeInternal, deps: AgentRuntimeDeps) {
+  if (runtime.config.taskType === "subagent_child") return undefined;
+  return deps.pluginDiscoveryPort;
+}
+
+function resolveSessionControl(runtime: AgentRuntimeInternal, deps: AgentRuntimeDeps) {
+  return sessionControlForRuntime(
+    deps.sessionControl,
+    runtime.config.taskType,
+    runtime.sessionId,
+  );
 }
 
 function resolveRuntimeBrowserUseEnabled(

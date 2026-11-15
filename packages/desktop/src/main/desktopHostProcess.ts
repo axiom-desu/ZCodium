@@ -10,6 +10,7 @@ import {
   type HostAgentProcessSpawnedResponse,
   type HostCuaOperationStateResponse,
   type HostMcpTelemetryResponse,
+  type ProviderProvisioningLaneStatus,
   type TaskRealtimeHostDeliveryKind,
   type WorkspacePurpose,
   formatZCodeHostProcessName,
@@ -27,6 +28,12 @@ import type {
   PluginSandboxRegisterRequestPayload,
   PluginSandboxRegisterResultPayload,
 } from "@zcode/shared/mcp-apps";
+import type {
+  ExtensionHostStartPayload,
+  ExtensionHostStartResultPayload,
+  ExtensionHostStopPayload,
+  ExtensionHostStopResultPayload,
+} from "@zcode/shared/extension-host";
 import type { UtilityProcess as ElectronUtilityProcess, MessagePortMain } from "electron";
 import {
   app,
@@ -37,6 +44,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { BroadcastHub } from "./broadcastHub.js";
+import { bindAppControlNavigationHost } from "#src/app-control-navigation/main.js";
 import { bindDatabaseStartupRelay } from "./databaseStartupRelay.js";
 import { getMainLaunchPartialMarks } from "./desktopLaunchMarks.js";
 import { ingestHostNetworkObservations } from "./desktopNetworkTelemetry.js";
@@ -49,6 +57,7 @@ import {
 import { buildHostE2ECoverageEnv } from "./e2eCoverage.js";
 import { createHostLogRelay } from "./hostLogRelay.js";
 import { ingestCliResourceSample } from "./processResourceCliSource.js";
+import type { TaskRealtimeBus } from "./taskRealtimeBus.js";
 import { ingestHostSelfResourceSample } from "./processResourceSelfHeapSource.js";
 import { resolveHostResourceUsageResult } from "./resourceManagerHostSampling.js";
 import {
@@ -74,6 +83,10 @@ export interface HostInitMessage {
   remoteAssets?: RemoteAssetDirs;
   hostId?: string;
   databaseStartupId?: string;
+  /** 该 Host 所属窗口；扩展进程按窗口归属与代际停止，Host 不自行猜测窗口 id。 */
+  ownerWebContentsId?: number;
+  /** Main 为该窗口绑定的可信 App 导航目标（`window:<BrowserWindow.id>`）；模型不能提供。 */
+  uiTarget?: string;
   deliveryKind?: TaskRealtimeHostDeliveryKind;
   workspacePath?: string;
   workspaceIdentity?: string;
@@ -234,10 +247,34 @@ export function spawnHostProcess(
     }) => Promise<{ ok: boolean; [k: string]: unknown }>;
     /** Host 已完成附件授权后，由 Main 将本地视频 realpath 加入精确协议授权集合。 */
     authorizeLocalMediaPreviewPath?: (path: string) => Promise<string>;
+    /** 窗口扩展进程 supervisor：Main 是唯一生命周期 owner。 */
+    extensionHost?: {
+      start(
+        ownerWebContentsId: number,
+        input: Omit<ExtensionHostStartPayload, "requestId" | "ownerWebContentsId">,
+      ): Promise<{ pid: number }>;
+      stop(ownerWebContentsId: number, generation: number): Promise<boolean>;
+      stopPlugin(
+        ownerWebContentsId: number,
+        generation: number,
+        pluginId: string,
+      ): Promise<boolean>;
+    };
     /** Host 校验完插件 UI HTML 后交给 Main 沙箱注册表登记，返回句柄。 */
     registerPluginSandbox?: (
       input: PluginSandboxRegisterRequestPayload,
     ) => PluginSandboxHandle | Promise<PluginSandboxHandle>;
+    /**
+     * 数据同步页「模型提供商」分类：Main 协调器的 lane 是唯一数据源。
+     * 缺省（未接线的测试宿主）时回「无 lane」，Host 请求总有应答，不靠超时收尾。
+     */
+    providerProvisioningLanes?: {
+      getStatus(
+        sourceServerId: string,
+        options?: { waitForIdle?: boolean },
+      ): Promise<ProviderProvisioningLaneStatus>;
+      retry(sourceServerId: string): Promise<ProviderProvisioningLaneStatus>;
+    };
   },
   options?: SpawnHostProcessOptions,
 ): ElectronUtilityProcess {
@@ -288,6 +325,11 @@ export function spawnHostProcess(
   });
 
   const databaseStartupRelay = bindDatabaseStartupRelay(win, child, hostId);
+  // App 控制导航：显式目标只从 Main 当前窗口注册表解析；Host 退出/替换时解绑在途请求。
+  const unbindAppNavigation = bindAppControlNavigationHost(win, child, (id) =>
+    BrowserWindow.fromId(id),
+  );
+  child.once("exit", unbindAppNavigation);
   child.on("message", (message: unknown) => {
     const result = hostResponseMessageSchema.safeParse(message);
     if (!result.success) {
@@ -408,6 +450,85 @@ export function spawnHostProcess(
             error: error instanceof Error ? error.message : String(error),
           }),
         );
+      return;
+    }
+
+    if (result.data.type === HostResponseTypes.ExtensionHostStartRequest) {
+      const request = result.data;
+      const supervisor = dependencies.extensionHost;
+      const reply = (payload: ExtensionHostStartResultPayload) =>
+        child.postMessage({ type: HostMessageTypes.ExtensionHostStartResult, ...payload });
+      if (!supervisor || win.isDestroyed() || request.ownerWebContentsId !== win.webContents.id) {
+        reply({ requestId: request.requestId, ok: false, error: "Extension host is unavailable." });
+        return;
+      }
+      const { requestId, ownerWebContentsId, ...input } = request;
+      void supervisor
+        .start(ownerWebContentsId, input)
+        .then(({ pid }) => reply({ requestId, ok: true, pid }))
+        .catch((error: unknown) =>
+          reply({
+            requestId,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      return;
+    }
+
+    if (result.data.type === HostResponseTypes.ExtensionHostStopRequest) {
+      const request: ExtensionHostStopPayload & {
+        type: typeof HostResponseTypes.ExtensionHostStopRequest;
+      } = result.data;
+      const supervisor = dependencies.extensionHost;
+      const reply = (payload: ExtensionHostStopResultPayload) =>
+        child.postMessage({ type: HostMessageTypes.ExtensionHostStopResult, ...payload });
+      if (!supervisor || win.isDestroyed() || request.ownerWebContentsId !== win.webContents.id) {
+        reply({ requestId: request.requestId, ok: false, error: "Extension host is unavailable." });
+        return;
+      }
+      void (
+        request.pluginId
+          ? supervisor.stopPlugin(request.ownerWebContentsId, request.generation, request.pluginId)
+          : supervisor.stop(request.ownerWebContentsId, request.generation)
+      )
+        .then((stopped) => reply({ requestId: request.requestId, ok: true, stopped }))
+        .catch((error: unknown) =>
+          reply({
+            requestId: request.requestId,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      return;
+    }
+
+    if (result.data.type === HostResponseTypes.ProviderProvisioningLaneRequest) {
+      const request = result.data;
+      const lanes = dependencies.providerProvisioningLanes;
+      const reply = (status: ProviderProvisioningLaneStatus) =>
+        child.postMessage({
+          type: HostMessageTypes.ProviderProvisioningLaneResult,
+          requestId: request.requestId,
+          status,
+        });
+      // 没有协调器（例如未接线的测试宿主）时回「无 lane」：Host 请求总有应答，不靠超时收尾。
+      if (!lanes) {
+        reply({ lane: "none" });
+        return;
+      }
+      void (
+        request.action === "retry"
+          ? lanes.retry(request.sourceServerId)
+          : lanes.getStatus(request.sourceServerId, { waitForIdle: request.action === "wait" })
+      ).then(reply, (error: unknown) => {
+        // 协调器的查询与重试不会抛出；万一抛出也要应答，避免 Renderer 一直停在「同步中」。
+        dependencies.logger.warn("[provider-provisioning] lane request failed", {
+          action: request.action,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        reply({ lane: "none" });
+      });
       return;
     }
 
@@ -674,10 +795,15 @@ export function spawnHostProcess(
     ? {
         ...initMessage,
         databaseStartupId: databaseStartupRelay.startupId,
+        ownerWebContentsId: win.webContents.id,
         hostId,
         deliveryKind: options?.taskRealtime?.deliveryKind,
       }
-    : { ...initMessage, databaseStartupId: databaseStartupRelay.startupId };
+    : {
+        ...initMessage,
+        databaseStartupId: databaseStartupRelay.startupId,
+        ownerWebContentsId: win.webContents.id,
+      };
 
   if (options?.attachInitialServicePort === false) {
     child.postMessage(hostInitMessage);

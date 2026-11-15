@@ -19,7 +19,22 @@ export { ToolScheduler, defaultToolScheduler, READ_ONLY_TOOLS } from "./tool/sch
 export type { ToolSchedule, ToolScheduleItem, ToolDependency } from "./tool/scheduler.js";
 export { createToolRegistry, ToolRegistry, ToolRegistryImpl } from "./tool/registry.js";
 export { createToolExecutor, ToolExecutor, ToolExecutorImpl } from "./tool/executor.js";
-export { builtInTools, registerBuiltInTools } from "./tool/handlers/index.js";
+export {
+  APP_SESSION_CONTROL_TOOL_NAMES,
+  CLI_SESSION_CONTROL_TOOL_NAMES,
+  builtInTools,
+  registerBuiltInTools,
+  SESSION_CONTROL_TOOL_NAMES,
+  appSessionControlTools,
+  sessionControlTools,
+  sessionControlToolsByKind,
+} from "./tool/handlers/index.js";
+// 会话控制绑定由启动装配构造：命令工具面与执行面共用同一份类型，避免 bootstrap 另立结构。
+export type {
+  AppSessionControlBinding,
+  CliSessionControlBinding,
+  SessionControlBinding,
+} from "./tool/session-control/contract.js";
 // dwf driver 的 submit profile 运行时守卫要把 typed 声明换回通用声明。
 export {
   createSubmitResultToolEntry,

@@ -1,4 +1,4 @@
-export type WebRemoteControlDeviceAuth =
+type WebRemoteControlDeviceAuth =
   | { mode: "register"; passHash: string }
   | { mode: "persisted"; deviceSid: string; passHash: string };
 

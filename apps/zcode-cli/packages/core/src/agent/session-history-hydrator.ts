@@ -14,7 +14,17 @@ import type {
   ToolPart,
 } from "@zcode/contracts";
 import { persistedTokenUsageBaseline } from "./message-history-usage.js";
-import { type MessageHistory, type ToolCallInput } from "./message-history.js";
+import {
+  createRuntimeAssistantEntry,
+  createRuntimeToolResultEntry,
+  withCompactGroupKey,
+  type MessageHistory,
+  type RuntimeMessageEntry,
+  type ToolCallInput,
+} from "./message-history.js";
+import {
+  isProviderExecutedToolPartMetadata,
+} from "../runtime/provider-tool-rounds/contract.js";
 import {
   assistantReasoningFromParts,
   assistantTextFromParts,
@@ -126,36 +136,81 @@ export async function hydrateMessageHistoryFromSession(input: {
       continue;
     }
 
-    const text = assistantTextFromParts(parts);
-    const reasoning = assistantReasoningFromParts(parts);
-    const toolParts = selectToolPartsForHistory(parts.filter(isToolPart));
+    // 服务端内置工具在流中按顺序落盘：tool part 之前的 reasoning/text 属于同一轮。
+    // 与 live history 一致，每轮回放为 assistant(text, [工具]) + tool(结果)。
+    const { rounds: providerRounds, remainingParts } = splitProviderToolRoundParts(parts);
+    const assistantModel =
+      message.info.modelId && message.info.providerId
+        ? { modelId: message.info.modelId, providerId: message.info.providerId }
+        : undefined;
+    // 这条消息拆出的所有 assistant entry 共用分组键：compact 按数据库消息定持久化边界。
+    const compactGroupKey = providerRounds.length > 0 ? message.info.id : undefined;
+    if (providerRounds.length > 0) {
+      const entries: RuntimeMessageEntry[] = providerRounds.flatMap((round) => {
+        const toolPart = round.toolPart;
+        const result = providerToolResultFromPart(toolPart);
+        return [
+          createRuntimeAssistantEntry(
+            assistantTextFromParts(round.parts),
+            [{ id: toolPart.callID, input: toolPart.state.input, name: toolPart.tool }],
+            assistantReasoningFromParts(round.parts),
+            assistantModel,
+          ),
+          createRuntimeToolResultEntry(
+            toolPart.callID,
+            toolPart.tool,
+            result.output,
+            result.isError,
+          ),
+        ];
+      });
+      input.history.addEntries(withCompactGroupKey(entries, compactGroupKey));
+    }
+    const text = assistantTextFromParts(remainingParts);
+    const reasoning = assistantReasoningFromParts(remainingParts);
+    const toolParts = selectToolPartsForHistory(remainingParts.filter(isToolPart));
+    // 有服务端内置工具轮次时，持久化 usage 是服务端多轮请求的合计，不能当上下文估算锚点；
+    // 与 live 一致不挂 tokens，也不为它保留空 assistant。
+    const contextUsage = compactGroupKey ? undefined : message.info.tokens;
     // live history 会保留带合法 provider usage 的空 assistant 作为估算锚点，
     // 旧 hydration 却无条件丢弃它，导致重启前后的 context estimate 不一致。
     if (
       text.trim().length === 0 &&
       reasoning.length === 0 &&
       toolParts.length === 0 &&
-      !persistedTokenUsageBaseline(message.info.tokens)
+      !persistedTokenUsageBaseline(contextUsage)
     ) {
+      appliedMessageCount++;
       continue;
     }
 
-    input.history.addAssistant(
-      text,
-      toolParts.map(
-        (part): ToolCallInput => ({
-          id: part.callID,
-          input: part.state.input,
-          modelCallWrapper: modelCallWrapperFromPart(part),
-          name: providerToolNameFromPart(part),
-        }),
-      ),
-      reasoning,
-      message.info.modelId && message.info.providerId
-        ? { modelId: message.info.modelId, providerId: message.info.providerId }
-        : undefined,
-      message.info.tokens,
-    );
+    const finalEntries: RuntimeMessageEntry[] = [];
+    // 空正文但带合法 provider usage 的 assistant 必须保留：它就是上下文估算锚点，
+    // 上面的守卫已经放行，这里若再按「有正文」判断就会把锚点又丢掉（重启前后估算不一致）。
+    if (
+      text.trim().length > 0 ||
+      reasoning.length > 0 ||
+      toolParts.length > 0 ||
+      persistedTokenUsageBaseline(contextUsage)
+    ) {
+      finalEntries.push(
+        createRuntimeAssistantEntry(
+          text,
+          toolParts.map(
+            (part): ToolCallInput => ({
+              id: part.callID,
+              input: part.state.input,
+              modelCallWrapper: modelCallWrapperFromPart(part),
+              name: providerToolNameFromPart(part),
+            }),
+          ),
+          reasoning,
+          assistantModel,
+          contextUsage,
+        ),
+      );
+    }
+    input.history.addEntries(withCompactGroupKey(finalEntries, compactGroupKey));
     appliedMessageCount++;
 
     for (const part of toolParts) {
@@ -230,6 +285,47 @@ export async function hydrateMessageHistoryFromSession(input: {
     messageCount: activeMessages.length,
     partCount,
   };
+}
+
+function providerToolResultFromPart(part: ToolPart): { output: string; isError: boolean } {
+  return {
+    output:
+      part.state.status === "completed"
+        ? part.state.output
+        : part.state.status === "error"
+          ? part.state.error
+          : INTERRUPTED_TOOL_RESULT,
+    isError: part.state.status === "error",
+  };
+}
+
+/**
+ * 服务端内置工具在流中按顺序落盘：tool part 之前的 reasoning/text 属于该轮。
+ * 没有 provider part 的消息原样返回，走旧恢复逻辑。
+ */
+function splitProviderToolRoundParts(parts: MessagePart[]): {
+  rounds: Array<{ parts: MessagePart[]; toolPart: ToolPart }>;
+  remainingParts: MessagePart[];
+} {
+  if (
+    !parts.some((part) => isToolPart(part) && isProviderExecutedToolPartMetadata(part.metadata))
+  ) {
+    return { rounds: [], remainingParts: parts };
+  }
+  const rounds: Array<{ parts: MessagePart[]; toolPart: ToolPart }> = [];
+  const remainingParts: MessagePart[] = [];
+  let pending: MessagePart[] = [];
+  for (const part of parts) {
+    if (isToolPart(part) && isProviderExecutedToolPartMetadata(part.metadata)) {
+      rounds.push({ parts: pending, toolPart: part });
+      pending = [];
+    } else if (part.type === "text" || part.type === "reasoning") {
+      pending.push(part);
+    } else {
+      remainingParts.push(part);
+    }
+  }
+  return { rounds, remainingParts: [...remainingParts, ...pending] };
 }
 
 function modelCallWrapperFromPart(part: ToolPart) {

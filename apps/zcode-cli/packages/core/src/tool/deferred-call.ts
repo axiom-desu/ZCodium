@@ -3,7 +3,7 @@ import {
   createCoreError,
   DEFERRED_TOOL_CALL_NAME,
   DeferredToolCallInputSchema,
-  TOOL_SEARCH_NAME,
+  isToolSearchName,
   type ToolSearchExecutionContext,
 } from "@zcode/contracts";
 import type { ExecutableToolCall } from "./types.js";
@@ -38,7 +38,7 @@ export function resolveDeferredToolCall<T extends ExecutableToolCall>(
   const entry = registry.get(name);
   if (!candidate || !entry) return reject(`Tool not available in this request: ${name}`);
   if (
-    name === TOOL_SEARCH_NAME ||
+    isToolSearchName(name) ||
     name === DEFERRED_TOOL_CALL_NAME ||
     entry.providerNative ||
     !candidate.deferred

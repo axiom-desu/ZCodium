@@ -15,7 +15,7 @@ export const WORKSPACE_HOOK_SCHEMA_FIELDS = {
     "PostToolUseFailure",
     "Stop",
   ],
-  process: ["type", "command", "enabled", "args", "timeoutMs", "statusMessage"],
+  process: ["type", "command", "enabled", "args", "timeoutMs", "statusMessage", "onError"],
   command: [
     "type",
     "command",
@@ -25,6 +25,7 @@ export const WORKSPACE_HOOK_SCHEMA_FIELDS = {
     "timeout",
     "timeoutMs",
     "statusMessage",
+    "onError",
   ],
 } as const;
 
@@ -207,6 +208,7 @@ const canonicalEntryBaseShape = {
   resolvedTimeoutMs: positiveIntegerSchema,
   resolvedMaxOutputBytes: positiveIntegerSchema,
   statusMessage: nonEmptyStringSchema.optional(),
+  onError: z.enum(["allow", "deny"]).optional(),
   sourceRootEnabled: z.boolean(),
   declarationEnabled: z.boolean(),
   runtimeHooksEnabled: z.boolean(),

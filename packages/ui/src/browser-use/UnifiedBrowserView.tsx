@@ -1,17 +1,23 @@
 /* oxlint-disable eslint(max-lines) -- UnifiedBrowserView 集中维护稳定 webview 的导航、事件和 guest 生命周期；横向滚动链已下沉独立 hook。 */
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { isRemoteWorkspaceIdentity } from "@zcode/shared";
 import type {
   BrowserViewScreenshotSurfacePreparePayload,
   EmbeddedBrowserViewportPreference,
 } from "@zcode/shared";
 import { cn } from "@/components/lib/utils.js";
+import { useOptionalServices } from "@/hooks/useServices.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { useWebElementPicker } from "@/hooks/useWebElementPicker.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { BrowserToolbar } from "@/EmbeddedBrowserPaneParts.js";
+import { BrowserDesignInspector } from "@/browser-use/BrowserDesignInspector.js";
+import { BrowserDesignToolbar } from "@/browser-use/BrowserDesignToolbar.js";
 import { BrowserViewportSurface } from "@/browser-use/BrowserViewportSurface.js";
 import { BrowserViewportToolbar } from "@/browser-use/BrowserViewportToolbar.js";
+import { useBrowserDesignExport } from "@/browser-use/useBrowserDesignExport.js";
+import { useBrowserDesignInspect } from "@/browser-use/useBrowserDesignInspect.js";
 import { useBrowserResizeOperationWarning } from "@/browser-use/useBrowserResizeOperationWarning.js";
 import { useBrowserScreenshotSurfaceReady } from "@/browser-use/useBrowserScreenshotSurfaceReady.js";
 import { useEmbeddedBrowserWheelChain } from "@/browser-use/useEmbeddedBrowserWheelChain.js";
@@ -71,6 +77,7 @@ export function UnifiedBrowserView({
   deferEmptyGuest = false,
   initialHumanViewportPreference,
   onHumanViewportPreferenceChange,
+  enableDesignInspect = false,
 }: {
   /** 受控视图 key（= tab.id / sessionId，agent 定位该 tab 用）。 */
   browserKey: string;
@@ -118,8 +125,11 @@ export function UnifiedBrowserView({
     preference: EmbeddedBrowserViewportPreference,
     source: HumanBrowserViewportPreferenceChangeSource,
   ) => void;
+  /** 仅 human browser 且宿主明确开启时出现设计入口；Agent tab / Web / 手机为 false。 */
+  enableDesignInspect?: boolean;
 }): React.JSX.Element {
   const platform = usePlatform();
+  const services = useOptionalServices();
   const { intl } = useZCodeIntl();
   const desktopZoomFactor = useDesktopZoomFactor();
 
@@ -133,6 +143,25 @@ export function UnifiedBrowserView({
   useBrowserScreenshotSurfaceReady({
     request: screenshotSurfaceRequest ?? null,
     webview,
+  });
+  // Web/手机没有 Desktop browser guest 桥：即使调用方误传 enable，也不暴露设计写回能力。
+  // B7：远端 workspace 的绝对路径属于远端 Host，不在本机按 project 事实解析/写回。
+  const isRemoteWorkspace = Boolean(
+    workspaceKey?.trim() && isRemoteWorkspaceIdentity(workspaceKey.trim()),
+  );
+  const isDesignInspectAvailable =
+    enableDesignInspect &&
+    typeof platform.browserViewAttachGuest === "function" &&
+    !isRemoteWorkspace;
+  const designInspect = useBrowserDesignInspect({
+    browserKey,
+    enabled: isDesignInspectAvailable && browserState.isReady && webview !== null,
+    executeJs: (script) =>
+      webview ? webview.executeJavaScript(script, true) : Promise.resolve({ status: "cancelled" }),
+    fileService: services?.fileService,
+    pageUrl: browserState.currentUrl,
+    workspacePath: workspacePath ?? "",
+    workspaceIdentity: workspaceKey ?? workspaceIdentity,
   });
   const shouldComposeSurface = Boolean(screenshotSurfaceRequest);
   const setGuestZoomFactor = useCallback((target: ElectronWebviewTag, targetZoomFactor: number) => {
@@ -224,6 +253,26 @@ export function UnifiedBrowserView({
     scopeFingerprint: string;
   } | null>(null);
   const wasResponsiveModeRef = useRef(false);
+  // 导出归属快照需要 guest 上报 ref，因此放在 lastReportedGuestRef 之后（hook 顺序稳定）。
+  const designExport = useBrowserDesignExport({
+    enabled: isDesignInspectAvailable,
+    // 元素截图只消费已经过宿主解析的 inspect 选中 rect；页面 rect 越界由 main 按实际帧拒绝。
+    elementRect: designInspect.selection?.rect ?? null,
+    executeJs: (script) =>
+      webview ? webview.executeJavaScript(script, true) : Promise.resolve(null),
+    // 归属快照全部取真实 View 上下文：owner/session/tab/generation + 已上报给 main 的 guest id。
+    guest: {
+      webContentsId: lastReportedGuestRef.current?.webContentsId ?? 0,
+      title: browserState.title,
+    },
+    scope: {
+      browserKey,
+      sessionId: sessionId ?? "",
+      workspaceKey: workspaceKey ?? (workspaceIdentity?.trim() || workspacePath) ?? "",
+      residencyGeneration: residencyGeneration ?? null,
+      webviewGeneration,
+    },
+  });
   // guest 销毁归因打点：线上主进程 UAF（EXC_BAD_ACCESS at
   // 0x10，DevToolsSession 在途通知访问已析构 client）发生前，main 日志只能看到
   // 「cdp still attached on destroyed guest」，无法区分 webview 节点是被谁卸载的：
@@ -1040,6 +1089,18 @@ export function UnifiedBrowserView({
         isElementPickerActive={isWebElementPicking}
         isResponsiveMode={isResponsiveMode}
       />
+      {isDesignInspectAvailable ? (
+        <BrowserDesignToolbar
+          canExportElement={designExport.canExportElement}
+          canExportPdf={designExport.canExportPdf}
+          canExportPng={designExport.canExportPng}
+          isExporting={designExport.isExporting}
+          isInspecting={designInspect.status === "inspecting"}
+          onExportElement={designExport.exportElement}
+          onExportPage={designExport.exportPage}
+          onInspect={designInspect.inspect}
+        />
+      ) : null}
       {isResponsiveMode ? (
         <BrowserViewportToolbar
           isVisible={isVisible}
@@ -1049,29 +1110,47 @@ export function UnifiedBrowserView({
           zoom={responsiveViewportZoom}
         />
       ) : null}
-      <BrowserViewportSurface
-        browserRegionRef={browserRegionRef}
-        browserState={browserState}
-        desktopZoomFactor={desktopZoomFactor}
-        isResidencyRestore={isResidencyRestore}
-        formatMessage={intl.formatMessage}
-        isEmptyBrowserState={isEmptyBrowserState}
-        isComposed={isVisible || shouldComposeSurface}
-        isResponsiveMode={effectiveIsResponsiveMode}
-        isViewportEmulated={
-          effectiveIsResponsiveMode && screenshotSurfaceRequest?.viewportMode !== "natural"
-        }
-        onRetryGuest={handleRetryGuest}
-        onRetryLoad={handleRetryLoad}
-        onViewportResize={notifyBrowserViewportResize}
-        onViewportSizeChange={handleResponsiveViewportSizeChange}
-        onWebviewRef={handleWebviewRef}
-        shouldMountWebview={shouldMountWebview}
-        showResizeWarning={showResizeWarning}
-        webviewGeneration={webviewGeneration}
-        viewportSize={effectiveViewportSize}
-        viewportZoom={effectiveViewportZoom}
-      />
+      <div className="relative flex min-h-0 min-w-0 flex-1">
+        <BrowserViewportSurface
+          browserRegionRef={browserRegionRef}
+          browserState={browserState}
+          desktopZoomFactor={desktopZoomFactor}
+          isResidencyRestore={isResidencyRestore}
+          formatMessage={intl.formatMessage}
+          isEmptyBrowserState={isEmptyBrowserState}
+          isComposed={isVisible || shouldComposeSurface}
+          isResponsiveMode={effectiveIsResponsiveMode}
+          isViewportEmulated={
+            effectiveIsResponsiveMode && screenshotSurfaceRequest?.viewportMode !== "natural"
+          }
+          onRetryGuest={handleRetryGuest}
+          onRetryLoad={handleRetryLoad}
+          onViewportResize={notifyBrowserViewportResize}
+          onViewportSizeChange={handleResponsiveViewportSizeChange}
+          onWebviewRef={handleWebviewRef}
+          shouldMountWebview={shouldMountWebview}
+          showResizeWarning={showResizeWarning}
+          webviewGeneration={webviewGeneration}
+          viewportSize={effectiveViewportSize}
+          viewportZoom={effectiveViewportZoom}
+        />
+        {isDesignInspectAvailable ? (
+          <BrowserDesignInspector
+            applied={designInspect.applied}
+            canApply={designInspect.canApply}
+            changes={designInspect.changes}
+            draft={designInspect.draft}
+            error={designInspect.error}
+            fileName={designInspect.fileName}
+            onApply={designInspect.apply}
+            onCancel={designInspect.cancel}
+            onDraftChange={designInspect.setDraftValue}
+            selection={designInspect.selection}
+            sourceWritable={designInspect.sourceWritable}
+            status={designInspect.status}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

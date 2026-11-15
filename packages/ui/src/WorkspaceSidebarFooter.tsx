@@ -2,6 +2,8 @@ import type { Locale } from "@zcode/shared";
 import { memo, useCallback, useEffect, useState } from "react";
 import {
   DesktopCommandIds,
+  LOCALE_NATIVE_NAMES,
+  SUPPORTED_LOCALES,
   TID_SIDEBAR_PREFERENCES_TRIGGER,
   TID_TASK_SETTINGS_BUTTON,
 } from "@zcode/shared";
@@ -39,6 +41,7 @@ import { normalizeInterfaceMode } from "@/lib/interfaceMode.js";
 import type { Theme } from "@/useTheme.js";
 import { WorkspaceWebRemoteControlTrigger } from "@/WorkspaceWebRemoteControlTrigger.js";
 import { WorkspaceSidebarUsageMenuItem } from "@/WorkspaceSidebarUsageMenuItem.js";
+import { ExtensionStatusSlot } from "@/extensions/index.js";
 
 const DESKTOP_ZOOM_MIN_LEVEL = -3;
 const DESKTOP_ZOOM_MAX_LEVEL = 5;
@@ -153,16 +156,11 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
                       id: "sidebar.settings.systemDefault",
                     })}
                   </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="en-US">
-                    {intl.formatMessage({
-                      id: "sidebar.settings.locale.en-US",
-                    })}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="zh-CN">
-                    {intl.formatMessage({
-                      id: "sidebar.settings.locale.zh-CN",
-                    })}
-                  </DropdownMenuRadioItem>
+                  {SUPPORTED_LOCALES.map((locale) => (
+                    <DropdownMenuRadioItem key={locale} value={locale}>
+                      {LOCALE_NATIVE_NAMES[locale]}
+                    </DropdownMenuRadioItem>
+                  ))}
                 </DropdownMenuRadioGroup>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -248,6 +246,8 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
             <WorkspaceSidebarUsageMenuItem onUsageClick={usageButtonClick} />
           </DropdownMenuContent>
         </DropdownMenu>
+        {/* 扩展状态槽：没有扩展服务（手机/Web/旧 Host）或没有贡献时返回 null，不改变既有布局。 */}
+        <ExtensionStatusSlot className="max-w-40 shrink-0" />
         <div className="flex shrink-0 items-center gap-1.5">
           {isDesktop && workspacePath ? (
             <WorkspaceWebRemoteControlTrigger

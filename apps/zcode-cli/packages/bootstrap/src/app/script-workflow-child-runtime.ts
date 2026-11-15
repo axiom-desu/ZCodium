@@ -31,6 +31,7 @@ import {
   type WorkflowAgentCallInput,
   type WorkflowEscalatePort,
   type WorkflowSubmitPort,
+  type WorkflowWebSearchBudgetPort,
 } from "@zcode/contracts";
 import { collectDisabledPaths } from "../skill-command-overrides.js";
 import { parseProviderQualifiedModelSelection } from "./provider-registry-selection.js";
@@ -98,6 +99,8 @@ export function createScriptWorkflowAgentRuntime(input: {
    * 不喂信号。与两个工具端口同路进 runtime deps。
    */
   modelRequestAdmission?: ModelRequestAdmission;
+  /** dwf actor 的每 ask WebSearch 预算端口；legacy workflow child 不传。 */
+  webSearchBudgetPort?: WorkflowWebSearchBudgetPort;
 }): AgentRuntime {
   // dwf actor 经 configOverrides.workflowActor 走 builder 的叠加路径，此时 systemPrompt 必须
   // 缺席（builder 对二者同在抛错）——父会话自带的 custom system prompt 不得漏给子代理，所以
@@ -163,6 +166,7 @@ export function createScriptWorkflowAgentRuntime(input: {
       ...(input.modelRequestAdmission
         ? { modelRequestAdmission: input.modelRequestAdmission }
         : {}),
+      ...(input.webSearchBudgetPort ? { webSearchBudget: input.webSearchBudgetPort } : {}),
     },
   );
 }

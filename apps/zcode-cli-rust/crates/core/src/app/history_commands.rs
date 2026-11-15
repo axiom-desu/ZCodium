@@ -260,6 +260,14 @@ impl Engine {
         }
         child.finish_rows("success", self.clock.now());
         child.history_actions();
+        // W4：上游 `copyPromptSnapshotToFork`——父会话有 system 快照时复制给子会话，
+        // 冷恢复的子分支与父分支发送同一份已绑定前缀字节；没有快照时不写。
+        if let Some(snapshot) = self.sessions[parent].prompt_system.clone()
+            && snapshot["cleared"] != true
+        {
+            child.prompt_system = Some(snapshot.clone());
+            child.node_prompt_system(self.clock.now(), snapshot);
+        }
         let id = child.id.clone();
         let mut ack = c.ack("accepted", self.sessions[parent].revision, None);
         ack["result"] = json!({"type":"forkAssistant","sessionId":id});
@@ -277,6 +285,7 @@ impl Engine {
         self.tools.inherit_session(parent, &id).await?;
         let summary = child.summary();
         self.sessions.insert(id.clone(), child);
+        self.store.session_presence_register(&id).await?;
         self.publish_index(&id, Some(summary))?;
         Ok(ack)
     }

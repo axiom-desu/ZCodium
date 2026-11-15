@@ -1,6 +1,13 @@
 export { IProjectService } from "#src/project/domain/contract.js";
 export { LEGACY_SINGLE_ROOT_PROJECT_PREFIX } from "#src/project-storage/contract.js";
 export type {
+  ProjectDataDeleteResult,
+  ProjectDataMeasure,
+  ProjectDataMeasureResult,
+  ProjectDataPort,
+  ProjectDataSession,
+} from "#src/project/domain/data-contract.js";
+export type {
   ProjectDirectories,
   ProjectRoot,
   ProjectTask,

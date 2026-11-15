@@ -20,6 +20,7 @@ import { persistSessionShellEnvironmentSnapshot } from "./session-shell-environm
 import { persistRuntimeModelSelection } from "./turn-model.js";
 import { persistDurableSessionEvent } from "./events-durable-persistence.js";
 import { writeDynamicWorkflowActivationEntryIfActivated } from "./dynamic-workflow-activation.js";
+import { writeSessionFeaturesEntryAfterFirstPersist } from "../session-features/contract.js";
 import {
   flushSessionEventAppendAggregates,
   recordSessionEventAppendAggregate,
@@ -213,6 +214,8 @@ async function persistSession(
     this.sessionPersisted = true;
     // `/workflow` 作为会话首轮到来时激活先于落盘；此时才第一次有会话可挂 entry。
     await writeDynamicWorkflowActivationEntryIfActivated(this);
+    // 落盘前打的会话能力标签只在内存里，这里补写；之后的打点各自排队写入。
+    await writeSessionFeaturesEntryAfterFirstPersist(this, traceContext);
     this.logger?.debug("Session persisted", {
       ...traceContextToLogContext(traceContext),
       event: "session.persisted",

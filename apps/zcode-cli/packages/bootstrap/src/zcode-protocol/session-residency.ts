@@ -50,7 +50,7 @@ export function runWithSessionResidencyFinalization<T>(
  * 又会并发碰同一 session 资源。因此同步摘除与异步 close 必须由 pool 的 in-flight gate
  * 组合成一个生命周期事务。
  */
-async function deactivateSessionRecord(
+export async function deactivateSessionRecord(
   context: ZCodeProtocolAgentServerContext,
   sessionId: string,
 ): Promise<void> {
@@ -59,12 +59,45 @@ async function deactivateSessionRecord(
   // CommandInbox pin 的拒绝曾发生在 unsubscribe 之后，异常会留下仍在 registry
   // 但收不到 runtime event 的半清 record。所有可预检拒绝必须早于第一个副作用。
   context.v4Gateway?.assertSessionRuntimeDeactivatable(sessionId);
+  // 生命周期 owner 存在时，LRU/TTL 回收与 stop/restart 共享同一串行状态机；
+  // 否则（旧嵌入调用）保持原直接释放路径。
+  if (context.sessionLifecycle) {
+    await context.sessionLifecycle.dispose(sessionId, () => releaseSessionRecord(context, sessionId));
+    return;
+  }
+  await releaseSessionRecord(context, sessionId);
+}
+
+/** 被生命周期 owner 与去激活路径共同复用的唯一 record 释放执行面。 */
+export async function releaseSessionRecord(
+  context: ZCodeProtocolAgentServerContext,
+  sessionId: string,
+): Promise<void> {
+  const record = context.sessions.get(sessionId);
+  if (!record) return;
   record.unsubscribe?.();
   context.v4Gateway?.deactivateSession(sessionId);
   context.sessions.delete(sessionId);
   await record.app.close?.();
   // 去激活后内存 event store 必须与“从未加载”等价。
   await record.eventStore.deleteSession(sessionId as SessionId);
+  // 运行态登记与真实驻留同寿命：删除预检据此区分本进程/其它进程的活跃会话。
+  await context.deps?.sessionStore?.unregisterSessionRuntime?.(sessionId as SessionId);
+}
+
+/**
+ * 本进程已加载的会话是否在忙（有在途 work / 待处理交互 / 排队命令）；未加载返回 null。
+ * 彻底删除数据时只有 busy 才保留会话：删掉正在写入的会话会让 turn 写库失败。
+ */
+export function readSessionBusyState(
+  context: ZCodeProtocolAgentServerContext,
+  sessionId: string,
+): "busy" | "idle" | null {
+  const facts = createSessionResidentPoolHost(context).readResidencyFacts(sessionId);
+  if (!facts) return null;
+  return facts.hasResidencyBlockingWork || facts.hasPendingInteractions || facts.hasQueuedCommands
+    ? "busy"
+    : "idle";
 }
 
 export function createSessionResidentPoolHost(

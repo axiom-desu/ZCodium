@@ -18,6 +18,9 @@ const PRESENTATIONS: [&str; 7] = [
     "task_notification",
 ];
 
+#[path = "hydrate_user.rs"]
+mod user;
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Hydrated {
     pub entries: Vec<Entry>,
@@ -47,6 +50,17 @@ fn runtime_metadata(part_metadata: &Value) -> Option<Value> {
     }
     let source = runtime["source"].as_str()?;
     if let Some(out) = super::announcement::runtime_metadata(runtime) {
+        return Some(out);
+    }
+    // 3.18 F1：指令公告的已公告文件与正文同一条提醒，热历史与冷历史必须一致。
+    if source == crate::instruction_files::SOURCE {
+        let mut out = metadata(source, None);
+        if let Some(instructions) = runtime
+            .get("instructions")
+            .and_then(crate::instruction_files::Announcement::from_value)
+        {
+            out[crate::instruction_files::KEY] = instructions.to_value();
+        }
         return Some(out);
     }
     (matches!(source, "real_user" | "legacy_synthetic" | "todo_reminder")
@@ -146,69 +160,6 @@ fn block_has_text(block: &Value) -> bool {
 }
 
 /// Node `userEntriesFromParts`.
-fn user_entries(parts: &[Value], artifacts: ArtifactReader) -> Vec<Entry> {
-    let (mut attachments, mut prompt, mut media) = (vec![], vec![], vec![]);
-    let (mut synthetic, mut reminders_) = (vec![], vec![]);
-    for part in parts {
-        match part["type"].as_str() {
-            Some("text") if part["ignored"] != true => match synthetic_attachment(part) {
-                Some(entry) => synthetic.push(entry),
-                None => prompt.push(json!({"type": "text", "text": provider_text(part)})),
-            },
-            Some("file") => {
-                let block = file_block(part, artifacts);
-                if block["type"] == "text"
-                    && let Some(body) = prompt_attachment(part, &block)
-                {
-                    reminders_.push(Entry::Attachment {
-                        source: "prompt_attachment".into(),
-                        content: body,
-                        metadata: None,
-                    });
-                    continue;
-                }
-                if matches!(block["type"].as_str(), Some("image" | "video")) {
-                    media.push(block);
-                } else {
-                    attachments.push(block);
-                }
-            }
-            Some("agent") => prompt.push(json!({"type": "text",
-                "text": format!("[Selected agent: {}]", part["name"].as_str().unwrap_or(""))})),
-            _ => {}
-        }
-    }
-    let preserve = !attachments.is_empty() || !media.is_empty();
-    let blocks: Vec<Value> = attachments.into_iter().chain(prompt).chain(media).collect();
-    let has_content = blocks.iter().any(block_has_text);
-    let content = if preserve || blocks.iter().any(|b| b["type"] != "text") {
-        Value::Array(blocks)
-    } else {
-        let texts: Vec<&str> = blocks
-            .iter()
-            .filter_map(|b| b["text"].as_str())
-            .filter(|t| !t.is_empty())
-            .collect();
-        Value::String(texts.join("\n\n"))
-    };
-    let user = user_metadata(parts);
-    let envelope = has_content || (user["source"] == "real_user" && !reminders_.is_empty());
-    if !envelope && synthetic.is_empty() && reminders_.is_empty() {
-        return vec![];
-    }
-    let mut out = vec![];
-    if envelope {
-        out.push(Entry::Message {
-            message: json!({"role": "user", "content": content}),
-            metadata: Some(user),
-            tokens: None,
-        });
-    }
-    out.extend(synthetic);
-    out.extend(reminders_);
-    out
-}
-
 /// Node `persistedTokenUsageBaseline(...) !== undefined`: a positive input window.
 fn usage_baseline(tokens: &Value) -> bool {
     let positive = |v: &Value| {
@@ -263,12 +214,23 @@ fn assistant(record: &Record, parts: &[Value], artifacts: ArtifactReader, out: &
             block
         })
         .collect();
-    let tools = super::tool_parts::tool_parts(parts);
+    // 3.18 R2：provider 原生工具按落库 part 顺序切回轮次（上游 `splitProviderToolRoundParts`）。
+    // 它们不参与本地工具执行/历史，所以从工具 part 里排除。
+    let rounds = crate::provider_rounds::from_parts(parts);
+    let tools: Vec<&Value> = super::tool_parts::tool_parts(parts)
+        .into_iter()
+        .filter(|part| !crate::provider_rounds::executed(part))
+        .collect();
     let tokens = &record.info["tokens"];
     if text.trim().is_empty() && reasoning.is_empty() && tools.is_empty() && !usage_baseline(tokens)
     {
         return;
     }
+    // 热历史的 canonical 正文是所有段正文的直接拼接；冷恢复必须得到同一份字节。
+    let text = match &rounds {
+        Some(rounds) => crate::provider_rounds::content(rounds),
+        None => text,
+    };
     let content = if reasoning.is_empty() {
         Value::String(text)
     } else {
@@ -291,6 +253,10 @@ fn assistant(record: &Record, parts: &[Value], artifacts: ArtifactReader, out: &
         })
         .collect();
     let mut message = json!({"role": "assistant", "content": content, "toolCalls": calls});
+    if let Some(rounds) = &rounds {
+        message[crate::provider_rounds::KEY] = Value::Array(rounds.clone());
+        message["_zcode_anthropic_server_tools"] = crate::provider_rounds::flat_blocks(rounds);
+    }
     let info = &record.info;
     if truthy(info.get("modelId")) && truthy(info.get("providerId")) {
         message["providerId"] = info["providerId"].clone();
@@ -366,7 +332,7 @@ fn hydrate_record(record: &Record, artifacts: ArtifactReader, out: &mut Hydrated
             out.entries.push(entry);
             return;
         }
-        let mut entries = user_entries(&parts, artifacts);
+        let mut entries = user::user_entries(&parts, artifacts);
         if let Some(boundary) = super::compact_boundary::compact_boundary(&parts)
             && let Some(Entry::Message {
                 metadata: entry_metadata,

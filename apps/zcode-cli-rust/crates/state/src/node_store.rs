@@ -17,6 +17,10 @@ use zcode_cli_domain::{node_ids, workspace_identity::parse_remote};
 
 type Reply<T> = oneshot::Sender<Result<T>>;
 pub(super) type Settings = BTreeMap<(String, String), Value>;
+/// 会话数据删除命令：在唯一连接线程内按既有事务边界执行。
+pub(super) type SessionDataCommand =
+    Box<dyn FnOnce(&Connection) -> anyhow::Result<Value> + Send + Sync>;
+
 /// A failed commit hands its writes back so the session keeps them.
 pub(super) type CommitReply = oneshot::Sender<Result<(), (anyhow::Error, Vec<Write>)>>;
 
@@ -33,6 +37,8 @@ pub(super) enum Request {
     Usage(Box<crate::domain::usage::Fact>),
     /// Replies once every earlier request was handled.
     Barrier(oneshot::Sender<()>),
+    /// 会话数据删除写/读命令：在唯一连接线程内执行，不在别处另开连接。
+    SessionData(SessionDataCommand, Reply<Value>),
 }
 
 /// The session store over Node's `db.sqlite`.
@@ -43,6 +49,10 @@ pub struct NodeStore {
     pub(super) attachments: super::input_attachments::Backing,
     /// The database file, for request-scoped read-only usage queries.
     pub(super) path: PathBuf,
+    /// CLI 存储根（`<storage>/cli`）：会话数据文件与项目记忆按它定位。
+    pub(super) storage_root: PathBuf,
+    /// 跨进程运行态 owner（pid + uuid），与删除凭据同一库。
+    pub(super) owner_id: String,
 }
 
 fn now_ms() -> i64 {
@@ -96,6 +106,10 @@ impl NodeStore {
         let (tx, rx) = mpsc::channel(64);
         let (ready_tx, ready_rx) = oneshot::channel();
         let database = path.clone();
+        let storage_root = artifacts
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| artifacts.clone());
         tokio::task::spawn_blocking(move || {
             match open::open(&path, open::MIGRATION_LOCK_WAIT, &mut |_| {}) {
                 Ok(conn) => {
@@ -117,6 +131,8 @@ impl NodeStore {
             tx,
             attachments,
             path: database,
+            storage_root,
+            owner_id: crate::node::session_data::runtime_owner_id(),
         })
     }
 
@@ -173,6 +189,9 @@ impl Worker {
                 }
                 Request::Barrier(reply) => {
                     let _ = reply.send(());
+                }
+                Request::SessionData(command, reply) => {
+                    let _ = reply.send(command(&self.conn));
                 }
             }
         }

@@ -6,6 +6,7 @@ import {
   logResolvedTurnAttachments,
   resolveTurnAttachments,
   runtimeMetadataForSyntheticUserMessageSource,
+  withConversationQuotes,
 } from "../helpers/index.js";
 import { buildReferencedSessionContextReminderBody } from "../../session-context/read-session-context.js";
 import { formatLocalIsoDate } from "../deps.js";
@@ -102,9 +103,14 @@ export async function applyRegularTurnUserInput(
     });
   } else if (options?.skipInputRecord !== true) {
     this.messageHistory.addEntries(
-      buildRuntimeUserEntriesFromTurn(input, resolvedAttachments, {
-        browserAmbientContext: options?.browserAmbientContext,
-      }).map((entry) => {
+      buildRuntimeUserEntriesFromTurn(
+        // 选区引用是模型材料：在进入 message history 的边界附加，canonical 正文不变。
+        withConversationQuotes(input, options?.intent?.conversationQuotes),
+        resolvedAttachments,
+        {
+          browserAmbientContext: options?.browserAmbientContext,
+        },
+      ).map((entry) => {
         const metadata = runtimeInputMetadata(options?.inputPresentation);
         return entry.kind !== "attachment" && metadata ? { ...entry, metadata } : entry;
       }),

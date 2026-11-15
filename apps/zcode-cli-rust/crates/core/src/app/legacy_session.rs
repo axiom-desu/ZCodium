@@ -209,6 +209,7 @@ impl Engine {
             self.tools.configure_mcp(&id, servers).await?;
         }
         self.sessions.insert(id.clone(), session);
+        self.store.session_presence_register(&id).await?;
         self.apply_selection(&id, selection)?;
         self.legacy_thought_level(&id, p["thoughtLevel"].as_str());
         self.legacy_snapshot(&id)

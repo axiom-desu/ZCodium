@@ -62,10 +62,18 @@ methods! {
     ConversationFileChanges => "v4/conversation/fileChanges",
     ConversationFileRewindPreview => "v4/conversation/fileRewindPreview",
     UsageStats => "v4/usage/stats",
+    // 项目数据彻底删除（上游 project-management）：measure/purge 与会话归档永久删除。
+    SessionDataMeasure => "v4/storage/sessionData/measure",
+    SessionDataPurge => "v4/storage/sessionData/purge",
+    SessionDataDeletionPreview => "v4/storage/sessionData/deletionPreview",
+    SessionDataDeletionExecute => "v4/storage/sessionData/deletionExecute",
     ConversationUsage => "v4/conversation/usage",
+    // 3.18 F4：context composition（真实请求的细类别分解）。
+    ConversationContextComposition => "v4/conversation/contextComposition",
     LegacyUsageStats => "usage/stats",
     SessionUsage => "session/usage",
     McpList => "mcp/list",
+    WorkspaceMcpTrust => "workspace/mcp/trust",
     SkillsReferenceCatalog => "skills/referenceCatalog",
     PluginsList => "plugins/list",
     PluginsOverview => "plugins/overview",
@@ -100,6 +108,11 @@ methods! {
     SessionsIndexReconcile => "v4/sessionsIndex/reconcile",
     SessionSubagents => "session/subagents",
     SessionClose => "session/close",
+    // 运行实例生命周期：只管理本进程内实例，不创建/删除持久会话（3.18 session-lifecycle）。
+    SessionLifecycleGetState => "session/lifecycle/getState",
+    SessionLifecycleEnsureReady => "session/lifecycle/ensureReady",
+    SessionLifecycleStop => "session/lifecycle/stop",
+    SessionLifecycleRestart => "session/lifecycle/restart",
     RuntimeCapabilities => "runtime/capabilities",
     ProcessChildProcesses => "process/childProcesses",
     WorkspaceReadPresentation => "workspace/readPresentation",
@@ -317,6 +330,22 @@ mod tests {
         );
         assert_eq!(Method::parse(Method::InputHistoryRecall.as_str()), None);
         assert_eq!(Method::parse("v4/conversation/subscribe"), None);
+        // 项目数据彻底删除的四条方法名与 TS `V4_METHODS` 逐字一致。
+        for (method, name) in [
+            (Method::SessionDataMeasure, "v4/storage/sessionData/measure"),
+            (Method::SessionDataPurge, "v4/storage/sessionData/purge"),
+            (
+                Method::SessionDataDeletionPreview,
+                "v4/storage/sessionData/deletionPreview",
+            ),
+            (
+                Method::SessionDataDeletionExecute,
+                "v4/storage/sessionData/deletionExecute",
+            ),
+        ] {
+            assert_eq!(method.as_str(), name);
+            assert_eq!(Method::parse(name), Some(method));
+        }
     }
 
     #[test]

@@ -88,6 +88,7 @@ impl Engine {
             .context(StorageCommitFailure)?;
         let summary = session.summary();
         self.sessions.insert(id.clone(), session);
+        self.store.session_presence_register(&id).await?;
         self.touch_session(&id);
         self.closed.remove(&id);
         self.publish(&id, vec![])?;

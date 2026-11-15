@@ -146,8 +146,8 @@ export function createPluginUiBridgeService(
       // 工具级声明只在资源两处都没有对应字段时兜底；csp 整体取舍，不逐域并集。
       const meta =
         picked.meta ?? (await readListLevelResourceMeta(dependencies.listMcpResourcesForUi, bound));
-      const csp = meta?.csp ?? params.csp;
-      const prefersBorder = meta?.prefersBorder ?? params.prefersBorder;
+      const csp = meta?.csp ?? params.csp,
+        prefersBorder = meta?.prefersBorder ?? params.prefersBorder;
       log.info("prepareSandbox resource ready", {
         scopeId: params.scopeId,
         htmlBytes: Buffer.byteLength(html, "utf8"),
@@ -173,6 +173,9 @@ export function createPluginUiBridgeService(
         ...(meta?.heightHint !== undefined ? { heightHint: meta.heightHint } : {}),
         ...(meta?.minFrameHeight !== undefined ? { minFrameHeight: meta.minFrameHeight } : {}),
         ...(meta?.showInline !== undefined ? { showInline: meta.showInline } : {}),
+        ...(meta?.backgroundRetention !== undefined
+          ? { backgroundRetention: meta.backgroundRetention }
+          : {}),
       });
       log.info("prepareSandbox registered", {
         scopeId: params.scopeId,

@@ -23,6 +23,8 @@ pub use engine::Engine;
 mod input_validation;
 
 mod agent_loop;
+mod automation;
+mod automation_tool;
 mod durable;
 mod hook_events;
 mod hook_runner;
@@ -39,18 +41,31 @@ mod workspace_trust;
 mod compact_request;
 mod compaction;
 mod context;
+mod context_composition;
+#[cfg(test)]
+#[path = "context_composition_tests.rs"]
+mod context_composition_tests;
 mod context_projection;
 mod create_session;
+mod instructions;
 mod maintenance;
+mod prompt_system;
 mod queue_control;
 mod stop_command;
 #[cfg(test)]
 mod stop_command_tests;
+mod total_tokens;
 
 mod attachment_upload;
 mod attachments;
 mod input_attachments;
 mod session_close;
+mod session_data;
+mod session_deletion;
+mod session_features;
+mod session_lifecycle;
+#[cfg(test)]
+mod session_lifecycle_tests;
 mod session_read;
 mod session_residency;
 

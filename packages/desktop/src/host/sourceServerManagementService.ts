@@ -4,13 +4,18 @@ import {
   SOURCE_SERVER_REMOVE_CALLBACK_FAILED_ERROR_CODE,
   SOURCE_SERVER_REMOVE_CALLBACK_MISSING_ERROR_CODE,
   SOURCE_SERVER_REMOVE_PERSIST_FAILED_ERROR_CODE,
+  compareCompatibilityVersions,
   isSameSourceServerUpdateTarget,
+  SOURCE_SERVER_LIFECYCLE_CONTROL_MIN_VERSION,
+  sourceServerLifecycleSourceIdSchema,
   sourceServerManagementDirectoryDeltaSchema,
   sourceServerManagementSnapshotRequestSchema,
   sourceServerManagementSnapshotSchema,
   sourceServerManagementStateDeltaSchema,
   sourceServerOperationLogSchema,
+  sourceServerRunningTasksResultSchema,
   remoteTargetSchema,
+  sourceServerUpdateCancelProfileIdSchema,
   sourceServerUpdateRequestSchema,
   type ConnectionProfile,
   type RemoteTarget,
@@ -20,6 +25,7 @@ import {
   type SourceServerManagementSnapshotRequest,
   type SourceServerManagementStateDelta,
   type SourceServerOperationLog,
+  type SourceServerRunningTasksResult,
   type SourceServerUpdateRequest,
   type SourceServerUpdateTarget,
 } from "@zcode/shared";
@@ -57,6 +63,9 @@ export interface SourceServerManagementRuntime {
     profile: ConnectionProfile;
     target: Exclude<RemoteTarget, { kind: "server" }>;
     force?: boolean;
+    allowDowngrade?: boolean;
+    /** 本机阶段（probe/下载）可取消时通知管理服务投影 `updateCancelable`。 */
+    onLocalStageChange?: (cancelable: boolean) => void;
     context: {
       onLog: (event: {
         phase: string;
@@ -66,6 +75,35 @@ export interface SourceServerManagementRuntime {
       }) => void;
     };
   }): Promise<SourceServerManagementRuntimeConnectResult>;
+  cancelUpdate(profileId: string): boolean;
+  stopSource(input: {
+    profile: ConnectionProfile;
+    target: Exclude<RemoteTarget, { kind: "server" }>;
+    context: {
+      onLog: (event: {
+        phase: string;
+        message: string;
+        progress?: number;
+        level?: "info" | "warn" | "error";
+      }) => void;
+    };
+  }): Promise<void>;
+  restartSource(input: {
+    profile: ConnectionProfile;
+    target: Exclude<RemoteTarget, { kind: "server" }>;
+    context: {
+      onLog: (event: {
+        phase: string;
+        message: string;
+        progress?: number;
+        level?: "info" | "warn" | "error";
+      }) => void;
+    };
+  }): Promise<SourceServerManagementRuntimeConnectResult>;
+  getSourceRunningTasks(input: {
+    profile: ConnectionProfile;
+    target: Exclude<RemoteTarget, { kind: "server" }>;
+  }): Promise<SourceServerRunningTasksResult>;
   disconnect(sourceServerId: string): Promise<void>;
   isOnline(sourceServerId: string): boolean;
   currentVersion?(sourceServerId: string): string | undefined;
@@ -123,7 +161,7 @@ export function createSourceServerManagementService(
 
   function appendLog(input: {
     profileId: string;
-    operation: "connect" | "update";
+    operation: "connect" | "update" | "stop" | "restart";
     phase: string;
     level: "info" | "warn" | "error";
     message: string;
@@ -185,6 +223,26 @@ export function createSourceServerManagementService(
     return profile;
   }
 
+  /**
+   * 设备级生命周期合同只存在于包含 `stop --wait` / 整树 `restart` 的远端版本之后。
+   * 已知版本低于门禁时 typed 拒绝，不能把旧 CLI 的 ack 当作成功；离线未知版本
+   * 仍允许尝试，由远端命令结果给出真实失败。
+   */
+  function assertLifecycleControlSupported(sourceServerId: string): void {
+    const version = options.runtime.currentVersion?.(sourceServerId);
+    if (
+      version &&
+      compareCompatibilityVersions(version, SOURCE_SERVER_LIFECYCLE_CONTROL_MIN_VERSION) < 0
+    ) {
+      throw Object.assign(
+        new Error(
+          `Remote service ${version} does not support lifecycle control (requires ${SOURCE_SERVER_LIFECYCLE_CONTROL_MIN_VERSION})`,
+        ),
+        { code: "source-server-upgrade-required", retryable: false },
+      );
+    }
+  }
+
   async function getSnapshot(
     input?: SourceServerManagementSnapshotRequest,
   ): Promise<SourceServerManagementSnapshot> {
@@ -212,7 +270,7 @@ export function createSourceServerManagementService(
 
   function logContext(
     profileId: string,
-    operation: "connect" | "update",
+    operation: "connect" | "update" | "stop" | "restart",
   ): {
     onLog: (event: {
       phase: string;
@@ -359,7 +417,8 @@ export function createSourceServerManagementService(
       return await getSnapshot();
     },
     async updateSource(input: SourceServerUpdateRequest) {
-      const { profileId, expectedTarget, force } = sourceServerUpdateRequestSchema.parse(input);
+      const { profileId, expectedTarget, force, allowDowngrade } =
+        sourceServerUpdateRequestSchema.parse(input);
       const profile = await readProfile(profileId);
       // profile ID 可原位改址；读取凭据前后都核验 expectedTarget，旧授权不能用于新设备/账户。
       const assertTarget = (target: Exclude<RemoteTarget, { kind: "server" }>) => {
@@ -372,11 +431,22 @@ export function createSourceServerManagementService(
       assertTarget(profile.target);
       const target = await options.directory.resolveProfileTarget(profile);
       assertTarget(target);
+      const previousState = lastStates.get(profileId);
       try {
         const result = await options.runtime.update({
           profile,
           target,
           ...(force ? { force: true } : {}),
+          ...(allowDowngrade ? { allowDowngrade: true } : {}),
+          onLocalStageChange: (cancelable) => {
+            publishState({
+              profileId,
+              ...(profile.sourceServerId ? { sourceServerId: profile.sourceServerId } : {}),
+              state: "updating",
+              ...(cancelable ? { updateCancelable: true as const } : {}),
+              updatedAt: now(),
+            });
+          },
           context: logContext(profile.profileId, "update"),
         });
         if (result.sourceServerId) {
@@ -399,10 +469,68 @@ export function createSourceServerManagementService(
           typeof error === "object" && error && "code" in error
             ? String((error as { code?: unknown }).code)
             : undefined;
+        const canceled = code === "remote-connection-canceled";
         publishState({
           profileId,
           ...(profile.sourceServerId ? { sourceServerId: profile.sourceServerId } : {}),
-          state: code === "source-server-update-running-tasks" ? "updating" : "failed",
+          ...(canceled && previousState
+            ? {
+                state: previousState.state,
+                ...(previousState.currentVersion
+                  ? { currentVersion: previousState.currentVersion }
+                  : {}),
+              }
+            : {
+                state: code === "source-server-update-running-tasks" ? "updating" : "failed",
+                error: error instanceof Error ? error.message : String(error),
+                ...(code ? { errorCode: code as never } : {}),
+              }),
+          updatedAt: now(),
+        });
+        throw error;
+      }
+      return await getSnapshot();
+    },
+    async cancelSourceUpdate(profileId) {
+      return {
+        canceled: options.runtime.cancelUpdate(
+          sourceServerUpdateCancelProfileIdSchema.parse(profileId),
+        ),
+      };
+    },
+    async stopSource(sourceServerId) {
+      const id = sourceServerLifecycleSourceIdSchema.parse(sourceServerId);
+      assertLifecycleControlSupported(id);
+      const route = await options.directory.resolveSourceLifecycleRoute(id);
+      // 整个停止过程设备保持未连接；失败原因稍后留在同一状态上。
+      publishState({
+        profileId: route.profile.profileId,
+        ...(route.profile.sourceServerId ? { sourceServerId: route.profile.sourceServerId } : {}),
+        state: "offline",
+        updatedAt: now(),
+      });
+      try {
+        await options.runtime.stopSource({
+          profile: route.profile,
+          target: route.target,
+          context: logContext(route.profile.profileId, "stop"),
+        });
+        publishState({
+          profileId: route.profile.profileId,
+          ...(route.profile.sourceServerId ? { sourceServerId: route.profile.sourceServerId } : {}),
+          state: "offline",
+          updatedAt: now(),
+        });
+      } catch (error) {
+        const code =
+          typeof error === "object" && error && "code" in error
+            ? String((error as { code?: unknown }).code)
+            : undefined;
+        // 停止失败后设备也保持未连接；失败原因留在连接状态上供分类展示。
+        publishState({
+          profileId: route.profile.profileId,
+          ...(route.profile.sourceServerId ? { sourceServerId: route.profile.sourceServerId } : {}),
+          state: "offline",
           error: error instanceof Error ? error.message : String(error),
           ...(code ? { errorCode: code as never } : {}),
           updatedAt: now(),
@@ -410,6 +538,65 @@ export function createSourceServerManagementService(
         throw error;
       }
       return await getSnapshot();
+    },
+    async restartSource(sourceServerId) {
+      const id = sourceServerLifecycleSourceIdSchema.parse(sourceServerId);
+      assertLifecycleControlSupported(id);
+      const route = await options.directory.resolveSourceLifecycleRoute(id);
+      // 重启期间投影为“连接中”（bootstrapping），不显示更新中/自动重试计数。
+      publishState({
+        profileId: route.profile.profileId,
+        ...(route.profile.sourceServerId ? { sourceServerId: route.profile.sourceServerId } : {}),
+        state: "bootstrapping",
+        updatedAt: now(),
+      });
+      try {
+        const result = await options.runtime.restartSource({
+          profile: route.profile,
+          target: route.target,
+          context: logContext(route.profile.profileId, "restart"),
+        });
+        const resolvedSourceId = result.sourceServerId ?? route.profile.sourceServerId;
+        if (result.sourceServerId) {
+          await options.directory.recordHandshake(route.profile.profileId, {
+            sourceServerId: result.sourceServerId,
+            version: result.version ?? "unknown",
+          });
+        }
+        publishState({
+          profileId: route.profile.profileId,
+          ...(resolvedSourceId ? { sourceServerId: resolvedSourceId } : {}),
+          state: "online",
+          ...(result.version ? { currentVersion: result.version } : {}),
+          updatedAt: now(),
+        });
+      } catch (error) {
+        const code =
+          typeof error === "object" && error && "code" in error
+            ? String((error as { code?: unknown }).code)
+            : undefined;
+        publishState({
+          profileId: route.profile.profileId,
+          ...(route.profile.sourceServerId ? { sourceServerId: route.profile.sourceServerId } : {}),
+          state: "failed",
+          error: error instanceof Error ? error.message : String(error),
+          ...(code ? { errorCode: code as never } : {}),
+          updatedAt: now(),
+        });
+        throw error;
+      }
+      return await getSnapshot();
+    },
+    async getSourceRunningTasks(sourceServerId) {
+      const id = sourceServerLifecycleSourceIdSchema.parse(sourceServerId);
+      assertLifecycleControlSupported(id);
+      const route = await options.directory.resolveSourceLifecycleRoute(id);
+      return sourceServerRunningTasksResultSchema.parse(
+        await options.runtime.getSourceRunningTasks({
+          profile: route.profile,
+          target: route.target,
+        }),
+      );
     },
     async renameSource(sourceServerId, displayName) {
       await options.directory.renameSource(sourceServerId, displayName);

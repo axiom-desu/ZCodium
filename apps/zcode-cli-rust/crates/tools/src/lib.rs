@@ -44,6 +44,8 @@ mod tool_args;
 mod tool_args_tests;
 mod tool_definitions;
 mod tool_edit;
+#[cfg(test)]
+mod tool_exposure_tests;
 mod tool_files;
 mod tool_process;
 mod tool_search;

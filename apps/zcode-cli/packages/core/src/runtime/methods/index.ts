@@ -96,6 +96,7 @@ import { logContextUsageSnapshot } from "./context-usage.js";
 import { logModelRequestSteeringContext } from "./context-usage.js";
 import { buildModelMessageTailDiagnostics } from "./context-usage.js";
 import { buildContextUsageSnapshot } from "./context-usage.js";
+import * as contextComposition from "../context-composition/index.js";
 import { buildContextUsageBreakdownFromSnapshot } from "./context-usage.js";
 import { buildContextUsageCategory } from "./context-usage.js";
 import { buildToolUsageDetail } from "./context-usage.js";
@@ -299,6 +300,9 @@ export function installAgentRuntimeMethods(ctor: AgentRuntimeConstructor): void 
   proto.logContextUsageSnapshot = logContextUsageSnapshot;
   proto.logModelRequestSteeringContext = logModelRequestSteeringContext;
   proto.buildModelMessageTailDiagnostics = buildModelMessageTailDiagnostics;
+  proto.getContextComposition = contextComposition.getContextComposition;
+  proto.subscribeContextCompositionChanged = contextComposition.subscribeContextCompositionChanged;
+  proto.markContextCompositionChanged = contextComposition.markContextCompositionChanged;
   proto.buildContextUsageSnapshot = buildContextUsageSnapshot;
   proto.buildContextUsageBreakdownFromSnapshot = buildContextUsageBreakdownFromSnapshot;
   proto.buildContextUsageCategory = buildContextUsageCategory;

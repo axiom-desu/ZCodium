@@ -10,6 +10,7 @@ import {
 import type { MessageId, MessageWithParts, SessionId, SessionInfo, TraceContext } from "../deps.js";
 import { buildExecutionStateEntry, readRuntimeExecutionState } from "../execution-state.js";
 import { cloneMessageForFork, clonePartForFork } from "../helpers/index.js";
+import { buildForkedPromptSnapshotEntry } from "../helpers/prompt-snapshot.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import type {
   StableConversationForkGoalBoundary,
@@ -47,6 +48,8 @@ export async function commitAtomicConversationFork(
     sourceCommandId: string;
     targetMessageId: MessageId;
     target?: StableConversationForkTarget;
+    /** 受管 worktree：子会话目录（缺省沿用父会话目录）。 */
+    targetCwd?: { cwd: string };
     traceContext: TraceContext;
     kind?: "fork" | "selection_side_chat";
   },
@@ -156,6 +159,7 @@ export async function commitAtomicConversationFork(
   });
   const clonedEntries = entries.map((entry) => cloneVerifierEntryForAtomicFork(entry, identities));
   const modelSelectionEntry = buildModelSelectionEntry(childSessionId, modelSelection);
+  const promptSnapshotEntry = buildForkedPromptSnapshotEntry(runtime, childSessionId);
   if (kind === "selection_side_chat") {
     copiedMessages.push(buildSelectionSideChatBoundary(runtime, childSessionId, modelSelection));
   } else {
@@ -197,7 +201,13 @@ export async function commitAtomicConversationFork(
         }
       : undefined;
   const committedChild = await store.commitForkBundle({
-    child: buildForkedSessionInput(runtime, options.parentSession, childSessionId, kind),
+    child: buildForkedSessionInput(
+      runtime,
+      options.parentSession,
+      childSessionId,
+      kind,
+      options.targetCwd?.cwd,
+    ),
     messages: copiedMessages,
     copySources: {
       messages: Object.fromEntries(
@@ -214,6 +224,7 @@ export async function commitAtomicConversationFork(
       ...clonedEntries.map((item) => item.entry),
       modelSelectionEntry,
       buildExecutionStateEntry(childSessionId, executionState),
+      ...(promptSnapshotEntry ? [promptSnapshotEntry] : []),
     ],
     ...(goal ? { goal } : {}),
     ...(options.initialInput ? { initialInput: options.initialInput } : {}),

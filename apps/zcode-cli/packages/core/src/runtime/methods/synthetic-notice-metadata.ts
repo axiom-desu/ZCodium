@@ -93,5 +93,14 @@ function syntheticUserNoticeKind(source: SyntheticUserMessageSource): MessageSem
       return "user_prompt";
     case "shared_context":
       return "shared_context";
+    // 指令文件公告（上游 3.18.2）：隐藏 system reminder，正文即第几次重读的差异说明。
+    case "context_prefix":
+      return "system_reminder";
+    // 中断标记（上游 3.18.2）：普通 user 文本但仍是 runtime 注入的隐藏提醒语义。
+    case "interrupt_marker":
+      return "system_reminder";
+    // 环境公告（上游 3.18.2）：隐藏 system reminder，正文是环境变化清单。
+    case "environment_announcement":
+      return "system_reminder";
   }
 }

@@ -1,6 +1,7 @@
 import type {
   LoadCliMcpFromUserDirectoryRequest,
   LoadCliMcpFromUserDirectoryResult,
+  McpDataSyncPayload,
   McpSyncCandidateListResult,
   McpSyncExportResult,
   McpSyncExportedServer,
@@ -11,11 +12,18 @@ import type {
   ZCodeAgentMcpServer,
   ZCodeMcpListMode,
   ZCodeMcpListResult,
+  ZCodeWorkspaceMcpTrustResult,
 } from "@zcode/shared";
 import { ServiceChannels } from "@zcode/shared";
+import type { IDataSyncCategoryService } from "../data-sync/contract.js";
 import { createServiceDescriptor } from "../descriptors.js";
 
-export interface IMcpSyncService {
+/**
+ * MCP 通道：设置页配置读写 + 数据同步（IDataSyncCategoryService，docs/remote/data-sync.md「MCP 服务器」）。
+ * 旧 `listRemoteUserMcpStatuses/exportMcpServers/importMcpServers/...` 仍由设置页同步弹窗调用，
+ * 保留为同一 owner 的适配面；新入口只使用五方法数据同步契约。
+ */
+export interface IMcpSyncService extends IDataSyncCategoryService<McpDataSyncPayload> {
   loadMcpFromUserDirectory(
     request?: LoadCliMcpFromUserDirectoryRequest,
   ): Promise<LoadCliMcpFromUserDirectoryResult>;
@@ -30,6 +38,17 @@ export interface IMcpSyncService {
     mcpServers?: ZCodeAgentMcpServer[];
     mode?: ZCodeMcpListMode;
   }): Promise<ZCodeMcpListResult>;
+  /**
+   * 工作区 MCP 声明审核决定。摘要必须来自 mcp/list 的 workspaceTrust（只读投影），
+   * UI 不自行计算；实际落盘与摘要校验由 CLI 的 workspace-mcp-trust owner 完成。
+   */
+  setWorkspaceMcpTrust(params: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    serverName: string;
+    declarationDigest: string;
+    trusted: boolean;
+  }): Promise<ZCodeWorkspaceMcpTrustResult>;
   saveMcpToUserDirectory(payload: SaveCliMcpToUserDirectoryRequest): Promise<void>;
   listLocalUserMcpCandidates(): Promise<McpSyncCandidateListResult>;
   listRemoteUserMcpStatuses(params: { names: string[] }): Promise<McpSyncRemoteStatusResult>;

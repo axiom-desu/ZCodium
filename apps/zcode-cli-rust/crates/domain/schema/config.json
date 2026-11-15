@@ -731,6 +731,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -776,6 +780,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -830,6 +838,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -875,6 +887,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -929,6 +945,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -974,6 +994,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -1028,6 +1052,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -1073,6 +1101,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -1127,6 +1159,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -1172,6 +1208,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -1226,6 +1266,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -1271,6 +1315,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -1325,6 +1373,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],
@@ -1370,6 +1422,10 @@
                               "statusMessage": {
                                 "type": "string",
                                 "minLength": 1
+                              },
+                              "onError": {
+                                "type": "string",
+                                "enum": ["allow", "deny"]
                               }
                             },
                             "required": ["type", "command"],

@@ -94,6 +94,7 @@ export function createAppDynamicWorkflowPorts(
             submitProfile,
             escalatePort,
             modelRequestAdmission,
+            webSearchBudgetPort,
           }) =>
             createScriptWorkflowAgentRuntime({
               childSessionId: actorSessionId,
@@ -163,6 +164,8 @@ export function createAppDynamicWorkflowPorts(
               // 就是 core 侧的注册门。恒传（端口在 run service 里恒被构造），不做 opt-in——
               // 最可能撞上未预见之墙的 actor 恰是作者没标记的那一个。
               workflowEscalatePort: escalatePort,
+              // 每个 ask 的 WebSearch 预算端口：计数在 driver 会话状态里，源自同一 closure。
+              webSearchBudgetPort,
               // 请求级准入端口：driver 在治理器在场时给出，runner 每次尝试先过闸门。
               ...(modelRequestAdmission === undefined ? {} : { modelRequestAdmission }),
             }),

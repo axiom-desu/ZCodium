@@ -5,6 +5,9 @@
   "author": "ZCodium",
   "type": "module",
   "main": "out/main/index.js",
+  "imports": {
+    "#src/*": "./src/*"
+  },
   "scripts": {
     "pre-dev": "node scripts/ensure-local-runtime-assets.mjs && node -e \"require('node:fs').rmSync('./out',{recursive:true,force:true})\"",
     "dev": "node ../../scripts/dev-desktop-env.mjs production",
@@ -45,7 +48,7 @@
     "@zcode/shared": "workspace:*",
     "@zcode/ui": "workspace:*",
     "@zcode/zcode-cua": "workspace:*",
-    "electron-updater": "^6.8.3",
+    "electron-updater": "6.8.10",
     "module-details-from-path": "^1.0.4",
     "node-forge": "^1.4.0",
     "node-pty": "^1.0.0",
@@ -71,8 +74,8 @@
     "@types/yauzl": "^2.10.3",
     "@types/yazl": "^3.3.1",
     "@vitejs/plugin-react": "^6.0.1",
-    "electron": "41.0.3",
-    "electron-builder": "^26.8.1",
+    "electron": "44.7.0",
+    "electron-builder": "26.17.0",
     "istanbul-lib-instrument": "^6.0.3",
     "tailwindcss": "^4.2.2",
     "tsup": "^8.5.0",

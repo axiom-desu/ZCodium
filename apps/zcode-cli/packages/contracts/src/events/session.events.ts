@@ -333,6 +333,15 @@ export interface BackgroundResultOriginMeta {
   workflowNotification?: WorkflowNotificationMeta;
   /** 空闲提醒的载荷；与 workflowNotification 至多在场一个。 */
   workflowBlocked?: WorkflowBlockedMeta;
+  /**
+   * 后台 Agent 无进展提醒（不是结果）。App 的 schema 会剥掉它，界面按普通后台结果轮显示标题；
+   * CLI 用它把提醒排除在「消费了后台 Agent 结果」的埋点之外，并在出队时判定是否已过时。
+   */
+  subagentStall?: {
+    noProgressForMs: number;
+    /** 生成提醒时 Agent 的最后进展时间；出队时已有新进展就丢弃（内容已不成立）。 */
+    lastProgressAt?: number;
+  };
 }
 
 /**

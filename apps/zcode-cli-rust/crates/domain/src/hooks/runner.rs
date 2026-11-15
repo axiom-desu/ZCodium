@@ -1,7 +1,7 @@
 //! Node `InMemoryHookRunner.run`: which hooks take part, the order they run
 //! in, lifecycle payloads and the merged result. IO comes from a [`Driver`].
 use super::output::{self, Callback, Failure, RunResult};
-use super::{HookEvent, Registration, display, matches};
+use super::{HookEvent, OnErrorPolicy, Registration, display, matches};
 use serde_json::{Map, Value};
 
 /// M2.6 admission of one project hook, decided again before every dispatch.
@@ -121,6 +121,21 @@ impl Dispatch {
             ],
         )
     }
+    fn blocked_on_error(&self, now: u64, failure: &Failure) -> Lifecycle {
+        let reason = display::sanitize(&failure.message);
+        self.lifecycle(
+            Kind::Blocked,
+            vec![
+                ("durationMs", now.saturating_sub(self.started_at).into()),
+                ("outcome", "blocked".into()),
+                ("blockReason", reason.into()),
+                (
+                    "errorCode",
+                    failure.code.map(Value::from).unwrap_or(Value::Null),
+                ),
+            ],
+        )
+    }
     fn finished(&self, now: u64, callback: &Callback, processed: &RunResult) -> Lifecycle {
         let mut extra = vec![("durationMs", now.saturating_sub(self.started_at).into())];
         let Some(reason) = processed.block_reason() else {
@@ -235,7 +250,23 @@ pub async fn run<D: Driver>(
                 output::merge(&mut result, processed);
                 lifecycle
             }
-            Err(failure) => dispatch.failed(now, &failure),
+            Err(failure) => {
+                // Hook failures default to allow; only an explicitly configured
+                // PreToolUse deny policy blocks, and cancellation is never a failure.
+                if dispatch.hook.on_error == OnErrorPolicy::Deny
+                    && event == HookEvent::PreToolUse
+                    && failure.outcome != "cancelled"
+                {
+                    result.block_requested = true;
+                    result.prevent_continuation = true;
+                    result.behavior = Some(crate::permission::Behavior::Deny);
+                    result.decision_reason = Some(failure.message.clone());
+                    result.stop_reason = Some(failure.message.clone());
+                    dispatch.blocked_on_error(now, &failure)
+                } else {
+                    dispatch.failed(now, &failure)
+                }
+            }
         };
         driver.emit(lifecycle).await;
     }

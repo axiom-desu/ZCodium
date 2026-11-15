@@ -144,6 +144,14 @@
       "midConversation": true,
       "trailingNewline": false
     },
+    "environment_announcement": {
+      "channel": "current_turn",
+      "lifecycle": "resume_history",
+      "isMeta": true,
+      "providerVisibility": "provider_visible",
+      "midConversation": true,
+      "trailingNewline": false
+    },
     "incoming_message": {
       "channel": "mid_turn_event",
       "lifecycle": "mid_turn_event",
@@ -219,6 +227,14 @@
     "diagnostics": {
       "channel": "mid_turn_event",
       "lifecycle": "mid_turn_event",
+      "isMeta": true,
+      "providerVisibility": "provider_visible",
+      "midConversation": true,
+      "trailingNewline": false
+    },
+    "total_tokens_reminder": {
+      "channel": "current_turn",
+      "lifecycle": "per_current_turn",
       "isMeta": true,
       "providerVisibility": "provider_visible",
       "midConversation": true,

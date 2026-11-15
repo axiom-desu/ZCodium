@@ -12,6 +12,7 @@ import type {
   RepairRemoteSessionPathsInput,
   SessionEntryInfo,
   SessionEntryType,
+  SessionDeletionSnapshot,
   SessionId,
   SessionInfo,
   SessionInputDelivery,
@@ -24,6 +25,7 @@ import type {
 } from "@zcode/contracts";
 import * as permissionFullAccessRepository from "./repositories/permission-full-access.js";
 import * as messageRepository from "./repositories/messages.js";
+import * as sessionDeletionRepository from "./repositories/session-deletion.js";
 import * as sessionEntryRepository from "./repositories/session-entries.js";
 import * as sessionInputRepository from "./repositories/session-inputs.js";
 import * as sessionRepository from "./repositories/sessions.js";
@@ -48,6 +50,66 @@ export class RepositorySurface extends SessionStoreSurface {
   async softDeleteSession(sessionID: SessionId, timeDeleted?: number): Promise<void> {
     this.throwBeforeWrite();
     sessionRepository.softDeleteSession(this.db, sessionID, timeDeleted ?? Date.now());
+  }
+
+  // 项目数据彻底删除（v4/storage/sessionData/*）：owned 树、附件引用保护、行删除。
+  async listOwnedSessionTrees(sessionIDs: SessionId[]): Promise<Map<SessionId, SessionId[]>> {
+    return sessionRepository.listOwnedSessionTrees(this.db, sessionIDs);
+  }
+
+  async listArtifactReferrers(sessionIDs: SessionId[]): Promise<Map<SessionId, SessionId[]>> {
+    return sessionRepository.listArtifactReferrers(this.db, sessionIDs);
+  }
+
+  async purgeSessions(sessionIDs: SessionId[]): Promise<void> {
+    this.throwBeforeWrite();
+    sessionRepository.purgeSessions(this.db, sessionIDs);
+  }
+
+  // 归档永久删除：预检 → 写入删除凭据 → 文件清理 → 删正文（bootstrap 执行面编排）。
+  async inspectSessionDeletion(sessionID: SessionId): Promise<SessionDeletionSnapshot> {
+    return sessionDeletionRepository.inspectSessionDeletion(
+      this.db,
+      sessionID,
+      this.runtimeOwnerId,
+    );
+  }
+
+  async beginSessionDeletion(
+    sessionID: SessionId,
+    revision: string,
+    operationId: string,
+    retained: Array<{ sessionId: SessionId; artifactId: string }>,
+  ): Promise<void> {
+    this.throwBeforeWrite();
+    sessionDeletionRepository.beginSessionDeletion(
+      this.db,
+      sessionID,
+      this.runtimeOwnerId,
+      revision,
+      operationId,
+      retained,
+    );
+  }
+
+  async completeSessionDeletion(sessionID: SessionId): Promise<void> {
+    this.throwBeforeWrite();
+    sessionDeletionRepository.completeSessionDeletion(this.db, sessionID);
+  }
+
+  async registerSessionRuntime(sessionID: SessionId): Promise<void> {
+    this.throwBeforeWrite();
+    sessionDeletionRepository.registerSessionRuntime(this.db, this.runtimeOwnerId, sessionID);
+  }
+
+  async unregisterSessionRuntime(sessionID: SessionId): Promise<void> {
+    this.throwBeforeWrite();
+    sessionDeletionRepository.unregisterSessionRuntime(this.db, this.runtimeOwnerId, sessionID);
+  }
+
+  /** 连接关闭时清掉本 owner 的运行态行，不留“永远活着”的残留。 */
+  clearRuntimePresence(): void {
+    sessionDeletionRepository.clearSessionRuntimePresence(this.db, this.runtimeOwnerId);
   }
 
   async listSessions(input: ListSessionsInput = {}): Promise<SessionInfo[]> {

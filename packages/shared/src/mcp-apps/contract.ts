@@ -98,6 +98,8 @@ export interface McpAppResourceMeta {
   heightHint?: number;
   minFrameHeight?: number;
   showInline?: boolean;
+  /** `_meta.ui.backgroundRetention`：资源显式申请隐藏后保留在 inert 后台表面（缺省 false）。 */
+  backgroundRetention?: boolean;
 }
 /** 随沙箱句柄回到 renderer 的资源级呈现信息；CSP 与放宽只在 main 生效，不回传。 */
 export type PluginSandboxResourceMeta = Omit<McpAppResourceMeta, "csp" | "cspRelaxations">;
@@ -156,6 +158,8 @@ export {
 export const MCP_APPS_WIDGET_STATE_EXPERIMENTAL_KEY = "zcode/widgetState";
 export const MCP_APPS_RESOURCE_SUBSCRIBE_EXPERIMENTAL_KEY = "zcode/resourceSubscribe";
 export const MCP_APPS_SURFACE_EXPERIMENTAL_KEY = "zcode/surface";
+/** 宿主宣告后，插件文档内部的子 frame 导航不会被当作页面重载；旧宿主不宣告时插件应自行降级。 */
+export const MCP_APPS_NESTED_FRAMES_EXPERIMENTAL_KEY = "zcode/nestedFrames";
 /**
  * ZCode 扩展方法 `ui/set-widget-state { widgetState }`（MCP Apps 无 widgetState）：页面把界面状态交给宿主
  * renderer 内存保存（不持久化，会话内重挂载可恢复）；初值经 hostContext 的 `zcode/widgetState` 键随握手下发。
@@ -197,6 +201,11 @@ export interface PluginSandboxPlatformPort {
    */
   disposeSandbox(sandboxId: string, initId?: number): Promise<void>;
   consumeUserGesture(sandboxId: string): Promise<boolean>;
+  /**
+   * 即后台保留页执行状态：true 时 Main 解除该 guest webContents 的后台节流，
+   * false 时恢复。缺省（旧 preload）表示不支持，调用方保持现有行为。
+   */
+  setExecutionActive?(sandboxId: string, active: boolean): Promise<void>;
   onPorts(handler: (event: PluginSandboxPortsEvent) => void): () => void;
 }
 
@@ -247,6 +256,8 @@ export interface PluginSandboxRegisterRequestPayload {
   minFrameHeight?: number;
   /** 资源级强制常驻标记，随句柄 resourceMeta 回 renderer。 */
   showInline?: boolean;
+  /** 资源级 `_meta.ui.backgroundRetention`：隐藏后保留在 inert 后台表面。 */
+  backgroundRetention?: boolean;
 }
 /** host 内部使用的登记输入：去掉传输层 requestId。 */
 export type PluginSandboxRegisterInput = Omit<PluginSandboxRegisterRequestPayload, "requestId">;
@@ -256,7 +267,7 @@ export interface PluginSandboxHandle {
   initId: number;
   shellUrl: string;
   partition: string;
-  /** 资源级呈现信息（prefersBorder / heightHint / minFrameHeight / showInline）；资源没声明时省略。 */
+  /** 资源级呈现信息（prefersBorder / heightHint / minFrameHeight / showInline / backgroundRetention）；资源没声明时省略。 */
   resourceMeta?: PluginSandboxResourceMeta;
 }
 export type PluginSandboxRegisterResultPayload =

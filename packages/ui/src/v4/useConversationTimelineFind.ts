@@ -8,7 +8,7 @@ import {
   scrollConversationFindRangeIntoView,
 } from "@/v4/conversationFindHighlightDom.js";
 import {
-  buildConversationFindIndex,
+  createConversationFindIndexBuilder,
   findConversationMatchIndexByKey,
   getConversationFindMatchKey,
   resolveConversationFindActiveIndex,
@@ -78,6 +78,8 @@ export function useConversationTimelineFind({
   scrollToUnit,
 }: UseConversationTimelineFindOptions) {
   const codeCommentCardsEnabled = useAssistantCodeCommentFeatureEnabled();
+  // 归一化/代码注释投影按不可变 row 缓存：查询逐字变化时只重新匹配，不反复重转全文。
+  const buildFindIndex = useMemo(() => createConversationFindIndexBuilder(), []);
   const findStable = sessionPhase !== "running" && sessionPhase !== "prewarming";
   const unitFindCacheRef = useRef(
     new Map<string, { source: ConversationFindMatch[]; loadedRowCount: number }>(),
@@ -99,7 +101,7 @@ export function useConversationTimelineFind({
       const cached = !unit.isRunning ? unitFindCacheRef.current.get(cacheKey) : undefined;
       const unitIndexResult = cached
         ? { matches: cached.source, loadedRowCount: cached.loadedRowCount }
-        : buildConversationFindIndex([unit], query, {
+        : buildFindIndex([unit], query, {
             projectAssistantCodeComments: codeCommentCardsEnabled,
           });
       if (!unit.isRunning && !cached) {
@@ -114,15 +116,21 @@ export function useConversationTimelineFind({
       }
     });
     return { query: normalizedQuery, matches, matchCount: matches.length, loadedRowCount };
-  }, [codeCommentCardsEnabled, conversationFindQuery, renderUnits]);
+  }, [buildFindIndex, codeCommentCardsEnabled, conversationFindQuery, renderUnits]);
   const searchResultFindIndex = useMemo(
     () =>
       findStable && searchResultHighlightRequest
-        ? buildConversationFindIndex(renderUnits, searchResultHighlightRequest.query, {
+        ? buildFindIndex(renderUnits, searchResultHighlightRequest.query, {
             projectAssistantCodeComments: codeCommentCardsEnabled,
           })
-        : buildConversationFindIndex([], ""),
-    [codeCommentCardsEnabled, findStable, renderUnits, searchResultHighlightRequest],
+        : buildFindIndex([], ""),
+    [
+      buildFindIndex,
+      codeCommentCardsEnabled,
+      findStable,
+      renderUnits,
+      searchResultHighlightRequest,
+    ],
   );
   const [resolvedFindActiveIndex, setResolvedFindActiveIndex] = useState(-1);
   const findActiveKeyRef = useRef<ConversationFindMatchKey | null>(null);

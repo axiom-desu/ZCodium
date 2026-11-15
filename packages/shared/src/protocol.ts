@@ -71,8 +71,9 @@ export interface SystemInfo {
   platform: string;
 }
 
-/** 支持的语言 */
-export type Locale = "zh-CN" | "en-US";
+/** 支持的界面语言；共享协议是 locale identity 的唯一类型 owner。 */
+export const SUPPORTED_LOCALES = ["zh-CN", "en-US", "ja-JP", "ru-RU", "ko-KR"] as const;
+export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 /** 界面语言偏好；system 表示跟随当前运行端系统语言。 */
 export type LocalePreference = "system" | Locale;
@@ -293,6 +294,11 @@ export interface AppSettings {
   closeToTrayOnWindows?: boolean;
   /** 存在执行中的闲时任务时阻止系统闲置休眠（手动开关，防不了合盖）。 */
   keepAwakeWhileRunning?: boolean;
+  /**
+   * 文件树单击 HTML 文件时用内置浏览器打开（右键「打开」仍为源码预览）。
+   * 本机界面偏好：始终读写本机 base Host，远端 workspace 不继承。
+   */
+  fileTreeHtmlClickOpensBrowser?: boolean;
   /** Windows 关闭到托盘默认值是否已执行过一次性迁移；只用于设置迁移，不参与业务判断。 */
   closeToTrayOnWindowsMigrationInitialized?: boolean;
   /** 桌面端全局页面缩放档位；用于重启后恢复界面缩放，Web/手机端忽略。 */

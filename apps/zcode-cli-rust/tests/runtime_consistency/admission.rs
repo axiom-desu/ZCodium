@@ -24,7 +24,7 @@ async fn guide_admission_and_consumption_are_durable_barriers() {
         let guide = receive(&mut runtime.commits).await;
         assert_eq!(guide.last_role, "user");
         assert!(
-            guide.messages.last().unwrap()["content"]
+            request_body(&guide.messages).last().unwrap()["content"]
                 .as_str()
                 .unwrap()
                 .contains("new input")
@@ -38,8 +38,9 @@ async fn guide_admission_and_consumption_are_durable_barriers() {
         } else {
             receive(&mut runtime.requests).await;
             let next = receive(&mut runtime.requests).await;
-            assert_eq!(next[next.len() - 2]["role"], "tool");
-            assert_eq!(next.last().unwrap()["role"], "user");
+            let body = request_body(&next);
+            assert_eq!(body[body.len() - 2]["role"], "tool");
+            assert_eq!(body.last().unwrap()["role"], "user");
             finish_success(runtime).await;
         }
     }
@@ -82,13 +83,14 @@ async fn start_now_waits_for_reservation_terminal_and_promotion_commits() {
         } else {
             receive(&mut runtime.requests).await;
             let next = receive(&mut runtime.requests).await;
+            let body = request_body(&next);
             assert!(
-                next.last().unwrap()["content"]
+                body.last().unwrap()["content"]
                     .as_str()
                     .unwrap()
                     .contains("new input")
             );
-            assert_eq!(next[next.len() - 2]["role"], "tool");
+            assert_eq!(body[body.len() - 2]["role"], "tool");
             finish_success(runtime).await;
         }
     }

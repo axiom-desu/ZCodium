@@ -77,7 +77,7 @@ fn local_plan_exposes_controls_and_projects_history() {
         .collect();
     assert_eq!(
         names,
-        vec!["Read", TOOL_SEARCH_NAME, DEFERRED_TOOL_CALL_NAME]
+        vec!["Read", "LocalToolSearch", DEFERRED_TOOL_CALL_NAME]
     );
     assert!(!plan.options.tool_search_enabled);
     assert_eq!(plan.mode, ResolvedMode::Local);

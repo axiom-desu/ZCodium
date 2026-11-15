@@ -1,13 +1,13 @@
 import { useCallback } from "react";
-import type { Locale } from "@zcode/shared";
-import { TID_LOCALE_TOGGLE } from "@zcode/shared";
+import { SUPPORTED_LOCALES, TID_LOCALE_TOGGLE, type Locale } from "@zcode/shared";
 import { useZCodeIntl } from "./IntlProvider.js";
-
-const LOCALE_CYCLE: Locale[] = ["zh-CN", "en-US"];
 
 const LOCALE_LABELS: Record<Locale, string> = {
   "zh-CN": "中",
   "en-US": "En",
+  "ja-JP": "日",
+  "ru-RU": "Ру",
+  "ko-KR": "한",
 };
 
 /**
@@ -17,8 +17,8 @@ export function LocaleSwitcher() {
   const { intl, locale, setLocale } = useZCodeIntl();
 
   const cycleLocale = useCallback(() => {
-    const idx = LOCALE_CYCLE.indexOf(locale);
-    const next = LOCALE_CYCLE[(idx + 1) % LOCALE_CYCLE.length] ?? LOCALE_CYCLE[0]!;
+    const idx = SUPPORTED_LOCALES.indexOf(locale);
+    const next = SUPPORTED_LOCALES[(idx + 1) % SUPPORTED_LOCALES.length] ?? SUPPORTED_LOCALES[0]!;
     setLocale(next);
   }, [locale, setLocale]);
 

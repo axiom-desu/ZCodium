@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- ZCode task wrapper service 接口集中承载 app/runtime API，拆散会让替换阶段更难追踪。 */
 import type { Event } from "@zcode/rpc";
 import { ServiceChannels } from "@zcode/shared";
-import type { CommandPayloadMap } from "@zcode/shared/zcode-protocol-v4";
+import type { CommandAck, CommandPayloadMap } from "@zcode/shared/zcode-protocol-v4";
 import { createServiceDescriptor } from "#src/descriptors.js";
 import type {
   ZCodeImportSessionsResult,
@@ -320,13 +320,15 @@ export interface IZCodeTaskService {
     clientMode: ZCodeTaskClientMode;
   }): Promise<ZCodeCancelTaskCommandResult>;
 
-  /** 停止当前正在进行的生成 */
+  /** 停止当前正在进行的生成；返回 v4 stop ACK，调用方可按 reasonCode 分流。 */
   stopGeneration(params: {
     taskId: string;
     workspacePath?: string;
     workspaceIdentity?: string;
     runId?: TraceId;
-  }): Promise<void>;
+    /** 来自 runtime 活动执行事实的停止凭据；不匹配时 owner 以 noop 拒绝。 */
+    expectedExecutionId?: string;
+  }): Promise<CommandAck>;
 
   /** 执行 agent 内建 /compact 命令；手机 replayable 仍经 shared host 路由。 */
   compactSession(params: {

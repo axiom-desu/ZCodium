@@ -1,6 +1,10 @@
 import {
+  SOURCE_SERVER_CONTROL_UNRESPONSIVE_ERROR_CODE,
+  SOURCE_SERVER_DOWNGRADE_UNCONFIRMED_ERROR_CODE,
   SOURCE_SERVER_IDENTITY_CHANGE_PENDING_ERROR_CODE,
   SOURCE_SERVER_INSTALL_REQUIRED_ERROR_CODE,
+  SOURCE_SERVER_STOP_FAILED_ERROR_CODE,
+  SOURCE_SERVER_UPDATE_IN_PROGRESS_ERROR_CODE,
   SOURCE_SERVER_UPDATE_RUNNING_TASKS_ERROR_CODE,
   SOURCE_SERVER_UPGRADE_REQUIRED_ERROR_CODE,
   getSourceServerUpdateTarget,
@@ -54,6 +58,10 @@ export type SourceServerFailureKind =
   | "install-required"
   | "upgrade-required"
   | "running-tasks"
+  | "update-in-progress"
+  | "downgrade-unconfirmed"
+  | "stop-failed"
+  | "control-unresponsive"
   | "identity-change-pending"
   | "target-changed"
   | "credentials-required"
@@ -87,6 +95,14 @@ export function classifySourceServerFailure(error: unknown): SourceServerFailure
       return { kind: "upgrade-required", code, retryable: true };
     case SOURCE_SERVER_UPDATE_RUNNING_TASKS_ERROR_CODE:
       return { kind: "running-tasks", code, retryable: true };
+    case SOURCE_SERVER_UPDATE_IN_PROGRESS_ERROR_CODE:
+      return { kind: "update-in-progress", code, retryable: true };
+    case SOURCE_SERVER_DOWNGRADE_UNCONFIRMED_ERROR_CODE:
+      return { kind: "downgrade-unconfirmed", code, retryable: true };
+    case SOURCE_SERVER_STOP_FAILED_ERROR_CODE:
+      return { kind: "stop-failed", code, retryable: true };
+    case SOURCE_SERVER_CONTROL_UNRESPONSIVE_ERROR_CODE:
+      return { kind: "control-unresponsive", code, retryable: true };
     case SOURCE_SERVER_IDENTITY_CHANGE_PENDING_ERROR_CODE:
       return { kind: "identity-change-pending", code, retryable: true };
     case "remote-target-changed":
@@ -119,6 +135,13 @@ export interface SourceProfileRow {
   availableVersion?: string;
   runningTasks?: SourceServerRunningTask[];
   pendingIdentityChange: boolean;
+  /** 最近握手的远端版本；生命周期命令的版本门禁只读它，不发试探命令。 */
+  lastSeenVersion?: string;
+  updateAvailability?: "none" | "available" | "required";
+  /** 更新处于本机阶段，`cancelSourceUpdate` 可取消。 */
+  updateCancelable?: boolean;
+  /** 远端当前 release 由显式降级安装时被替换的版本。 */
+  downgradedFrom?: string;
 }
 
 function formatSourceProfileTargetLabel(target: ConnectionProfile["target"]): string {
@@ -165,6 +188,10 @@ export function buildSourceProfileRows(
         ...(state?.currentVersion ? { currentVersion: state.currentVersion } : {}),
         ...(state?.availableVersion ? { availableVersion: state.availableVersion } : {}),
         ...(state?.runningTasks ? { runningTasks: state.runningTasks } : {}),
+        ...(source?.lastSeenVersion ? { lastSeenVersion: source.lastSeenVersion } : {}),
+        ...(state?.updateAvailability ? { updateAvailability: state.updateAvailability } : {}),
+        ...(state?.updateCancelable ? { updateCancelable: true } : {}),
+        ...(state?.downgradedFrom ? { downgradedFrom: state.downgradedFrom } : {}),
         pendingIdentityChange:
           state?.state === "identity-change-pending" || Boolean(state?.pendingSourceServerId),
       } satisfies SourceProfileRow;

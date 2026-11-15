@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
-import { OFFICE_VIEWER_RUNTIME_PATHS } from "@zcode/shared/builtin-plugin-assets";
+import {
+  BUILTIN_PLUGIN_SEED_PATHS,
+  OFFICE_VIEWER_RUNTIME_PATHS,
+} from "@zcode/shared/builtin-plugin-assets";
 import { validateOfficeViewerRuntimeAssets } from "@zcode/shared/office-viewer-assets";
 
 export const seaOfficialPluginAssetPrefix = "zcode-official-plugins/";
@@ -59,6 +62,17 @@ export const officialSeaPlugins = [
     version: "0.1.0",
   },
   {
+    // design：纯内容型（入口技能 + design-resources 资源 + SessionStart hook），requiresRuntime:false。
+    // requiredSeedPaths 直接取自单一资产契约；版本与 package.json / plugin.json / definitions 同步。
+    marketplace: "zcode-plugins-official",
+    name: "design",
+    packageName: "@zcode/design-plugin",
+    requiresRuntime: false,
+    requiredSeedPaths: [...BUILTIN_PLUGIN_SEED_PATHS["design-plugin"]],
+    rootPath: join("packages", "design-plugin"),
+    version: "0.7.2",
+  },
+  {
     // node_repl 宿主：Browser Use 与 Computer Use 共用的运行时产物，自己不是面向用户的插件
     // （无 skill、无市场 listing）。它必须始终随发布物嵌入，否则任一能力启用时都没有宿主可跑。
     marketplace: "zcode-plugins-official",
@@ -67,7 +81,7 @@ export const officialSeaPlugins = [
     requiresRuntime: true,
     requiredRuntimePaths: ["dist/mcp/server.js"],
     rootPath: join("packages", "node-repl-host"),
-    version: "0.6.1",
+    version: "0.7.0",
   },
   {
     marketplace: "zcode-plugins-official",

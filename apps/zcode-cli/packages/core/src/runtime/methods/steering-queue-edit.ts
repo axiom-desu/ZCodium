@@ -1,8 +1,29 @@
 import { SessionEventType, createSessionEvent } from "../deps.js";
-import type { TraceContext } from "../deps.js";
+import type { TraceContext, TurnInputIntentMetadata } from "../deps.js";
 import { measureUtf8Bytes, previewInput } from "../helpers/index.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { persistSessionInputUpdates } from "./steering-queue-items.js";
+
+/**
+ * 队列原地编辑的 intent 事实：正文与选区引用一起改写，delivery/order/provenance 保持入队时的值。
+ * 没有 intent 的旧队列项不凭空造一份：调用方仅在显式传 quotes 时使用本函数。
+ */
+function editedIntent(
+  intent: TurnInputIntentMetadata | undefined,
+  text: string,
+  conversationQuotes: TurnInputIntentMetadata["conversationQuotes"],
+): TurnInputIntentMetadata | undefined {
+  if (!intent) return undefined;
+  // 显式 [] = 用户清空引用：键整体丢弃，与 admission 的“没引用”同形（不留下空数组）。
+  const { conversationQuotes: _previousQuotes, ...rest } = intent;
+  return {
+    ...rest,
+    text,
+    ...(conversationQuotes && conversationQuotes.length > 0
+      ? { conversationQuotes: [...conversationQuotes] }
+      : {}),
+  };
+}
 
 /**
  * （v4 queue 单项编辑）：按 id 替换某排队输入的文本，重发 TurnSteerQueued（同 id）。
@@ -13,6 +34,8 @@ export async function editPendingInputById(
   options: {
     pendingInputId: string;
     newText: string;
+    /** 队列原地编辑的选区引用：undefined = 保留原值，[] = 清空。 */
+    conversationQuotes?: TurnInputIntentMetadata["conversationQuotes"];
     traceContext: TraceContext;
   },
 ): Promise<boolean> {
@@ -26,7 +49,16 @@ export async function editPendingInputById(
       (item) => item.pendingInputId === options.pendingInputId,
     );
     if (!held) return false;
-    await persistSessionInputUpdates(this, [{ id: held.pendingInputId, text: options.newText }]);
+    const nextHeldIntent = editedIntent(held.intent, options.newText, options.conversationQuotes);
+    // 旧队列项没有 intent 事实：不能凭空造一份去承载 quotes，明确按“未命中”处理。
+    if (options.conversationQuotes !== undefined && !nextHeldIntent) return false;
+    await persistSessionInputUpdates(this, [
+      {
+        id: held.pendingInputId,
+        text: options.newText,
+        ...(nextHeldIntent ? { intent: nextHeldIntent } : {}),
+      },
+    ]);
     const event = createSessionEvent(
       SessionEventType.TurnSteerQueued,
       this.sessionId,
@@ -36,7 +68,7 @@ export async function editPendingInputById(
         inputPreview: previewInput(options.newText),
         inputSize: measureUtf8Bytes(options.newText),
         ...(held.commandKind ? { commandKind: held.commandKind } : {}),
-        ...(held.intent ? { intent: held.intent } : {}),
+        ...(nextHeldIntent ? { intent: nextHeldIntent } : {}),
         ...(held.toolDisallowlist ? { toolDisallowlist: held.toolDisallowlist } : {}),
         queueLength: projection.pendingSteerInputs.length,
         targetTurnId: held.targetTurnId,
@@ -49,8 +81,19 @@ export async function editPendingInputById(
     await this.appendEvent(event, options.traceContext);
     return true;
   }
-  await persistSessionInputUpdates(this, [{ id: pendingInput.id, text: options.newText }]);
+  const nextIntent = editedIntent(pendingInput.intent, options.newText, options.conversationQuotes);
+  // 没有 intent 的旧队列项无法承载 quotes：不伪造 intent，按未命中收口。
+  if (options.conversationQuotes !== undefined && !nextIntent) return false;
+  await persistSessionInputUpdates(this, [
+    {
+      id: pendingInput.id,
+      text: options.newText,
+      ...(nextIntent ? { intent: nextIntent } : {}),
+    },
+  ]);
   pendingInput.input = options.newText;
+  // 编辑后的 intent 必须回到内存 queue 项：drain/guide 消费时只能读同一份事实。
+  if (nextIntent) pendingInput.intent = nextIntent;
   const event = createSessionEvent(
     SessionEventType.TurnSteerQueued,
     this.sessionId,

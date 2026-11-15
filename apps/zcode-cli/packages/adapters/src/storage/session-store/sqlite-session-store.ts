@@ -105,6 +105,8 @@ export class SqliteSessionStore
   }
 
   close(): void {
+    // 先清本 owner 的运行态行：进程关闭后不能再被其它进程当成活跃 runtime。
+    this.clearRuntimePresence();
     this.db.close();
   }
 

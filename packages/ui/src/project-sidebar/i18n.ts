@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { toZhOrEnLocale } from "@zcode/shared";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 
 const MESSAGES = {
@@ -15,6 +16,27 @@ const MESSAGES = {
     "projectSidebar.moveTasks": "移动任务…",
     "projectSidebar.viewFiles": "查看文件",
     "projectSidebar.newTask": "在此项目新建任务",
+    "projectSidebar.worktrees": "受管 worktree…",
+    "projectSidebar.worktreeTitle": "受管 worktree",
+    "projectSidebar.worktreeDescription":
+      "worktree 由 Host 在受管目录创建；任务运行在 worktree 根目录。删除前会检查任务、改动与共享引用。",
+    "projectSidebar.worktreeEmpty": "还没有受管 worktree",
+    "projectSidebar.worktreeNewTask": "在新 worktree 中新建任务",
+    "projectSidebar.worktreeRemove": "删除 worktree",
+    "projectSidebar.worktreeRemoveConfirm": "确认删除",
+    "projectSidebar.worktreeForce": "强制删除（仅无任务使用时）",
+    "projectSidebar.worktreeDirty": "有未提交改动",
+    "projectSidebar.worktreeClose": "关闭",
+    "projectSidebar.worktreeUnsupported": "当前 Agent 版本不支持 worktree cwd，创建已禁用。",
+    "projectSidebar.remoteProjects": "远端项目…",
+    "projectSidebar.remoteProjectsTitle": "远端项目入口",
+    "projectSidebar.remoteProjectsDescription":
+      "这里只管理本机保存的远端项目入口与离线缓存；移除入口不会删除远端项目数据。",
+    "projectSidebar.remoteProjectsEmpty": "还没有保存的远端项目入口",
+    "projectSidebar.remoteProjectCachedDeleted": "远端已删除（离线隐藏）",
+    "projectSidebar.remoteProjectRemove": "从本机移除入口",
+    "projectSidebar.remoteProjectRemoveConfirm": "确认移除入口",
+    "projectSidebar.remoteProjectRestore": "恢复显示",
     "projectSidebar.noPrimaryRoot": "主目录不可用，新建与移动已禁用",
     "projectSidebar.legacyReadOnly": "旧远端项目只读",
     "projectSidebar.legacyReadOnlyHint":
@@ -98,6 +120,28 @@ const MESSAGES = {
     "projectSidebar.moveTasks": "Move tasks…",
     "projectSidebar.viewFiles": "View files",
     "projectSidebar.newTask": "New task in this project",
+    "projectSidebar.worktrees": "Managed worktrees…",
+    "projectSidebar.worktreeTitle": "Managed worktrees",
+    "projectSidebar.worktreeDescription":
+      "The Host creates worktrees under its managed directory; tasks run at the worktree root. Deletion checks tasks, local changes and shared references first.",
+    "projectSidebar.worktreeEmpty": "No managed worktrees yet",
+    "projectSidebar.worktreeNewTask": "New task in a new worktree",
+    "projectSidebar.worktreeRemove": "Remove worktree",
+    "projectSidebar.worktreeRemoveConfirm": "Remove",
+    "projectSidebar.worktreeForce": "Force remove (only when unused)",
+    "projectSidebar.worktreeDirty": "Uncommitted changes",
+    "projectSidebar.worktreeClose": "Close",
+    "projectSidebar.worktreeUnsupported":
+      "This Agent version does not support worktree cwd; creation is disabled.",
+    "projectSidebar.remoteProjects": "Remote projects…",
+    "projectSidebar.remoteProjectsTitle": "Remote project entries",
+    "projectSidebar.remoteProjectsDescription":
+      "This manages local remote-project entries and the offline cache only. Removing an entry never deletes remote project data.",
+    "projectSidebar.remoteProjectsEmpty": "No saved remote project entries",
+    "projectSidebar.remoteProjectCachedDeleted": "Removed remotely (hidden offline)",
+    "projectSidebar.remoteProjectRemove": "Remove local entry",
+    "projectSidebar.remoteProjectRemoveConfirm": "Remove entry",
+    "projectSidebar.remoteProjectRestore": "Restore visibility",
     "projectSidebar.noPrimaryRoot": "Primary folder unavailable; new tasks and moves are disabled",
     "projectSidebar.legacyReadOnly": "Legacy remote project (read-only)",
     "projectSidebar.legacyReadOnlyHint":
@@ -195,7 +239,7 @@ function format(
 export function useProjectSidebarIntl(): ProjectSidebarIntl {
   const { intl, locale } = useZCodeIntl();
   return useMemo(() => {
-    const messages = MESSAGES[locale] as Record<string, string> | undefined;
+    const messages = MESSAGES[toZhOrEnLocale(locale)] as Record<string, string> | undefined;
     return {
       formatMessage(descriptor, values) {
         if (messages && descriptor.id in messages) {

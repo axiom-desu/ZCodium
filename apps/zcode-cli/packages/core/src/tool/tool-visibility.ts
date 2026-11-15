@@ -1,4 +1,8 @@
+import { LOCAL_TOOL_SEARCH_NAME, TOOL_SEARCH_NAME } from "@zcode/contracts";
+
 export function normalizeToolNameAlias(toolName: string): string {
+  // local 模式的搜索控制入口用独立名字对模型暴露；规则/权限/历史仍按 ToolSearch 记一份。
+  if (toolName === LOCAL_TOOL_SEARCH_NAME) return TOOL_SEARCH_NAME;
   return toolName === "web_search" ? "WebSearch" : toolName;
 }
 

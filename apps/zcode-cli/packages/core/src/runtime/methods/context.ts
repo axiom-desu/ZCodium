@@ -29,6 +29,7 @@ import {
   ensureGenUiOutputDirectory,
   resolveGenUiOutputDirectory,
 } from "../helpers/gen-ui-output.js";
+import { recordInstructionAnnouncement } from "../helpers/instruction-announcement.js";
 
 export { buildContextHistoryEntries };
 
@@ -75,6 +76,18 @@ export async function ensureContextInitialized(
     model,
   });
   this.initializeMessageHistoryFromContext(this.contextBuilder, traceContext);
+  // 首次公告：把本次构建出的完整指令正文与文件集合记成已公告（已有状态时不覆盖，
+  // 否则冷恢复会把冻结正文换成当前文件内容）。
+  const instructionSection = this.latestContextBuildResult?.sections.find(
+    (section) => section.source === "request_user_context",
+  );
+  if (instructionSection && (instructionSection.instructionFiles?.length ?? 0) > 0) {
+    await recordInstructionAnnouncement(
+      this,
+      { content: instructionSection.content, files: instructionSection.instructionFiles ?? [] },
+      traceContext,
+    );
+  }
   this.contextInitialized = true;
 }
 
@@ -146,6 +159,8 @@ export function createContextBuilderFromSnapshot(
     outputStyle: this.config.outputStyle,
     compact: this.config.compact,
     guidanceToolNames: this.getTools(options.model).map((tool) => tool.name),
+    // 已公告的指令正文（冻结字节）；没有公告时由当前文件渲染。
+    instructionAnnouncementContent: this.instructionAnnouncement?.content,
   };
 
   return createContextBuilder(contextConfig).setToolRegistry(this.registry);

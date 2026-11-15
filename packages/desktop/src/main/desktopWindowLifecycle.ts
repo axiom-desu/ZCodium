@@ -33,7 +33,7 @@ export function createWindow(options: {
   spawnHostProcess: (
     win: BrowserWindow,
     label: string,
-    initMessage: HostInitMessage,
+    initMessage: Omit<HostInitMessage, "zcodeBuiltinProviderConfigFilePath">,
   ) => ElectronUtilityProcess;
   disposeHostProcess: (
     child: ElectronUtilityProcess,
@@ -44,6 +44,8 @@ export function createWindow(options: {
   syncReadyUpdateToWindow: (win: BrowserWindow) => void;
   syncPostUpdateReleaseNotesToWindow: (win: BrowserWindow) => void;
   disposeRemoteWorkspaceSessionsForWindow: (windowId: number, reason: string) => void;
+  /** 窗口关闭时由 Main 停止该窗口的扩展进程；不经过 Host，避免 Host 已退出后遗留子进程。 */
+  disposeExtensionHostForWindow?: (windowId: number, reason: string) => void;
   reattachRemoteWorkspaceSessionsForWindow: (win: BrowserWindow, reason: string) => void;
   bootstrap?: WindowBootstrapOptions;
   agentWarmupTargets?: readonly StartupWorkspaceWarmupTarget[];
@@ -251,6 +253,7 @@ export function createWindow(options: {
       options.windowHostProcessMap.delete(wcId);
     }
     options.disposeRemoteWorkspaceSessionsForWindow(wcId, `${label}:window-closed`);
+    options.disposeExtensionHostForWindow?.(wcId, `${label}:window-closed`);
   });
 
   return win;

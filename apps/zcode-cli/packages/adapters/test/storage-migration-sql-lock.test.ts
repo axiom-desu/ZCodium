@@ -124,6 +124,13 @@ const EXPECTED = [
     "0.16.9",
     "8d7bd83cd3f3c7359af4d3261d878f76fdb1de80f8b99a060729082a13f601cd",
   ],
+  // 0025 与上游 3.18.2 同 id/appVersion/原字节；账本 checksum（trim 后）为
+  // 608f3ea3aad458679a4b377968413575749f2231c88133765a088564fc20691e，TS/Rust 互认。
+  [
+    "0025_session_permanent_deletion",
+    "0.17.1",
+    "05ac9582dcee912915729b9736fdb092b12175b2f0b24b1210781ca975eaeca7",
+  ],
 ] as const;
 
 it("migration ledger keeps id order, appVersion and exact SQL bytes", () => {

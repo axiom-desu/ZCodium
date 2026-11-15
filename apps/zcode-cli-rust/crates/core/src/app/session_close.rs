@@ -131,11 +131,20 @@ impl Engine {
         self.hooks.without.remove(id);
         self.session_access.remove(id);
         self.closed.insert(id.into());
+        self.store.session_presence_unregister(id).await?;
         self.publish_index(id, None)?;
         Ok(ack.map(|(key, ack)| {
             self.acks.insert(key, ack.clone());
             ack
         }))
+    }
+
+    /// 生命周期 owner 的释放入口：关闭实例并保留持久历史（不写软删，不发布移除事实）。
+    pub(super) async fn release_runtime_session(&mut self, id: &str) -> Result<()> {
+        if !self.sessions.contains_key(id) {
+            return Ok(());
+        }
+        self.shut_down(id, None).await.map(|_| ())
     }
 
     pub(super) async fn ensure_session(&mut self, id: &str) -> Result<()> {
@@ -175,6 +184,8 @@ impl Engine {
             .context(StorageCommitFailure)?;
         let summary = (session.listed && !session.archived).then(|| session.summary());
         self.sessions.insert(id.into(), session);
+        // 跨进程运行态先于索引发布：删除预检不能看到“已加载但未登记”的窗口。
+        self.store.session_presence_register(id).await?;
         self.touch_session(id);
         self.closed.remove(id);
         self.publish_index(id, summary)

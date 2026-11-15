@@ -38,7 +38,8 @@
                     {
                       "type": "command",
                       "command": "echo hi",
-                      "timeout": 5
+                      "timeout": 5,
+                      "onError": "deny"
                     }
                   ]
                 }
@@ -93,13 +94,14 @@
             "command": "echo hi",
             "resolvedTimeoutMs": 5000,
             "resolvedMaxOutputBytes": 32768,
+            "onError": "deny",
             "sourceRootEnabled": true,
             "declarationEnabled": true,
             "runtimeHooksEnabled": true,
             "configuredEnabled": true,
             "editable": true,
             "declarationDigestAlgorithm": "sha256",
-            "hookDeclarationDigest": "aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2",
+            "hookDeclarationDigest": "c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75",
             "type": "command"
           },
           {
@@ -119,13 +121,13 @@
             "configuredEnabled": false,
             "editable": true,
             "declarationDigestAlgorithm": "sha256",
-            "hookDeclarationDigest": "09754046e0fc17030263f8efcf57f3f1f98cb96c197a11747fc871c93d02aaaa",
+            "hookDeclarationDigest": "3d7aa10bb1e4224133e55752cddd647da3fbfd03d6bf2cf7df6bba3e5864fc16",
             "type": "process",
             "args": ["stop.js"]
           }
         ],
         "digestAlgorithm": "sha256",
-        "bundleDigest": "20b819b490de6ac09c3e3c3ab1fd54590f21551a5d7b683226e8c1a7d537e8ee"
+        "bundleDigest": "1d5f643dd7051ad4535f7bc94ea687253ca34f47bb70d2d45107b3bdce0e12c7"
       }
     },
     {
@@ -162,7 +164,8 @@
                       "type": "command",
                       "command": "x",
                       "shell": true,
-                      "timeoutMs": 1e-7
+                      "timeoutMs": 1e-7,
+                      "onError": "allow"
                     }
                   ]
                 }
@@ -174,7 +177,8 @@
                     {
                       "type": "process",
                       "command": "fmt",
-                      "args": []
+                      "args": [],
+                      "onError": "deny"
                     }
                   ]
                 },
@@ -266,7 +270,7 @@
             "configuredEnabled": true,
             "editable": false,
             "declarationDigestAlgorithm": "sha256",
-            "hookDeclarationDigest": "62de85f31a335351dd741213e0753bcc97af0b764c3531d36c62b2397c0ed63c",
+            "hookDeclarationDigest": "2a53a6b296f5cd3c6e727e199e41e16d71852e965090d7fe18f8b0ac12e01522",
             "type": "command",
             "async": true,
             "shell": "/bin/bash"
@@ -282,13 +286,14 @@
             "command": "x",
             "resolvedTimeoutMs": 1,
             "resolvedMaxOutputBytes": 4096,
+            "onError": "allow",
             "sourceRootEnabled": true,
             "declarationEnabled": true,
             "runtimeHooksEnabled": true,
             "configuredEnabled": true,
             "editable": false,
             "declarationDigestAlgorithm": "sha256",
-            "hookDeclarationDigest": "48d2714b9a71470c0b5a86d4c0c392040f556df7b81b80b13da3456282c3ec71",
+            "hookDeclarationDigest": "7daa43ed91e5085cdb83300391d86b97bbc9a444a6aa0dd9b23f9910d9e9a80d",
             "type": "command",
             "shell": true
           },
@@ -303,13 +308,14 @@
             "command": "fmt",
             "resolvedTimeoutMs": 1501,
             "resolvedMaxOutputBytes": 4096,
+            "onError": "deny",
             "sourceRootEnabled": true,
             "declarationEnabled": true,
             "runtimeHooksEnabled": true,
             "configuredEnabled": true,
             "editable": false,
             "declarationDigestAlgorithm": "sha256",
-            "hookDeclarationDigest": "7cf2ac33b1a79c13d64f85c7af945b940beb704fe8f4f4a4b0f00a8a0e15c8e5",
+            "hookDeclarationDigest": "987c0eeff2683a472477417cdda41ad2ca80d4ca32833730b964a0e6088eafac",
             "type": "process"
           },
           {
@@ -329,7 +335,7 @@
             "configuredEnabled": true,
             "editable": false,
             "declarationDigestAlgorithm": "sha256",
-            "hookDeclarationDigest": "b62f6ce2dec7eb74456e326f85f7229906deffe91f5bcbcbddffaf2912038cdf",
+            "hookDeclarationDigest": "37d4400fe5fafc34f62d35ff158dbfe310927afefc62939a98dfb4c5c46d0700",
             "type": "process",
             "args": ["--fix", "a b"]
           },
@@ -350,12 +356,12 @@
             "configuredEnabled": false,
             "editable": false,
             "declarationDigestAlgorithm": "sha256",
-            "hookDeclarationDigest": "20be375b5e97eb9715c3b78887fef82096970d54fa9f17f126ff1bd052cf102d",
+            "hookDeclarationDigest": "776aa98095e45d35de978214449f256bc885a966792168c4bf0b31918cb1ec29",
             "type": "command"
           }
         ],
         "digestAlgorithm": "sha256",
-        "bundleDigest": "3a8a9884053da9de592c0c31268345d3505bbe288ee3135faf9cef3bda22626c"
+        "bundleDigest": "fa57bd011bdced85fdb947049a416f47a6ac78469cdddeb5fcd95383d0be6508"
       }
     }
   ],
@@ -377,7 +383,7 @@
       "records": [
         {
           "workspaceIdentity": "id-1",
-          "hookDeclarationDigest": "aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2",
+          "hookDeclarationDigest": "c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75",
           "digestAlgorithm": "sha256",
           "decision": "trusted",
           "grantedAt": "2026-01-01T00:00:00.000Z",
@@ -391,7 +397,7 @@
         },
         {
           "workspaceIdentity": "id-1",
-          "hookDeclarationDigest": "09754046e0fc17030263f8efcf57f3f1f98cb96c197a11747fc871c93d02aaaa",
+          "hookDeclarationDigest": "3d7aa10bb1e4224133e55752cddd647da3fbfd03d6bf2cf7df6bba3e5864fc16",
           "digestAlgorithm": "sha256",
           "decision": "trusted",
           "grantedAt": "2026-01-01T00:00:00.000Z",
@@ -415,7 +421,7 @@
       "name": "revoked",
       "policy": "user_decides",
       "records": [],
-      "revoked": ["aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2"],
+      "revoked": ["c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75"],
       "corrupt": false,
       "items": [
         ["workspace-hook-0-PreToolUse-0-0", "revoked", false],
@@ -454,7 +460,7 @@
       "records": [
         {
           "workspaceIdentity": "id-1",
-          "hookDeclarationDigest": "aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2",
+          "hookDeclarationDigest": "c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75",
           "digestAlgorithm": "sha256",
           "decision": "trusted",
           "grantedAt": "2026-01-01T00:00:00.000Z",
@@ -480,7 +486,7 @@
       "records": [
         {
           "workspaceIdentity": "id-1",
-          "hookDeclarationDigest": "aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2",
+          "hookDeclarationDigest": "c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75",
           "digestAlgorithm": "sha256",
           "decision": "trusted",
           "grantedAt": "2026-01-01T00:00:00.000Z",
@@ -506,7 +512,7 @@
       "records": [
         {
           "workspaceIdentity": "id-1",
-          "hookDeclarationDigest": "aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2",
+          "hookDeclarationDigest": "c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75",
           "digestAlgorithm": "sha256",
           "decision": "trusted",
           "grantedAt": "2026-01-01T00:00:00.000Z",
@@ -530,11 +536,11 @@
   "records": [
     {
       "workspaceIdentity": "id-1",
-      "hookDeclarationDigest": "09754046e0fc17030263f8efcf57f3f1f98cb96c197a11747fc871c93d02aaaa",
+      "hookDeclarationDigest": "3d7aa10bb1e4224133e55752cddd647da3fbfd03d6bf2cf7df6bba3e5864fc16",
       "digestAlgorithm": "sha256",
       "decision": "trusted",
       "grantedAt": "2026-01-01T00:00:00.000Z",
-      "bundleDigestAtGrant": "20b819b490de6ac09c3e3c3ab1fd54590f21551a5d7b683226e8c1a7d537e8ee",
+      "bundleDigestAtGrant": "1d5f643dd7051ad4535f7bc94ea687253ca34f47bb70d2d45107b3bdce0e12c7",
       "eventAtGrant": "Stop",
       "displayCommandAtGrant": "node stop.js",
       "sourcePathAtGrant": ".zcodium/config.json",
@@ -546,11 +552,11 @@
     },
     {
       "workspaceIdentity": "id-1",
-      "hookDeclarationDigest": "aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2",
+      "hookDeclarationDigest": "c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75",
       "digestAlgorithm": "sha256",
       "decision": "trusted",
       "grantedAt": "2026-01-01T00:00:00.000Z",
-      "bundleDigestAtGrant": "20b819b490de6ac09c3e3c3ab1fd54590f21551a5d7b683226e8c1a7d537e8ee",
+      "bundleDigestAtGrant": "1d5f643dd7051ad4535f7bc94ea687253ca34f47bb70d2d45107b3bdce0e12c7",
       "eventAtGrant": "PreToolUse",
       "displayCommandAtGrant": "echo hi",
       "sourcePathAtGrant": ".zcodium/config.json",
@@ -572,7 +578,7 @@
     "workspaceIdentity": "id-1",
     "workspaceLabel": "w",
     "remoteSessionId": "remote-1",
-    "bundleDigest": "3a8a9884053da9de592c0c31268345d3505bbe288ee3135faf9cef3bda22626c",
+    "bundleDigest": "fa57bd011bdced85fdb947049a416f47a6ac78469cdddeb5fcd95383d0be6508",
     "createdAt": 1000,
     "deadlineAt": 601000,
     "sourceFiles": [
@@ -702,11 +708,11 @@
       "records": null
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
       "records": [
         {
           "workspaceIdentity": "id-1",
-          "hookDeclarationDigest": "aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2",
+          "hookDeclarationDigest": "c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75",
           "digestAlgorithm": "sha256",
           "decision": "trusted",
           "grantedAt": "2026-02-28T23:59:59.5Z",
@@ -718,11 +724,11 @@
       ]
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null,\"lastUsedAt\":\"2024-02-29T00:00:00Z\",\"matcherIndexAtGrant\":0,\"appVersionAtGrant\":\"1.0\"}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null,\"lastUsedAt\":\"2024-02-29T00:00:00Z\",\"matcherIndexAtGrant\":0,\"appVersionAtGrant\":\"1.0\"}]}",
       "records": [
         {
           "workspaceIdentity": "id-1",
-          "hookDeclarationDigest": "aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2",
+          "hookDeclarationDigest": "c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75",
           "digestAlgorithm": "sha256",
           "decision": "trusted",
           "grantedAt": "2026-02-28T23:59:59.5Z",
@@ -737,11 +743,11 @@
       ]
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-29T00:00:00Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-29T00:00:00Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
       "records": null
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-01-01T00:00:00+08:00\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-01-01T00:00:00+08:00\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
       "records": null
     },
     {
@@ -749,29 +755,29 @@
       "records": null
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null,\"unknown\":true}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null,\"unknown\":true}]}",
       "records": null
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\"   \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\"   \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
       "records": null
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null,\"matcherIndexAtGrant\":1.5}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null,\"matcherIndexAtGrant\":1.5}]}",
       "records": null
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null,\"matcherIndexAtGrant\":2,\"sourceDiscoveryOrderAtGrant\":-1}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null,\"matcherIndexAtGrant\":2,\"sourceDiscoveryOrderAtGrant\":-1}]}",
       "records": null
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"Nope\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"Nope\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
       "records": null
     },
     {
-      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null},{\"workspaceIdentity\":\"id-1\",\"hookDeclarationDigest\":\"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
+      "content": "{\"schemaVersion\":1,\"records\":[{\"workspaceIdentity\":\"  id-1 \",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null},{\"workspaceIdentity\":\"id-1\",\"hookDeclarationDigest\":\"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\"digestAlgorithm\":\"sha256\",\"decision\":\"trusted\",\"grantedAt\":\"2026-02-28T23:59:59.5Z\",\"eventAtGrant\":\"PreToolUse\",\"displayCommandAtGrant\":\" echo hi \",\"sourcePathAtGrant\":\".zcodium/config.json\",\"matcherAtGrant\":null}]}",
       "records": null
     }
   ],
-  "storeContent": "{\n  \"schemaVersion\": 1,\n  \"records\": [\n    {\n      \"workspaceIdentity\": \"id-1\",\n      \"hookDeclarationDigest\": \"09754046e0fc17030263f8efcf57f3f1f98cb96c197a11747fc871c93d02aaaa\",\n      \"digestAlgorithm\": \"sha256\",\n      \"decision\": \"trusted\",\n      \"grantedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"bundleDigestAtGrant\": \"20b819b490de6ac09c3e3c3ab1fd54590f21551a5d7b683226e8c1a7d537e8ee\",\n      \"eventAtGrant\": \"Stop\",\n      \"displayCommandAtGrant\": \"node stop.js\",\n      \"sourcePathAtGrant\": \".zcodium/config.json\",\n      \"sourceDiscoveryOrderAtGrant\": 0,\n      \"matcherAtGrant\": null,\n      \"matcherIndexAtGrant\": 0,\n      \"hookIndexAtGrant\": 0,\n      \"appVersionAtGrant\": \"9.9.9\"\n    },\n    {\n      \"workspaceIdentity\": \"id-1\",\n      \"hookDeclarationDigest\": \"aa99dea2991301c158b8b4718de9044a8740a3312a1e40914b4e8cae1ae668c2\",\n      \"digestAlgorithm\": \"sha256\",\n      \"decision\": \"trusted\",\n      \"grantedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"bundleDigestAtGrant\": \"20b819b490de6ac09c3e3c3ab1fd54590f21551a5d7b683226e8c1a7d537e8ee\",\n      \"eventAtGrant\": \"PreToolUse\",\n      \"displayCommandAtGrant\": \"echo hi\",\n      \"sourcePathAtGrant\": \".zcodium/config.json\",\n      \"sourceDiscoveryOrderAtGrant\": 0,\n      \"matcherAtGrant\": \"Bash\",\n      \"matcherIndexAtGrant\": 0,\n      \"hookIndexAtGrant\": 0,\n      \"appVersionAtGrant\": \"9.9.9\"\n    }\n  ]\n}\n"
+  "storeContent": "{\n  \"schemaVersion\": 1,\n  \"records\": [\n    {\n      \"workspaceIdentity\": \"id-1\",\n      \"hookDeclarationDigest\": \"3d7aa10bb1e4224133e55752cddd647da3fbfd03d6bf2cf7df6bba3e5864fc16\",\n      \"digestAlgorithm\": \"sha256\",\n      \"decision\": \"trusted\",\n      \"grantedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"bundleDigestAtGrant\": \"1d5f643dd7051ad4535f7bc94ea687253ca34f47bb70d2d45107b3bdce0e12c7\",\n      \"eventAtGrant\": \"Stop\",\n      \"displayCommandAtGrant\": \"node stop.js\",\n      \"sourcePathAtGrant\": \".zcodium/config.json\",\n      \"sourceDiscoveryOrderAtGrant\": 0,\n      \"matcherAtGrant\": null,\n      \"matcherIndexAtGrant\": 0,\n      \"hookIndexAtGrant\": 0,\n      \"appVersionAtGrant\": \"9.9.9\"\n    },\n    {\n      \"workspaceIdentity\": \"id-1\",\n      \"hookDeclarationDigest\": \"c601ac6e7354aa41e13be45611dc604a7daf08588e9c91b96b12d802e6e3dd75\",\n      \"digestAlgorithm\": \"sha256\",\n      \"decision\": \"trusted\",\n      \"grantedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"bundleDigestAtGrant\": \"1d5f643dd7051ad4535f7bc94ea687253ca34f47bb70d2d45107b3bdce0e12c7\",\n      \"eventAtGrant\": \"PreToolUse\",\n      \"displayCommandAtGrant\": \"echo hi\",\n      \"sourcePathAtGrant\": \".zcodium/config.json\",\n      \"sourceDiscoveryOrderAtGrant\": 0,\n      \"matcherAtGrant\": \"Bash\",\n      \"matcherIndexAtGrant\": 0,\n      \"hookIndexAtGrant\": 0,\n      \"appVersionAtGrant\": \"9.9.9\"\n    }\n  ]\n}\n"
 }

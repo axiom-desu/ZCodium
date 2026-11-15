@@ -30,6 +30,8 @@ pub fn runtime_message(source: &str) -> Value {
         }
         // ToolSearch 公告沿用 Node 的 legacy_synthetic runtime message。
         "tool_search_announcement" => "legacy_synthetic",
+        // 3.18 F1：指令公告的 source 就是 context_prefix（hydrate 按它重建提醒）。
+        "context_prefix" => "context_prefix",
         "goal-continuation" => "target_continuation",
         _ => "rewind_notice",
     };
@@ -83,6 +85,10 @@ impl Session {
             .cloned()
         {
             runtime["toolSearchAnnouncement"] = announcement;
+        }
+        // 3.18 F1：已公告的文件与正文同次保存；冷恢复据此避免整份重发。
+        if let Some(instructions) = part_metadata.get(crate::instruction_files::KEY).cloned() {
+            runtime["instructions"] = instructions;
         }
         part_metadata.insert("runtimeMessage".into(), runtime);
         part_metadata.insert("source".into(), n.source.into());

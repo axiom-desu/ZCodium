@@ -22,3 +22,6 @@ spec：`.agents/specs/upstream-3.16-project-integration.md` 的 S8-B UI 合同�
   dialogs 仅叠加打开实例的 liveness；success/catch/finally 同验票，不覆盖新树、关闭新编辑器或清除其 busy。
 - 写入成功后只 `refresh()` readTree，不乐观伪造成功行；空 reserve 行不显示，真实 CLI 事实到达
   后立即可见。
+- worktree 入口只消费 `IManagedWorktreeService`；先要求 CLI `worktreeCwd` 能力，缺失时创建/删除按钮禁用。
+- 远端项目入口只消费本机 `IRemoteProjectService`：列出 intent、移除本机入口、恢复离线缓存；
+  不把它当作远端项目数据删除，也不新建第二 store。

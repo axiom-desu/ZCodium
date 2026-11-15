@@ -1964,7 +1964,7 @@ export class BrowserGuestManager {
    */
   private isInFlightScreenshotAlive(tracked: InFlightScreenshot): boolean {
     const running = this.runningRequests.get(tracked.requestId);
-    return Boolean(running) && !running.controller.signal.aborted;
+    return running !== undefined && !running.controller.signal.aborted;
   }
 
   private createRecordingEntry(
@@ -2232,6 +2232,9 @@ export class BrowserGuestManager {
         if (result.kind === "timeout")
           throw new Error(`recording action timed out: ${result.reason}`);
         return;
+      }
+      if (action.type !== "click") {
+        throw new Error(`recording ${action.type} requires a selector`);
       }
       if (typeof action.x !== "number" || typeof action.y !== "number") {
         throw new Error("recording click requires selector or (x,y)");
@@ -2639,7 +2642,12 @@ export class BrowserGuestManager {
       // 如果 destroyed/mismatch 已经发起过重绑，沿用该请求，避免同一 tab 重复创建 webview。
       if (!tab.rebindRequested) this.onOpenTabRequested?.(tab.tabId, tab.owner);
       // 某些测试/旧 renderer 会在 Ready 回调内同步 attach；不能在 attach 已成功后再注册 waiter。
-      if (tab.guest && !safeBool(() => tab.guest.isDestroyed(), true)) return tab.guest;
+      // guest 是可变字段，进入回调后 TypeScript 会撤销属性收窄；固定本轮引用，
+      // 同时保证销毁检查与返回的是同一个 guest。
+      const attachedGuest = tab.guest;
+      if (attachedGuest && !safeBool(() => attachedGuest.isDestroyed(), true)) {
+        return attachedGuest;
+      }
       const guest = await this.waitForGuest(tab.tabId);
       if (guest && !safeBool(() => guest.isDestroyed(), true)) return guest;
       if (attempt === 0 && !tab.hasAttachedGuest && !tab.attachFailure) return null;
@@ -2796,7 +2804,9 @@ export class BrowserGuestManager {
       title: tab.cachedTitle,
       viewport: await this.readTabViewport(tab),
       ...(this.effectiveActiveTabId(tab.owner) === tab.tabId ? { active: true } : {}),
-      ...(tab.lifecycle !== "active" ? { lifecycle: tab.lifecycle } : {}),
+      ...(tab.lifecycle === "deliverable" || tab.lifecycle === "handoff"
+        ? { lifecycle: tab.lifecycle }
+        : {}),
     };
   }
 
@@ -3874,14 +3884,19 @@ export class BrowserGuestManager {
     }
   }
 
+  /** 重新读取可变 lifecycle，避免 await 后沿用旧的属性收窄；不做类型强转。 */
+  private readTabLifecycle(tab: ManagedTab): TabLifecycle {
+    return tab.lifecycle;
+  }
+
   private async restoreReboundGuest(
     tab: ManagedTab,
     guest: GuestWebContents,
   ): Promise<GuestWebContents | null> {
     if (tab.lifecycle === "closed" || tab.guest !== guest) return null;
     const restored = await this.restoreGuestState(tab, guest);
-    if (!restored || tab.lifecycle === "closed" || tab.guest !== guest) {
-      if (tab.lifecycle !== "closed" && tab.guest === guest) {
+    if (!restored || this.readTabLifecycle(tab) === "closed" || tab.guest !== guest) {
+      if (this.readTabLifecycle(tab) !== "closed" && tab.guest === guest) {
         this.warn(`browser tab guest rebind restore failed tabId=${tab.tabId}`);
       }
       return null;

@@ -40,9 +40,20 @@ export interface AutomationCreateContext {
   sessionId?: string;
 }
 
+export interface AutomationPauseInput {
+  /** 要暂停的 automation id；只能由执行器从本轮准入身份注入，不来自模型输入。 */
+  id: string;
+}
+
 export interface AutomationPort {
   create(input: CronCreateInput, context?: AutomationCreateContext): Promise<CronAutomation>;
   update(input: CronUpdateInput): Promise<CronAutomation>;
   list(): Promise<CronAutomation[]>;
   delete(input: CronDeleteInput): Promise<boolean>;
+  /**
+   * 条件暂停：只有 active 且 enabled 的任务会转 paused；返回是否真的改变了状态。
+   * 可选是因为宿主能力可缺失（旧 Host 不提供 automation/pause）；缺席时 CronPauseSelf 必须
+   * 明确报能力不支持，不能静默成功。
+   */
+  pause?(input: AutomationPauseInput): Promise<boolean>;
 }

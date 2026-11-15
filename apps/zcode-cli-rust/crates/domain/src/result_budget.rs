@@ -54,6 +54,8 @@ pub fn for_tool(name: &str) -> Budget {
         "Read" => budget(256 * 1024, Truncate),
         "SendMessage" => budget(4_096, Truncate),
         "WebSearch" => budget(10_000, Truncate),
+        // Node `cronResultBudget`（CronPauseSelf 与四个 cron 工具同预算）。
+        crate::automation::PAUSE_SELF => budget(crate::automation::PAUSE_SELF_MAX_BYTES, Truncate),
         mcp if mcp.starts_with("mcp__") => budget(50_000, Truncate),
         _ => budget(DEFAULT_MAX_BYTES, Truncate),
     }

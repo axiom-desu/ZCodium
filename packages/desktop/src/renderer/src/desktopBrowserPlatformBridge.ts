@@ -22,16 +22,28 @@ type DesktopBrowserPlatformBridge = Pick<
   | "getPathForFile"
   | "saveFile"
   | "printPageToPdf"
+  | "captureBrowserGuestPage"
+  | "printBrowserGuestPage"
 >;
 
 // Rebase 集成：browser bridge 若继续内联在 renderer 入口，会让入口越过 max-lines 门禁。
 // 独立对象只做 preload 委托与旧 bridge 兼容兜底，不持有 Browser 业务状态。
 export const desktopBrowserPlatformBridge = {
-  getPathForFile: (file) => window.zcode.getPathForFile?.(file) ?? null,
+  getPathForFile: (file) =>
+    file instanceof File ? (window.zcode.getPathForFile?.(file) ?? null) : null,
   saveFile: (payload) =>
     window.zcode.saveFile?.(payload) ?? Promise.resolve({ success: false, error: "not_supported" }),
   // 条件定义而非兜底返回失败：UI 靠方法是否存在做能力检测，旧 preload 下必须保持 undefined
   printPageToPdf: window.zcode.printPageToPdf ? () => window.zcode.printPageToPdf!() : undefined,
+  // 与 printPageToPdf 一样按 preload 是否提供决定能力是否存在：
+  // 旧 preload / Web 下保持 undefined，UI 据此不出页面导出与元素截图入口。
+  captureBrowserGuestPage: window.zcode.captureBrowserGuestPage
+    ? (payload) => window.zcode.captureBrowserGuestPage!(payload)
+    : undefined,
+  // 与 captureBrowserGuestPage 同一能力原则：旧 preload / Web 下缺席，UI 据此不出 PDF 导出入口。
+  printBrowserGuestPage: window.zcode.printBrowserGuestPage
+    ? (payload) => window.zcode.printBrowserGuestPage!(payload)
+    : undefined,
   onBrowserViewReady: (handler) => window.zcode.onBrowserViewReady?.(handler) ?? (() => {}),
   onBrowserViewOperation: (handler) => window.zcode.onBrowserViewOperation?.(handler) ?? (() => {}),
   onBrowserViewViewportChanged: (handler) =>
@@ -69,7 +81,7 @@ export const desktopBrowserPlatformBridge = {
         originsSkipped: 0,
         originsFailed: 0,
       },
-      error: "unsupported",
+      error: "chrome_import_not_supported",
     }),
   clearEmbeddedBrowserData: (mode) =>
     window.zcode.clearEmbeddedBrowserData?.(mode) ??

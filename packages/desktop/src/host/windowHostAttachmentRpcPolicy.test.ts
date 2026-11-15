@@ -89,6 +89,11 @@ describe("Host attachment authorization over real RPC", () => {
     ServiceChannels.SourceServerManagement,
     ServiceChannels.ProviderProvisioningTarget,
     ServiceChannels.ClientConfig,
+    // 数据同步面默认拒绝：设备同步状态 / Provisioning lane 只在本机 Host，
+    // user-config-sync 不进手机与 Web allowlist。
+    ServiceChannels.UserConfigSync,
+    ServiceChannels.DeviceSyncState,
+    ServiceChannels.ProviderProvisioningStatus,
     ServiceChannels.PluginUiBridge,
     ServiceChannels.PluginUiSampling,
     ServiceChannels.PluginUiAppTools,
@@ -143,11 +148,26 @@ describe("Host attachment authorization over real RPC", () => {
       ServiceChannels.PromptAttachmentTransfer,
     ];
     const services = new ServiceCollection();
-    for (const channel of channels) registerProbe(services, channel);
+    // Setting/ZCodeAgent 已方法级收窄：用各自允许的既有方法验证频道仍发布，不用未来 probe 名字。
+    const allowedProbeMethod = (channel: string) =>
+      channel === ServiceChannels.Setting
+        ? "get"
+        : channel === ServiceChannels.ZCodeAgent
+          ? "listSessions"
+          : "probe";
+    for (const channel of channels) {
+      const method = allowedProbeMethod(channel);
+      const probe = vi.fn(async () => channel);
+      services.register(createServiceDescriptor<Record<string, typeof probe>>(channel), {
+        [method]: probe,
+      });
+    }
     for (const mode of ["web-remote-replayable", "desktop-continuous"] as const) {
       const { client } = attach(services, mode);
       for (const channel of channels) {
-        await expect(client.getChannel(channel).call("probe")).resolves.toBe(channel);
+        await expect(client.getChannel(channel).call(allowedProbeMethod(channel))).resolves.toBe(
+          channel,
+        );
       }
     }
   });
@@ -195,6 +215,12 @@ describe("Host attachment authorization over real RPC", () => {
       "exportMcpServers",
       "checkRemoteUserMcpWriteAccess",
       "importMcpServers",
+      // 数据同步五方法同样只属于桌面：手机 attachment 必须 fail closed。
+      "listSyncItems",
+      "getSyncContentHashes",
+      "checkSyncWriteAccess",
+      "exportSyncItems",
+      "importSyncItems",
       "futureSyncMethod",
       "setWorkspaceMcpTrust",
       "constructor",
@@ -242,6 +268,54 @@ describe("Host attachment authorization over real RPC", () => {
     await expect(
       desktop.client.getChannel(IMcpSyncService.channelName).call("importMcpServers", [{}]),
     ).resolves.toEqual({ marker: "attachment", args: [{}] });
+  });
+
+  it("scopes Setting user instructions and Agent trust grants for remote attachments", async () => {
+    const setting = {
+      get: vi.fn(async () => ({ theme: "dark" })),
+      update: vi.fn(async () => undefined),
+      updateDataBaseDir: vi.fn(async () => undefined),
+      ensureDefaultProject: vi.fn(async () => ({ path: "/tmp/p", created: false })),
+      getUserInstructions: vi.fn(async () => ({ content: "secret", filePath: "/tmp/AGENTS.md" })),
+      saveUserInstructions: vi.fn(async () => ({ filePath: "/tmp/AGENTS.md" })),
+      futureSettingMethod: vi.fn(async () => "future"),
+    };
+    const agent = {
+      setWorkspaceMcpTrust: vi.fn(async () => ({ accepted: true })),
+      listSessions: vi.fn(async () => [{ id: "s1" }]),
+    };
+    const services = new ServiceCollection()
+      .register(createServiceDescriptor<typeof setting>(ServiceChannels.Setting), setting)
+      .register(createServiceDescriptor<typeof agent>(ServiceChannels.ZCodeAgent), agent);
+    for (const surface of ["mobile", "web-client"] as const) {
+      const { client } = attach(services, "web-remote-replayable", undefined, surface);
+      const settingChannel = client.getChannel(ServiceChannels.Setting);
+      await expect(settingChannel.call("get")).resolves.toEqual({ theme: "dark" });
+      await expect(settingChannel.call("update", [{ theme: "light" }])).resolves.toBeUndefined();
+      for (const method of ["getUserInstructions", "saveUserInstructions", "futureSettingMethod"]) {
+        await expect(settingChannel.call(method, ["evil"])).rejects.toMatchObject({
+          kind: "feature_disabled",
+        });
+      }
+      const agentChannel = client.getChannel(ServiceChannels.ZCodeAgent);
+      await expect(agentChannel.call("listSessions", [{}])).resolves.toEqual([{ id: "s1" }]);
+      // Agent 通道不能绕过 McpSync 的方法收窄直接授予工作区 MCP 信任。
+      await expect(agentChannel.call("setWorkspaceMcpTrust", [{}])).rejects.toMatchObject({
+        kind: "feature_disabled",
+      });
+    }
+    expect(setting.getUserInstructions).not.toHaveBeenCalled();
+    expect(setting.saveUserInstructions).not.toHaveBeenCalled();
+    expect(setting.futureSettingMethod).not.toHaveBeenCalled();
+    expect(agent.setWorkspaceMcpTrust).not.toHaveBeenCalled();
+
+    const desktop = attach(services, "desktop-continuous").client;
+    await expect(
+      desktop.getChannel(ServiceChannels.Setting).call("getUserInstructions"),
+    ).resolves.toEqual({ content: "secret", filePath: "/tmp/AGENTS.md" });
+    await expect(
+      desktop.getChannel(ServiceChannels.ZCodeAgent).call("setWorkspaceMcpTrust", [{}]),
+    ).resolves.toEqual({ accepted: true });
   });
 
   it("exposes only Gen UI listState, without publishing sandbox or write methods", async () => {

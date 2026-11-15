@@ -1,4 +1,5 @@
 import { recordDesktopDiagnostic, shutdownDesktopDiagnostics } from "./localDiagnosticSink.js";
+import { createExtensionHostSupervisor } from "./extensionHost/supervisor.js";
 import { DiagnosticRecordSchema, ZCODE_USER_DATA_DIR_NAME } from "@zcode/shared";
 import {
   registerDesktopResourceTelemetry,
@@ -191,6 +192,7 @@ import {
   setBrowserUseGuestWebContentsIdsProvider,
 } from "./resourceManagerWindow.js";
 import { registerPlatformIpcHandlers } from "./desktopMainIpcPlatform.js";
+import { registerAppControlNavigationIpc } from "#src/app-control-navigation/main.js";
 import { registerRemoteIpcHandlers } from "./desktopMainIpcRemote.js";
 import { applyDesktopChromiumNetworkPolicies } from "./desktopNetworkPolicy.js";
 import {
@@ -210,6 +212,13 @@ import {
 
 registerLocalMediaPreviewScheme(protocol, [PLUGIN_SANDBOX_PRIVILEGED_SCHEME]);
 const localMediaPreviewPathRegistry = createLocalMediaPreviewPathRegistry();
+// 扩展进程的唯一生命周期 owner；授权与槽位仍在窗口 Host 的 extensions 服务里。
+const extensionHostSupervisor = createExtensionHostSupervisor({
+  logger: {
+    info: (message) => logger.info(message),
+    warn: (message) => logger.warn(message),
+  },
+});
 
 // e2e 由 Chromedriver 管理远程调试端口；如果这里继续固定到 9229，
 // 会和开发态已打开的 ZCode Dev 抢端口，导致 WebDriver session 创建前白屏超时。
@@ -843,6 +852,10 @@ async function prepareAppQuit(reason: string, kind: AppShutdownKind = "normal"):
   );
   windowsCuaOperationIndicator.dispose();
   browserScreenshotSurfaceCoordinator.dispose();
+  // 扩展进程是 Main 的子进程：应用退出时先停，避免 Host 先退出后留下孤儿进程。
+  void extensionHostSupervisor.disposeAll().catch((error: unknown) => {
+    logger.warn("extension host app-quit dispose failed", error);
+  });
 
   const cronSchedulerToDispose = cronScheduler;
   cronScheduler = null;
@@ -1502,6 +1515,8 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
         label,
         {
           ...initMessage,
+          // 可信窗口绑定：Host 把它作为 App 导航目标，不接受 CLI/模型自报。
+          uiTarget: `window:${win.id}`,
           remoteAssets: resolveRemoteAssetDirs(),
           zcodeBuiltinProviderConfigFilePath: resolveZCodeBuiltinProviderConfigFilePath({
             env: { ...hostProcessLocalEnv, ...process.env },
@@ -1527,6 +1542,7 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
           onCronRunResult: forwardCronRunResult,
           onCronSchedulerWakeRequested: wakeCronScheduler,
           authorizeLocalMediaPreviewPath: localMediaPreviewPathRegistry.authorize,
+          extensionHost: extensionHostSupervisor,
           registerPluginSandbox: (input) => {
             const host = getPluginSandboxHost();
             if (!host) throw new Error("Plugin UI sandbox host is not installed.");
@@ -1606,6 +1622,13 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
           // browser-use：main 用 WebContentsView+CDP 执行命令。
           handleBrowserExecuteRequest: ({ win: browserWin, ...request }) =>
             runBrowserCommandOnView({ win: browserWin, ...request }),
+          // 数据同步页「模型提供商」分类：最近结果与重试都以 Main 协调器的 lane 为唯一数据源。
+          providerProvisioningLanes: {
+            getStatus: (sourceServerId, laneOptions) =>
+              remoteSessionManager.getProviderProvisioningLaneStatus(sourceServerId, laneOptions),
+            retry: (sourceServerId) =>
+              remoteSessionManager.retryProviderProvisioning(sourceServerId),
+          },
         },
         {
           taskRealtime: {
@@ -1631,6 +1654,12 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
     syncPostUpdateReleaseNotesToWindow,
     disposeRemoteWorkspaceSessionsForWindow:
       remoteSessionManager.disposeRemoteWorkspaceSessionsForWindow,
+    disposeExtensionHostForWindow: (windowId, reason) => {
+      logger.info(`disposing extension host for window ${windowId} (${reason})`);
+      void extensionHostSupervisor.disposeWindow(windowId).catch((error: unknown) => {
+        logger.warn("extension host window dispose failed", error);
+      });
+    },
     reattachRemoteWorkspaceSessionsForWindow:
       remoteSessionManager.reattachRemoteWorkspaceSessionsForWindow,
     bootstrap: {
@@ -1649,7 +1678,7 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
     initialWindowSize: currentDesktopWindowSize,
     currentApplicationLocale: () => currentApplicationLocale,
     resolveBrowserViewOwner: (webContentsId) =>
-      browserGuestManager.getTabOwnerByWebContentsId(webContentsId),
+      browserGuestManager.getTabOwnerByWebContentsId(webContentsId) ?? undefined,
     persistWindowSize: async (state) => {
       currentDesktopWindowSize = state;
       await mainSettingService.update({ desktopWindowSize: state });
@@ -1888,6 +1917,8 @@ app.whenReady().then(async () => {
     return null;
   });
 
+  // App 控制导航：renderer 登记能力/回执只接受真实窗口主框架；手机无此 IPC 通道。
+  registerAppControlNavigationIpc(ipcMain, (contents) => BrowserWindow.fromWebContents(contents));
   registerPlatformIpcHandlers({
     logger,
     // CDP-on-guest pivot：renderer `<webview>` dom-ready 上报 guest webContentsId → attach。
@@ -1916,6 +1947,9 @@ app.whenReady().then(async () => {
         payload,
       });
     },
+    // 人类用户的页面导出/元素截图与 Agent 截图同样由 main 取帧；这里只复用既有 manager 的当前 guest owner。
+    resolveBrowserGuestBinding: (webContentsId) =>
+      browserGuestManager.getTabOwnerByWebContentsId(webContentsId),
     browserViewResidencyHandlers: {
       detachBrowserGuest: (key, webContentsId, windowId) =>
         browserGuestManager.detachGuestBeforeReplacement(key, webContentsId, windowId),
@@ -2049,7 +2083,7 @@ app.whenReady().then(async () => {
   });
 
   const protocolUrl = extractDeepLinkUrlFromArgs(process.argv);
-  if (startupDeepLinkConsumptionGate.shouldHandleReadyProtocolUrl(protocolUrl)) {
+  if (protocolUrl && startupDeepLinkConsumptionGate.shouldHandleReadyProtocolUrl(protocolUrl)) {
     handleDeepLink(protocolUrl, logger, {
       confirmationCopy: resolveExternalWorkspaceConfirmationCopy(),
       resolveApplicationWindow: () => getApplicationWindowsExcludingCuaIndicator()[0] ?? null,

@@ -6,7 +6,7 @@ import type {
   LocalePreference,
   ZCodeInteractionBehavior,
 } from "@zcode/shared";
-import { appToolSearchModeSchema } from "@zcode/shared";
+import { appToolSearchModeSchema, LOCALE_NATIVE_NAMES } from "@zcode/shared";
 import {
   TID_SETTINGS_ASK_USER_QUESTION_AUTO_RESOLUTION_SWITCH,
   TID_SETTINGS_NATIVE_SEARCH_SWITCH,
@@ -15,11 +15,7 @@ import {
 } from "@zcode/shared";
 import { useState, useCallback, useEffect } from "react";
 import type { IPlatformService } from "@zcode/shared";
-import {
-  TID_SETTINGS_LOCALE_SELECT_ITEM,
-  TID_SETTINGS_LOCALE_SELECT_TRIGGER,
-  testId,
-} from "@zcode/shared";
+import { testId } from "@zcode/shared";
 import {
   Select,
   SelectContent,
@@ -37,6 +33,7 @@ import { useOptionalServices } from "@/hooks/useServices.js";
 import { ProactiveSuggestionsSetting } from "@/settings/ProactiveSuggestionsSetting.js";
 import { DynamicWorkflowModeSetting } from "@/settings/DynamicWorkflowModeSetting.js";
 import { normalizeInterfaceMode, type InterfaceMode } from "@/lib/interfaceMode.js";
+import { LocaleSelectorRow } from "@/settings/LocaleSelectorRow.js";
 import {
   createSettingsPageConfig,
   resolveSettingsSectionForPlatform,
@@ -284,49 +281,14 @@ export function GeneralSectionContent({
 
   return (
     <div className="space-y-4">
-      <SettingsGroupCard>
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.locale" })}
-          description={intl.formatMessage({ id: "settings.localeDescription" })}
-          control={
-            <Select
-              value={localePreference}
-              onValueChange={(value) => setLocalePreference(value as LocalePreference)}
-            >
-              <SelectTrigger
-                size="lg"
-                className="w-[260px] min-w-0 justify-between"
-                data-testid={TID_SETTINGS_LOCALE_SELECT_TRIGGER}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  value="system"
-                  data-testid={testId(TID_SETTINGS_LOCALE_SELECT_ITEM, "system")}
-                >
-                  {intl.formatMessage({ id: "settings.locale.system" })}
-                </SelectItem>
-                <SelectItem
-                  value="zh-CN"
-                  data-testid={testId(TID_SETTINGS_LOCALE_SELECT_ITEM, "zh-CN")}
-                >
-                  {intl.formatMessage({ id: "settings.locale.zh-CN" })}
-                </SelectItem>
-                <SelectItem
-                  value="en-US"
-                  data-testid={testId(TID_SETTINGS_LOCALE_SELECT_ITEM, "en-US")}
-                >
-                  {intl.formatMessage({ id: "settings.locale.en-US" })}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          }
-        />
-      </SettingsGroupCard>
+      <LocaleSelectorRow
+        localePreference={localePreference}
+        onLocalePreferenceChange={setLocalePreference}
+      />
 
       <SettingsGroupCard>
         <SettingsRow
+          searchId="settings.interfaceMode"
           controlLayout="wide"
           label={intl.formatMessage({ id: "settings.interfaceMode" })}
           description={intl.formatMessage({ id: "settings.interfaceMode.description" })}
@@ -359,6 +321,7 @@ export function GeneralSectionContent({
 
       <SettingsGroupCard>
         <SettingsRow
+          searchId="settings.terminalProfile"
           label={intl.formatMessage({ id: "settings.terminalProfile" })}
           description={intl.formatMessage({ id: "settings.terminalProfileDescription" })}
           control={
@@ -371,6 +334,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.terminalFontFamily"
           label={intl.formatMessage({ id: "settings.terminalFontFamily" })}
           description={intl.formatMessage({ id: "settings.terminalFontFamilyDescription" })}
           control={
@@ -404,6 +368,7 @@ export function GeneralSectionContent({
         />
         {showIntegratedTerminalShell ? (
           <SettingsRow
+            searchId="settings.integratedTerminalShell"
             label={intl.formatMessage({ id: "settings.integratedTerminalShell" })}
             description={intl.formatMessage({
               id: "settings.integratedTerminalShellDescription",
@@ -433,6 +398,7 @@ export function GeneralSectionContent({
           />
         ) : null}
         <SettingsRow
+          searchId="settings.toolSearch"
           label={intl.formatMessage({ id: "settings.toolSearch" })}
           description={intl.formatMessage({ id: "settings.toolSearchDescription" })}
           detail={
@@ -472,6 +438,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.nativeSearchEnhancements"
           label={intl.formatMessage({
             id: "settings.nativeSearchEnhancements",
           })}
@@ -495,6 +462,7 @@ export function GeneralSectionContent({
 
       <SettingsGroupCard>
         <SettingsRow
+          searchId="settings.httpProxy"
           label={intl.formatMessage({ id: "settings.httpProxy" })}
           description={intl.formatMessage({ id: "settings.httpProxyDescription" })}
           control={
@@ -528,6 +496,7 @@ export function GeneralSectionContent({
         />
         {/* No Proxy 与 HTTP 代理共同决定同一出口策略，必须贴在代理地址下面。*/}
         <SettingsRow
+          searchId="settings.httpProxyNoProxy"
           label={intl.formatMessage({ id: "settings.httpProxyNoProxy" })}
           description={intl.formatMessage({
             id: "settings.httpProxyNoProxyDescription",
@@ -563,6 +532,7 @@ export function GeneralSectionContent({
         />
         {/* 自定义 CA 属于 HTTP 代理的同一网络出口策略，必须跟代理输入放在同一卡片里。*/}
         <SettingsRow
+          searchId="settings.httpProxyCaCertPath"
           label={intl.formatMessage({ id: "settings.httpProxyCaCertPath" })}
           description={intl.formatMessage({
             id: "settings.httpProxyCaCertPathDescription",
@@ -602,6 +572,7 @@ export function GeneralSectionContent({
         {isDesktop ? (
           <>
             <SettingsRow
+              searchId="settings.desktopChromiumHardwareAcceleration"
               label={intl.formatMessage({
                 id: "settings.desktopChromiumHardwareAcceleration",
               })}
@@ -621,6 +592,7 @@ export function GeneralSectionContent({
               }
             />
             <SettingsRow
+              searchId="settings.receivePreviewUpdates"
               label={intl.formatMessage({ id: "settings.receivePreviewUpdates" })}
               description={intl.formatMessage({
                 id: "settings.receivePreviewUpdatesDescription",
@@ -636,6 +608,7 @@ export function GeneralSectionContent({
               }
             />
             <SettingsRow
+              searchId="settings.autoDownloadAndInstallUpdates"
               label={intl.formatMessage({
                 id: "settings.autoDownloadAndInstallUpdates",
               })}
@@ -657,6 +630,7 @@ export function GeneralSectionContent({
           </>
         ) : null}
         <SettingsRow
+          searchId="settings.notification"
           label={intl.formatMessage({ id: "settings.notification" })}
           description={intl.formatMessage({
             id: "settings.notificationDescription",
@@ -666,6 +640,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.notificationSound"
           label={intl.formatMessage({ id: "settings.notificationSound" })}
           description={intl.formatMessage({
             id: "settings.notificationSoundDescription",
@@ -680,6 +655,7 @@ export function GeneralSectionContent({
         />
         {isWindowsDesktop ? (
           <SettingsRow
+            searchId="settings.closeToTrayOnWindows"
             label={intl.formatMessage({ id: "settings.closeToTrayOnWindows" })}
             description={intl.formatMessage({
               id: "settings.closeToTrayOnWindowsDescription",
@@ -696,6 +672,7 @@ export function GeneralSectionContent({
         ) : null}
         {isDesktop ? (
           <SettingsRow
+            searchId="settings.keepAwakeWhileRunning"
             label={intl.formatMessage({ id: "settings.keepAwakeWhileRunning" })}
             description={intl.formatMessage({
               id: "settings.keepAwakeWhileRunningDescription",
@@ -717,6 +694,7 @@ export function GeneralSectionContent({
 
       <SettingsGroupCard>
         <SettingsRow
+          searchId="settings.zcodeInteractionBehavior"
           label={intl.formatMessage({ id: "settings.zcodeInteractionBehavior" })}
           description={intl.formatMessage({
             id: "settings.zcodeInteractionBehaviorDescription",
@@ -744,6 +722,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.askUserQuestionAutoResolution"
           label={intl.formatMessage({
             id: "settings.askUserQuestionAutoResolution",
           })}
@@ -764,6 +743,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.messageStreamShowReasoning"
           label={intl.formatMessage({ id: "settings.messageStreamShowReasoning" })}
           description={intl.formatMessage({
             id: "settings.messageStreamShowReasoningDescription",
@@ -779,6 +759,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.messageStreamShowTodos"
           label={intl.formatMessage({ id: "settings.messageStreamShowTodos" })}
           description={intl.formatMessage({
             id: "settings.messageStreamShowTodosDescription",
@@ -794,6 +775,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.toolGroupingExplore"
           label={intl.formatMessage({ id: "settings.toolGroupingExplore" })}
           description={intl.formatMessage({
             id: "settings.toolGroupingExploreDescription",
@@ -809,6 +791,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.toolGroupingTerminal"
           label={intl.formatMessage({ id: "settings.toolGroupingTerminal" })}
           description={intl.formatMessage({
             id: "settings.toolGroupingTerminalDescription",
@@ -824,6 +807,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.toolGroupingChanges"
           label={intl.formatMessage({ id: "settings.toolGroupingChanges" })}
           description={intl.formatMessage({
             id: "settings.toolGroupingChangesDescription",
@@ -842,6 +826,7 @@ export function GeneralSectionContent({
 
       <SettingsGroupCard>
         <SettingsRow
+          searchId="settings.taskAutoArchive"
           label={intl.formatMessage({ id: "settings.taskAutoArchive" })}
           description={intl.formatMessage({
             id: "settings.taskAutoArchiveDescription",
@@ -856,6 +841,7 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          searchId="settings.taskAutoArchiveDays"
           label={intl.formatMessage({ id: "settings.taskAutoArchiveDays" })}
           description={intl.formatMessage({
             id: "settings.taskAutoArchiveDaysDescription",
@@ -886,6 +872,7 @@ export function GeneralSectionContent({
 
       <SettingsGroupCard>
         <SettingsRow
+          searchId="settings.dataBaseDir"
           label={intl.formatMessage({ id: "settings.dataBaseDir" })}
           description={intl.formatMessage({
             id: "settings.dataBaseDirDescription",
@@ -903,6 +890,7 @@ export function GeneralSectionContent({
 
       <SettingsGroupCard>
         <SettingsRow
+          searchId="settings.onboarding"
           label={intl.formatMessage({ id: "settings.onboarding" })}
           description={intl.formatMessage({
             id: "settings.onboardingDescription",
@@ -924,7 +912,9 @@ export function GeneralSectionHeader({ localePreference }: { localePreference: L
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       <SettingsBadge>
-        {intl.formatMessage({ id: `settings.locale.${localePreference}` })}
+        {localePreference === "system"
+          ? intl.formatMessage({ id: "settings.locale.system" })
+          : LOCALE_NATIVE_NAMES[localePreference]}
       </SettingsBadge>
     </div>
   );

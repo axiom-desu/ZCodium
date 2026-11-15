@@ -189,6 +189,10 @@ export function onTurnStarted(
               ...(fact.requestedDelivery ? { requestedDelivery: fact.requestedDelivery } : {}),
               ...(fact.admittedDelivery ? { admittedDelivery: fact.admittedDelivery } : {}),
               ...(fact.fallbackReasonCode ? { fallbackReasonCode: fact.fallbackReasonCode } : {}),
+              // 选区引用随 canonical 事实进入 edit target：编辑/重试重放同源。
+              ...(fact.conversationQuotes
+                ? { conversationQuotes: fact.conversationQuotes }
+                : {}),
               ...(fact.modelSelection ? { modelSelection: fact.modelSelection } : {}),
               ...(fact.mode ? { mode: fact.mode } : {}),
               ...(fact.planEnabled !== undefined ? { planEnabled: fact.planEnabled } : {}),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import { ChevronDown, UploadCloud } from "lucide-react";
 import type { RemoteTarget } from "@zcode/shared";
 import type {
@@ -58,37 +58,6 @@ export function shouldStartRemoteSyncOperation(params: {
   selectedCount: number;
 }): boolean {
   return !params.inFlight && params.selectedCount > 0;
-}
-
-export function useRemoteSyncDialogIntent(params: { rpcReady: boolean; targetKey: string }): {
-  open: boolean;
-  setOpen: (open: boolean) => void;
-} {
-  const [openedTargetKey, setOpenedTargetKey] = useState<string | null>(null);
-  const open =
-    params.rpcReady && params.targetKey.length > 0 && openedTargetKey === params.targetKey;
-
-  useEffect(() => {
-    // 弹窗 open 曾只绑定 PluginList 组件生命周期，远端断连或切换目标时
-    // Dialog 虽被卸载，用户意图仍会残留并在重连后自动恢复。
-    setOpenedTargetKey(null);
-  }, [params.targetKey]);
-  useEffect(() => {
-    if (!params.rpcReady) {
-      setOpenedTargetKey(null);
-    }
-  }, [params.rpcReady]);
-
-  const setOpen = useCallback(
-    (nextOpen: boolean) => {
-      setOpenedTargetKey(
-        nextOpen && params.rpcReady && params.targetKey.length > 0 ? params.targetKey : null,
-      );
-    },
-    [params.rpcReady, params.targetKey],
-  );
-
-  return { open, setOpen };
 }
 
 export async function runRemoteSyncPreflightWithTimeout<T>(

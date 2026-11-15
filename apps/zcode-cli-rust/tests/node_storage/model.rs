@@ -40,16 +40,23 @@ impl ModelPort for Model {
         sink: &EventSink,
         _: &CancellationToken,
     ) -> std::result::Result<ModelOutput, ModelFailure> {
+        // 3.18：每条请求末尾带 total_tokens 提醒；脚本按真正的最后一条消息判定。
+        let last = |messages: &[Value]| -> Option<Value> {
+            messages
+                .iter()
+                .rev()
+                .find(|m| m["_zcode_source"] != "total_tokens_reminder")
+                .cloned()
+        };
         // 目标完成验证：第一次未通过（带下一步），之后通过。
-        let verify = messages.last().is_some_and(|m| {
+        let verify = last(&messages).is_some_and(|m| {
             m["content"].as_str().is_some_and(|c| {
                 c.starts_with("Verify whether the active session goal is actually complete.")
             })
         });
         if verify {
             let n = self.verifications.fetch_add(1, Ordering::SeqCst);
-            let stall = messages
-                .last()
+            let stall = last(&messages)
                 .is_some_and(|m| m["content"].as_str().is_some_and(|c| c.contains("stall")));
             let verdict = if n == 0 && stall {
                 json!({"passed": false, "reason": "Blocked."})
@@ -66,13 +73,13 @@ impl ModelPort for Model {
                 raw_finish_reason: None,
             });
         }
-        let compaction = messages.last().is_some_and(|m| {
+        let compaction = last(&messages).is_some_and(|m| {
             m["content"]
                 .as_str()
                 .is_some_and(|c| c.starts_with("CRITICAL: Respond with TEXT ONLY"))
         });
         // 父会话首轮派生子代理：最后一条是“spawn a child”的用户输入时调用 Agent 工具。
-        let spawn = messages.last().and_then(|m| {
+        let spawn = last(&messages).and_then(|m| {
             (m["role"] == "user")
                 .then(|| m["content"].as_str())
                 .flatten()

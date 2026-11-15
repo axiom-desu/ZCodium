@@ -19,7 +19,7 @@ macro_rules! migration {
 }
 
 /// `SQLITE_MIGRATIONS` in execution order.
-pub const MIGRATIONS: [Migration; 23] = [
+pub const MIGRATIONS: [Migration; 24] = [
     migration!("0001_base_session_store", "0.2.0"),
     migration!("0002_local_setting", "0.2.0"),
     migration!("0003_backfill_permission_local_setting", "0.2.0"),
@@ -43,10 +43,26 @@ pub const MIGRATIONS: [Migration; 23] = [
     migration!("0021_official_glm_selection", "0.16.5"),
     migration!("0022_backfilled_session_reasoning", "0.16.5"),
     migration!("0023_session_soft_delete_outcome", "0.16.9"),
+    migration!("0025_session_permanent_deletion", "0.17.1"),
 ];
 
 /// 0023 在「列已存在但账本缺失」的历史库上必须幂等（另一实现/上游可能已加过列）。
 pub const SOFT_DELETE_OUTCOME_MIGRATION: &str = "0023_session_soft_delete_outcome";
+/// 0025 在「结构已存在但账本缺失」的历史库上只补缺失对象，保留删除凭据与已有触发器。
+pub const PERMANENT_DELETION_MIGRATION: &str = "0025_session_permanent_deletion";
+
+/// Node `0025-…ts` `apply` 的同一守卫：把 `create table|index|trigger` 变为 `if not exists`。
+/// 已发布 SQL 参与 checksum，执行变换不能改变账本行的值。
+pub fn idempotent_ddl(sql: &str) -> String {
+    ["table", "index", "trigger"]
+        .iter()
+        .fold(sql.to_owned(), |text, kind| {
+            text.replace(
+                &format!("create {kind} "),
+                &format!("create {kind} if not exists "),
+            )
+        })
+}
 
 /// Node `0023-…ts` `apply` 的同一逐列守卫：只为缺失列保留 ALTER 语句。
 /// `present` 是 `pragma table_info(session)` 的列名；账本 checksum 仍取整段 `sql`。
@@ -97,7 +113,7 @@ mod tests {
     use super::*;
 
     /// The ledger values recorded by Node (and in existing user databases).
-    const EXPECTED: [&str; 23] = [
+    const EXPECTED: [&str; 24] = [
         "60e2d6a38ab36f31417c4f92c02690c96c7dcaaa0b6abe1741117d62a55c6462",
         "22a6ada9325c9ad55a00a1f0ecf72332c63c1e89fc3d91fec8d155bb0058b465",
         "bd880375ba7b948c8bcda847e7eb52bc568d065bcba48190f6c3bfb14d11b7dc",
@@ -121,6 +137,7 @@ mod tests {
         "433a8da454682406e962b043f2e0f412e9801bf7e4641ff25760aa16625ebafe",
         "aee472fe499e9c25d2e71df0fbc68d92e462b30d1d02919ca35d540bf133c99a",
         "999cc9840e30c94f8a6628440f3e729c24e7ee839720f3e76099b3c3127a8bd8",
+        "608f3ea3aad458679a4b377968413575749f2231c88133765a088564fc20691e",
     ];
 
     #[test]

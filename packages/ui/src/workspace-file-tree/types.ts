@@ -56,6 +56,8 @@ export interface WorkspaceFileTreeEditorState {
   installedEditors: EditorInfo[];
   isRemoteWorkspaceFileTree: boolean;
   remoteTarget?: OpenInEditorRemoteTarget;
+  /** 本机偏好：单击 HTML 文件用内置浏览器打开（右键「打开」仍是源码预览）。 */
+  htmlClickOpensBrowser: boolean;
 }
 
 export type WorkspaceFileGitStatusLabels = Record<WorkspaceFileGitStatus, string>;

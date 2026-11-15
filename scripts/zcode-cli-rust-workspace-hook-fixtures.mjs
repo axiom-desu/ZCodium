@@ -24,7 +24,9 @@ const CASES = [
         hooks: {
           enabled: true,
           events: {
-            PreToolUse: [{ matcher: "Bash", hooks: [command("echo hi", { timeout: 5 })] }],
+            PreToolUse: [
+              { matcher: "Bash", hooks: [command("echo hi", { timeout: 5, onError: "deny" })] },
+            ],
             Stop: [
               { hooks: [{ type: "process", command: "node", args: ["stop.js"], enabled: false }] },
             ],
@@ -55,12 +57,15 @@ const CASES = [
                     async: true,
                     statusMessage: " Checking ",
                   }),
-                  command("x", { shell: true, timeoutMs: 1e-7 }),
+                  command("x", { shell: true, timeoutMs: 1e-7, onError: "allow" }),
                 ],
               },
             ],
             PostToolUse: [
-              { matcher: "Edit|Write", hooks: [{ type: "process", command: "fmt", args: [] }] },
+              {
+                matcher: "Edit|Write",
+                hooks: [{ type: "process", command: "fmt", args: [], onError: "deny" }],
+              },
               {
                 hooks: [
                   {

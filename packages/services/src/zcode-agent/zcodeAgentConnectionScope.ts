@@ -108,6 +108,9 @@ function withTrustedConnection<T extends object>(
   return forwarded as T;
 }
 
+/** Host 内部可信调用（AppForkSession 等）注入连接事实的唯一入口；不暴露给 RPC 调用方。 */
+export { withTrustedConnection as withTrustedZCodeAgentV4Connection };
+
 function withTrustedUnsubscribeRoute<T extends object>(
   value: T,
   route: TrustedZCodeAgentV4UnsubscribeRoute,

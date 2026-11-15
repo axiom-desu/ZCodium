@@ -1,7 +1,7 @@
 //! Node `core/src/tool/search/history.ts` 的引用投影 + `local-projection.ts` 定义渲染。
 //! 只派生请求内容：不写主历史、不保存 schema 快照。
 use super::discovery::tool_reference_name;
-use super::{DEFERRED_TOOL_CALL_NAME, ResolvedMode, TOOL_SEARCH_NAME, WRAPPER_KEY};
+use super::{DEFERRED_TOOL_CALL_NAME, ResolvedMode, WRAPPER_KEY, is_tool_search_name};
 use crate::node_history::reminders;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -254,7 +254,9 @@ fn is_search_call(messages: &[Value], call_id: &str) -> bool {
                 .flatten()
                 .any(|call| {
                     call["id"].as_str() == Some(call_id)
-                        && call["function"]["name"].as_str() == Some(TOOL_SEARCH_NAME)
+                        && call["function"]["name"]
+                            .as_str()
+                            .is_some_and(is_tool_search_name)
                 })
     })
 }

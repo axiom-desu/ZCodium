@@ -81,6 +81,8 @@ function createWebPlatform(): IPlatformService {
   return {
     selectFileData: selectBrowserFileData,
     canSelectFilePath: false,
+    // Web 只能触发浏览器下载，不能把路径交给本机应用。
+    canOpenLocalFiles: false,
     saveFile: saveBrowserFile,
     // Web 端无法打开系统目录选择框
     selectDirectory: () => Promise.resolve(null),

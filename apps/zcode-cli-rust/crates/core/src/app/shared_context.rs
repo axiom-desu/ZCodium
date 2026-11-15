@@ -135,6 +135,7 @@ impl Engine {
             .await
             .context(StorageCommitFailure)?;
         self.sessions.insert(id.clone(), session);
+        self.store.session_presence_register(&id).await?;
         self.publish(&id, vec![])?;
         self.read_session(&json!({"sessionId":id}))
     }

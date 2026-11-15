@@ -22,6 +22,7 @@ import type {
 } from "@zcode/contracts";
 import type { EffectiveModelSelectionResult } from "@zcode/shared/model-selection";
 import type { RuntimeMessageEntry } from "../agent/message-history.js";
+import type { ProviderToolRound } from "./provider-tool-rounds/rounds.js";
 import type {
   CompactPhase,
   CompactReason,
@@ -83,6 +84,7 @@ import type {
   WorkflowPort,
   WorkflowEscalatePort,
   WorkflowSubmitPort,
+  WorkflowWebSearchBudgetPort,
   TraceContext,
   TraceId,
   TurnId,
@@ -104,6 +106,8 @@ import type {
 } from "./deps.js";
 import type { AgentProfile } from "../subagent/profile.js";
 import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
+import type { SessionControlBinding } from "../tool/session-control/contract.js";
+import type { PluginDiscoveryPort } from "@zcode/contracts";
 import type { BashTimeoutPolicy } from "../tool/bash-timeout-policy.js";
 import type { PresentationSurface } from "../context/types.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
@@ -142,6 +146,10 @@ export interface AgentRuntimeConfig {
     inactivityTimeoutMs?: number;
     autoBackgroundMs?: number;
     backgroundBashMaxMs?: number;
+    /** 后台 Agent 无进展多久后第一次提醒父会话；之后每次间隔加倍。默认 15 分钟。 */
+    backgroundStallNotifyMs?: number;
+    /** 无进展提醒的最大间隔。默认 4 小时。 */
+    backgroundStallMaxIntervalMs?: number;
     maxTurns?: number;
     outputRootDir?: string;
     profiles?: readonly AgentProfile[];
@@ -357,12 +365,27 @@ export interface AgentRuntimeDeps {
    */
   workflowEscalatePort?: WorkflowEscalatePort;
   /**
+   * actor 每个 ask 的 WebSearch 预算端口；缺席即无上限（主会话、Agent 子代理）。
+   * 计数与上限归 driver 会话状态，runtime 只透传给 tool executor。
+   */
+  webSearchBudget?: WorkflowWebSearchBudgetPort;
+  /**
    * 模型请求的进程级准入端口：在场时
    * 每次模型请求尝试先经它拿票据；沿调用上下文到 adapter。dwf actor runtime 拿 driver 的 per-actor
    * 包装（受闸门约束），主 runtime 拿治理器的 observer（只喂信号）；缺席即不设闸门。
    */
   modelRequestAdmission?: ModelRequestAdmission;
   workflowPort?: WorkflowPort;
+  /**
+   * 独立 CLI 的会话控制绑定；由 bootstrap 启动装配注入，缺席的会话不注册 8 个会话工具。
+   * 注册面与执行面由同一个 sessionControlForRuntime 推导，避免两处判断漂移。
+   */
+  sessionControl?: SessionControlBinding;
+  /**
+   * 插件发现端口：bootstrap 启动装配注入（目录与安装意图都归既有插件 store）。
+   * 注册面按「端口在场且不是子代理执行面」收口，见 runtime-tools.ts。
+   */
+  pluginDiscoveryPort?: PluginDiscoveryPort;
   /** workflow run 的提交/观察/取消端口；存在即 CreateWorkflow 真启动，缺席则回占位诊断。 */
   dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   dynamicWorkflowSnippetPort?: DynamicWorkflowSnippetPort;
@@ -620,6 +643,11 @@ export interface StableConversationForkOptions {
   sourceCommandId: string;
   revisionAtDecision?: number;
   target: StableConversationForkTarget;
+  /**
+   * 受管 worktree：子会话 cwd 改为该目录（会话历史仍从父会话复制）。
+   * 缺省 = 父会话目录，行为不变。
+   */
+  targetCwd?: { cwd: string };
   traceContext?: TraceContext;
 }
 
@@ -697,6 +725,8 @@ export interface ResumeSessionResult extends SessionHistoryHydrationResult {
 
 export interface ExecuteToolsOptions {
   automationTurn?: boolean;
+  /** 本轮 automation 身份；只从 Host 准入写入的 loop 状态下传，不从模型输入推断。 */
+  automationId?: string;
   signal?: AbortSignal;
   traceContext?: TraceContext;
   /** 仅透传给当前 turn 同步等待的 Agent child。 */
@@ -825,6 +855,8 @@ export interface RuntimeModelTextResult {
   reasoning?: ModelReasoningContentBlock[];
   text: string;
   toolCalls?: ModelToolCall[];
+  /** 服务端内置工具切出的前序轮次；text/reasoning 只保留最后一轮。 */
+  providerToolRounds?: ProviderToolRound[];
   usage: ModelUsage;
 }
 

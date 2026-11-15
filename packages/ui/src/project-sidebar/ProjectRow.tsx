@@ -15,6 +15,7 @@ import {
   FolderSearch,
   MoveRight,
   AlertTriangle,
+  GitBranch,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -66,6 +67,8 @@ export const ProjectRow = memo(function ProjectRow({
   onDelete,
   onMoveTasks,
   onNewTask,
+  onOpenWorktrees,
+  onOpenRemoteProjects,
   onViewFiles,
   canReorder,
   busy = false,
@@ -84,6 +87,8 @@ export const ProjectRow = memo(function ProjectRow({
   onDelete: () => void;
   onMoveTasks: () => void;
   onNewTask: () => void;
+  onOpenWorktrees?: () => void;
+  onOpenRemoteProjects?: () => void;
   onViewFiles: (rootPath: string) => void;
   canReorder: boolean;
   busy?: boolean;
@@ -205,6 +210,25 @@ export const ProjectRow = memo(function ProjectRow({
                   id: project.pinned ? "projectSidebar.unpin" : "projectSidebar.pin",
                 })}
               </DropdownMenuItem>
+              {onOpenWorktrees ? (
+                <DropdownMenuItem
+                  disabled={legacyReadOnly || primaryRootMissing}
+                  onSelect={onOpenWorktrees}
+                  data-testid="project-worktrees"
+                >
+                  <GitBranch className="size-3.5" />
+                  {intl.formatMessage({ id: "projectSidebar.worktrees" })}
+                </DropdownMenuItem>
+              ) : null}
+              {onOpenRemoteProjects ? (
+                <DropdownMenuItem
+                  onSelect={onOpenRemoteProjects}
+                  data-testid="project-remote-projects"
+                >
+                  <Cloud className="size-3.5" />
+                  {intl.formatMessage({ id: "projectSidebar.remoteProjects" })}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 disabled={legacyReadOnly || primaryRootMissing || tasks.length === 0}
                 onSelect={onMoveTasks}

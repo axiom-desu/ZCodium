@@ -6,7 +6,6 @@ import type {
   VirtualProject,
 } from "./contract.js";
 import { useServices } from "@/hooks/useServices.js";
-import { splitRoots } from "./view.js";
 
 /**
  * 只发 ProjectService 命令并在提交后重读 Host 树；不乐观写项目/任务行。
@@ -60,18 +59,10 @@ export function useProjectSidebarCommands(refresh: () => Promise<void>) {
     [saveProject],
   );
 
-  /** 恢复必须显式提交原 roots/primary；服务端再次校验 exact match。 */
+  /** 撤销软删除（D2）：roots/任务归属不变；服务端幂等，不校验目录是否存在。 */
   const restoreProject = useCallback(
-    (project: VirtualProject) => {
-      const { roots, primaryRoot } = splitRoots(project);
-      return saveProject({
-        restoreProjectId: project.id,
-        hostId: project.hostId,
-        roots,
-        ...(primaryRoot ? { primaryRoot } : {}),
-      });
-    },
-    [saveProject],
+    (project: VirtualProject) => run(() => service!.restoreProject(project.id, project.hostId)),
+    [run, service],
   );
 
   return {

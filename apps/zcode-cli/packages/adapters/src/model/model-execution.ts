@@ -28,6 +28,7 @@ import { createModelOptionMapFetch, type RawRequestBodyCapture } from "./model-o
 import { createNetworkProxyFetch } from "../network/proxy-fetch.js";
 import { normalizeModelTlsFailure } from "./failure-tls.js";
 import { mergeModelRequestHeaders } from "./model-request-headers.js";
+import { withoutContextOwnedModelHeaders } from "./model-request-headers.js";
 
 export type AiSdkProviderKind = "openai" | "anthropic" | "openai-compatible" | "google";
 
@@ -209,7 +210,7 @@ export class AiSdkModelExecution {
     // 不依赖签名成功，不给各业务重复补头，也不修改 Provider 或已绑定 Model 的配置。
     configuredProvider.headers = mergeModelRequestHeaders(
       withOpenRouterAttributionHeaders(this.defaultHeaders, configuredProvider.baseURL),
-      configuredProvider.headers,
+      withoutContextOwnedModelHeaders(configuredProvider.headers),
     );
     const apiKey = this.resolveApiKey(configuredProvider);
     return {

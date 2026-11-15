@@ -87,6 +87,21 @@ pub fn session(workspace: &str, r: Resume, epoch: String) -> Session {
     }
     s.last_assistant_mode = r.last_assistant_mode.clone();
     s.stored_env = r.env_info.clone();
+    // 3.18 F3：同一模型的主会话直接复用已冻结的 system 字节。
+    s.prompt_system = r.prompt_system.clone();
+    // 3.18 F12：冷恢复的标签 = entry ∪ 从持久消息推导（entry 落后或缺失时仍能恢复）。
+    s.session_features = crate::domain::session_features::parse_entry(
+        r.session_features
+            .as_ref()
+            .unwrap_or(&serde_json::Value::Null),
+    )
+    .into_iter()
+    .chain(
+        crate::domain::session_features::from_persisted_messages(&r.history.messages)
+            .into_iter()
+            .map(str::to_owned),
+    )
+    .collect();
     s.permission_grant = r.permission_grant.clone();
     s.todos = r
         .todos

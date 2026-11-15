@@ -1,6 +1,12 @@
 import { selectBrowserFileData } from "@zcode/ui";
-import { DesktopCommandIds, buildLocalMediaPreviewUrl, type IPlatformService } from "@zcode/shared";
+import {
+  DesktopCommandIds,
+  buildLocalMediaPreviewUrl,
+  resolveLocaleFromLanguageTag,
+  type IPlatformService,
+} from "@zcode/shared";
 
+import { registerAppControlNavigationHandler } from "#src/app-control-navigation/renderer.js";
 import { desktopBrowserPlatformBridge } from "./desktopBrowserPlatformBridge.js";
 import { createDesktopPluginSandboxPlatform } from "./plugin-sandbox/desktopPluginSandboxPlatform.js";
 
@@ -10,6 +16,7 @@ export function createDesktopPlatform(options: {
   return {
     selectFileData: selectBrowserFileData,
     canSelectFilePath: true,
+    canOpenLocalFiles: true,
     pluginSandbox: createDesktopPluginSandboxPlatform(),
     createLocalMediaPreviewUrl: buildLocalMediaPreviewUrl,
     isLocalDevelopmentRuntime: options.isLocalDevelopmentRuntime,
@@ -30,7 +37,13 @@ export function createDesktopPlatform(options: {
     requestSourceSettingsAttachment: (sourceServerId) =>
       window.zcode.requestSourceSettingsAttachment(sourceServerId),
     bindRemoteWorkspaceSessionContext: (context) =>
-      window.zcode.bindRemoteWorkspaceSessionContext?.(context) ?? Promise.resolve(),
+      window.zcode.bindRemoteWorkspaceSessionContext?.(context) ??
+      // 旧 preload 没有该方法：与 attach 失败同一结构，调用方按 ok:false 处理。
+      Promise.resolve({
+        ok: false as const,
+        reason: "not-found" as const,
+        recoveryRequested: false,
+      }),
     disposeRemoteSession: (sessionId) => window.zcode.disposeRemoteSession(sessionId),
     startWebRemoteControl: (request) => window.zcode.startWebRemoteControl(request),
     stopWebRemoteControl: () => window.zcode.stopWebRemoteControl(),
@@ -124,6 +137,24 @@ export function createDesktopPlatform(options: {
     onDesktopZoomLevelChanged: (handler) =>
       window.zcode.onDesktopZoomLevelChanged?.(handler) ?? (() => {}),
     onTaskNotificationClick: (handler) => window.zcode.onTaskNotificationClick(handler),
+    // 显式 App 导航：登记/回执都由当前 renderer 的 generation 收口；旧 preload 缺失时保持不可用。
+    onAppControlNavigation: (handler) => {
+      const subscribe = window.zcode.onAppControlNavigationMessage;
+      const send = window.zcode.sendAppControlNavigation;
+      if (!subscribe || !send) return () => {};
+      const generation = crypto.randomUUID();
+      return registerAppControlNavigationHandler(
+        {
+          subscribe: (listener) => subscribe(listener),
+          register: (activeGeneration) => send({ type: "register", generation: activeGeneration }),
+          unregister: (activeGeneration) =>
+            send({ type: "unregister", generation: activeGeneration }),
+          reply: (message) => send({ type: "result", ...message }),
+        },
+        handler,
+        generation,
+      );
+    },
     exportLogs: () => window.zcode.exportLogs(),
     captureWindowScreenshot: () =>
       window.zcode.captureWindowScreenshot?.() ?? Promise.resolve(null),
@@ -154,7 +185,14 @@ export function createDesktopPlatform(options: {
       window.zcode.acknowledgePostUpdateReleaseNotes(version),
     skipUpdateVersion: (version) => window.zcode.skipUpdateVersion?.(version) ?? Promise.resolve(),
     quitAndInstallUpdate: () => window.zcode.quitAndInstallUpdate(),
-    getInstalledEditors: () => window.zcode.getInstalledEditors(),
+    getInstalledEditors: (filePath) => window.zcode.getInstalledEditors(filePath),
+    // 系统关联应用是桌面独有的本机能力：preload 缺席时保持 undefined，UI 据此不出入口。
+    getFileApplications: window.zcode.getFileApplications
+      ? (target) => window.zcode.getFileApplications!(target)
+      : undefined,
+    openFileWithApplication: window.zcode.openFileWithApplication
+      ? (applicationId, target) => window.zcode.openFileWithApplication!(applicationId, target)
+      : undefined,
     getApplicationIcon: (bundleId) =>
       window.zcode.getApplicationIcon?.(bundleId) ?? Promise.resolve(null),
     openInEditor: (editorId, path, editorOptions) =>
@@ -163,7 +201,7 @@ export function createDesktopPlatform(options: {
     setApplicationLocale: (locale) => window.zcode.setApplicationLocale(locale),
     getSystemLocale: () =>
       window.zcode.getSystemLocale?.() ??
-      Promise.resolve(navigator.language.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US"),
+      Promise.resolve(resolveLocaleFromLanguageTag(navigator.language)),
     setTitleBarTheme: (theme) => window.zcode.setTitleBarTheme(theme),
   };
 }

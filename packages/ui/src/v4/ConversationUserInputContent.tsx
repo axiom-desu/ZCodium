@@ -1,3 +1,5 @@
+import { ConversationImageFileMention } from "@/v4/ConversationImageFileMention.js";
+import type { ImageFilePreviewContext } from "@/hooks/useImageFilePreview.js";
 import { memo, useState } from "react";
 import {
   Bot,
@@ -75,25 +77,37 @@ function V4UserInputMention({
   part,
   authoritativeGoal,
   pluginIcon,
+  imagePreviewContext,
 }: {
   part: Exclude<V4UserInputMentionPart, { type: "text" }>;
   authoritativeGoal: boolean;
   pluginIcon?: string;
+  imagePreviewContext?: ImageFilePreviewContext;
 }) {
   if (part.type === "file" || part.type === "directory") {
-    return (
-      <span className={mentionClassName("files")}>
-        <FileDisplayInline
-          path={part.label}
-          options={{
-            className: "inline-flex min-w-0 max-w-full items-center gap-1 align-middle",
-            iconSize: 16,
-            kind: part.type === "directory" ? "directory" : "file",
-            fileNameClassName: "truncate text-ui-base leading-6 font-medium text-current",
-          }}
-        />
-      </span>
+    const content = (
+      <FileDisplayInline
+        path={part.label}
+        options={{
+          className: "inline-flex min-w-0 max-w-full items-center gap-1 align-middle",
+          iconSize: 16,
+          kind: part.type === "directory" ? "directory" : "file",
+          fileNameClassName: "truncate text-ui-base leading-6 font-medium text-current",
+        }}
+      />
     );
+    if (part.type === "file")
+      return (
+        <ConversationImageFileMention
+          href={part.href}
+          label={part.label}
+          context={imagePreviewContext}
+          className={mentionClassName("files")}
+        >
+          {content}
+        </ConversationImageFileMention>
+      );
+    return <span className={mentionClassName("files")}>{content}</span>;
   }
 
   if (part.type === "skill") {
@@ -184,10 +198,12 @@ export const ConversationUserInputContent = memo(function ConversationUserInputC
   text,
   attachments = EMPTY_ATTACHMENTS,
   contextAttachmentCount = 0,
+  imagePreviewContext,
 }: {
   text: string;
   attachments?: readonly unknown[];
   contextAttachmentCount?: number;
+  imagePreviewContext?: ImageFilePreviewContext;
 }) {
   const pluginIconProjection = usePluginReferenceIconProjection();
   const goalQuery = parseV4UserInputGoalQuery(text, attachments, contextAttachmentCount);
@@ -211,6 +227,7 @@ export const ConversationUserInputContent = memo(function ConversationUserInputC
           <V4UserInputMention
             key={`${part.type}-${index}`}
             part={part}
+            imagePreviewContext={imagePreviewContext}
             authoritativeGoal={index === authoritativeGoalPartIndex}
             pluginIcon={
               part.type === "plugin" && part.pluginId

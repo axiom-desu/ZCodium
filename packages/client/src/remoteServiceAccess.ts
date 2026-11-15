@@ -17,6 +17,8 @@ import {
   ICuaPermissionService,
   IConversationShareService,
   IProjectService,
+  IManagedWorktreeService,
+  IRemoteProjectService,
   IBotsService,
   IFileWatcherService,
   IModelSelectionService,
@@ -29,8 +31,12 @@ import {
   ISkillsService,
   ISkillSyncService,
   IMcpSyncService,
+  IUserConfigSyncService,
+  IDeviceSyncStateService,
+  IProviderProvisioningStatusService,
   IPluginUiAppToolsService,
   IPluginUiSamplingService,
+  IExtensionsService,
   IPluginUiBridgeService,
   IPluginSyncService,
   IPluginsService,
@@ -72,6 +78,9 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly conversationShareService: IConversationShareService;
   /** 只有 Host 握手声明 virtualProjects 才创建；旧 Host 缺省，UI 走显式只读 legacy。 */
   readonly projectService?: IProjectService;
+  /** 受管 worktree / 远端项目入口只在本地桌面 Host 注册；远程/手机不创建代理。 */
+  readonly managedWorktreeService?: IManagedWorktreeService;
+  readonly remoteProjectService?: IRemoteProjectService;
   readonly botsService: IBotsService;
   readonly fileWatcherService: IFileWatcherService;
   readonly providerSettingsService: IProviderSettingsService;
@@ -85,7 +94,15 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly skillsService: ISkillsService;
   readonly skillSyncService: ISkillSyncService;
   readonly mcpSyncService: IMcpSyncService;
+  /** 用户配置同步（子智能体/命令/钩子）；两端同一实现。 */
+  readonly userConfigSyncService: IUserConfigSyncService;
+  /** 仅 desktop base attachment 注册：数据同步页的设备同步状态。 */
+  readonly deviceSyncStateService?: IDeviceSyncStateService;
+  /** 仅 desktop base attachment 注册：数据同步页的 Provider Provisioning lane。 */
+  readonly providerProvisioningStatusService?: IProviderProvisioningStatusService;
   readonly genUiService: IGenUiService;
+  /** 扩展宿主投影；只有桌面本地 base attachment 提供，远程/手机不创建代理。 */
+  readonly extensionsService?: IExtensionsService;
   readonly pluginUiBridgeService: IPluginUiBridgeService;
   readonly pluginUiSamplingService: IPluginUiSamplingService;
   readonly pluginUiAppToolsService: IPluginUiAppToolsService;
@@ -101,7 +118,24 @@ export class RemoteServiceAccess implements IServiceAccessor {
   /** Host 公开的 Source Server 管理端口；旧 Host 可缺失。 */
   readonly sourceServerManagementService?: ISourceServerManagementService;
 
-  constructor(channelClient: IChannelClient, options: { virtualProjects?: boolean } = {}) {
+  constructor(
+    channelClient: IChannelClient,
+    options: {
+      virtualProjects?: boolean;
+      dataSyncServices?: boolean;
+      localExtensions?: boolean;
+      localHostServices?: boolean;
+    } = {},
+  ) {
+    // 受管 worktree / 远端项目入口 intent 只在本机桌面 Host 注册；远程与手机不创建代理。
+    if (options.localHostServices) {
+      this.managedWorktreeService = ProxyChannel.toService<IManagedWorktreeService>(
+        channelClient.getChannel(IManagedWorktreeService.channelName),
+      );
+      this.remoteProjectService = ProxyChannel.toService<IRemoteProjectService>(
+        channelClient.getChannel(IRemoteProjectService.channelName),
+      );
+    }
     if (options.virtualProjects) {
       this.projectService = ProxyChannel.toService<IProjectService>(
         channelClient.getChannel(IProjectService.channelName),
@@ -196,9 +230,30 @@ export class RemoteServiceAccess implements IServiceAccessor {
     this.mcpSyncService = ProxyChannel.toService<IMcpSyncService>(
       channelClient.getChannel(IMcpSyncService.channelName),
     );
+    this.userConfigSyncService = ProxyChannel.toService<IUserConfigSyncService>(
+      channelClient.getChannel(IUserConfigSyncService.channelName),
+    );
+    // 代理对象不能证明 Host 注册了频道：设备同步状态 / Provisioning lane 只在桌面本机
+    // base attachment 开启，远程、手机与 Web 不创建代理（对应频道默认拒绝）。
+    this.deviceSyncStateService = options.dataSyncServices
+      ? ProxyChannel.toService<IDeviceSyncStateService>(
+          channelClient.getChannel(IDeviceSyncStateService.channelName),
+        )
+      : undefined;
+    this.providerProvisioningStatusService = options.dataSyncServices
+      ? ProxyChannel.toService<IProviderProvisioningStatusService>(
+          channelClient.getChannel(IProviderProvisioningStatusService.channelName),
+        )
+      : undefined;
     this.genUiService = ProxyChannel.toService<IGenUiService>(
       channelClient.getChannel(IGenUiService.channelName),
     );
+    // 扩展服务只在桌面本地 base attachment 注册；远程/手机/Web 不创建代理，调用方拿不到频道。
+    this.extensionsService = options.localExtensions
+      ? ProxyChannel.toService<IExtensionsService>(
+          channelClient.getChannel(IExtensionsService.channelName),
+        )
+      : undefined;
     this.pluginUiBridgeService = ProxyChannel.toService<IPluginUiBridgeService>(
       channelClient.getChannel(IPluginUiBridgeService.channelName),
     );

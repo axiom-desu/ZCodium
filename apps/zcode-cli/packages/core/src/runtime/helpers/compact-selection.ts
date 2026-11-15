@@ -359,7 +359,13 @@ function isCompactPromptTooLongRetryMarker(entry: RuntimeMessageEntry): boolean 
 function groupRuntimeEntriesByCompactRound(
   entries: readonly RuntimeMessageEntry[],
 ): RuntimeMessageEntry[][] {
-  return groupByAssistantStartedRounds(entries, runtimeEntryRole);
+  // 服务端内置工具把一条持久化 assistant 拆成多条 runtime assistant；共用 compactGroupKey 的
+  // 必须算作一组，否则保留组数与 selectPersistedCompactTail 按数据库消息算出的边界不一致。
+  return groupByAssistantStartedRounds(entries, runtimeEntryRole, runtimeEntryCompactGroupKey);
+}
+
+function runtimeEntryCompactGroupKey(entry: RuntimeMessageEntry): string | undefined {
+  return isRuntimeAttachmentEntry(entry) ? undefined : entry.compactGroupKey;
 }
 
 function positiveInt(value: number | undefined): number | undefined {

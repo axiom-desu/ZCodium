@@ -8,6 +8,7 @@ import type {
 } from "@zcode/shared/zcode-protocol-v4";
 import { PROTOCOL_V4_LIMITS, parseCommandEnvelope } from "@zcode/shared/zcode-protocol-v4";
 import { decideCommandAdmission, type CommandAdmissionHost } from "./command-inbox-admission.js";
+import { requestIdentityOf } from "./command-inbox-request-identity.js";
 import { AsyncGateRegistry } from "./async-gate-registry.js";
 
 type PersistentLookup = (key: CommandKey) => Promise<CommandAck | null> | CommandAck | null;
@@ -23,6 +24,8 @@ interface CommandInboxHost extends CommandAdmissionHost {
 
 interface InFlightEntry {
   ack: CommandAck;
+  /** 本次请求的内容身份；undefined 表示该命令不做冲突判定。 */
+  requestIdentity?: string;
   final: Promise<CommandAck>;
   resolveFinal: (ack: CommandAck) => void;
 }
@@ -32,8 +35,14 @@ type CommandFinal = Pick<
   "status" | "reasonCode" | "message" | "result" | "memoryEnabled"
 >;
 
+interface SettledEntry {
+  ack: CommandAck;
+  requestIdentity?: string;
+}
+
 interface LiveInputEntry {
   ack: CommandAck;
+  requestIdentity?: string;
   intent: ConversationInputIntent;
 }
 
@@ -61,7 +70,7 @@ export function queueItemIdForCommand(commandId: string): string {
 export class CommandInbox {
   private readonly inFlight = new Map<string, Map<string, InFlightEntry>>();
   private readonly liveInputs = new Map<string, Map<string, LiveInputEntry>>();
-  private readonly settled = new Map<string, Map<string, CommandAck>>();
+  private readonly settled = new Map<string, Map<string, SettledEntry>>();
   private readonly admissionSeq = new Map<string, number>();
   private readonly keyGates = new AsyncGateRegistry();
   private readonly sessionGates = new AsyncGateRegistry();
@@ -80,11 +89,15 @@ export class CommandInbox {
       });
     }
     const envelope = parsed.envelope;
+    const identity = requestIdentityOf(envelope);
     const key = { sessionId: envelope.sessionId, commandId: envelope.commandId };
     const bucketKey = this.bucketKey(envelope.sessionId);
     const releaseKey = await this.keyGates.acquire(this.keyGateKey(key));
 
     try {
+      // 同 commandId 不同内容不是重试：先判冲突，再判重复。
+      const conflict = this.requestConflict(bucketKey, envelope.commandId, identity);
+      if (conflict) return this.ackOnly(conflict);
       const pinned = this.inFlight.get(bucketKey)?.get(envelope.commandId);
       if (pinned) return this.ackOnly(this.retryAck(await pinned.final));
       const existing = await this.lookupExact(key);
@@ -95,6 +108,11 @@ export class CommandInbox {
       const releaseSession = await this.sessionGates.acquire(bucketKey);
       try {
         // 等待 session gate 期间，上一条命令可能增量写入了本 key 的持久化事实。
+        const afterWaitConflict = this.requestConflict(bucketKey, envelope.commandId, identity);
+        if (afterWaitConflict) {
+          releaseSession();
+          return this.ackOnly(afterWaitConflict);
+        }
         const afterWaitPinned = this.inFlight.get(bucketKey)?.get(envelope.commandId);
         if (afterWaitPinned) {
           releaseSession();
@@ -108,7 +126,8 @@ export class CommandInbox {
 
         const decision = decideCommandAdmission(this.host, envelope);
         if (decision.kind === "ack") {
-          if (decision.remember) this.rememberSettled(bucketKey, envelope.commandId, decision.ack);
+          if (decision.remember)
+            this.rememberSettled(bucketKey, envelope.commandId, decision.ack, identity);
           releaseSession();
           return this.ackOnly(decision.ack);
         }
@@ -120,7 +139,12 @@ export class CommandInbox {
         const final = new Promise<CommandAck>((resolve) => {
           resolveFinal = resolve;
         });
-        const entry: InFlightEntry = { ack: decision.ack, final, resolveFinal };
+        const entry: InFlightEntry = {
+          ack: decision.ack,
+          ...(identity ? { requestIdentity: identity } : {}),
+          final,
+          resolveFinal,
+        };
         this.mapFor(this.inFlight, bucketKey).set(envelope.commandId, entry);
 
         // 旧单表 LRU 会在 >512 条 churn 时淘汰仍在执行/队列里的命令，随后
@@ -145,8 +169,9 @@ export class CommandInbox {
             this.inFlight.get(bucketKey)?.delete(envelope.commandId);
             if (live) {
               live.ack = ack;
+              if (identity) live.requestIdentity = identity;
             } else {
-              this.rememberSettled(bucketKey, envelope.commandId, ack);
+              this.rememberSettled(bucketKey, envelope.commandId, ack, identity);
             }
             // 在途 duplicate 过去直接拿 admission ACK，fork/create 尚无 child
             // result 时就返回，ACK 丢失重试会导航失败。所有同 key 请求必须共享这一个
@@ -177,9 +202,14 @@ export class CommandInbox {
   /** queue/guide admission 后 pin 同一个完整 intent；settled churn 不得触及它。 */
   pinLiveInput(sessionId: string, intent: ConversationInputIntent, ack?: CommandAck): void {
     const bucketKey = this.bucketKey(sessionId);
-    const inFlightAck = this.inFlight.get(bucketKey)?.get(intent.sourceCommandId)?.ack;
+    const inFlight = this.inFlight.get(bucketKey)?.get(intent.sourceCommandId);
+    const settled = this.settled.get(bucketKey)?.get(intent.sourceCommandId);
+    const inFlightAck = inFlight?.ack;
     this.mapFor(this.liveInputs, bucketKey).set(intent.sourceCommandId, {
       intent,
+      ...(inFlight?.requestIdentity ?? settled?.requestIdentity
+        ? { requestIdentity: inFlight?.requestIdentity ?? settled?.requestIdentity }
+        : {}),
       ack: ack ??
         inFlightAck ?? {
           commandId: intent.sourceCommandId,
@@ -196,7 +226,7 @@ export class CommandInbox {
     const live = this.liveInputs.get(bucketKey)?.get(key.commandId);
     this.liveInputs.get(bucketKey)?.delete(key.commandId);
     if (finalAck ?? live?.ack) {
-      this.rememberSettled(bucketKey, key.commandId, finalAck ?? live!.ack);
+      this.rememberSettled(bucketKey, key.commandId, finalAck ?? live!.ack, live?.requestIdentity);
     }
   }
 
@@ -244,7 +274,7 @@ export class CommandInbox {
     const settled = this.settled.get(bucketKey)?.get(key.commandId);
     if (settled) {
       this.touchSettled(bucketKey, key.commandId, settled);
-      return settled;
+      return settled.ack;
     }
 
     for (const lookup of [
@@ -294,16 +324,45 @@ export class CommandInbox {
     return bucket;
   }
 
-  private touchSettled(bucketKey: string, commandId: string, ack: CommandAck): void {
+  private touchSettled(bucketKey: string, commandId: string, entry: SettledEntry): void {
     const bucket = this.mapFor(this.settled, bucketKey);
     bucket.delete(commandId);
-    bucket.set(commandId, ack);
+    bucket.set(commandId, entry);
   }
 
-  private rememberSettled(bucketKey: string, commandId: string, ack: CommandAck): void {
+  /**
+   * 同 commandId 但内容身份不同 → 明确冲突，而不是回放旧 ACK。
+   * 冷回源只有 ACK（没有内容），维持原 replay 语义，不能从派生 intent 反推请求身份。
+   */
+  private requestConflict(
+    bucketKey: string,
+    commandId: string,
+    identity: string | undefined,
+  ): CommandAck | null {
+    if (!identity) return null;
+    const entry =
+      this.inFlight.get(bucketKey)?.get(commandId) ??
+      this.liveInputs.get(bucketKey)?.get(commandId) ??
+      this.settled.get(bucketKey)?.get(commandId);
+    if (!entry?.requestIdentity || entry.requestIdentity === identity) return null;
+    return {
+      commandId,
+      status: "rejected",
+      reasonCode: "proto.commandConflict",
+      message: "Command ID was already used for a different request.",
+      revisionAtDecision: entry.ack.revisionAtDecision,
+    };
+  }
+
+  private rememberSettled(
+    bucketKey: string,
+    commandId: string,
+    ack: CommandAck,
+    requestIdentity?: string,
+  ): void {
     const bucket = this.mapFor(this.settled, bucketKey);
     bucket.delete(commandId);
-    bucket.set(commandId, ack);
+    bucket.set(commandId, { ack, ...(requestIdentity ? { requestIdentity } : {}) });
     while (bucket.size > PROTOCOL_V4_LIMITS.idempotencyTablePerSession) {
       const oldest = bucket.keys().next().value;
       if (oldest === undefined) break;

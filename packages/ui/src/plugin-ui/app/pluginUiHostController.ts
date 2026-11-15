@@ -103,7 +103,10 @@ export function createPluginUiHostController(
         canSample: () => Boolean(deps.getHostCapabilities().sampling),
         createCallId,
         activeCalls,
-        onBusyChange: deps.onBusyChange,
+        onBusyChange: () => {
+          deps.onActivity?.();
+          deps.onBusyChange?.();
+        },
       })
     : undefined;
 
@@ -122,7 +125,10 @@ export function createPluginUiHostController(
         pluginScope,
         scopeId: buildPluginSandboxScopeId(deps.scope.scope),
         currentGeneration: () => handle?.instance.generation,
-        onBusyChange: deps.onBusyChange,
+        onBusyChange: () => {
+          deps.onActivity?.();
+          deps.onBusyChange?.();
+        },
         setTimer,
         log: deps.log,
       })
@@ -192,6 +198,7 @@ export function createPluginUiHostController(
       createCallId,
       activeCalls,
       onBusyChange: deps.onBusyChange,
+      onActivity: deps.onActivity,
       onOpenExternal: deps.onOpenExternal,
     });
     sampling?.install(active, () => !disposed && bridge === active);

@@ -1,4 +1,7 @@
+import type { IDeviceSyncStateService, IUserConfigSyncService } from "./data-sync/index.js";
+import type { IProviderProvisioningStatusService } from "./provider-provisioning-status/contract.js";
 import type { IGenUiService } from "./gen-ui/contract.js";
+import type { IExtensionsService } from "./extensions/contract.js";
 import type { IPluginUiBridgeService } from "./plugin-ui-bridge/contract.js";
 import type { IPluginUiSamplingService } from "./plugin-ui-bridge/samplingContract.js";
 import type { IPluginUiAppToolsService } from "./plugin-ui-bridge/appToolsContract.js";
@@ -41,6 +44,8 @@ import type { IWindowControllerService } from "./window-controller/windowControl
 import type { IOnboardingRecordService } from "./onboarding/onboardingRecord.js";
 import type { IConversationShareService } from "./conversation-share/conversationShare.js";
 import type { IProjectService } from "./project/contract.js";
+import type { IManagedWorktreeService } from "./managed-worktree-tasks/contract.js";
+import type { IRemoteProjectService } from "./remote-projects/contract.js";
 import type { ISourceServerManagementService } from "./source-server-management/sourceServerManagement.js";
 
 /** UI 层消费的统一服务接口 */
@@ -66,6 +71,10 @@ export interface IServiceAccessor {
   readonly conversationShareService: IConversationShareService;
   /** Host 项目组织态；旧 Host/测试 double 可不提供，UI 据此隐藏项目入口而不是伪造行。 */
   readonly projectService?: IProjectService;
+  /** 受管 worktree（仅本地桌面 Host）；旧 Host/远端/手机不提供，入口隐藏。 */
+  readonly managedWorktreeService?: IManagedWorktreeService;
+  /** 本机远端项目入口 intent（连接事实仍在 registry）；旧 Host/远端不提供。 */
+  readonly remoteProjectService?: IRemoteProjectService;
   readonly botsService: IBotsService;
   readonly fileWatcherService: IFileWatcherService;
   /** 当前 Environment 的 Provider 配置与设置视图。 */
@@ -82,12 +91,20 @@ export interface IServiceAccessor {
   readonly mcpSyncService: IMcpSyncService;
   /** 插件 UI 桥；web 或旧 host 可不提供，UI 据此回退普通 MCP 卡片。 */
   readonly genUiService?: IGenUiService;
+  /** 扩展宿主投影；只有桌面本地窗口 Host 注册，手机/Web 不暴露。 */
+  readonly extensionsService?: IExtensionsService;
   readonly pluginUiBridgeService?: IPluginUiBridgeService;
   /** 页面 sampling；只有桌面本地任务开放。 */
   readonly pluginUiSamplingService?: IPluginUiSamplingService;
   /** App-Provided Tools；只有桌面本地 agent 时存在。 */
   readonly pluginUiAppToolsService?: IPluginUiAppToolsService;
   readonly pluginSyncService: IPluginSyncService;
+  /** 用户配置同步（子智能体/命令/钩子）；两端同一实现，随远程 workspace RPC 合同注册。 */
+  readonly userConfigSyncService: IUserConfigSyncService;
+  /** 数据同步页的设备同步状态：只在桌面本机 Host 注册，其他 scope 必须按可选能力消费。 */
+  readonly deviceSyncStateService?: IDeviceSyncStateService;
+  /** 数据同步页的 Provider Provisioning lane：只在本机 Host 注册，唯一数据源是 Main 协调器。 */
+  readonly providerProvisioningStatusService?: IProviderProvisioningStatusService;
   readonly pluginsService: IPluginsService;
   /** 设置页插件管理（UI 不再直触 zcodeAgentService 的 plugins/* 面） */
   readonly pluginManagementService: IPluginManagementService;

@@ -173,6 +173,36 @@ fn uuid_format_uses_the_generated_pattern_as_its_only_rule() {
 }
 
 #[test]
+fn date_time_format_uses_the_generated_pattern_as_its_only_rule() {
+    // 本仓 `timestampSchema` 生成的线格式：format 只是注解，精确值域在 pattern 里，
+    // 所以必须接受 date-time 并要求 pattern 在场（缺 pattern 仍 fail closed）。
+    let schema = json!({
+        "type":"string",
+        "format":"date-time",
+        "pattern": r"^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$"
+    });
+    let node = Node::compile(&schema).unwrap();
+    for timestamp in [
+        "2026-11-15T10:00:00Z",
+        "2024-02-29T23:59:59.123+08:00",
+        "2026-11-15T10:00:00-05:30",
+    ] {
+        assert!(node.validate(&json!(timestamp), "").is_ok(), "{timestamp}");
+    }
+    for invalid in [
+        "2026-13-01T00:00:00Z",
+        "2026-02-30T00:00:00Z",
+        "2026-11-15 10:00:00Z",
+        "2026-11-15T10:00:00",
+        "not-a-timestamp",
+    ] {
+        assert!(node.validate(&json!(invalid), "").is_err(), "{invalid}");
+    }
+    // 缺 pattern 的 date-time 不能当成“无约束字符串”放行。
+    assert!(Node::compile(&json!({"type":"string","format":"date-time"})).is_err());
+}
+
+#[test]
 fn strip_orders_keys_like_zod_and_fills_defaults() {
     let node = Node::compile(&json!({
         "type":"object",

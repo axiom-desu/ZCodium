@@ -5,9 +5,17 @@
     "rootDir": "src/renderer",
     "lib": ["es2025", "dom", "dom.iterable"],
     "jsx": "react-jsx",
+    // renderer 的单测直接在 Node 里跑（node:vm/node:fs）；不把 node 类型带进 lib，
+    // 只补全局类型，避免为了测试文件单独排除它们而绕过类型检查。
+    "types": ["node"],
     "noEmit": true
   },
   "include": ["src/renderer"],
   // renderer 直接 import 了 shared；把它补进 references，避免 renderer 单独检查时再走源码回退路径。
-  "references": [{ "path": "../shared" }, { "path": "../ui" }, { "path": "../client" }]
+  "references": [
+    { "path": "../shared" },
+    { "path": "../ui" },
+    { "path": "../client" },
+    { "path": "./tsconfig.app-navigation.json" }
+  ]
 }

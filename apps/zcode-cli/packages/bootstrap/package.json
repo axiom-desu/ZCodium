@@ -32,6 +32,7 @@
     "@zcode/i18n": "workspace:*",
     "@zcode/provider": "workspace:*",
     "@zcode/provider-node": "workspace:*",
+    "@zcode/session-control": "workspace:*",
     "@zcode/shared": "workspace:*",
     "diff": "^9.0.0",
     "zod": "4.6.5"

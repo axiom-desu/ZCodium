@@ -40,7 +40,29 @@ export interface RuntimeTaskMessageSink {
   send(message: RuntimeTaskPendingMessage): Promise<"queued" | "steered">;
 }
 
+/** 后台 Agent 的进展事实（subagent/background-stall.ts 写，停滞提醒与 TaskOutput 读）。 */
+export interface SubagentActivitySnapshot {
+  lastProgressAt: number;
+  runningTools: SubagentRunningToolActivity[];
+  /** child 正在等用户审批；此时无进展是在等人，不提醒主代理。由 pendingPermissionToolCallIds 派生。 */
+  waitingForPermission: boolean;
+  /** 还在等审批的工具调用。并行工具组里可能同时有多个审批挂起。 */
+  pendingPermissionToolCallIds?: string[];
+  /** 已经结束的审批（requestId）与工具调用（toolCallId），各保留最近 64 个。 */
+  endedPermissionRequestIds?: string[];
+  endedToolCallIds?: string[];
+}
+
+export interface SubagentRunningToolActivity {
+  toolCallId: string;
+  toolName: string;
+  startedAt: number;
+  summary?: string;
+}
+
 export interface RuntimeTaskSnapshot extends SubagentTaskSnapshot {
+  /** local_agent 的进展事实；只在有 child 事件后出现。 */
+  activity?: SubagentActivitySnapshot;
   /** task 注册时所属 active conversation branch；用于迟到 completion fencing。 */
   branchGeneration?: number;
   exitCode?: number;
@@ -68,6 +90,8 @@ export interface RuntimeTaskSnapshot extends SubagentTaskSnapshot {
 }
 
 export interface RuntimeTaskRegistry {
+  /** 任务快照变化（注册 / 更新 / 摘除）：停滞钟据此对齐定时器，轮询被禁止。 */
+  subscribe?(listener: () => void): () => void;
   all(): Record<string, RuntimeTaskSnapshot>;
   get(id: string): RuntimeTaskSnapshot | undefined;
   drainMessages(id: string): RuntimeTaskPendingMessage[];
@@ -110,10 +134,22 @@ const TERMINAL_STATUSES = new Set<RuntimeTaskSnapshot["status"]>([
 ]);
 
 export class InMemoryRuntimeTaskRegistry implements RuntimeTaskRegistry {
+  private readonly listeners = new Set<() => void>();
   private activeBranchGeneration = 0;
   private readonly backgroundWaiters = new Map<string, Set<RuntimeTaskWaiter>>();
   private readonly tasks = new Map<string, RuntimeTaskSnapshot>();
   private readonly terminalWaiters = new Map<string, Set<RuntimeTaskWaiter>>();
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private changed(): void {
+    for (const listener of this.listeners) listener();
+  }
 
   register(task: RuntimeTaskSnapshot): void {
     const stamped = {
@@ -123,6 +159,7 @@ export class InMemoryRuntimeTaskRegistry implements RuntimeTaskRegistry {
     this.tasks.set(stamped.taskId, stamped);
     this.resolveIfTerminal(stamped.taskId, stamped);
     this.resolveIfBackgrounded(stamped.taskId, stamped);
+    this.changed();
   }
 
   setActiveBranchGeneration(generation: number): void {
@@ -139,6 +176,7 @@ export class InMemoryRuntimeTaskRegistry implements RuntimeTaskRegistry {
     this.tasks.set(id, next);
     this.resolveIfTerminal(id, next);
     this.resolveIfBackgrounded(id, next);
+    this.changed();
     return next;
   }
 
@@ -148,6 +186,7 @@ export class InMemoryRuntimeTaskRegistry implements RuntimeTaskRegistry {
     const next: RuntimeTaskSnapshot = { ...task, isBackgrounded: true };
     this.tasks.set(id, next);
     this.resolveBackgroundWaiters(id, next);
+    this.changed();
     return true;
   }
 
@@ -155,6 +194,7 @@ export class InMemoryRuntimeTaskRegistry implements RuntimeTaskRegistry {
     this.tasks.delete(id);
     this.resolveTerminalWaiters(id, undefined);
     this.resolveBackgroundWaiters(id, undefined);
+    this.changed();
   }
 
   get(id: string): RuntimeTaskSnapshot | undefined {

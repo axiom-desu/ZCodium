@@ -11,28 +11,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { getWorkspaceKey } from "@/lib/workspaceKey.js";
 import type { PluginWorkspaceTarget } from "@/lib/configDirectoryCatalog.js";
 
-export function getPluginWorkspaceKey(tab: PluginWorkspaceTarget): string {
-  return getWorkspaceKey(tab.workspacePath, tab.workspaceIdentity);
-}
+import { getPluginWorkspaceKey, isPluginScopeWorkspaceConnected } from "@/settings-scope/index.js";
 
-export function isPluginScopeWorkspaceConnected(tab: PluginWorkspaceTarget): boolean {
-  if (tab.configOnline !== undefined) return tab.configOnline;
-  // 持久化 tab 会保留已经断开的远端项目和已失效的本地目录；Scope 若继续展示，
-  // 用户会选中一个没有可用 service target 的项目。远端必须有当前 session，本地必须仍可用。
-  if (tab.availability === "unavailable-local-directory") {
-    return false;
-  }
-  const isRemote = Boolean(
-    tab.workspaceIdentity?.trim() || tab.remoteTarget || tab.remoteSessionId,
-  );
-  if (!isRemote) {
-    return true;
-  }
-  return Boolean(tab.remoteSessionId);
-}
+// Scope key 与「项目是否仍可配置」的规则只有 settings-scope/domain/scope.ts 一份实现；
+// 这些菜单只是它的渲染消费者，不保留第二套等价判断。
+export { getPluginWorkspaceKey, isPluginScopeWorkspaceConnected };
 
 export function PluginScopeMenu({
   align = "start",

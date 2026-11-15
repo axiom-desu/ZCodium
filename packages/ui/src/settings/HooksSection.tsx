@@ -20,17 +20,19 @@ import { HooksList, type HookScope, type PluginHookRow } from "./HooksList.js";
 import { useWorkspaceHookInlineTrust } from "./useWorkspaceHookInlineTrust.js";
 import { useWorkspaceHookReviewStore } from "@/store/workspaceHookReviewStore.js";
 import {
-  PluginScopeMenu,
-  getPluginWorkspaceKey,
-  isPluginScopeWorkspaceConnected,
-} from "@/settings/PluginScopeMenu.js";
+  SettingsScopeBlockedNotice,
+  SettingsScopeDeviceProvider,
+  SettingsScopePicker,
+  resolveSettingsScopeBlock,
+  resolveSettingsScopeTargetBlock,
+  useSettingsScope,
+  useSettingsScopeForm,
+} from "@/settings-scope/index.js";
 import { PluginLoadingState, PluginSearchEmptyState } from "@/settings/PluginInstallEmptyState.js";
 import {
   resolvePluginDisplayName,
   resolveUniquePluginListingByName,
 } from "@/settings/pluginStoreListing.js";
-import { useTabStore } from "@/store/TabStoreProvider.js";
-import { isWorkspaceTab } from "@/store/tabStore.js";
 import {
   shouldShowWorkspaceHookTrustNotice,
   WorkspaceHookTrustNotice,
@@ -150,42 +152,80 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
   const pluginsLoading = usePluginManagementStore((state) => state.loading);
   const pluginsError = usePluginManagementStore((state) => state.error);
   const initializePlugins = usePluginManagementStore((state) => state.initialize);
-  const [viewMode, setViewMode] = useState<"list" | "form">("list");
-  const [editingHook, setEditingHook] = useState<Hook | null>(null);
+  // Scope 的唯一 owner（L1 模块）：设备分组、选中项解析、本机/远端「用户」目标都由它给出。
+  const settingsScope = useSettingsScope({ workspacePath, workspaceIdentity });
+  // 表单归属打开它的设备（`settings-scope/app/useSettingsScopeForm`）：设备切换后在渲染期清掉，
+  // 旧设备的 hook 内容不会写给新设备（各设备用户 hook 的 id 都从 hook-zcode-user-0 编号）。
+  const hookForm = useSettingsScopeForm<{ hook: Hook | null }>(settingsScope);
   const [query, setQuery] = useState("");
-  const tabs = useTabStore((state) => state.tabs);
-  const workspaceTabs = useMemo(() => {
-    const seen = new Set<string>();
-    return tabs
-      .filter(isWorkspaceTab)
-      .filter(isPluginScopeWorkspaceConnected)
-      .filter((tab) => {
-        const key = getPluginWorkspaceKey(tab);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-  }, [tabs]);
-  const [selectedScopeKey, setSelectedScopeKey] = useState("user");
   const deferredQuery = useDeferredValue(query);
-  const selectedWorkspace = workspaceTabs.find(
-    (tab) => getPluginWorkspaceKey(tab) === selectedScopeKey,
-  );
-  const activeScope: HookScope = selectedWorkspace ? "project" : "user";
-  const targetWorkspacePath = selectedWorkspace?.workspacePath ?? workspacePath;
-  const targetWorkspaceIdentity = selectedWorkspace?.workspaceIdentity ?? workspaceIdentity;
+  const editingHook = hookForm.form?.hook ?? null;
+  const isFormMode = hookForm.form !== null;
+  const {
+    groups: scopeGroups,
+    selectedScopeKey,
+    setSelectedScopeKey,
+    resolution: scopeResolution,
+    user: settingsUser,
+    device: scopeDevice,
+    deviceTargets,
+    toLocalScopeKey,
+    toPageScopeKey,
+  } = settingsScope;
+  const selectedWorkspaceTarget =
+    scopeResolution.status === "ready" && scopeResolution.kind === "workspace"
+      ? scopeResolution.target
+      : undefined;
+  const userSelected = scopeResolution.status === "ready" && scopeResolution.kind === "user";
+  const activeScope: HookScope = selectedWorkspaceTarget ? "project" : "user";
+  // disconnected / 外设备目标 fail-closed：离线设备整组不出现在菜单里，残留的选中项也不能
+  // 借用当前 Host 的服务去读写，只渲染阻断提示。
+  const scopeBlock =
+    resolveSettingsScopeBlock(settingsScope, userSelected) ??
+    resolveSettingsScopeTargetBlock(selectedWorkspaceTarget);
+  // 远端「用户」只经该设备的 source-settings attachment 服务；本机「用户」沿用当前
+  // workspace 服务解析（本机 Host），不把远端服务当成本机用户配置写入口。
+  const remoteUserScope =
+    userSelected && settingsUser.status === "ready" && settingsUser.cacheAuthorityKey
+      ? settingsUser
+      : null;
+  const targetWorkspacePath = remoteUserScope
+    ? remoteUserScope.target.workspacePath
+    : (selectedWorkspaceTarget?.workspacePath ?? workspacePath);
+  const targetWorkspaceIdentity = remoteUserScope
+    ? undefined
+    : (selectedWorkspaceTarget?.workspaceIdentity ?? workspaceIdentity);
   const targetWorkspaceKey = targetWorkspacePath
     ? getWorkspaceKey(targetWorkspacePath, targetWorkspaceIdentity)
     : null;
   const targetServiceResolution = useWorkspaceServicesResolution(
     targetWorkspacePath,
-    selectedWorkspace?.remoteSessionId,
+    remoteUserScope ? undefined : selectedWorkspaceTarget?.remoteSessionId,
     targetWorkspaceIdentity,
-    selectedWorkspace?.remoteTarget,
+    remoteUserScope ? undefined : selectedWorkspaceTarget?.remoteTarget,
   );
   // Scope 切到另一个远程 workspace 后，路径已切换但 hooks/plugin 服务仍来自
   // 当前激活 workspace。这里让服务 host 与 target 身份同源，等待连接时不发送越界 RPC。
-  const { hooksService, pluginManagementService } = targetServiceResolution.services;
+  const hooksService =
+    remoteUserScope?.unscopedServices.hooksService ?? targetServiceResolution.services.hooksService;
+  const pluginManagementService =
+    remoteUserScope?.unscopedServices.pluginManagementService ??
+    targetServiceResolution.services.pluginManagementService;
+  const rpcReady =
+    scopeBlock === null && (remoteUserScope !== null || targetServiceResolution.rpcReady);
+  const scopeTargets = useMemo(
+    () =>
+      scopeGroups.flatMap((group) =>
+        group.options.flatMap((option) => (option.target ? [option.target] : [])),
+      ),
+    [scopeGroups],
+  );
+  const scopeDeviceHasUser = scopeGroups.some(
+    (group) =>
+      (group.device.kind === "local" ? "local" : group.device.id) ===
+        (scopeDevice.kind === "local" ? "local" : scopeDevice.id) &&
+      group.options.some((option) => option.kind === "user"),
+  );
   const zcodeSessionService = useZCodeSessionService(
     targetWorkspacePath ?? undefined,
     undefined,
@@ -198,8 +238,8 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
   const { trustActionAvailable, trustingHookId, trustHook } = useWorkspaceHookInlineTrust({
     workspacePath: targetWorkspacePath,
     workspaceIdentity: targetWorkspaceIdentity,
-    hooksService: targetServiceResolution.rpcReady ? hooksService : undefined,
-    rpcReady: targetServiceResolution.rpcReady,
+    hooksService: rpcReady ? hooksService : undefined,
+    rpcReady,
   });
   const reviewBindings = useWorkspaceHookReviewStore((state) => state.bindings);
 
@@ -264,22 +304,16 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
   );
 
   useEffect(() => {
-    if (!targetServiceResolution.rpcReady) return;
+    if (!rpcReady) return;
     void hooksState.initialize(
       targetWorkspacePath ?? undefined,
       targetWorkspaceIdentity,
       hooksService,
     );
-  }, [
-    hooksService,
-    hooksState.initialize,
-    targetServiceResolution.rpcReady,
-    targetWorkspaceIdentity,
-    targetWorkspacePath,
-  ]);
+  }, [hooksService, hooksState.initialize, rpcReady, targetWorkspaceIdentity, targetWorkspacePath]);
 
   useEffect(() => {
-    if (!targetWorkspacePath || !targetServiceResolution.rpcReady) return;
+    if (!targetWorkspacePath || !rpcReady) return;
     void initializePlugins({
       workspacePath: targetWorkspacePath,
       workspaceIdentity: targetWorkspaceIdentity,
@@ -288,13 +322,13 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
   }, [
     initializePlugins,
     pluginManagementService,
-    targetServiceResolution.rpcReady,
+    rpcReady,
     targetWorkspaceIdentity,
     targetWorkspacePath,
   ]);
 
   const handleRefresh = useCallback(async () => {
-    if (!targetServiceResolution.rpcReady) return;
+    if (!rpcReady) return;
     await Promise.all([
       hooksState.initialize(
         targetWorkspacePath ?? undefined,
@@ -314,19 +348,10 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
     hooksState.initialize,
     initializePlugins,
     pluginManagementService,
-    targetServiceResolution.rpcReady,
+    rpcReady,
     targetWorkspaceIdentity,
     targetWorkspacePath,
   ]);
-
-  useEffect(() => {
-    if (
-      selectedScopeKey !== "user" &&
-      !workspaceTabs.some((tab) => getPluginWorkspaceKey(tab) === selectedScopeKey)
-    ) {
-      setSelectedScopeKey("user");
-    }
-  }, [selectedScopeKey, workspaceTabs]);
 
   // workspace-hook-trust（修复）：会话区对 workspace B 发起审核时，把 scope 菜单
   // 自动切到 B 一次。两条硬约束：
@@ -336,8 +361,8 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
   //    workspace 时切过去只会停在 Connecting，还会与上面的「失效 scope 重置 user」
   //    effect 形成乒乓循环。
   const latestReviewScopeTarget = useMemo(
-    () => resolveLatestReviewScopeTarget(reviewBindings, workspaceTabs),
-    [reviewBindings, workspaceTabs],
+    () => resolveLatestReviewScopeTarget(reviewBindings, scopeTargets),
+    [reviewBindings, scopeTargets],
   );
   const handledReviewInteractionRef = useRef<string | null>(null);
   useEffect(() => {
@@ -372,18 +397,23 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
           await hooksState.addHook(config, hooksService);
           await invalidateDraft("hook-added");
         }
-        setViewMode("list");
-        setEditingHook(null);
+        hookForm.closeForm();
       } catch (error) {
         toast(error instanceof Error ? error.message : String(error));
       }
     },
-    [editingHook, hooksService, hooksState.addHook, hooksState.updateHook, invalidateDraft],
+    [
+      editingHook,
+      hookForm,
+      hooksService,
+      hooksState.addHook,
+      hooksState.updateHook,
+      invalidateDraft,
+    ],
   );
   const handleCreateHook = useCallback(() => {
-    setEditingHook(null);
-    setViewMode("form");
-  }, []);
+    hookForm.openForm({ hook: null });
+  }, [hookForm]);
 
   const handleDelete = useCallback(
     async (hook: Hook) => {
@@ -399,13 +429,12 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
       try {
         await hooksState.deleteHook(hook.id, hooksService);
         await invalidateDraft("hook-deleted");
-        setEditingHook(null);
-        setViewMode("list");
+        hookForm.closeForm();
       } catch (error) {
         toast(error instanceof Error ? error.message : String(error));
       }
     },
-    [confirmDialog, hooksService, hooksState.deleteHook, intl, invalidateDraft],
+    [confirmDialog, hookForm, hooksService, hooksState.deleteHook, intl, invalidateDraft],
   );
 
   const handleToggle = useCallback(
@@ -433,7 +462,7 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
     [hooksService, hooksState.importHook, intl, invalidateDraft],
   );
 
-  if (viewMode === "form" && targetServiceResolution.rpcReady) {
+  if (isFormMode && rpcReady) {
     return (
       <>
         <SettingsBreadcrumbReporter
@@ -442,26 +471,23 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
               label: editingHook?.event ?? intl.formatMessage({ id: "settings.hooks.add" }),
             },
           ]}
-          onSectionSelect={() => {
-            setEditingHook(null);
-            setViewMode("list");
-          }}
+          onSectionSelect={() => hookForm.closeForm()}
         />
-        <HookForm
-          hook={editingHook ?? undefined}
-          workspaceAvailable={Boolean(targetWorkspacePath)}
-          defaultStorageLevel={activeScope}
-          selectedScopeKey={selectedScopeKey}
-          workspaceTabs={workspaceTabs}
-          onScopeKeyChange={setSelectedScopeKey}
-          onSave={handleSaveHook}
-          onDelete={editingHook ? handleDelete : undefined}
-          onCancel={() => {
-            setEditingHook(null);
-            setViewMode("list");
-          }}
-          isEditing={Boolean(editingHook)}
-        />
+        {/* 表单内的 Scope 菜单只列当前设备的「用户」与项目：写入目标由分区按同一设备解析。 */}
+        <SettingsScopeDeviceProvider device={scopeDevice} userAvailable={scopeDeviceHasUser}>
+          <HookForm
+            hook={editingHook ?? undefined}
+            workspaceAvailable={Boolean(targetWorkspacePath)}
+            defaultStorageLevel={activeScope}
+            selectedScopeKey={toLocalScopeKey(selectedScopeKey)}
+            workspaceTabs={deviceTargets}
+            onScopeKeyChange={(localKey) => setSelectedScopeKey(toPageScopeKey(localKey))}
+            onSave={handleSaveHook}
+            onDelete={editingHook ? handleDelete : undefined}
+            onCancel={() => hookForm.closeForm()}
+            isEditing={Boolean(editingHook)}
+          />
+        </SettingsScopeDeviceProvider>
       </>
     );
   }
@@ -475,18 +501,24 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
   const showWorkspaceHookTrustNotice = shouldShowWorkspaceHookTrustNotice({
     hooks: editableHooks,
     loadedWorkspaceKey: hooksState.loadedWorkspaceKey,
-    rpcReady: targetServiceResolution.rpcReady,
+    rpcReady,
     targetWorkspaceKey,
   });
   return (
     <div className="space-y-6" data-testid="hooks-settings-section">
       <div className="flex min-w-0 flex-wrap items-center gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <PluginScopeMenu
+          <SettingsScopePicker
+            scope={{
+              groups: scopeGroups,
+              selectedScopeKey,
+              setSelectedScopeKey,
+              resolution: scopeResolution,
+            }}
             align="start"
-            selectedScopeKey={selectedScopeKey}
-            workspaceTabs={workspaceTabs}
-            onScopeKeyChange={setSelectedScopeKey}
+            triggerTestId="hooks-settings-scope-trigger"
+            userOptionTestId="hooks-settings-scope-user-option"
+            workspaceOptionTestIdPrefix="hooks-settings-scope-option"
           />
           <div className="hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
           <div
@@ -511,13 +543,17 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
 
       {showWorkspaceHookTrustNotice ? <WorkspaceHookTrustNotice hooks={editableHooks} /> : null}
 
-      {targetServiceResolution.rpcReady && error ? (
+      {scopeBlock !== null ? (
+        <SettingsScopeBlockedNotice state={scopeBlock} device={scopeDevice} />
+      ) : null}
+
+      {rpcReady && error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-ui-base text-destructive">
           {error}
         </div>
       ) : null}
 
-      {!targetServiceResolution.rpcReady ? (
+      {scopeBlock !== null ? null : !rpcReady ? (
         <PluginLoadingState label={intl.formatMessage({ id: "common.connecting" })} />
       ) : loading && totalCount === 0 ? (
         <PluginLoadingState label={intl.formatMessage({ id: "common.loading" })} />
@@ -561,8 +597,7 @@ export function HooksSection({ workspacePath, workspaceIdentity }: HooksSectionP
             )
           }
           onEdit={(target) => {
-            setEditingHook(target);
-            setViewMode("form");
+            hookForm.openForm({ hook: target });
           }}
           onImport={handleImport}
           onTrust={trustHook}

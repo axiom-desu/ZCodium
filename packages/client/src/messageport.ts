@@ -17,6 +17,16 @@ export interface MessagePortServiceConnection {
   dispose: (reason?: Error) => void;
 }
 
+/** 只在桌面本机 base attachment 打开的附加服务面；远程/手机/Web 不声明。 */
+interface MessagePortServiceFeatureOptions {
+  /** 数据同步页：设备同步状态 + Provider Provisioning lane（只在本机 Host 注册）。 */
+  dataSyncServices?: boolean;
+  /** 扩展 host 投影：只在本机 base attachment 注册，手机/Web/远程不创建代理。 */
+  localExtensions?: boolean;
+  /** 受管 worktree / 远端项目入口 intent：只在本机 base attachment 注册。 */
+  localHostServices?: boolean;
+}
+
 /**
  * 创建一个带明确生命周期的 MessagePort service connection。
  *
@@ -25,7 +35,7 @@ export interface MessagePortServiceConnection {
  */
 export function createMessagePortServiceConnection(
   port: MessagePort,
-  options: RPCOptions = {},
+  options: RPCOptions & MessagePortServiceFeatureOptions = {},
 ): MessagePortServiceConnection {
   logMessagePortDebug("[messageport] creating protocol and client...");
   const protocol = new MessagePortProtocol(port);
@@ -35,7 +45,11 @@ export function createMessagePortServiceConnection(
   });
   logMessagePortDebug("[messageport] client created, waiting for Initialize...");
 
-  const services = new RemoteServiceAccess(client);
+  const services = new RemoteServiceAccess(client, {
+    dataSyncServices: options.dataSyncServices,
+    localExtensions: options.localExtensions,
+    localHostServices: options.localHostServices,
+  });
   let disposed = false;
   return {
     services,
@@ -58,7 +72,7 @@ export function createMessagePortServiceConnection(
  */
 export function connectViaMessagePort(
   port: MessagePort,
-  options: RPCOptions = {},
+  options: RPCOptions & MessagePortServiceFeatureOptions = {},
 ): IServiceAccessor {
   return createMessagePortServiceConnection(port, options).services;
 }

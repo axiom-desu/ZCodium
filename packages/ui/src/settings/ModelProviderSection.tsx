@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toZhOrEnLocale } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
 import { useModelProviders } from "@/hooks/useModelProviders.js";
@@ -134,7 +135,7 @@ export function ModelProviderSection({
     const navigationIntent = ++navigationIntentRef.current;
     setCreating(true);
     try {
-      const created = await createPersonalProvider({ ...input, locale });
+      const created = await createPersonalProvider({ ...input, locale: toZhOrEnLocale(locale) });
       // 新建结果已由 Hook 提交配置，但不能覆盖等待期间用户更新的导航意图。
       if (navigationIntentRef.current !== navigationIntent) return;
       setPendingCreatedProviderId(created.providerId);

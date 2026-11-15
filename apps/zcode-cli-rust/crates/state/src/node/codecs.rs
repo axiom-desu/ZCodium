@@ -3,6 +3,10 @@
 use serde_json::{Map, Value, json};
 
 pub const MODEL_SELECTION_ENTRY: &str = "runtime/model_selection";
+/// 3.18 F3：主会话 system 字节快照（冷恢复来源）。
+pub const PROMPT_SNAPSHOT_ENTRY: &str = "runtime/prompt_snapshot";
+/// 3.18 F12：会话能力标签（冷恢复来源）。
+pub const SESSION_FEATURES_ENTRY: &str = "runtime/session_features";
 
 /// Node `SESSION_TASK_TYPES`.
 pub const TASK_TYPES: [&str; 7] = [

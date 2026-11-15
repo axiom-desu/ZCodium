@@ -22,6 +22,7 @@ import {
   readEvents,
   readMessages,
   readSession,
+  releaseSessionsUnderDirectory,
   resumeSession,
   sendPrompt,
   setMode,
@@ -55,6 +56,7 @@ import {
   getPluginReferenceCatalog,
   resolveSuggestedPluginReference,
 } from "./plugin-reference-catalog.js";
+import { getPluginMentionItems } from "./plugin-mention-items.js";
 import { getSkillReferenceCatalog } from "./skill-reference-catalog.js";
 import {
   deleteSavedWorkflowOp,
@@ -150,6 +152,8 @@ export async function dispatchLegacyRequest(
       return await setMode(host.context, request.params);
     case zcodeProtocolMethods.sessionClose:
       return await closeSession(host.context, request.params);
+    case zcodeProtocolMethods.sessionReleaseUnderDirectory:
+      return await releaseSessionsUnderDirectory(host.context, request.params);
     case zcodeProtocolMethods.workspaceReadPresentation:
       return await readWorkspacePresentation(host.context, request.params);
     case zcodeProtocolMethods.workspaceHookTrustGrant: {
@@ -226,6 +230,8 @@ export async function dispatchLegacyRequest(
       return await getPluginReferenceCatalog(host.context, request.params, true);
     case zcodeProtocolMethods.pluginsReferenceCatalog:
       return await getPluginReferenceCatalog(host.context, request.params);
+    case zcodeProtocolMethods.pluginsMentionItems:
+      return await getPluginMentionItems(host.context, request.params);
     case zcodeProtocolMethods.pluginsListUiSurfaces:
       return await listPluginUiSurfaces(host.context, request.params);
     case zcodeProtocolMethods.skillsReferenceCatalog:
@@ -260,6 +266,10 @@ export async function dispatchLegacyRequest(
       return {
         protocol: { name: ZCODE_PROTOCOL_NAME, version: ZCODE_PROTOCOL_VERSION },
         independentPlanState: true,
+        // 本 CLI 实现 forkAssistant.targetCwd 与 session/releaseUnderDirectory。
+        worktreeCwd: true,
+        // 本 CLI 在模型边界渲染 <conversation_quote> 并把引用写进持久 intent。
+        conversationQuotes: true,
       };
     case zcodeProtocolMethods.pluginsMarketplaceAdd:
       return await withPluginOperationSignal(host.pluginOperationControllers, request, (signal) =>

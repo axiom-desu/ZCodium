@@ -50,6 +50,13 @@ export const SYNTHETIC_USER_MESSAGE_SOURCES = [
   // origin=real_user、kind=user_prompt，与其余「运行时注入的提醒」类来源不同档。
   "workflow_launch",
   "shared_context",
+  // 指令文件公告（上游 3.18.2）：运行时注入的模型可读隐藏提醒，正文与增量事实一起落库。
+  "context_prefix",
+  // 用户停止本轮后的中断标记（上游 3.18.2）：普通 user 文本，不是 system reminder。
+  "interrupt_marker",
+  // 环境公告（上游 3.18.2）：system 的 # Environment 被 prompt 快照冻结后，
+  // 目录/Desktop 等会话中途或跨 Host 恢复的变化只能靠这条隐藏提醒告知模型。
+  "environment_announcement",
 ] as const;
 export type SyntheticUserMessageSource = (typeof SYNTHETIC_USER_MESSAGE_SOURCES)[number];
 
@@ -338,6 +345,28 @@ export const SESSION_ENTRY_WORKSPACE_FILE_REWIND = "runtime/workspace_file_rewin
 /** 动态工作流工具面已在本会话激活（docs/dynamic-workflow/launch.md「On demand: activation」）。 */
 export const SESSION_ENTRY_DYNAMIC_WORKFLOW_ACTIVATION =
   "runtime/dynamic_workflow_activation" as const;
+/**
+ * 主会话 system 快照（上游 3.18.2 prompt-snapshot）：每个会话一行，覆盖写。
+ * 冷恢复与升级后按记录的 system 字节发送，prompt cache 与 thinking 签名不失效。
+ */
+export const SESSION_ENTRY_PROMPT_SNAPSHOT = "runtime/prompt_snapshot" as const;
+/**
+ * 已公告的指令文件（上游 3.18.2 instruction announcements）：每个会话一行，覆盖写。
+ * 存首次公告的完整正文（前缀按它冻结渲染）与已公告文件 hash 集合（增量比较用）。
+ */
+export const SESSION_ENTRY_INSTRUCTION_ANNOUNCEMENT =
+  "runtime/instruction_announcement" as const;
+/**
+ * 会话能力标签（上游 3.18.2 session-features）：每个会话一行，覆盖写。
+ * 只是冷恢复的捷径；缺失或读取失败时按持久化历史补回，标签只增不减。
+ */
+export const SESSION_ENTRY_SESSION_FEATURES = "runtime/session_features" as const;
+/**
+ * 已公告的环境快照（上游 3.18.2 environment announcement）：每个会话一行，覆盖写。
+ * 只保存「模型已知的环境」与是否已给过完整块，用来算下一次的增量公告。
+ */
+export const SESSION_ENTRY_ENVIRONMENT_ANNOUNCEMENT =
+  "runtime/environment_announcement" as const;
 
 export const SESSION_ENTRY_TYPES = [
   SESSION_ENTRY_TARGET_COMPLETION_VERIFICATION,
@@ -348,6 +377,10 @@ export const SESSION_ENTRY_TYPES = [
   SESSION_ENTRY_WORKSPACE_CHECKPOINT,
   SESSION_ENTRY_WORKSPACE_FILE_REWIND,
   SESSION_ENTRY_DYNAMIC_WORKFLOW_ACTIVATION,
+  SESSION_ENTRY_PROMPT_SNAPSHOT,
+  SESSION_ENTRY_INSTRUCTION_ANNOUNCEMENT,
+  SESSION_ENTRY_SESSION_FEATURES,
+  SESSION_ENTRY_ENVIRONMENT_ANNOUNCEMENT,
 ] as const;
 
 export type SessionEntryType = (typeof SESSION_ENTRY_TYPES)[number];
