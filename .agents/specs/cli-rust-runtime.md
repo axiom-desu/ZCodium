@@ -113,7 +113,7 @@ schema ← protocol / domain → core-api → core
 - `domain` 纯领域模型，不依赖 transport、tokio / reqwest / rusqlite / 文件系统；不依赖 `protocol`。协议 DTO 由真正需要它的消费者直接依赖公开的 `protocol` crate。
 - `tools` → `net` 是 WebFetch/Search 共用网络策略的明确 adapter 依赖；网络策略由 `net` 所有，tools 不另建策略实现。
 - `core` 不依赖 state / model / tools。
-- application 代码不得 import adapter 或做文件/网络/进程 IO；`schema` 同样加入无 IO application 检查。
+- application 代码不得 import adapter 或做文件/网络/进程 IO；`schema` 同样加入无 IO application 检查。测试代码同属 application crate，禁止用 `use ... as` 别名绕过 `std::process`/`std::fs` 扫描；确实需要进程/主机事实时，经既有 Host port 或新增窄 port 注入，否则不引入该依赖（如 `queries.rs` 的能力测试只用一个不落盘的不透明 workspace 标识）。
 - `src/main.rs` 是唯一组装具体 adapter 的地方。
 - workspace lint：`unsafe_code = "deny"`；源码文件不超过 400 行。约束覆盖 `crates/**` 与 workspace 根下 `src/**`、`tests/**`、`examples/**` 的全部 Rust 源码（按 checker 的行数口径，含末尾换行产生的空行）；根级 composition 代码仍可组合具体 adapter，不受 application 禁止 IO 检查。拆分仅为源码组织，不改变 runtime 行为。
 
@@ -142,7 +142,7 @@ M1 正确规则与验收：
 - AckStatus 包含 `Failed`。Command 与 CommandAck 必须通过来自 TS `parseCommandEnvelope` / `commandAckSchema` 的数据验证 Rust 解码与往返，而非只用 Rust 自己构造的数据自测。
 - Node→Rust 差分覆盖真实 TS oracle：nil/max/普通 UUID、1/1.0 原始 JSON 字面形式、非法 UUID/花括号/unicode、`sendText` strict、两个 `superRefine`、CAS、ACK failed 及关键可选字段保留；验证组合必须实际执行 Rust `validate` 后再解码为 Command。oracle 与 fixture 的 `--check` 必须重新调用 TS 契约并比较真实结果，不得依靠静默生成的期望值。
 - 保持 UTF-16 字符串长度与 strict/strip 语义；新增与修改 Rust 文件继续遵守 400 行上限及 `unsafe_code = "deny"`。
-- 当前 transformation inventory：63 paths、70 leaf branches × 5 cases = 350 leaf cases；另有 29 整 Command cases 和 1 ACK case。29 Command/ACK cases 通过 `parse_command` + serde 验证完整 outputs；350 leaf cases 验证 publicNode normalization projection，不等同完整 DTO oracle。此受控用例集已验收，但不等价于 exhaustive DTO coverage 或产品 parity。
+- 当前 transformation inventory：65 paths、72 leaf branches × 5 cases = 360 leaf cases；另有 29 整 Command cases 和 1 ACK case。29 Command/ACK cases 通过 `parse_command` + serde 验证完整 outputs；360 leaf cases 验证 publicNode normalization projection，不等同完整 DTO oracle。此受控用例集已验收，但不等价于 exhaustive DTO coverage 或产品 parity。
 
 此前关于“上游缺 preserve_order”及“大整数 `as_f64` 必然为 NaN”的结论不正确，撤回；本 M1 不以这些结论作为设计依据。
 
@@ -164,11 +164,11 @@ M1 正确规则与验收：
 ### 契约材料和生成器盘点
 
 - 本地 M1 命令 schema/oracle 的实际来源是 `packages/shared/src/zcode-protocol-v4/command.ts`（payload schemas、command/ACK schema 和 parser）；当前权威 driver 为 `scripts/generate-zcode-cli-rust-protocol-schema.mjs`。不得用上游 `crates/protocol`、`schema/v4-command.json` 或 generator 覆盖本地 M1 crate、oracle 与 fixture。
-- 上游 `crates/domain/schema/config.json` 的 generator `scripts/generate-zcode-cli-rust-config-schema.mjs` 输入为上游 `apps/zcode-cli/packages/adapters/src/config/schema.ts`。本仓库当前可见候选是 `packages/shared/src/config-schema.ts`；语义映射尚未审核，故 schema/driver 是待审材料，不声称生成通过。
-- 上游 `scripts/zcode-cli-rust-node-projection-schemas.mjs` 输入为 `packages/shared/src/zcode-protocol-v4/index.ts` 和 `apps/zcode-cli/packages/contracts/src/tools/tool-result-metadata.ts`；前者存在于本仓，后者路径也存在，但导出/语义需审。此 schema 不属于 M1 command schema。
-- 上游 `scripts/generate-zcode-cli-rust-tool-schemas.mjs` 读多个 `apps/zcode-cli/packages/core/src/tool/handlers/*`、`packages/contracts/src/tools/*` 的工具定义与 subagent prompt。脚本直接依赖路径在本 checkout 存在，但需逐个确认 named exports 与本 fork 产品边界后才能运行。
-- 需要后续盘点/移植的 fixture drivers：`generate-zcode-cli-rust-fixtures.mjs`、`zcode-cli-rust-{egress,permission,bash,legacy-params,web,edit,plan-mode,hooks,workspace-hook,plugin,node-db,node-cold,node-projection-schemas,node-session,bash-parse}-fixtures.mjs` 以及 DB message/ledger ops。总驱动包含上游旧 CLI 的 adapters/repositories、未同构导出和多项脚本互相依赖；按实际 import 可用性逐个适配，不能整批原样复制。当前扫描显示 fixtures 汇总 driver 的 15 个 import 目标、node-db fixture driver 的两个 message/ledger ops、node-session driver 的 cold fixture/scenario 目标在本仓对应路径缺失，均为阻碍；真实库检查 driver 不运行。
-- 当前 M1 TS oracle、protocol generator 与 M1 fixtures/test driver保持原样；缺失 export/module 不补回、不恢复已删除 TS 模块。
+- `crates/domain/schema/config.json` 的 generator `scripts/generate-zcode-cli-rust-config-schema.mjs` 以本仓 `apps/zcode-cli/packages/adapters/src/config/schema.ts` 的 `ZCodeConfigFileSchema` 为唯一真源；当前生成与 `--check` 均通过。`hooks.*[].onError` 是 Rust 已实现的逐 Hook 失败策略（用户/插件与工作区声明摘要同词），不是能力宣称。
+- `scripts/zcode-cli-rust-node-projection-schemas.mjs`（`crates/domain/schema/node-projection.json`、`system-reminders.json`）以 `packages/shared/src/zcode-protocol-v4/index.ts` 与 `apps/zcode-cli/packages/contracts/src/tools/tool-result-metadata.ts` 为真源；属于冷读投影，`--check` 通过。
+- `scripts/generate-zcode-cli-rust-tool-schemas.mjs` 读真实 CLI handler/contract exports，产出 `tool_schemas.json`、`tool_search_{descriptions,metadata}.json` 等；`--check` 通过。`tool_search_metadata.json` 按名字投影 TS `builtInTools` 元数据，**不是** Rust 的工具注册表：`domain/tool_search/exposure.rs` 只对真实传入的 `definitions` 查元数据，`crates/tools/src/tool_definitions.rs` 才是注册目录。未被 Rust 实现的 TS native 工具（如 `SearchPlugins`、`SuggestPluginInstall`、app-control 会话工具）只留在元数据表里，不进入候选/搜索/执行面（回归：`crates/tools/src/tool_exposure_tests.rs`）。
+- fixture drivers 已按本仓 import 适配并可运行：`generate-zcode-cli-rust-domain-fixtures.mjs`（config/workspace-hooks/permission + `tool-permissions.json`）、`generate-zcode-cli-rust-state-fixtures.mjs`（真实 SQLite 重放 `node-{db,cold,sessions}.json`）。两者 `--check` 通过；不整批复制上游旧 CLI 驱动，也不恢复已删除 TS 模块。`zcode-cli-rust-node-projection-schemas.mjs` 不属于 M1 command schema。
+- 生成物只由公开脚本写入，JSON 不手改；字段收紧/放宽必须先改本 spec 与 updater，不得为通过门禁放宽未来字段。
 
 每个里程碑都必须通过：
 
