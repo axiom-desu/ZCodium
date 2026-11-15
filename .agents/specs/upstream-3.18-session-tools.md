@@ -42,6 +42,9 @@
 - wait 语义：`accepted/queued/running/idle` 不算完成；`completed/interrupted/failed/needs_attention`
   满足条件；`timeoutMs=0` 收齐全量快照后再判断；self wait 与重复 operation 在访问端口前拒绝；
   epoch 变化、revision 不递增、身份变化一律 `invalidated`（`unknown`）。
+- wait 不得克隆可信上下文：App control 等的连接事实是 WeakMap 身份绑定，`{...ctx}` 会丢绑定
+  使 waitSessions 失败；取消通过显式 signal 传给 observation port，授权仍用原 ctx。
+  App 观察的 initial 必须是 owner 真实快照，否则合成 unknown 会让 wait 立即结束。
 - 工具名用 PascalCase（`ListSessions`…），权限键 `session_control.<method>`；结果 budget 走 artifact，
   超时/取消时错误文案携带 `requestId`，模型只能以 `retryOf` 对账。
 

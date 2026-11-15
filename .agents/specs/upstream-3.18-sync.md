@@ -64,6 +64,26 @@ root锁文件、统一生成资产、最终格式化与整合提交仍由主代�
 
 每组只在实际完成后标记实现；未实现/未接线/仅TS/未验证分别记录，不能用“代码已搬完”笼统覆盖。
 
+## f6515b7f 后续搬迁批次
+
+沿用同一分支与Draft #93，不创建第二条实现线。先补：
+
+- project-memory semantic recall的真实请求前预取/注入/重置；Dream按上游代码明确**不自动触发**，
+  只移植可等待handler与隔离/锁规则，不能擅自新增后台自动扫描或宣称其生产已启用。
+- plugin secrets的敏感键权威已存在于PluginUserConfigOption.sensitive；由原file-config owner
+  分流私有值，公开UI/导出脱敏，runtime/仅本插件的受信任读取使用同一resolver，不造配置缓存。
+- ReadTopicResource必须绑定Host已接纳话题快照与会话/输入身份，不允许模型传任意URL/路径下载；
+  沿现有bot ingress接纳链建立资源归档，不恢复已删除的外部bot登录或官方云依赖。
+- input prediction只使用当前配置模型与原runtime的只读sidecar，草稿仍归composer；取消/换代/编辑/提交
+  立即失效，不进入CommandInbox、业务续期或watchdog回收，不隐式另选provider。
+- Rust native优先接现有Host App-control/插件发现反向RPC，身份来自可信init/run上下文，
+  无Host/未声明能力/子agent均隐藏；不得把元数据键或空port算成工具实现。
+- worktree脏状态迁移与fork菜单、mobile pendingInteractions派生；browser设计draft undo/redo、
+  多选/CSS变量/原有site-permission owner的真实UI；扩展优先复用已存在的App-control facade扩会话能力，
+  保持逐插件身份/授权/撤销/旧代际保护，不冒充已兼容完整上游SDK。
+
+各片仍需自己的spec与负向验收；新public入口须注册policy。共享装配/锁文件/生成资产由主代理整合。
+
 ## 验收
 
 - 新行为先添加临时HOME/XDG/data/workspace/DB、loopback测试，不读真实配置/日志/凭据、不连真实远端。

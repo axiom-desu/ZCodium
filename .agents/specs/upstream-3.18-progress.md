@@ -46,7 +46,7 @@ Rust参考为 `MBearo/ZCode-rs@a7a980de`，不是产品上游。**本检查点�
 - TS冷恢复合法usage空assistant锚点回归：修生产hydrator，不改node-cold oracle来迁就错误。
 - contracts公开面新增三项按真实API更新枚举fixture，保留完整相等断言，没有删除测试或放宽基线。
 
-## 本检查点实测（Node24.14.0 / pnpm10.33.2）
+## 首个检查点f6515b7f的历史实测（Node24.14.0 / pnpm10.33.2）
 
 - `pnpm typecheck`：覆盖Desktop main/preload/renderer/host/scheduler/app-navigation、CLI核心依赖、SDK与session-control。
 - `pnpm lint`：0 warnings / 0 errors；`verify:pre-push`的lint/format/architecture零新增。
@@ -67,17 +67,52 @@ Rust参考为 `MBearo/ZCode-rs@a7a980de`，不是产品上游。**本检查点�
 - 0025迁移SQL按上游原字节/已锁checksum镜像，design vendored内容也保留原字节；两者自带的
   尾随空白不为git diff检查擅改。其余自有源码的staged whitespace检查通过，未放宽任何lint/架构棘轮。
 
+## f6515b7f之后的已验证增量
+
+- **Memory源码与生命周期**：搬完semantic selector/content/read-state与prefetch/consume/reset；
+  Dream锁/时序/失败恢复及await handler已搬。默认semantic recall关闭、Dream不自动触发，和官方一致，
+  不新增静默后台调度或宣称已自动启用。真实loopback模型与SQLite测试已跑。
+- **插件敏感配置**：既有manifest `sensitive`→单一file-config resolver→private原子写/跨进程锁；
+  legacy迁移、scope/层序、普通↔敏感转型、0600及软硬链处理、reset/uninstall、UI保留/清除已接。
+  实际D1导入/导出过滤legacy明文和private file。self user-options只有受信任port，尚未接RPC/SDK。
+- **话题资源**：原认证bot ingress的accepted快照→CLI tool→Host授权下载→受管文件已接，
+  目前Feishu/Lark。Desktop和server HTTP的replayable共享严格方法白名单，内部入站/下载不对Web开放。
+- **输入预测**：仅显式窄Web的原ConversationComposer/Lexical，cap精确true才请求；不新建composer/runtime，
+  不进CommandInbox/不续期，不持久化hint；显式采纳保留mention、精确空白与焦点。
+  edit/pending submit/stop/dispose取消到真实模型HTTP；late结果和缓存均有generation保护。
+  已撤回误接旧mobile入口的改动，旧mobile/relay仍暂停。
+- **扩展会话facade**：12个既有App意图、sessions.read/write声明及consent、五语言许可文案；
+  Gateway注入plugin/generation身份，跨插件幂等/撤销/迟到ACK负向验证。
+  真实Main child/SDK/loopback/临时SQLite→原AppControlService已验证，v1原三能力不改语义。
+- **Rust App模式12工具**：可信Host preferences授予、root/subagent门、真实registry与HostRequest；
+  真实native app-server子进程↔Node protocol client↔原AppControlService跑List/Read/Rename，
+  caller/旧连接/取消/unknown ACK有回归。不是standalone CLI八工具或Rust插件发现已完成。
+- **CI缺口**：查询确认f6515b7f远端Checks/oracle/remote/Windows失败；补root session-control冷构建前置，
+  从实际无dist状态重建oracle依赖及remote server均通过。修旧loopback ACK夹具、Electron44 ClipboardItem
+  测试夹具与Windows专属symlink测试编译；没有加timeout掩盖失败。
+  新native纵向并入services-safety，入口先构建当前Rust binary，CI先准备Rust；新consent/prediction smoke进CI。
+- **审核收口**：五个旧未用type继续不进公开barrel，真实跨文件结构保留唯一权威与完整shape/消费断言；
+  声明导出的TS4058用明确`ReturnType`收口，不恢复无消费者export或放宽strict。
+  两个topic模块policy根已覆盖真实reader/handler/磁盘归档，不只注册spec/空目录。
+
+本轮最终Node24.14.0 / pnpm10.33.2验证：typecheck、lint **0/0**、format、architecture、knip零新增；
+CLI六包 **688**（37/272/81/242/43/13）；services **116 Node + 207 Vitest**；
+Rust **1011 passed / 0 failed / 1 ignored**及fmt/clippy/boundaries/四项schema-fixture门禁通过。
+真实Composer预测、原手机layout/focus、扩展consent/child、敏感表单、真实native↔Node纵向均通过。
+首次宽/桌面fixture用过早的initScript误造入口，现从实际HTML设置profile，并加无runtime error断言；
+submit使用有效queue快照及真实生产submit回调，pending时立即撤销预测。未经验证的真机/平台结论仍不扩张。
+
 ## 剩余，不能宣称“代码全部搬完”
 
-1. **扩展完整上游面**：当前是三个只读能力(settings/projects/context)+状态槽位的最小闭环；
+1. **扩展完整上游面**：当前为v1三个只读能力、状态槽位及已授权12会话facade；
    上游完整视图、多槽位、能力集合/SDK兼容尚未逐项搬完。不能把private同名SDK当官方完整SDK。
 2. **浏览器设计完整面**：多选/CSS变量/方案分页/undo-redo/live reload等尚未齐；site-permission
    UI等上游增量仍需逐项对账。现有inspect/确认写回/page-element-PNG/PDF不代表全域完成。
 3. **Worktree体验**：父目录未提交改动的迁移、assistant fork菜单入口、mobile pendingInteractions等未齐。
    非Linux或无法证明终端cwd时保守拒删；Linux脱离PTY进程树的孤儿后台进程不可观察。
-4. **CLI尾项**：project-memory dream/recall、plugin-secrets、ReadTopicResource、input prediction等
-   还需在本仓现有owner/协议上真正实现；“没有旧消费者”不是排除理由。
-5. **Rust preview parity**：native session-control/插件发现、每ask WebSearch预算、workspace MCP真实授予、
+4. **CLI/资源尾项**：self-plugin user-options RPC/SDK消费者尚未接；topic资源其他provider/远端workspace
+   归档仍需逐项对账。Memory备用分支保持官方默认关闭，不将其误报为自动功能或未搬源码。
+5. **Rust preview parity**：standalone CLI八工具/插件发现、每ask WebSearch预算、workspace MCP真实授予、
    `forkAssistant.targetCwd`/releaseUnderDirectory、conversationQuotes仍未支持；能力false/严格拒绝，
    不假成功或用metadata宣称已注册。工作区Hook `onError`影响审核摘要，执行仍默认allow（TS同样）。
    元数据资产不注册工具，已有回归证明未注册名字不进模型候选/执行。

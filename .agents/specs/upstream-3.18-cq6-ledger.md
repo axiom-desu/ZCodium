@@ -5,39 +5,43 @@
 
 ## 1. project-memory dream / recall
 
-| 上游落点                                                                                         | 本仓现状                                                         | 判定       |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- | ---------- |
-| `core/src/memory/dream.ts`（`.consolidate-lock`、24h 间隔、10min 扫描节流、锁超时）              | 0 命中                                                           | **未实现** |
-| `core/src/memory/project-memory-retrieval-branch.ts`（`semantic-recall` 分支判定）               | 0 命中                                                           | **未实现** |
-| `core/src/memory/recall/{content,selector}.ts`（辅助模型 JSON Schema 选内存）                    | 只有 `recall/{manifest,types}.ts`，仅供 `extraction.ts` 渲染清单 | **未实现** |
-| `core/src/runtime/helpers/project-memory-{dream,recall}.ts`（请求前预取 / compact、resume 重置） | 0 命中                                                           | **未实现** |
+| 上游落点                                           | 本仓现状                                                             | 判定                  |
+| -------------------------------------------------- | -------------------------------------------------------------------- | --------------------- |
+| `core/src/memory/dream.ts`                         | 已搬锁、24h/10min时序、失败恢复及可等待handler                       | 已搬，**不自动触发**  |
+| `project-memory-retrieval-branch.ts`               | 已搬；默认`false`与官方一致                                          | 已对齐默认行为        |
+| `recall/{content,selector}.ts`                     | 同一模型JSON能力门禁、manifest选择、受限读取、read-state一致性       | 已搬并定向验证        |
+| `runtime/helpers/project-memory-{dream,recall}.ts` | 请求前prefetch、tool-result批次后consume、compact/resume/cleanup重置 | 已接原runtime生命周期 |
 
-依据：本仓的 memory owner 是 `runtime.memoryRoot` + `memory/extraction.ts` 抽取循环 + index 注入。
-dream 需要一个“会话静默后由辅助模型合并 memory 文件”的后台调度 owner；recall 需要
-（a）辅助模型选择器（严格 JSON Schema + 模型能力门禁 + 每轮一次预取生命周期）、（b）把选中的 memory
-文件按 read-file-state 注入附件、（c）compact/resume 时重置。三者都要新增跨轮后台状态，
-与 CQ6 的 quotes 主题无交集，需独立 spec + 真实 loopback 模型回归，不能在本片用 helper + 空调用糊过去。
+唯一owner仍是原runtime memory状态。真实loopback模型/临时SQLite回归见
+`.agents/specs/upstream-3.18-project-memory-recall-dream.md`。官方并未开启semantic recall或自动Dream，
+本仓也不擅自开启；不能把已搬的备用分支描述成用户默认已启用的后台功能。
 
 ## 2. plugin secrets 配置 adapter
 
-| 上游落点                                                                                                              | 本仓现状                                 | 判定       |
-| --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ---------- |
-| `adapters/src/config/plugin-secrets.adapter.ts`（`plugin-secrets.json`、user/workspace 两层、私有文件权限、损坏备份） | `pluginSecret*` 0 命中                   | **未实现** |
-| bootstrap 侧“哪些插件选项敏感、读取时如何叠加”                                                                        | 插件配置走既有 config 分层，无敏感键清单 | **未实现** |
+| 上游落点                                                                                                              | 本仓现状                                                            | 判定             |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------- |
+| `adapters/src/config/plugin-secrets.adapter.ts`（`plugin-secrets.json`、user/workspace 两层、私有文件权限、损坏备份） | 已移植到 `adapters/src/config/plugin-secrets.adapter.ts`            | **已实现（S4）** |
+| bootstrap侧“敏感选项的私有值分流与读取叠加”                                                                           | `bootstrap/src/plugin-secrets.ts` 接既有 file-config 层序与写入路径 | **已实现（S4）** |
 
-依据：本仓插件配置没有“敏感选项”清单 owner；直接照搬会得到第二个配置缓存，并把明文密钥写进新的
-文件格式。正确做法是先定“敏感键声明属于插件 manifest 还是 Host 配置 owner”，再接入既有
-`file-config` 写入路径（原子写 + 权限），本片不新建第二配置存储。
+更正：敏感键声明的权威已存在于`contracts/src/plugins/index.ts`的`sensitive`字段，
+不能以“无敏感键owner”为由排除。现已沿原`file-config`配置层序与写入路径接私有文件adapter，
+保持单一resolver，无独立配置缓存；公开UI/导出脱敏，runtime/受信任本插件读取保留实际值。
+私有文件是敏感字段的唯一持久owner，不与公开config持久化同一字段；迁移应先私有写入再移除旧明文。
+
+实现与验收见 `.agents/specs/upstream-3.18-plugin-secrets.md`：`sensitive` 键由原 `configure/reset/uninstall`
+分流到私有文件，读取走单一 `applyPluginSecrets` 叠加（无独立缓存），UI/导出脱敏。仅本插件user视图的受信任读port已有身份校验，但**未注册RPC/接SDK生产消费者**，
+不能把它算作已可用的插件设置API；实际runtime配置插值已走同一resolver。
 
 ## 3. 本地 ReadTopicResource
 
-| 上游落点                                                                                | 本仓现状                                                                                                       | 判定       |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------- |
-| `core/src/tool/topic-resource/{contract,reader}.ts` + `handlers/read-topic-resource.ts` | 0 命中（无 tool、无 reader）                                                                                   | **未实现** |
-| 依赖：会话已接纳话题快照 + topic history 文件 + Host 侧 bot 资源下载 port               | `packages/services/src/bots` 只有 astrbot/feishu 通道与投递，没有 topic history 归档，也没有 topicResourcePort | **未实现** |
+| 上游落点                                                     | 本仓现状                                                | 判定                  |
+| ------------------------------------------------------------ | ------------------------------------------------------- | --------------------- |
+| `core/src/tool/topic-resource/{contract,reader}.ts`及handler | 已注册真实tool，仅接受当前会话已接纳input/message/index | 已接线                |
+| Host已接纳快照/资源下载port                                  | 原bot ingress→admission→archive→CLI反向RPC→受管文件     | Feishu/Lark纵向已验证 |
 
-依据：该工具只读“当前会话已接纳话题快照”里的资源，安全性完全来自 topic history 归档的接纳边界。
-本仓没有这个归档 owner，先建工具会得到一条绕过接纳边界的下载通道，因此保持留账。
+Desktop attachment与server HTTP replayable共用Bots方法白名单，Host-only资源下载与入站回调默认拒绝；
+下载前后复核input、identity、bot授权与generation。见`.agents/specs/upstream-3.18-t5-topic-resource.md`。
+其他provider与远端workspace归档仍未齐，不把单provider纵向写成所有Bot资源能力完成。
 
 ## 4. Desktop / date / Git 段
 
