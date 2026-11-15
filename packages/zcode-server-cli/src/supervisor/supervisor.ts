@@ -3,6 +3,7 @@
 import { type ChildProcess } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { createServiceLogger } from "@zcode/services/node";
+import type { SourceServerRunningTask } from "@zcode/shared";
 import {
   coreMessageSchema,
   SERVER_CLI_PROTOCOL_VERSION,
@@ -59,6 +60,7 @@ export class Supervisor {
   private port: number | null = null;
   private startedAt: number | null = null;
   private runningTaskCount = 0;
+  private runningTasks: SourceServerRunningTask[] | undefined;
   private lastExitReason: string | null = null;
   private readonly persistStatusSnapshot: () => Promise<void>;
   private lifecycleOperation:
@@ -438,6 +440,7 @@ export class Supervisor {
       });
     } else if (message.type === "heartbeat" || message.type === "task-activity") {
       this.runningTaskCount = message.runningTaskCount;
+      this.runningTasks = message.runningTasks;
       log.debug("core activity snapshot", {
         type: message.type,
         runningTaskCount: message.runningTaskCount,
@@ -463,6 +466,7 @@ export class Supervisor {
     this.port = null;
     this.startedAt = null;
     this.runningTaskCount = 0;
+    this.runningTasks = undefined;
   }
 
   private async handleControl(request: ControlRequest): Promise<unknown> {
@@ -471,6 +475,8 @@ export class Supervisor {
         return { protocolVersion: SERVER_CLI_PROTOCOL_VERSION };
       case "status":
         return this.status();
+      case "running-tasks":
+        return this.runningTasks ?? null;
       case "stop":
         this.startAcknowledgedLifecycleOperation("stop", () =>
           this.stopInternal("control request"),

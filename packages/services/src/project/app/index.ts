@@ -3,12 +3,18 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { mkdir, stat } from "node:fs/promises";
 import { isAbsolute, join, normalize } from "node:path";
-import type { ProjectRepositoryContract } from "#src/project-storage/contract.js";
+import type {
+  ProjectDataRepositoryContract,
+  ProjectRepositoryContract,
+} from "#src/project-storage/contract.js";
 import type {
   IProjectService,
   ProjectDirectories,
   VirtualProject,
 } from "#src/project/domain/contract.js";
+import type { ProjectDataPort } from "#src/project/domain/data-contract.js";
+import { createProjectDataCommands } from "#src/project/app/project-data.js";
+import { restoreProjectWith } from "#src/project/app/restore-project.js";
 
 interface ProjectDirectoryPort {
   home(): Promise<string>;
@@ -101,6 +107,11 @@ export function createProjectService(options: {
   directories?: ProjectDirectoryPort;
   /** 只解析现有连接；连接缺失拒绝，不创建替代 Host。 */
   resolveHost?: (hostId: string) => Promise<IProjectService>;
+  /**
+   * 彻底删除数据的副作用端口（node.ts 装配：CLI 会话数据 + Host 文件检查点）。
+   * 缺省时两条数据命令报 `project.data-unavailable`，不伪造 0 字节成功。
+   */
+  data?: { port: ProjectDataPort; repository(): Promise<ProjectDataRepositoryContract> };
   afterChange?: () => Promise<void>;
 }): IProjectService {
   const route = async (hostId?: string) => {
@@ -112,6 +123,13 @@ export function createProjectService(options: {
   const changed = async () => {
     await options.afterChange?.();
   };
+  // 数据命令与项目命令同一 service 实例：唯一写仓储不变，副作用经注入端口。
+  const dataCommands = createProjectDataCommands({
+    repository: options.repository,
+    ...(options.ownerHostId ? { ownerHostId: options.ownerHostId } : {}),
+    ...(options.data ? { data: options.data } : {}),
+    changed,
+  });
   const service: IProjectService = {
     async readDirectory(params = {}) {
       const input = z
@@ -195,6 +213,19 @@ export function createProjectService(options: {
       (await options.repository()).deleteProject(id);
       await changed();
     },
+    async restoreProject(id, hostId) {
+      const remote = await route(hostId);
+      if (remote) return remote.restoreProject(id);
+      const restored = await restoreProjectWith(
+        await options.repository(),
+        options.ownerHostId ?? "local",
+        id,
+      );
+      await changed();
+      return restored;
+    },
+    measureProjectData: (ids, hostId) => dataCommands.measureProjectData(ids, hostId),
+    deleteProjectData: (id, hostId) => dataCommands.deleteProjectData(id, hostId),
     async moveTask(input) {
       const remote = await route(input.hostId);
       if (remote)
@@ -334,6 +365,9 @@ export function bindRemoteProjectIdentities(
     readDirectory: (params) => service.readDirectory(params),
     saveProject: (input) => service.saveProject(input),
     deleteProject: (id, hostId) => service.deleteProject(id, hostId),
+    restoreProject: (id, hostId) => service.restoreProject(id, hostId),
+    measureProjectData: (ids, hostId) => service.measureProjectData(ids, hostId),
+    deleteProjectData: (id, hostId) => service.deleteProjectData(id, hostId),
     moveTask: (input) => service.moveTask(input),
     reorderProjects: (ids, hostId) => service.reorderProjects(ids, hostId),
     moveTaskGroupNode: (input, hostId) => service.moveTaskGroupNode(input, hostId),

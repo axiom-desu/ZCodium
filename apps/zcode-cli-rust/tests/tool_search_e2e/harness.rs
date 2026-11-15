@@ -88,6 +88,7 @@ impl Harness {
                 home,
                 false,
                 vec![].into(),
+                None,
             )),
             store: Arc::new(store),
             model: Some(Arc::new(config)),
@@ -181,6 +182,71 @@ impl Harness {
             json!({"sessionId": session, "content": text}),
         )
         .await
+    }
+
+    /// `sendText` 信封：Host 准入的 automationId 与 inputId 必须原样进入本轮选项。
+    #[allow(dead_code)] // 共享 harness：automation_pause_e2e 使用
+    pub async fn send_automation(
+        &mut self,
+        id: u64,
+        session: &str,
+        text: &str,
+        automation_id: Option<&str>,
+        input_id: Option<&str>,
+    ) -> Value {
+        let mut params = json!({"sessionId": session, "content": text});
+        if let Some(automation) = automation_id {
+            params["automationId"] = automation.into();
+        }
+        if let Some(input) = input_id {
+            params["inputId"] = input.into();
+        }
+        self.request(id, "session/send", params).await
+    }
+
+    /// 等待工具发给 Host 的请求帧（`{id, method, params}`），并排空此前的输出。
+    #[allow(dead_code)] // 共享 harness：automation_pause_e2e 使用
+    pub async fn wait_host_request(&mut self, method: &str) -> Value {
+        for _ in 0..500 {
+            while let Ok(batch) = self.output.try_recv() {
+                self.frames.lock().unwrap().extend(batch.iter().cloned());
+            }
+            {
+                let frames = self.frames.lock().unwrap();
+                if let Some(frame) = frames
+                    .iter()
+                    .find(|frame| frame["method"] == method && frame["id"].is_string())
+                {
+                    return frame.clone();
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        panic!("host request not observed: {method}");
+    }
+
+    /// Host 的回执（成功 result 或错误投影后的空结果）。
+    #[allow(dead_code)] // 共享 harness：automation_pause_e2e 使用
+    pub async fn host_reply(&mut self, id: &str, result: Value) {
+        self.input
+            .send(Input::Response {
+                id: id.into(),
+                result,
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 已收到的 Host 请求帧数量（用于断言“没有发请求”）。
+    #[allow(dead_code)] // 共享 harness：automation_pause_e2e 使用
+    pub fn host_requests(&self, method: &str) -> Vec<Value> {
+        self.frames
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|frame| frame["method"] == method && frame["id"].is_string())
+            .cloned()
+            .collect()
     }
 
     pub async fn compact(&mut self, id: u64, session: &str) -> Value {

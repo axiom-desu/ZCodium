@@ -1,10 +1,13 @@
 import { z } from "zod";
+import { sourceServerRunningTasksSchema } from "@zcode/shared";
 
 export const SERVER_CLI_PROTOCOL_VERSION = 1;
 export const SERVER_RUNTIME_NODE_VERSION = "22.16.0";
 export const CRASH_WINDOW_MS = 5 * 60_000;
 export const CRASH_BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 16_000] as const;
 export const MAX_CONTROL_FRAME_BYTES = 64 * 1024;
+// stop 等待方需要覆盖宽限 + 强杀等待 + control socket 关闭，另留状态落盘和锁释放余量。
+export const SERVER_STOP_WAIT_TIMEOUT_MS = 20_000;
 
 export const lifecycleStateSchema = z.enum([
   "starting",
@@ -85,6 +88,7 @@ const requestBase = z.object({ id: z.string().trim().min(1).max(128) });
 export const controlRequestSchema = z.discriminatedUnion("command", [
   requestBase.extend({ command: z.literal("ping") }),
   requestBase.extend({ command: z.literal("status") }),
+  requestBase.extend({ command: z.literal("running-tasks") }),
   requestBase.extend({ command: z.literal("stop") }),
   requestBase.extend({ command: z.literal("restart") }),
   requestBase.extend({ command: z.literal("prepare-update") }),
@@ -122,10 +126,12 @@ export const coreMessageSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("heartbeat"),
     at: z.number().int().nonnegative(),
+    runningTasks: sourceServerRunningTasksSchema.optional(),
     runningTaskCount: z.number().int().nonnegative(),
   }),
   z.object({
     type: z.literal("task-activity"),
+    runningTasks: sourceServerRunningTasksSchema.optional(),
     runningTaskCount: z.number().int().nonnegative(),
   }),
   z.object({ type: z.literal("shutdown-ack") }),

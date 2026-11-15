@@ -29,12 +29,18 @@ import type {
   BrowserViewRestoredTabShell,
   BrowserViewRestoreTabsRequest,
   BrowserViewViewportChangedPayload,
+  CaptureBrowserGuestPageRequest,
+  CaptureBrowserGuestPageResult,
+  PrintBrowserGuestPageRequest,
+  PrintBrowserGuestPageResult,
   ConnectRemoteRequest,
   DesktopCommandId,
   DesktopTitleBarTheme,
   DockerContainerInfo,
   EmbeddedBrowserOpenUrlRequest,
   EditorInfo,
+  FileApplicationInfo,
+  FileApplicationTarget,
   CreateTempTextAttachmentRequest,
   CreateTempTextAttachmentResult,
   SaveFileRequest,
@@ -76,6 +82,8 @@ export const ServiceChannels = {
   /** Git checkpoint 服务 */
   GitCheckpoint: "git-checkpoint",
   Setting: "setting",
+  /** 扩展宿主能力/授权/槽位投影（仅桌面本地窗口 Host 注册，手机/Web 默认拒绝）。 */
+  Extensions: "extensions",
   /** 凭据管理（从 main IPC 迁移到 host RPC） */
   Credential: "credential",
   /** Computer Use Helper macOS 权限服务 */
@@ -92,6 +100,10 @@ export const ServiceChannels = {
   ZCodeSession: "zcode-session",
   /** Host 项目组织态唯一写者（项目/roots/任务归属/自动归档） */
   Project: "project",
+  /** 受管 Git worktree 生命周期（仅本地桌面 Host） */
+  ManagedWorktrees: "managed-worktrees",
+  /** 本机远端项目入口 intent（连接事实仍在 registry） */
+  RemoteProjects: "remote-projects",
   /** 会话分享发布、预览与 continuation API 编排 */
   ConversationShare: "conversation-share",
   /** 文件系统监视服务 */
@@ -103,6 +115,8 @@ export const ServiceChannels = {
   ModelSelection: "model-selection",
   /** 远端 Environment 内部 Provider Provisioning target */
   ProviderProvisioningTarget: "provider-provisioning-target",
+  /** 本机 Host：数据同步页读取 / 重试 Main 协调器的 Provisioning lane */
+  ProviderProvisioningStatus: "provider-provisioning-status",
   /** 本地 usage 统计服务 */
   UsageStats: "usage-stats",
   /** Coding Plan 订阅购买服务 */
@@ -118,6 +132,10 @@ export const ServiceChannels = {
   McpSync: "mcp-sync",
   /** SSH 远程 plugin 同步服务 */
   PluginSync: "plugin-sync",
+  /** 子智能体 / 命令 / 钩子共用的用户配置同步服务（数据同步） */
+  UserConfigSync: "user-config-sync",
+  /** 本机 Host：按设备记录上次数据同步结果（只在桌面本机 Host 注册） */
+  DeviceSyncState: "device-sync-state",
   /** 插件管理服务 */
   Plugins: "plugins",
   /** 设置页插件管理服务（UI 平台能力面收敛，不再直触 zcodeAgentService） */
@@ -161,6 +179,11 @@ export const PlatformChannels = {
   PluginSandboxCopyImage: "zcode:plugin-sandbox-copy-image",
   /** renderer → main：一次性消费插件 UI 沙箱 guest 的用户手势 token */
   PluginSandboxConsumeUserGesture: "zcode:plugin-sandbox-consume-user-gesture",
+  /**
+   * renderer → main：声明沙箱是否正在执行（后台保留页执行时解除 Chromium 后台节流）。
+   * 只影响已登记且 owner 匹配的 guest；不改变可见性、焦点或权限。
+   */
+  PluginSandboxExecutionActive: "zcode:plugin-sandbox-execution-active",
   /** renderer → main：查询自身 webContents id，作为沙箱登记的 owner */
   PluginSandboxOwnerWebContentsId: "zcode:plugin-sandbox-owner-web-contents-id",
   /** 打开系统目录选择框 */
@@ -411,6 +434,14 @@ export const PlatformChannels = {
   QuitAndInstallUpdate: "zcode:quit-and-install-update",
   /** Renderer → Main：获取系统中已安装的编辑器/终端列表（含图标） */
   GetInstalledEditors: "zcode:get-installed-editors",
+  /** Renderer → Main：查询本机文件的系统关联应用 */
+  GetFileApplications: "zcode:get-file-applications",
+  /** Renderer → Main：用系统关联应用打开本机文件 */
+  OpenFileWithApplication: "zcode:open-file-with-application",
+  /** Renderer → Main：在 main 进程截取浏览器 guest 可见视口（页面导出/元素截图） */
+  CaptureBrowserGuestPage: "zcode:capture-browser-guest-page",
+  /** Renderer → Main：在 main 进程把浏览器 guest 页面打印成 PDF（页面导出） */
+  PrintBrowserGuestPage: "zcode:print-browser-guest-page",
   /** Renderer → Main：按 bundle id 获取系统应用图标 */
   GetApplicationIcon: "zcode:get-application-icon",
   /** Renderer → Main：用指定编辑器打开路径 */
@@ -527,6 +558,8 @@ export const HostMessageTypes = {
   CancelRemoteWorkspaceConnect: "cancel-remote-workspace-connect",
   /** main → window Host：为 logical session 绑定 canonical workspace 身份 */
   BindRemoteWorkspaceContext: "bind-remote-workspace-context",
+  /** main → window Host：取消尚未完成的 workspace bind（只取消该 request，不 dispose session） */
+  CancelRemoteWorkspaceBind: "cancel-remote-workspace-bind",
   /** main → window Host：释放一个远程 logical session */
   DisposeRemoteWorkspaceSession: "dispose-remote-workspace-session",
   /** main → host：复用现有服务，对新的 RPC MessagePort 暴露服务 */
@@ -565,13 +598,20 @@ export const HostMessageTypes = {
   LocalMediaPreviewPathAuthorizeResult: "local-media-preview-path-authorize-result",
   /** main → host：插件 UI 沙箱登记结果（PluginSandboxRegisterResultPayload） */
   PluginSandboxRegisterResult: "plugin-sandbox-register-result",
+  /** main → host：扩展进程启动/停止结果（ExtensionHostStartResultPayload / Stop） */
+  ExtensionHostStartResult: "extension-host-start-result",
+  ExtensionHostStopResult: "extension-host-stop-result",
   /** Main → Host：全局前台 ZCode 窗口派生的 producer focus fact。 */
   CuaPipFocusChanged: "cua-pip-focus-changed",
   /** main → host：要求 Host 现读本地 Source，并同步指定 Remote Environment。 */
   ProviderProvisioningExecute: "provider-provisioning-execute",
+  /** main → host：数据同步页读取 / 重试 Provisioning lane 的结果。 */
+  ProviderProvisioningLaneResult: "provider-provisioning-lane-result",
   /** main → host：资源管理器请求 Host 采样其后代进程（Agent / MCP / 终端）的 CPU 与内存 */
   ResourceUsageSnapshotRequest: "resource-usage-snapshot-request",
   ResourceUsageSnapshotCancel: "resource-usage-snapshot-cancel",
+  /** main → host：renderer 实际导航提交结果（按 requestId/generation 关联）。 */
+  AppNavigationResult: "app-navigation-result",
 } as const;
 
 /** host process → main process 的反馈消息类型 */
@@ -583,6 +623,10 @@ export const HostResponseTypes = {
   RemoteWorkspaceConnected: "remote-workspace-connected",
   /** window Host → main：远程 logical session 建立失败 */
   RemoteWorkspaceConnectFailed: "remote-workspace-connect-failed",
+  /** window Host → main：workspace bind 完成 ACK；每个 requestId 恰好 settle 一次 */
+  RemoteWorkspaceContextBound: "remote-workspace-context-bound",
+  /** window Host → main：workspace bind 失败/取消（带 reasonCode/retryable） */
+  RemoteWorkspaceContextBindFailed: "remote-workspace-context-bind-failed",
   /** window Host → main：已连接的远程 logical session 关闭 */
   RemoteWorkspaceClosed: "remote-workspace-closed",
   /** host 进程日志上报 */
@@ -655,10 +699,20 @@ export const HostResponseTypes = {
   LocalMediaPreviewPathAuthorizeRequest: "local-media-preview-path-authorize-request",
   /** host → main：登记已校验的插件 UI HTML 与 CSP，换取 sandbox 句柄（PluginSandboxRegisterRequestPayload） */
   PluginSandboxRegisterRequest: "plugin-sandbox-register-request",
+  /** host → main：拉起窗口扩展进程（ExtensionHostStartPayload）；授权与槽位仍留在 Host。 */
+  ExtensionHostStartRequest: "extension-host-start-request",
+  /** host → main：按窗口与代际停止扩展进程（ExtensionHostStopPayload）。 */
+  ExtensionHostStopRequest: "extension-host-stop-request",
   /** host → main：本地 Provisioning Source 成功持久化。 */
   ProviderProvisioningSourceChanged: "provider-provisioning-source-changed",
   /** host → main：一次 Remote Environment 同步执行完毕。 */
   ProviderProvisioningExecutionResult: "provider-provisioning-execution-result",
+  /** host → main：数据同步页按设备读取 / 等执行结束 / 重试 Provisioning lane。 */
+  ProviderProvisioningLaneRequest: "provider-provisioning-lane-request",
+  /** host → main：App 控制请求在 Trusted 窗口里打开会话（只关联在途请求，不携带会话事实）。 */
+  AppNavigationOpen: "app-navigation-open",
+  /** host → main：取消同一 requestId 的在途导航（连接代际变化/调用取消）。 */
+  AppNavigationCancel: "app-navigation-cancel",
 } as const;
 
 // ============================================================================
@@ -1117,8 +1171,24 @@ export interface PlatformChannelMap {
     response: void;
   };
   [PlatformChannels.GetInstalledEditors]: {
-    request: void;
+    request: string | undefined;
     response: EditorInfo[];
+  };
+  [PlatformChannels.GetFileApplications]: {
+    request: FileApplicationTarget;
+    response: FileApplicationInfo[];
+  };
+  [PlatformChannels.OpenFileWithApplication]: {
+    request: { applicationId: string; target: FileApplicationTarget };
+    response: { success: boolean; error?: string };
+  };
+  [PlatformChannels.CaptureBrowserGuestPage]: {
+    request: CaptureBrowserGuestPageRequest;
+    response: CaptureBrowserGuestPageResult;
+  };
+  [PlatformChannels.PrintBrowserGuestPage]: {
+    request: PrintBrowserGuestPageRequest;
+    response: PrintBrowserGuestPageResult;
   };
   [PlatformChannels.GetApplicationIcon]: {
     request: string | import("./platform.js").ApplicationIconRequest;

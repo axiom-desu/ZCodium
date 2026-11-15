@@ -33,18 +33,25 @@ impl ToolSearchCapability {
     }
 }
 
-/// 模型端口可选的新增请求选项；缺省（全部 false）与既有 `complete` 完全等价。
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// 模型端口可选的新增请求选项；缺省（全部为空/false）与既有 `complete` 完全等价。
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ModelRequestOptions {
     /// 仅代表 Native ToolSearch 协议（不发 Local 展开或 off 全目录）。
     pub tool_search_enabled: bool,
+    /// 3.18 F12：会话能力标签快照（每次请求由 runtime owner 读取）。
+    pub session_features: Vec<String>,
 }
 
 impl ModelRequestOptions {
     pub fn native_tool_search() -> Self {
         Self {
             tool_search_enabled: true,
+            session_features: vec![],
         }
+    }
+    /// 本次请求的受控 `x-zcode-session-features` 值：去重、字典序；非法或超长整头省略。
+    pub fn session_features_header(&self) -> Option<String> {
+        crate::session_features::header_value(self.session_features.iter().map(String::as_str))
     }
 }
 

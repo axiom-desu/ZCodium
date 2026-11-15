@@ -22,7 +22,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
 import { Switch } from "@/components/ui/switch.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
-import { TID_PLUGIN_STORE_BROWSE } from "@zcode/shared";
+import { TID_PLUGIN_STORE_BROWSE, parseRemoteWorkspaceIdentity } from "@zcode/shared";
 import type { ZCodePluginInfo, ZCodePluginScope, ZCodePluginUserConfigOption } from "@zcode/shared";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
 import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
@@ -61,6 +61,8 @@ import { SettingsBreadcrumbReporter } from "@/settings/SettingsHeaderBreadcrumb.
 import { SettingsScopeBadge } from "@/settings/SettingsScopeBadge.js";
 import {
   buildPluginConfigPatch,
+  resolvePluginOptionValue,
+  type PluginOptionDisplayState,
   type PluginOptionDraftValue,
 } from "@/settings/pluginConfigPatch.js";
 import { formatRemoteSkillSyncTarget } from "@/settings/RemoteSkillSyncDialog.js";
@@ -90,11 +92,8 @@ import {
   resolveComputerUseAvailability,
 } from "@/settings/computerUseAvailability.js";
 import { PluginScopeMenu, getPluginWorkspaceKey } from "@/settings/PluginScopeMenu.js";
-import {
-  RemoteSyncDialogs,
-  shouldShowRemoteSyncActions,
-  useRemoteSyncDialogIntent,
-} from "@/settings/RemoteSyncActions.js";
+import { shouldShowRemoteSyncActions } from "@/settings/RemoteSyncActions.js";
+import { openDataSyncDialog } from "@/data-sync/index.js";
 
 type PluginTabTarget = "plugins" | "mcps" | "skills" | "commands";
 type PluginTab = Exclude<PluginTabTarget, "commands">;
@@ -199,8 +198,12 @@ function PluginList({
   >({});
   // 设置页重构后只保留了 Plugin 管理列表，漏掉了旧版插件页的远端同步入口。
   // 同步目标必须沿用当前 Scope 的 target services，不能回退到激活 workspace 的 host。
+  const syncSourceServerId = target?.workspaceIdentity
+    ? parseRemoteWorkspaceIdentity(target.workspaceIdentity)?.sourceServerId
+    : undefined;
   const connectedRemoteSyncTarget =
     targetServiceResolution.rpcReady &&
+    syncSourceServerId &&
     shouldShowRemoteSyncActions({
       remoteSessionId: target?.remoteSessionId,
       remoteTarget: target?.remoteTarget,
@@ -216,14 +219,21 @@ function PluginList({
     ? formatRemoteSkillSyncTarget(connectedRemoteSyncTarget, target?.workspacePath ?? "")
     : "";
   const targetKey = target ? workspaceKey(target) : "";
-  const pluginSyncTargetKey = target
-    ? `${targetKey}\u0000${target.remoteSessionId?.trim() ?? ""}`
-    : "";
-  const { open: remotePluginSyncOpen, setOpen: setRemotePluginSyncOpen } =
-    useRemoteSyncDialogIntent({
-      rpcReady: targetServiceResolution.rpcReady,
-      targetKey: pluginSyncTargetKey,
+  const openPluginDataSync = () => {
+    if (!syncSourceServerId || !target?.workspacePath) return;
+    openDataSyncDialog({
+      sourceServerId: syncSourceServerId,
+      category: "plugins",
+      ...(target.localWorkspacePath
+        ? {
+            workspace: {
+              sourceWorkspacePath: target.localWorkspacePath,
+              targetWorkspacePath: target.workspacePath,
+            },
+          }
+        : {}),
     });
+  };
   const storeKey = currentWorkspaceIdentity?.trim() || currentWorkspacePath || "";
   const currentAuthorityKey = usePluginManagementStore((state) => state.authorityKey);
   const storeMatchesTarget =
@@ -422,20 +432,13 @@ function PluginList({
       [pluginId]: { ...current[pluginId], [key]: value },
     }));
   };
-  const getPluginOptionValue = (
+  // 单一取值实现（含「敏感值已保存但不回显」判定），与配置 patch 构造同处一个模块。
+  const getPluginOptionState = (
     plugin: ZCodePluginInfo,
     key: string,
     option: ZCodePluginUserConfigOption,
-  ): string | number | boolean => {
-    const draft = pluginOptionsDrafts[plugin.id]?.[key];
-    if (draft === null) return "";
-    return (
-      draft ??
-      plugin.configuredOptions?.[key] ??
-      option.default ??
-      (option.type === "boolean" ? false : "")
-    );
-  };
+  ): PluginOptionDisplayState =>
+    resolvePluginOptionValue(plugin, key, option, pluginOptionsDrafts[plugin.id]?.[key]);
   const savePluginOptions = async (plugin: ZCodePluginInfo) => {
     const { options, clearOptionKeys } = buildPluginConfigPatch(
       plugin,
@@ -753,7 +756,7 @@ function PluginList({
                   <PluginHookDetails hooks={selectedPlugin.hookDetails ?? []} />
                 ) : null}
                 <PluginConfigControls
-                  getValue={getPluginOptionValue}
+                  getOptionState={getPluginOptionState}
                   isOptionClearPending={(pluginId, key) =>
                     pluginOptionsDrafts[pluginId]?.[key] === null
                   }
@@ -832,7 +835,7 @@ function PluginList({
                   aria-label={intl.formatMessage({
                     id: "settings.plugins.remoteSync.open",
                   })}
-                  onClick={() => setRemotePluginSyncOpen(true)}
+                  onClick={openPluginDataSync}
                 >
                   <UploadCloud className="size-3.5" aria-hidden="true" />
                 </Button>
@@ -941,30 +944,6 @@ function PluginList({
         pending={uninstall.uninstalling}
         onCancel={uninstall.cancelUninstall}
         onConfirm={() => void uninstall.confirmUninstall()}
-      />
-      <RemoteSyncDialogs
-        canSyncSkills={false}
-        canSyncMcp={false}
-        canSyncPlugins={Boolean(connectedRemoteSyncTarget && target?.workspacePath)}
-        skillOpen={false}
-        mcpOpen={false}
-        pluginOpen={remotePluginSyncOpen}
-        onSkillOpenChange={() => {}}
-        onMcpOpenChange={() => {}}
-        onPluginOpenChange={setRemotePluginSyncOpen}
-        localPluginSyncService={baseServices.pluginSyncService}
-        remotePluginSyncService={targetServiceResolution.services.pluginSyncService}
-        localZCodeAgentService={baseServices.zcodeAgentService}
-        remoteZCodeAgentService={targetServiceResolution.services.zcodeAgentService}
-        remoteTarget={connectedRemoteSyncTarget}
-        skillWorkspacePath=""
-        mcpWorkspacePath=""
-        pluginWorkspacePath={target?.workspacePath ?? ""}
-        pluginLocalWorkspacePath={target?.localWorkspacePath}
-        workspaceIdentity={target?.workspaceIdentity}
-        onSkillsSynced={() => {}}
-        onMcpSynced={() => {}}
-        onPluginsSynced={refreshAfterPluginChange}
       />
     </section>
   );

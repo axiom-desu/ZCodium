@@ -92,6 +92,8 @@ export function buildForkedSessionInput(
   parentSession: SessionInfo,
   forkedSessionId: SessionId,
   kind: "fork" | "selection_side_chat" = "fork",
+  /** 受管 worktree 子会话 cwd；缺省沿用父会话目录。 */
+  targetDirectory?: string,
 ): CreateSessionInput {
   const now = Date.now();
   return {
@@ -102,8 +104,8 @@ export function buildForkedSessionInput(
     traceID: runtime.rootTraceContext.traceId,
     taskType: kind,
     slug: `${slugify(parentSession.slug)}-${kind}-${now.toString(36)}`.slice(0, 120),
-    directory: parentSession.directory,
-    path: parentSession.path,
+    directory: targetDirectory ?? parentSession.directory,
+    path: targetDirectory ?? parentSession.path,
     title:
       kind === "selection_side_chat" ? "Selection side chat" : `Fork of ${parentSession.title}`,
     titleSource: "generated",

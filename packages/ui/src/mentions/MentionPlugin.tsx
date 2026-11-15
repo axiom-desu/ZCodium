@@ -44,6 +44,7 @@ import {
 import { $createPromptMentionNode } from "./nodes/PromptMentionNode.js";
 import { useFileMentionProvider } from "./providers/fileMentionProvider.js";
 import { usePluginsMentionProvider } from "./providers/pluginsMentionProvider.js";
+import type { PluginMentionTarget } from "@/hooks/usePluginMentionItems.js";
 import { useSessionsMentionProvider } from "./providers/sessionsMentionProvider.js";
 import { useSkillsMentionProvider } from "./providers/skillsMentionProvider.js";
 import { useWhiteboardMentionProvider } from "./providers/whiteboardMentionProvider.js";
@@ -61,6 +62,8 @@ interface MentionPluginProps {
   workspaceIdentity?: string;
   /** 已有 Session 的 id；null/undefined = 新建草稿。决定 Plugins 分组的 catalog authority。 */
   sessionId?: string | null;
+  /** `composer.mention` tool 条目（扩展静态表）；存在时 `@` 面板通过 services 查询候选项。 */
+  pluginMentionTargets?: readonly PluginMentionTarget[];
   disabled?: boolean;
   onWhiteboardMentionSelected?: (boardId: string) => void | Promise<void>;
 }
@@ -133,6 +136,7 @@ export function MentionPlugin({
   sessionId,
   provider,
   container,
+  pluginMentionTargets,
   disabled = false,
   onWhiteboardMentionSelected,
 }: MentionPluginProps & { provider: ZCodeProvider }) {
@@ -215,6 +219,7 @@ export function MentionPlugin({
     isOpen && isContextTrigger,
     intl.formatMessage({ id: "chat.mention.plugins.empty" }),
     intl.formatMessage({ id: "chat.mention.plugins.title" }),
+    pluginMentionTargets,
   );
 
   const panelGroups = useMemo<MentionResultGroup<MentionItem>[]>(() => {

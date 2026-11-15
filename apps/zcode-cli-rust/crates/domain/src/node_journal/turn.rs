@@ -244,7 +244,12 @@ impl Session {
         let calls: Vec<Value> = message
             .and_then(|m| m["tool_calls"].as_array().cloned())
             .unwrap_or_default();
-        if let Some(message) = message {
+        // 3.18 R2：provider 原生工具按「服务端轮次」落库：每轮推理/正文 part 之后紧跟
+        // 带 `providerExecuted` 的 tool part，冷恢复据此切回同一份段列表。
+        let rounds: Vec<Value> = message
+            .map(|m| crate::provider_rounds::segments(m).to_vec())
+            .unwrap_or_default();
+        if let Some(message) = message.filter(|_| rounds.is_empty()) {
             for (text, metadata) in super::reasoning_parts(message) {
                 let id = super::part_id(now, &ids());
                 let part = r::reasoning_part(
@@ -268,6 +273,65 @@ impl Session {
                 );
                 self.node.push(now, Op::Part(part));
             }
+        }
+        for (index, round) in rounds.iter().enumerate() {
+            let thinking = json!({"_zcode_anthropic_thinking": round["thinking"]});
+            for (text, metadata) in super::reasoning_parts(&thinking) {
+                let part = r::reasoning_part(
+                    super::part_id(now, &ids()),
+                    &self.id,
+                    &assistant,
+                    &text,
+                    metadata,
+                    (step.created, now),
+                );
+                self.node.push(now, Op::Part(part));
+            }
+            if let Some(text) = round["text"].as_str().filter(|t| !t.is_empty()) {
+                let part = r::text_part(
+                    super::part_id(now, &ids()),
+                    &self.id,
+                    &assistant,
+                    text,
+                    step.created,
+                    now,
+                );
+                self.node.push(now, Op::Part(part));
+            }
+            let (call, result) = (&round["call"], &round["result"]);
+            if !call.is_object() || !result.is_object() {
+                continue;
+            }
+            let call_id = call["id"].as_str().unwrap_or("").to_owned();
+            let name = call["name"].as_str().unwrap_or("").to_owned();
+            let input = if call["input"].is_object() {
+                call["input"].clone()
+            } else {
+                json!({})
+            };
+            let output = crate::provider_rounds::result_text(result);
+            let failed = result["is_error"] == true;
+            let window = (step.created, now);
+            let state = if failed {
+                r::error_tool(&input, &Value::from(output), None, window)
+            } else {
+                r::completed_tool(&name, &input, &Value::from(output), None, None, window)
+            };
+            let metadata = json!({
+                crate::provider_rounds::EXECUTED_KEY: true,
+                "schemaVersion": 1,
+                crate::provider_rounds::CALL_BLOCK_KEY: call,
+                crate::provider_rounds::RESULT_BLOCK_KEY: result,
+            });
+            let part = r::tool_part(
+                &super::part_id(now, &ids()),
+                &self.id,
+                &assistant,
+                (&call_id, index, &name),
+                Some(metadata),
+                state,
+            );
+            self.node.push(now, Op::Part(part));
         }
         let turn = self.node.turn.as_mut().unwrap();
         if message.is_some() {
@@ -315,84 +379,7 @@ impl Session {
         }
         self.node.turn.as_mut().unwrap().step = Some(step);
     }
-
-    fn step_tool(&mut self, call: &str) -> Option<(Step, usize)> {
-        let step = self.node.turn.as_ref()?.step.clone()?;
-        let index = step.tools.iter().position(|t| t.call == call)?;
-        Some((step, index))
-    }
-
-    /// Node `onBatchStart`: the tool part turns `running`.
-    pub fn node_tool_started(&mut self, now: u64, call: &str) {
-        let Some((mut step, index)) = self.step_tool(call) else {
-            return;
-        };
-        let tool = &mut step.tools[index];
-        tool.started = Some(now);
-        let state = r::running_tool(&tool.name, &tool.input, now);
-        let part = r::tool_part(
-            &tool.part,
-            &self.id,
-            &step.assistant,
-            (&tool.call, tool.index, &tool.name),
-            super::tool_metadata(tool),
-            state,
-        );
-        self.node.push(now, Op::Part(part));
-        self.node.turn.as_mut().unwrap().step = Some(step);
-    }
-
-    /// Node tool result persistence; the step completes after its last tool.
-    /// `media`: the result's stored media (Node `persistToolResultMediaAttachments`).
-    pub fn node_tool_done(
-        &mut self,
-        now: u64,
-        call: &str,
-        (content, display, failed): (&Value, Option<&Value>, bool),
-        model_content: Option<&Value>,
-        media: Option<&super::tool_media::ToolMedia>,
-        ids: &mut dyn FnMut() -> String,
-    ) {
-        let Some((mut step, index)) = self.step_tool(call) else {
-            return;
-        };
-        let tool = &mut step.tools[index];
-        let window = (tool.started.unwrap_or(now), now);
-        let state = if failed {
-            r::error_tool(&tool.input, content, model_content, window)
-        } else {
-            let mut state = r::completed_tool(
-                &tool.name,
-                &tool.input,
-                content,
-                display,
-                model_content,
-                window,
-            );
-            if let Some(media) = media {
-                state["metadata"]["modelContentLayout"] = Value::Array(media.layout.clone());
-                let parts = media
-                    .files
-                    .iter()
-                    .map(|file| file.part(&super::part_id(now, &ids()), &self.id, &step.assistant));
-                state["attachments"] = Value::Array(parts.collect());
-            }
-            state
-        };
-        tool.done = true;
-        let part = r::tool_part(
-            &tool.part,
-            &self.id,
-            &step.assistant,
-            (&tool.call, tool.index, &tool.name),
-            super::tool_metadata(tool),
-            state,
-        );
-        self.node.push(now, Op::Part(part));
-        let finished = step.tools.iter().all(|t| t.done);
-        self.node.turn.as_mut().unwrap().step = Some(step);
-        if finished {
-            self.complete_step(now, super::part_id(now, &ids()), None);
-        }
-    }
 }
+
+#[path = "turn_tools.rs"]
+mod turn_tools;

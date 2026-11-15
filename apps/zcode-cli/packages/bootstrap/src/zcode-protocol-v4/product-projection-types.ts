@@ -77,6 +77,8 @@ export interface ConversationEditTarget {
     requestedDelivery?: "auto" | "startNow" | "queue" | "guide";
     admittedDelivery?: "startNow" | "queue" | "guide";
     fallbackReasonCode?: string;
+    /** 本轮原选区引用：edit/retry 重放必须带上它，否则批注只留在被 rewind 的旧行。 */
+    conversationQuotes?: CanonicalUserIntentFact["conversationQuotes"];
     modelSelection?: TurnInputIntentMetadata["modelSelection"];
     mode?: TurnInputIntentMetadata["mode"];
     planEnabled?: boolean;

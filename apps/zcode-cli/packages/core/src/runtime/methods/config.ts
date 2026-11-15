@@ -24,6 +24,7 @@ import {
 } from "../helpers/child-client-ports.js";
 import type { AgentRuntimeConfig, ActiveTurnInfo } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { supersedeContextComposition } from "../context-composition/state.js";
 import { cloneModelSelection } from "../model-selection.js";
 import { applyRuntimeExecutionState } from "../execution-state.js";
 
@@ -148,6 +149,8 @@ export function getTools(this: AgentRuntimeInternal, model?: Model): ModelToolCo
 
 export function invalidateToolCache(this: AgentRuntimeInternal): void {
   this.cachedTools = null;
+  // 工具集合变了（MCP、页面工具、注册表改写）：下一个请求的组成随之变化。
+  supersedeContextComposition(this, "tools");
 }
 
 export function getToolRegistry(this: AgentRuntimeInternal): ToolRegistry {

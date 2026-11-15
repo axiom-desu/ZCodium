@@ -36,6 +36,7 @@ export const workspaceHookProcessConfigSchema = z
     args: z.array(z.string()).optional(),
     timeoutMs: positiveNumberSchema.optional(),
     statusMessage: z.string().min(1).optional(),
+    onError: z.enum(["allow", "deny"]).optional(),
   })
   .passthrough();
 
@@ -49,6 +50,8 @@ export const workspaceHookCommandConfigSchema = z
     timeout: positiveNumberSchema.optional(),
     timeoutMs: positiveNumberSchema.optional(),
     statusMessage: z.string().min(1).optional(),
+    // onError 进入声明摘要（workspace-hook-digest）：加/改它都会触发一次重新信任。
+    onError: z.enum(["allow", "deny"]).optional(),
   })
   .passthrough();
 

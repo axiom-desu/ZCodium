@@ -165,6 +165,7 @@ function createHookRegistration(input: {
       }),
     event: input.event,
     matcher: input.matcher,
+    ...(input.hook.onError === undefined ? {} : { onError: input.hook.onError }),
     source: input.source,
     sourceKind: input.sourceKind,
     timeoutMs: input.timeoutMs,

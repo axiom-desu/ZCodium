@@ -23,6 +23,8 @@ import {
 import { createHostDatabaseStartup } from "./hostDatabaseStartup.js";
 import { createHash, randomUUID } from "node:crypto";
 import { createPluginSandboxRegistrationBridge } from "./pluginSandbox/index.js";
+import { createAppControlNavigationBridge } from "#src/app-control-navigation/host.js";
+import { createExtensionHostRequestBridge } from "./extensions/bridge.js";
 import {
   MessagePortProtocol,
   ChannelServer,
@@ -54,6 +56,9 @@ import {
   IProjectService,
   IMobileProjectDirectoryService,
   ISourceServerManagementService,
+  IDeviceSyncStateService,
+  IExtensionsService,
+  IProviderProvisioningStatusService,
   ISystemService,
   createZCodeAgentConnectionScope,
   type ZCodeAgentV4ClientMode,
@@ -68,12 +73,17 @@ import {
   createServiceLogger,
   createHostApiNetworkTransport,
   createSettingService,
+  createExtensionsService,
+  getAppControlServiceHandle,
   getAstrBotBridgeProvider,
   getAppConfigDir,
+  createDeviceSyncStateService,
+  createHostProviderProvisioningStatus,
 } from "@zcode/services/node";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHostResourceUsageResponder } from "./hostResourceUsage.js";
+import { prepareRemoteWorkspaceIdentity } from "./remoteWorkspacePreparation.js";
 import { startBotsBridgeServer, type BotsBridgeServerHandle } from "./botsBridgeServer.js";
 import {
   HostMessageTypes,
@@ -107,6 +117,9 @@ import {
   type ModelSelection,
   normalizeDynamicWorkflowMode,
   type DynamicWorkflowMode,
+  REMOTE_BIND_CANCELED_ERROR_CODE,
+  REMOTE_WORKSPACE_BIND_SESSION_MISSING_ERROR_CODE,
+  sourceServerRunningTasksSchema,
 } from "@zcode/shared";
 import {
   parseHostIncomingMessageEvent,
@@ -260,8 +273,31 @@ function authorizeLocalMediaPreviewPath(path: string): Promise<string> {
   });
 }
 
+// 数据同步页「模型提供商」分类读取 / 重试 Main 协调器的 Provisioning lane（只在本机 Host）。
+const hostProviderProvisioningStatus = createHostProviderProvisioningStatus((message) => {
+  if (!parentPort) throw new Error("parentPort unavailable");
+  parentPort.postMessage(message);
+});
+
 const pluginSandboxRegistrationBridge = createPluginSandboxRegistrationBridge({
   send: (message) => {
+    if (!parentPort) throw new Error("parentPort unavailable");
+    parentPort.postMessage(message);
+  },
+});
+
+// 扩展进程生命周期桥：只传 endpoint/token/代际/工作区/插件目录；授权与槽位不经过 Main。
+const extensionHostRequestBridge = createExtensionHostRequestBridge({
+  send: (message) => {
+    if (!parentPort) throw new Error("parentPort unavailable");
+    parentPort.postMessage(message);
+  },
+});
+
+// App 控制显式导航桥：只关联在途请求与可信窗口；授权/目标解析仍在 AppControlService，
+// Main 只按真实 BrowserWindow 路由，renderer 用既有 Root 动作完成导航。
+const appControlNavigationBridge = createAppControlNavigationBridge({
+  post: (message) => {
     if (!parentPort) throw new Error("parentPort unavailable");
     parentPort.postMessage(message);
   },
@@ -1519,12 +1555,22 @@ async function createWindowRemoteConnectionHandle(params: {
   };
 }
 
+// Host 侧 bind admission：每个 requestId 恰好 settle 一次；取消只 abort 本次 bind，
+// 不 dispose 共享 logical session 或其他 attachment owner。
+const activeWorkspaceBindRequestIds = new Set<string>();
+const cancelledWorkspaceBindRequestIds = new Set<string>();
+const workspaceBindAbortControllers = new Map<string, AbortController>();
+
 const windowRemoteConnectionRegistry = createWindowRemoteConnectionRegistry<
   ServiceCollection,
   HostRemoteConnectionCapabilities
 >({
   connect: (request) => createWindowRemoteConnectionHandle(request),
   createId: randomUUID,
+  prepareWorkspaceIdentity: async (handle, input) => {
+    // 目录准备只验证远端可读；保留 #91 的握手身份，不在这里写 Source 路由。
+    await prepareRemoteWorkspaceIdentity(handle.services.get(IFileService), input);
+  },
   releaseWorkspace: async (services, context) => {
     await services.get(IZCodeTaskService).releaseWorkspacePreparation({
       workspacePath: context.workspacePath,
@@ -1643,23 +1689,53 @@ function registerSourceServerManagementService(
       };
     },
     async update(input) {
+      const sourceServerId = input.profile.sourceServerId;
+      // 新 Profile 首次安装还没有握手身份；flight 用 profileId 作稳定键，避免把安装挡在门外。
+      const lifecycleKey = sourceServerId ?? input.profile.profileId;
       const { createSourceServerTransportAdapter } =
         await import("@zcode/server/source-server/transportAdapter.js");
       const adapter = createSourceServerTransportAdapter(input.target.kind);
+      // 更新 flight 归既有 registry：本机阶段可取消，进入远端写入后不再可取消。
+      const flight = windowRemoteConnectionRegistry.beginSourceLifecycleOperation({
+        kind: "update",
+        profileId: input.profile.profileId,
+        sourceServerId: lifecycleKey,
+      });
+      const transportContext = { ...input.context, signal: flight.signal };
       try {
-        const probe = await adapter.probe(input.target, input.context);
+        flight.setLocalStageCancelable(true);
+        input.onLocalStageChange?.(true);
+        const probe = await adapter.probe(input.target, transportContext);
         const release = await resolveSourceServerReleaseAsset(
           probe,
           input.target,
           await getSourceServerReleaseRuntimeOptions(remoteAssets),
         );
-        await adapter.installOrUpdate(
-          input.target,
-          release,
-          input.context,
-          input.force ? { force: true } : {},
-        );
+        flight.signal.throwIfAborted();
+        // 远端阶段从 installOrUpdate 开始，此后取消会留下写了一半的远端。
+        flight.setLocalStageCancelable(false);
+        input.onLocalStageChange?.(false);
+        await adapter.installOrUpdate(input.target, release, transportContext, {
+          ...(input.force ? { force: true } : {}),
+          ...(input.allowDowngrade ? { allowDowngrade: true } : {}),
+        });
+        flight.signal.throwIfAborted();
+        // 旧在线连接仍是更新前的进程；连接前主动失效，避免复用到已死/旧版本连接。
+        if (sourceServerId) {
+          await windowRemoteConnectionRegistry.disposeSource(sourceServerId, {
+            preserveLifecycleFlight: true,
+          });
+        }
+      } catch (error) {
+        if (flight.signal.aborted) {
+          throw Object.assign(new Error("Source Server update was canceled"), {
+            code: "remote-connection-canceled",
+            retryable: true,
+          });
+        }
+        throw error;
       } finally {
+        flight.end();
         adapter.dispose?.();
       }
       const descriptor = await windowRemoteConnectionRegistry.connect({
@@ -1668,14 +1744,115 @@ function registerSourceServerManagementService(
         remoteAssets,
         confirmSourceServerInstall: true,
       });
-      const sourceServerId = descriptor.sourceServerId;
-      const version = sourceServerId
-        ? windowRemoteConnectionRegistry.getOnlineSource(sourceServerId)?.serverVersion
+      const connectedSourceServerId = descriptor.sourceServerId;
+      const version = connectedSourceServerId
+        ? windowRemoteConnectionRegistry.getOnlineSource(connectedSourceServerId)?.serverVersion
         : undefined;
       return {
-        ...(sourceServerId ? { sourceServerId } : {}),
+        ...(connectedSourceServerId ? { sourceServerId: connectedSourceServerId } : {}),
         ...(version ? { version } : {}),
       };
+    },
+    cancelUpdate(profileId) {
+      return windowRemoteConnectionRegistry.cancelSourceUpdateLocalStage(profileId);
+    },
+    async stopSource(input) {
+      const sourceServerId = input.profile.sourceServerId;
+      if (!sourceServerId) throw new Error("Source Server has no handshake identity");
+      const { createSourceServerTransportAdapter, readServerCommandResult } =
+        await import("@zcode/server/source-server/transportAdapter.js");
+      const adapter = createSourceServerTransportAdapter(input.target.kind);
+      try {
+        // 先按显式断开收口（删除恢复意图/释放 owner）；flight 在断开之后登记，
+        // 远端退出引起的连接关闭不再排重试或离线探测。
+        await windowRemoteConnectionRegistry.disposeSource(sourceServerId);
+        const flight = windowRemoteConnectionRegistry.beginSourceLifecycleOperation({
+          kind: "stop",
+          profileId: input.profile.profileId,
+          sourceServerId,
+        });
+        try {
+          const status = readServerCommandResult(
+            await adapter.exec(input.target, ["stop", "--wait", "--json"], {
+              signal: flight.signal,
+              onLog: input.context.onLog,
+            }),
+            "Remote service failed to stop",
+          );
+          if (status.state !== "stopped" && status.state !== "uninstalled") {
+            throw new Error("Remote service did not confirm that it stopped");
+          }
+        } finally {
+          flight.end();
+        }
+      } finally {
+        adapter.dispose?.();
+      }
+    },
+    async restartSource(input) {
+      const sourceServerId = input.profile.sourceServerId;
+      if (!sourceServerId) throw new Error("Source Server has no handshake identity");
+      const { createSourceServerTransportAdapter, readServerCommandResult } =
+        await import("@zcode/server/source-server/transportAdapter.js");
+      const adapter = createSourceServerTransportAdapter(input.target.kind);
+      try {
+        const flight = windowRemoteConnectionRegistry.beginSourceLifecycleOperation({
+          kind: "restart",
+          profileId: input.profile.profileId,
+          sourceServerId,
+        });
+        try {
+          const status = readServerCommandResult(
+            await adapter.exec(input.target, ["restart", "--json"], {
+              signal: flight.signal,
+              onLog: input.context.onLog,
+            }),
+            "Remote service failed to restart",
+          );
+          if (status.state !== "ready") {
+            throw new Error("Remote service did not confirm that it restarted");
+          }
+          // 远端旧进程退出后 close 可能晚于命令返回；连接前主动失效，避免复用已死连接。
+          await windowRemoteConnectionRegistry.disposeSource(sourceServerId, {
+            preserveLifecycleFlight: true,
+          });
+          const descriptor = await windowRemoteConnectionRegistry.connect({
+            requestId: randomUUID(),
+            target: input.target,
+            remoteAssets,
+          });
+          const version = descriptor.sourceServerId
+            ? windowRemoteConnectionRegistry.getOnlineSource(descriptor.sourceServerId)
+                ?.serverVersion
+            : undefined;
+          return {
+            ...(descriptor.sourceServerId ? { sourceServerId: descriptor.sourceServerId } : {}),
+            ...(version ? { version } : {}),
+          };
+        } finally {
+          flight.end();
+        }
+      } finally {
+        adapter.dispose?.();
+      }
+    },
+    async getSourceRunningTasks(input) {
+      const { createSourceServerTransportAdapter } =
+        await import("@zcode/server/source-server/transportAdapter.js");
+      const adapter = createSourceServerTransportAdapter(input.target.kind);
+      try {
+        // 清单走只读控制命令；null/非零退出/不符 schema 都是“清单不可用”，不能当没有任务。
+        const result = await adapter.exec(input.target, ["running-tasks", "--json"], {});
+        if (result.exitCode !== 0) return { available: false };
+        const parsed = sourceServerRunningTasksSchema.safeParse(JSON.parse(result.stdout.trim()));
+        return parsed.success
+          ? { available: true as const, tasks: parsed.data }
+          : { available: false as const };
+      } catch {
+        return { available: false };
+      } finally {
+        adapter.dispose?.();
+      }
     },
     async disconnect(sourceServerId) {
       await windowRemoteConnectionRegistry.disposeSource(sourceServerId);
@@ -2221,6 +2398,9 @@ async function disposeHostResources(reason: string): Promise<HostShutdownResult>
     logger.info(`disposing host resources, reason=${reason}`);
 
     pluginSandboxRegistrationBridge.dispose();
+    extensionHostRequestBridge.dispose();
+    // Host 退出/替换时取消全部在途 App 导航，不等待不可能到达的 renderer 回执。
+    appControlNavigationBridge.dispose();
     stopHostNetworkTelemetry();
     hostSelfResourceTelemetry.stop();
     disposeLocalResourceTelemetry();
@@ -2240,6 +2420,11 @@ async function disposeHostResources(reason: string): Promise<HostShutdownResult>
 
     const servicesToDispose = activeServices;
     activeServices = null;
+    // 扩展服务有异步收口（取消在途 → 关 loopback → 停进程），先于同步服务释放在这里 await。
+    const extensionsToDispose = servicesToDispose?.getOptional(IExtensionsService) as
+      | { dispose?(): Promise<void> }
+      | undefined;
+    await extensionsToDispose?.dispose?.().catch(() => {});
     // Registry 是全部远端 connection 的唯一 owner；释放失败不能阻塞本地服务继续收口。
     const shutdownResult = await runHostShutdownPhases(
       [
@@ -2288,6 +2473,7 @@ function disposeHostResourcesBestEffort(reason: string): void {
 
   logger.info(`disposing host resources, reason=${reason}`);
   pluginSandboxRegistrationBridge.dispose();
+  extensionHostRequestBridge.dispose();
   stopHostNetworkTelemetry();
   disposeLocalResourceTelemetry();
   disposeAttachedServicePorts();
@@ -2300,6 +2486,10 @@ function disposeHostResourcesBestEffort(reason: string): void {
 
   if (activeServices) {
     try {
+      const extensions = activeServices.getOptional(IExtensionsService) as
+        | { dispose?(): Promise<void> }
+        | undefined;
+      void extensions?.dispose?.().catch(() => {});
       disposeServiceResources(activeServices);
     } catch (error) {
       logger.error("failed to dispose local services:", error);
@@ -2372,6 +2562,14 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
 
   const msg = result.data;
   const port = e.ports[0];
+  if (msg.type === HostMessageTypes.AppNavigationResult) {
+    appControlNavigationBridge.receive({
+      type: "app-navigation-result",
+      requestId: msg.requestId,
+      result: msg.result,
+    });
+    return;
+  }
   if (msg.type === HostMessageTypes.DatabaseStartupControl) {
     if (msg.control.action === "snapshot") databaseStartup?.coordinator.publish();
     else if (msg.control.action === "retry")
@@ -2403,6 +2601,32 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
 
   if (msg.type === HostMessageTypes.PluginSandboxRegisterResult) {
     pluginSandboxRegistrationBridge.accept(msg);
+    return;
+  }
+
+  if (msg.type === HostMessageTypes.ExtensionHostStartResult) {
+    extensionHostRequestBridge.acceptStart(
+      msg.ok && msg.pid !== undefined
+        ? { requestId: msg.requestId, ok: true, pid: msg.pid }
+        : {
+            requestId: msg.requestId,
+            ok: false,
+            error: msg.error ?? "Extension host start failed.",
+          },
+    );
+    return;
+  }
+
+  if (msg.type === HostMessageTypes.ExtensionHostStopResult) {
+    extensionHostRequestBridge.acceptStop(
+      msg.ok && msg.stopped !== undefined
+        ? { requestId: msg.requestId, ok: true, stopped: msg.stopped }
+        : {
+            requestId: msg.requestId,
+            ok: false,
+            error: msg.error ?? "Extension host stop failed.",
+          },
+    );
     return;
   }
 
@@ -2511,6 +2735,11 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
     void zcodeTaskService.sendSessionMessageDeliveryResult(msg.result).catch((error) => {
       logger.warn("failed to forward session message delivery result:", error);
     });
+    return;
+  }
+
+  if (msg.type === HostMessageTypes.ProviderProvisioningLaneResult) {
+    hostProviderProvisioningStatus.handleResult(msg);
     return;
   }
 
@@ -2657,7 +2886,43 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
     return;
   }
 
+  if (msg.type === HostMessageTypes.CancelRemoteWorkspaceBind) {
+    cancelledWorkspaceBindRequestIds.add(msg.requestId);
+    workspaceBindAbortControllers.get(msg.requestId)?.abort();
+    // bind 可能 join 到已有 Source logical session；取消一个选择目录请求不代表
+    // 该 session 的其他 attachment/owner 都已释放。这里只取消 request，不再连坐 dispose。
+    if (!activeWorkspaceBindRequestIds.has(msg.requestId)) {
+      parentPort.postMessage({
+        type: HostResponseTypes.RemoteWorkspaceContextBindFailed,
+        requestId: msg.requestId,
+        error: "Remote workspace bind was canceled",
+        reasonCode: REMOTE_BIND_CANCELED_ERROR_CODE,
+        retryable: false,
+      });
+      cancelledWorkspaceBindRequestIds.delete(msg.requestId);
+      workspaceBindAbortControllers.delete(msg.requestId);
+    }
+    return;
+  }
+
   if (msg.type === HostMessageTypes.BindRemoteWorkspaceContext) {
+    activeWorkspaceBindRequestIds.add(msg.requestId);
+    const bindAbortController = new AbortController();
+    workspaceBindAbortControllers.set(msg.requestId, bindAbortController);
+    if (cancelledWorkspaceBindRequestIds.has(msg.requestId)) {
+      bindAbortController.abort();
+      parentPort.postMessage({
+        type: HostResponseTypes.RemoteWorkspaceContextBindFailed,
+        requestId: msg.requestId,
+        error: "Remote workspace bind was canceled",
+        reasonCode: REMOTE_BIND_CANCELED_ERROR_CODE,
+        retryable: false,
+      });
+      activeWorkspaceBindRequestIds.delete(msg.requestId);
+      cancelledWorkspaceBindRequestIds.delete(msg.requestId);
+      workspaceBindAbortControllers.delete(msg.requestId);
+      return;
+    }
     const previous = windowRemoteConnectionRegistry.getSession(msg.remoteSessionId);
     let workspaceReady: Promise<void>;
     try {
@@ -2667,39 +2932,121 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
         workspaceIdentity: msg.workspaceIdentity,
         ...(msg.workspacePurpose ? { workspacePurpose: msg.workspacePurpose } : {}),
         ...(msg.legacyRouteHint ? { legacyRouteHint: msg.legacyRouteHint } : {}),
+        signal: bindAbortController.signal,
       });
     } catch (error) {
       logger.warn(
         `failed to bind remote workspace context, remoteSessionId=${msg.remoteSessionId}`,
         error,
       );
+      parentPort.postMessage({
+        type: HostResponseTypes.RemoteWorkspaceContextBindFailed,
+        requestId: msg.requestId,
+        error: error instanceof Error ? error.message : String(error),
+        ...(error && typeof error === "object" && "code" in error && typeof error.code === "string"
+          ? { reasonCode: error.code }
+          : {}),
+        ...(error &&
+        typeof error === "object" &&
+        "retryable" in error &&
+        typeof error.retryable === "boolean"
+          ? { retryable: error.retryable }
+          : {}),
+      });
+      activeWorkspaceBindRequestIds.delete(msg.requestId);
+      cancelledWorkspaceBindRequestIds.delete(msg.requestId);
+      workspaceBindAbortControllers.delete(msg.requestId);
       return;
     }
-    const current = windowRemoteConnectionRegistry.getSession(msg.remoteSessionId);
-    if (current) {
-      // scope generation 换代后，旧 Renderer/手机 attachment 不得继续持有远端 IO facade。
-      windowHostAttachmentRegistry.detachStaleRemoteSessionAttachments(
-        msg.remoteSessionId,
-        current.generation,
-      );
-    }
-    void workspaceReady.catch((error) => {
-      logger.warn(
-        `failed to prepare bound remote workspace, remoteSessionId=${msg.remoteSessionId}`,
-        error,
-      );
-    });
-    if (previous?.workspacePath && previous.workspaceIdentity) {
-      windowHostControllerRuntime.removeSource({
-        kind: "remote",
-        remoteSessionId: msg.remoteSessionId,
-        workspacePath: previous.workspacePath,
-        workspaceIdentity: previous.workspaceIdentity,
+    void workspaceReady
+      .then(() => {
+        if (cancelledWorkspaceBindRequestIds.has(msg.requestId)) {
+          throw Object.assign(new Error("Remote workspace bind was canceled"), {
+            code: REMOTE_BIND_CANCELED_ERROR_CODE,
+            retryable: false,
+          });
+        }
+        const currentSession = windowRemoteConnectionRegistry.getSession(msg.remoteSessionId);
+        if (!currentSession?.workspaceIdentity) {
+          // Bug 原因：bind 完成前 logical session 可能被并发释放；旧实现直接 return，Main
+          // 永远收不到 ACK。抛入统一失败链，确保每个 requestId 恰好 settle 一次。
+          throw Object.assign(
+            new Error(`远程 workspace bind 完成时 session 已失效: ${msg.remoteSessionId}`),
+            {
+              code: REMOTE_WORKSPACE_BIND_SESSION_MISSING_ERROR_CODE,
+              retryable: true,
+            },
+          );
+        }
+        if (cancelledWorkspaceBindRequestIds.has(msg.requestId)) {
+          throw Object.assign(new Error("Remote workspace bind was canceled"), {
+            code: REMOTE_BIND_CANCELED_ERROR_CODE,
+            retryable: false,
+          });
+        }
+        if (previous?.workspacePath && previous.workspaceIdentity) {
+          windowHostControllerRuntime.removeSource({
+            kind: "remote",
+            remoteSessionId: msg.remoteSessionId,
+            workspacePath: previous.workspacePath,
+            workspaceIdentity: previous.workspaceIdentity,
+          });
+        }
+        // Bug 原因：旧实现 bind 一返回就 detach，取消/超时后旧 attachment 已失效而 Main 仍是旧
+        // descriptor。修复依据见安全 spec（B3）：只有 ready + ACK 检查均通过后才换代 detach。
+        windowHostAttachmentRegistry.detachStaleRemoteSessionAttachments(
+          msg.remoteSessionId,
+          currentSession.generation,
+        );
+        parentPort.postMessage({
+          type: HostResponseTypes.RemoteWorkspaceContextBound,
+          requestId: msg.requestId,
+          ...(msg.legacyRouteHint && msg.legacyRouteHint !== currentSession.workspaceIdentity
+            ? { previousWorkspaceIdentity: msg.legacyRouteHint }
+            : {}),
+        });
+        logger.info(
+          `bound remote workspace context, remoteSessionId=${msg.remoteSessionId}, workspacePath=${msg.workspacePath}`,
+        );
+        activeWorkspaceBindRequestIds.delete(msg.requestId);
+        cancelledWorkspaceBindRequestIds.delete(msg.requestId);
+        workspaceBindAbortControllers.delete(msg.requestId);
+      })
+      .catch((error) => {
+        logger.warn(
+          `failed to prepare bound remote workspace, remoteSessionId=${msg.remoteSessionId}`,
+          error,
+        );
+        const normalizedError =
+          cancelledWorkspaceBindRequestIds.has(msg.requestId) ||
+          (error && typeof error === "object" && "name" in error && error.name === "AbortError")
+            ? Object.assign(new Error("Remote workspace bind was canceled"), {
+                code: REMOTE_BIND_CANCELED_ERROR_CODE,
+                retryable: false,
+              })
+            : error;
+        parentPort.postMessage({
+          type: HostResponseTypes.RemoteWorkspaceContextBindFailed,
+          requestId: msg.requestId,
+          error:
+            normalizedError instanceof Error ? normalizedError.message : String(normalizedError),
+          ...(normalizedError &&
+          typeof normalizedError === "object" &&
+          "code" in normalizedError &&
+          typeof normalizedError.code === "string"
+            ? { reasonCode: normalizedError.code }
+            : {}),
+          ...(normalizedError &&
+          typeof normalizedError === "object" &&
+          "retryable" in normalizedError &&
+          typeof normalizedError.retryable === "boolean"
+            ? { retryable: normalizedError.retryable }
+            : {}),
+        });
+        activeWorkspaceBindRequestIds.delete(msg.requestId);
+        cancelledWorkspaceBindRequestIds.delete(msg.requestId);
+        workspaceBindAbortControllers.delete(msg.requestId);
       });
-    }
-    logger.info(
-      `bound remote workspace context, remoteSessionId=${msg.remoteSessionId}, workspacePath=${msg.workspacePath}`,
-    );
     return;
   }
 
@@ -2863,6 +3210,13 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
                 runtimeSurface: "desktop_local_host",
               },
               serviceAuthorityMode: "desktop-local",
+              // App 控制只在本地窗口 Host 装配：唯一服务 + 窗口导航端口（Host→Main→renderer）。
+              // uiTarget 来自 Main 的 init-local 绑定，模型/CLI 不能提供。
+              appControl: {
+                sourceServerId: "local",
+                ...(msg.uiTarget ? { uiTarget: msg.uiTarget } : {}),
+                navigation: appControlNavigationBridge,
+              },
               zcodeAgentSpawnFallbackCwd: msg.agentSpawnFallbackCwd,
               zcodeBuiltinProviderConfigFilePath: msg.zcodeBuiltinProviderConfigFilePath,
               processLifecycleReporter: runtimeProcessLifecycleReporter,
@@ -2919,9 +3273,70 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
             });
             activeServices = initializedServices;
             registerSourceServerManagementService(initializedServices, msg.remoteAssets ?? {});
+            // 数据同步页的设备同步状态只属于本机 Host：不进入远程 workspace RPC 合同、
+            // source-settings 服务集合，也不在手机 attachment 白名单中。
+            initializedServices.register(
+              IDeviceSyncStateService,
+              createDeviceSyncStateService({
+                filePath: join(getAppConfigDir(), "data-sync-state.json"),
+              }),
+            );
+            initializedServices.register(
+              IProviderProvisioningStatusService,
+              hostProviderProvisioningStatus.service,
+            );
             return initializedServices;
           },
         });
+        // 扩展宿主：授权/网关/槽位/loopback 的唯一 owner 是窗口 Host；Main 只监督进程。
+        // 只有本地窗口 Host 注册，远程 workspace 集合与手机/Web 白名单都不包含此频道。
+        const extensionWorkspaceIdentity =
+          msg.workspaceIdentity?.trim() || msg.workspacePath || null;
+        // 会话能力只复用本窗口 Host 已装配的 App 控制 facade（十二个意图）；
+        // 没有装配时 extensions 保持缺省拒绝（host-unavailable），不新建第二 session owner。
+        const extensionAppControl = getAppControlServiceHandle(services);
+        const extensionService = createExtensionsService({
+          grantsFilePath: join(getAppConfigDir(), "extensions", "grants.json"),
+          pluginDir: join(getAppConfigDir(), "extensions"),
+          workspaceIdentity: () => extensionWorkspaceIdentity,
+          processSupervisor: {
+            start: (input) =>
+              extensionHostRequestBridge.start({
+                ...input,
+                ownerWebContentsId: msg.ownerWebContentsId ?? -1,
+              }),
+            stop: async (generation) => {
+              await extensionHostRequestBridge.stop({
+                ownerWebContentsId: msg.ownerWebContentsId ?? -1,
+                generation,
+              });
+            },
+            stopPlugin: async (generation, pluginId) => {
+              await extensionHostRequestBridge.stop({
+                ownerWebContentsId: msg.ownerWebContentsId ?? -1,
+                generation,
+                pluginId,
+              });
+            },
+          },
+          readSettings: async () => ({ locale: (await settingService.get()).locale }),
+          readProjects: async () => {
+            const projectService = services.getOptional(IProjectService);
+            if (!projectService) return [];
+            return (await projectService.readProjects()).map((project) => ({
+              id: project.id,
+              name: project.name,
+            }));
+          },
+          // 会话能力只复用本窗口 Host 已装配的 App 控制 facade（十二个意图）；
+          // 没有装配时 extensions 会保持缺省拒绝（host-unavailable）。
+          ...(extensionAppControl ? { appControl: extensionAppControl } : {}),
+          logger: {
+            info: (message) => logger.info(message),
+            warn: (message) => logger.warn(message),
+          },
+        });
+        services.register(IExtensionsService, extensionService);
         const zcodeTaskService = services.getOptional(IZCodeTaskService);
         if (zcodeTaskService) {
           const reportingZCodeTaskService = createReportingRemoteZCodeTaskService(

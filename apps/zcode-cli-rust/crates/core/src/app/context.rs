@@ -16,14 +16,38 @@ pub(super) struct RunContext {
     pub prompt_snapshot: Option<crate::domain::prompt::PromptSnapshot>,
     /// A resumed session's stored `envInfo` (Node `extractPersistedEnvInfo`).
     pub stored_env: Option<Value>,
+    /// 3.18 F1：指令文件读取缓存（owner 是 Engine Session，run 只持副本）。
+    pub instructions: Option<std::sync::Arc<[crate::domain::instruction_files::File]>>,
+    /// 最近一次读取里存在但读不出来的路径（不算删除）。
+    pub instructions_unreadable: Option<std::sync::Arc<[String]>>,
+    pub instructions_boundary: Option<usize>,
+    /// 本次重读的原因；公告发出后清空。
+    pub instructions_reason: Option<crate::domain::instruction_files::Reason>,
+    /// 3.18 F2：本次 run 的预算副本（owner 是 Engine Session）。
+    pub total_tokens: crate::domain::total_tokens::Budget,
+    /// 最近一条带 usage 的响应的上下文（input + output）。
+    pub last_context: u64,
+    /// 子代理 run：不重新锚定、不消耗主会话预算，也不注入 system 快照。
+    pub subagent: bool,
+    /// 3.18 F1 auto-memory：本任务类型是否读取项目记忆索引。
+    pub auto_memory: bool,
+    /// 3.18 F3：冻结的 system 消息（与模型标识一起存在 session_entry）。
+    pub prompt_system: Option<Value>,
+    /// 3.18 F12：本 run 的能力标签副本（owner 是 Engine Session；新标签经事件交回）。
+    pub session_features: std::collections::BTreeSet<String>,
     /// Tools hidden from the provider for this turn (Node turn `toolDisallowlist`).
     pub tool_disallowlist: Vec<String>,
+    /// 3.18 F14：Host 准入注入的本轮 automationId（唯一身份来源；普通轮为 None）。
+    pub automation_id: Option<String>,
     /// `@plugin` references of the turn's user input (spec rust-m10-plugins §3.9).
     pub plugin_references: Vec<String>,
     /// Tools registered for the session (legacy `toolAllowlist` / `toolDenylist`).
     pub tool_filter: crate::domain::session_runtime::ToolFilter,
     /// 启动偏好固定的 ToolSearch 模式（本次 run 的请求投影使用）。
     pub tool_search_mode: crate::domain::tool_search::Mode,
+    /// 3.18 App 会话控制授予结论（Host 能力 + mainRoot + 非子代理）。
+    /// 可见性与执行边界都只读这一份本轮副本。
+    pub app_control: bool,
     /// Engine-published permission inputs; `None` in tests that bypass the engine.
     pub permissions:
         Option<tokio::sync::watch::Receiver<std::sync::Arc<super::permissions::Snapshot>>>,
@@ -58,6 +82,8 @@ pub(super) enum TransientKind {
     Continue,
     /// Kept by the engine across runs of this process.
     Reminder(crate::domain::session_runtime::ReminderKind),
+    /// 3.18 F2：本步的 `total_tokens` 提醒；每一步替换，不进 owner 的提醒表。
+    Budget,
 }
 const CONTINUE_PROMPT: &str = "Output token limit hit. Resume directly — no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.";
 fn continuation_tokens() -> usize {
@@ -77,10 +103,22 @@ impl RunContext {
             skills: None,
             prompt_snapshot: None,
             stored_env: None,
+            instructions: None,
+            instructions_unreadable: None,
+            instructions_boundary: None,
+            instructions_reason: None,
+            total_tokens: Default::default(),
+            last_context: 0,
+            subagent: false,
+            auto_memory: false,
+            prompt_system: None,
+            session_features: Default::default(),
             tool_disallowlist: vec![],
+            automation_id: None,
             plugin_references: vec![],
             tool_filter: Default::default(),
             tool_search_mode: Default::default(),
+            app_control: false,
             permissions: None,
             state,
             messages,
@@ -143,6 +181,31 @@ impl RunContext {
             });
         }
         self.transient.sort_by_key(|t| t.position);
+    }
+    /// 换掉本步的 `total_tokens` 提醒（旧倒数不能和新倒数一起发出去）。
+    pub fn clear_budget_reminder(&mut self) {
+        self.transient.retain(|t| t.kind != TransientKind::Budget);
+    }
+    pub fn set_budget_reminder(&mut self, message: Value) {
+        let tokens = estimate(std::slice::from_ref(&message));
+        self.add_transient(TransientKind::Budget, message, tokens);
+    }
+    #[cfg(test)]
+    pub fn budget_reminder(&self) -> Option<&Value> {
+        self.budget_reminders().next_back()
+    }
+    #[cfg(test)]
+    pub fn budget_reminders(&self) -> impl DoubleEndedIterator<Item = &Value> {
+        self.transient
+            .iter()
+            .filter(|t| t.kind == TransientKind::Budget)
+            .map(|t| &t.message)
+    }
+    /// 最近一条响应的上下文（Node `getModelUsageContextTokens`）。
+    pub fn set_usage_context(&mut self, usage: &Value) {
+        if let Some(tokens) = crate::domain::usage::context_tokens(usage) {
+            self.last_context = tokens;
+        }
     }
     pub fn transient(&self) -> &[Transient] {
         &self.transient
@@ -254,18 +317,14 @@ pub(super) async fn hidden_request(
 pub(super) async fn step_prefix(
     model: &dyn ModelPort,
     context: &dyn ContextPort,
-    history: &RunContext,
+    history: &mut RunContext,
+    sink: &EventSink,
     (skills, profile): (
         &crate::domain::skills::SkillCatalog,
         Option<&crate::domain::subagent::Profile>,
     ),
     cancel: &CancellationToken,
 ) -> Result<(Vec<Value>, crate::domain::usage::SectionChars)> {
-    let instructions = if profile.is_some_and(|p| p.inject_agents_md == Some(false)) {
-        vec![]
-    } else {
-        context.instructions(cancel).await?
-    };
     let identity = model.identity();
     let snapshot = history
         .prompt_snapshot
@@ -273,13 +332,35 @@ pub(super) async fn step_prefix(
         .context("Prompt snapshot missing")?;
     let (mut prefix, mut chars) = crate::domain::prompt::prefix_with_chars(
         snapshot,
-        &instructions,
         identity
             .as_ref()
             .map(|id| (id.provider_id.as_str(), id.model_id.as_str())),
         context.desktop(),
         &history.additional_directories,
     );
+    // 3.18 F3：主会话沿用已记录的 system 字节；模板升级不改已绑定前缀。
+    if !history.subagent {
+        let frozen = history
+            .prompt_system
+            .as_ref()
+            .and_then(|snapshot| super::prompt_system::matching(snapshot, identity.as_ref()));
+        match frozen.filter(|_| super::prompt_system::spliceable(&prefix)) {
+            Some(system) => {
+                // W4：只有开头恰好 SYSTEM_LEN 条 system 时才替换，避免改掉非 system 消息。
+                prefix.splice(0..super::prompt_system::SYSTEM_LEN, system);
+            }
+            None => {
+                let system = super::prompt_system::system_messages(&prefix);
+                if super::prompt_system::spliceable(&prefix)
+                    && system.len() == super::prompt_system::SYSTEM_LEN
+                {
+                    super::prompt_system::record(sink, identity.as_ref(), &system, cancel).await?;
+                    history.prompt_system =
+                        Some(super::prompt_system::build(identity.as_ref(), &system));
+                }
+            }
+        }
+    }
     if let Some(listing) = skills.listing() {
         chars.skills = crate::domain::usage::js_len(&listing);
         prefix.push(json!({"role":"user","content":format!("<system-reminder>\n{listing}\n</system-reminder>")}));

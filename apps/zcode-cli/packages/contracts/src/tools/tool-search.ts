@@ -3,9 +3,17 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { JsonSchema } from "../model/index.js";
 
 export const TOOL_SEARCH_NAME = "ToolSearch";
+export const LOCAL_TOOL_SEARCH_NAME = "LocalToolSearch";
 export const ToolSearchModeSchema = z.enum(["auto", "native", "local", "off"]);
 export type ToolSearchMode = z.infer<typeof ToolSearchModeSchema>;
 export type ResolvedToolSearchMode = Exclude<ToolSearchMode, "auto">;
+/** local 模式用独立工具名，不复用 Native 的 `ToolSearch`；规则/权限/历史都按名字归一。 */
+export function toolSearchNameForMode(mode: ResolvedToolSearchMode): string {
+  return mode === "local" ? LOCAL_TOOL_SEARCH_NAME : TOOL_SEARCH_NAME;
+}
+export function isToolSearchName(name: string | undefined): boolean {
+  return name === TOOL_SEARCH_NAME || name === LOCAL_TOOL_SEARCH_NAME;
+}
 export const TOOL_SEARCH_DEFAULT_RESULTS = 5;
 export const TOOL_SEARCH_BETA = "advanced-tool-use-2025-11-20";
 

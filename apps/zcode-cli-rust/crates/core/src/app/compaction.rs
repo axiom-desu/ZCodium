@@ -272,6 +272,10 @@ impl RunContext {
                 None => false,
             });
         self.usage_anchor = None;
+        // 3.18 F2：跨压缩的预算连续（压缩前的上下文滚进累计，剩余额度不回满）。
+        let rolled = self.last_context;
+        self.total_tokens.roll_over(rolled);
+        // 压缩后必须重读指令文件（由下一步的 boundary 变化触发）。
         self.estimated = kept;
         for reminder in reminders {
             self.push(reminder);

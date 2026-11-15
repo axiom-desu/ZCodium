@@ -62,6 +62,25 @@ fn first_issue(validator: &Validator, value: &Value, path: &str) -> Option<Strin
 /// 与上游 ZCode-rs 的分叉：本仓库移除了闲时（OffPeak）执行，改为拒绝携带
 /// `OffPeakCreate` 的 `toolDisallowlist`；`modelExecution` 依赖 `modelSelection` 两侧一致。
 fn refinements(kind: &str, p: &Value) -> Result<(), String> {
+    // 会话选区引用（上游 3.18.2 conversationQuotes）在 Rust 运行时没有材料渲染、持久化与
+    // 投影 owner。接受命令却丢掉批注等于假支持，因此这里显式拒绝，由 Host 先按
+    // runtime/capabilities.conversationQuotes 决定是否下发。
+    if has_conversation_quotes(p) {
+        return Err(
+            "conversationQuotes: this Rust runtime does not support conversation selection quotes"
+                .into(),
+        );
+    }
+    // 受管 worktree 的 fork 目标 cwd（上游 3.18.2 `forkAssistant.targetCwd`）在 Rust 运行时
+    // 没有 native 实现：不持久化子会话的 directory/path，也没有 `session/releaseUnderDirectory`。
+    // `forkAssistant` 在 TS 侧不是 strict，schema 会接受并剥离该字段，命令随后会在父 cwd 里
+    // 完成 fork——用户看到成功、目录却错了。因此这里显式拒绝，与 quotes 同一策略；
+    // 去掉这条必须先交付真实语义，并把 runtime/capabilities.worktreeCwd 改为 true。
+    if kind == "forkAssistant" && p.get("targetCwd").is_some() {
+        return Err(
+            "targetCwd: this Rust runtime does not support forking into another cwd".into(),
+        );
+    }
     if kind != "sendText" {
         return Ok(());
     }
@@ -77,6 +96,23 @@ fn refinements(kind: &str, p: &Value) -> Result<(), String> {
         return Err("modelExecution: modelExecution requires modelSelection".into());
     }
     Ok(())
+}
+
+/// `sendText` / `editUserQuery` / `editQueueItem` 的引用字段，以及 createSession.firstInput 的同名字段。
+fn has_conversation_quotes(payload: &Value) -> bool {
+    let non_empty = |value: Option<&Value>| {
+        value
+            .and_then(Value::as_array)
+            .is_some_and(|q| !q.is_empty())
+    };
+    if non_empty(payload.get("conversationQuotes")) {
+        return true;
+    }
+    payload
+        .get("firstInput")
+        .and_then(|first| first.get("conversationQuotes"))
+        .and_then(Value::as_array)
+        .is_some_and(|quotes| !quotes.is_empty())
 }
 
 /// Parse a raw `v4/command` envelope into the canonical Zod-compatible DTO.
@@ -138,188 +174,5 @@ pub fn invalid_payload_ack(raw: &Value, message: &str) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn envelope(kind: &str, payload: Value) -> Value {
-        json!({"commandId":"c1","clientId":"app","sessionId":"s","type":kind,"payload":payload,"issuedAt":1})
-    }
-
-    #[test]
-    fn parse_command_returns_canonical_stripped_dto_and_numeric_revision() {
-        let mut raw = envelope("setFollowupMode", json!({"mode":"queue","extra":true}));
-        raw["baseRevision"] = json!(-1.5);
-        raw["extraEnvelope"] = json!(true);
-        let command = parse_command(&raw).unwrap();
-        assert_eq!(command.base_revision, Some(-1.5));
-        assert_eq!(command.payload, json!({"mode":"queue"}));
-        let encoded = serde_json::to_value(command).unwrap();
-        assert!(encoded.get("extraEnvelope").is_none());
-        assert_eq!(encoded["sessionId"], "s");
-    }
-
-    #[test]
-    fn parser_normalizes_nested_trim_paths_without_trimming_user_text() {
-        let mut command = envelope(
-            "sendText",
-            json!({
-                "text":"  preserve me  ",
-                "modelSelection":{"providerId":"  provider  ","modelId":" model ","options":{"reasoningLevel":" deep "}}
-            }),
-        );
-        command["baseLogEpoch"] = json!("  epoch-1  ");
-        let parsed = parse_command(&command).unwrap();
-        assert_eq!(parsed.base_log_epoch.as_deref(), Some("epoch-1"));
-        assert_eq!(parsed.payload["text"], "  preserve me  ");
-        assert_eq!(parsed.payload["modelSelection"]["providerId"], "provider");
-        assert_eq!(parsed.payload["modelSelection"]["modelId"], "model");
-        assert_eq!(
-            parsed.payload["modelSelection"]["options"]["reasoningLevel"],
-            "deep"
-        );
-
-        let mcp = envelope(
-            "createSession",
-            json!({
-                "workspaceId":"workspace",
-                "mcpServers":[{"name":" server ","command":" command ","args":[],"env":[{"name":" KEY ","value":"unchanged"}]}]
-            }),
-        );
-        let parsed = parse_command(&mcp).unwrap();
-        assert_eq!(parsed.payload["mcpServers"][0]["name"], "server");
-        assert_eq!(parsed.payload["mcpServers"][0]["command"], "command");
-        assert_eq!(parsed.payload["mcpServers"][0]["env"][0]["name"], "KEY");
-        assert_eq!(
-            parsed.payload["mcpServers"][0]["env"][0]["value"],
-            "unchanged"
-        );
-    }
-
-    #[test]
-    fn parser_omits_absent_optional_fields_but_keeps_null_session() {
-        let command = parse_command(&envelope("sendText", json!({"text":"x"}))).unwrap();
-        let encoded = serde_json::to_value(command).unwrap();
-        for key in ["ttft", "baseRevision", "baseLogEpoch"] {
-            assert!(encoded.get(key).is_none(), "{key}");
-        }
-        let mut raw = envelope("createSession", json!({"workspaceId":"w"}));
-        raw["sessionId"] = Value::Null;
-        let encoded = serde_json::to_value(parse_command(&raw).unwrap()).unwrap();
-        assert_eq!(encoded["sessionId"], Value::Null);
-    }
-
-    #[test]
-    fn every_generated_command_compiles() {
-        assert_eq!(validators().payloads.len(), 34);
-    }
-
-    #[test]
-    fn accepts_valid_and_rejects_invalid_payloads_like_node() {
-        assert!(validate_command(&envelope("sendText", json!({"text":"hi"}))).is_ok());
-        // 本仓库 sendText 是 .strict()：未知字段被 zod 拒绝，而非静默剥离。
-        assert!(validate_command(&envelope("sendText", json!({"text":"hi","extra":1}))).is_err());
-        // 非 strict 命令保持 zod 默认语义：未知字段被接受（Node 解析时剥离）。
-        assert!(
-            validate_command(&envelope("setFollowupMode", json!({"mode":"x","extra":1}))).is_err()
-        );
-        // setFollowupMode 属 CAS 命令（requiresBaseRevision），必须带 baseRevision。
-        let mut followup = envelope("setFollowupMode", json!({"mode":"queue"}));
-        followup["baseRevision"] = json!(3);
-        assert!(validate_command(&followup).is_ok());
-        assert!(validate_command(&envelope("sendText", json!({"text":1}))).is_err());
-        assert!(validate_command(&envelope("nope", json!({}))).is_err());
-        let missing_revision =
-            validate_command(&envelope("setAutoDrain", json!({"autoDrain":true})));
-        assert!(missing_revision.unwrap_err().starts_with("baseRevision:"));
-    }
-
-    #[test]
-    fn strict_commands_reject_unknown_fields() {
-        // 这两个代表性 payload 在 TS 里显式 .strict()；测试范围不等于全集扫描。
-        assert!(validate_command(&envelope("sendText", json!({"text":"x","junk":1}))).is_err());
-        assert!(
-            validate_command(&envelope(
-                "discardSharedContext",
-                json!({"contextId":"c","junk":1})
-            ))
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn mirrors_send_text_refinements() {
-        let execution = json!({"text":"x","modelExecution":{"selectionScope":"execution"}});
-        assert!(validate_command(&envelope("sendText", execution)).is_err());
-        // 闲时执行已移除：携带 OffPeakCreate 的 toolDisallowlist 必须被拒绝。
-        let off_peak = json!({"text":"x","toolDisallowlist":["OffPeakCreate"]});
-        let err = validate_command(&envelope("sendText", off_peak)).unwrap_err();
-        assert!(
-            err.contains("Idle-time execution is no longer supported"),
-            "{err}"
-        );
-    }
-
-    #[test]
-    fn envelope_accepts_optional_ttft_context() {
-        // 本仓库 envelope 有 ttft（localTtftContextSchema.optional()），Rust 侧必须放行。
-        let mut raw = envelope("sendText", json!({"text":"hi"}));
-        raw["ttft"] = json!({
-            "version": 1,
-            "observationId": "01890a5d-ac96-774b-bcce-b302099a8057"
-        });
-        assert!(validate_command(&raw).is_ok());
-    }
-
-    #[test]
-    fn invalid_ack_matches_node_shape() {
-        let ack = invalid_payload_ack(&json!({"commandId":7}), "bad");
-        assert_eq!(
-            ack,
-            json!({"commandId":"","status":"rejected","reasonCode":"proto.invalidPayload","message":"bad","revisionAtDecision":0})
-        );
-    }
-
-    #[test]
-    fn decodes_and_round_trips_live_typescript_oracle_fixtures() {
-        use crate::{AckStatus, Command, CommandAck};
-
-        let fixture: Value =
-            serde_json::from_str(include_str!("../tests/fixtures/ts-command-oracle.json")).unwrap();
-        for case in fixture["commands"].as_array().unwrap() {
-            let raw: Value = serde_json::from_str(case["raw"].as_str().unwrap()).unwrap();
-            let result = parse_command(&raw);
-            assert_eq!(
-                result.is_ok(),
-                case["ok"].as_bool().unwrap(),
-                "{}",
-                case["name"]
-            );
-            if !result.is_ok() {
-                continue;
-            }
-            let command = result.unwrap();
-            let normalized = serde_json::to_value(&command).unwrap();
-            let expected = &case["parsed"];
-            assert!(
-                crate::json_schema::js_json_equal(&normalized, expected),
-                "{}",
-                case["name"]
-            );
-            let decoded: Command = serde_json::from_value(normalized.clone()).unwrap();
-            assert_eq!(decoded, command, "{}", case["name"]);
-        }
-
-        for case in fixture["acknowledgements"].as_array().unwrap() {
-            let expected: Value = serde_json::from_str(case["raw"].as_str().unwrap()).unwrap();
-            let decoded: CommandAck = serde_json::from_value(expected.clone()).unwrap();
-            assert_eq!(decoded.status, AckStatus::Failed);
-            let encoded = serde_json::to_value(&decoded).unwrap();
-            assert!(crate::json_schema::js_json_equal(&encoded, &case["parsed"]));
-            let round_trip: CommandAck = serde_json::from_value(encoded.clone()).unwrap();
-            assert_eq!(round_trip, decoded);
-            for field in ["reasonCode", "message", "memoryEnabled", "ttftExcluded"] {
-                assert_eq!(encoded.get(field), expected.get(field), "{field}");
-            }
-        }
-    }
-}
+#[path = "command_schema_tests.rs"]
+mod tests;

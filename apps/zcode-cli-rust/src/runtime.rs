@@ -190,6 +190,25 @@ impl Context {
                     None
                 }
             };
+        // 3.18 F1 auto-memory：项目记忆索引与 TS/Desktop 共用 `<cli>/memories/projects/...`；
+        // memory 功能关闭时不读取（不创建目录，缺索引则不公告）。
+        let memory_enabled = self.startup_config.config["features"]["memory"] != false
+            && self.startup_config.config["memory"]["use"] != false;
+        let memory_root = if memory_enabled {
+            match self.node_database().await {
+                Ok(paths) => {
+                    let identity = std::env::var("ZCODE_WORKSPACE_IDENTITY").ok();
+                    Some(zcode_cli_domain::memory::project_memory_root(
+                        &paths.cli,
+                        identity.as_deref(),
+                        &self.requested_cwd,
+                    ))
+                }
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
         let engine = Engine::new(
             self.workspace.clone(),
             identity,
@@ -199,6 +218,7 @@ impl Context {
                     self.home.clone(),
                     desktop,
                     self.runtime_env.vars().into(),
+                    memory_root,
                 )),
                 store,
                 model,

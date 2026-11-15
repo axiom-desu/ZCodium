@@ -19,6 +19,7 @@ import {
   Cloud,
   Folder,
   FolderOpen,
+  Folders,
   Hash,
   ListFilter,
   Maximize2,
@@ -100,6 +101,7 @@ import {
   WORKSPACE_TASK_PAGE_SIZE,
   type WorkspaceTaskVisibleLimitByKey,
 } from "@/lib/workspaceTaskPagination.js";
+import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 import { partitionWorkspaceTabsByPurpose } from "@/lib/workspacePurpose.js";
 import {
   areAllGroupedTaskGroupsExpanded,
@@ -1475,6 +1477,19 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                           <Archive className="size-4" />
                                           {projectIntl.formatMessage({
                                             id: "projectSidebar.restoreProjects",
+                                          })}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          data-testid="project-sidebar-manage"
+                                          onSelect={() => {
+                                            // 项目管理是设置页的同一份树投影；不复制任务/项目事实。
+                                            setPendingSettingsSectionIntent("projects");
+                                            openSettingsTab();
+                                          }}
+                                        >
+                                          <Folders className="size-4" />
+                                          {projectIntl.formatMessage({
+                                            id: "projectManagement.manage",
                                           })}
                                         </DropdownMenuItem>
                                       </>

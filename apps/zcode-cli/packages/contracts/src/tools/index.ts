@@ -28,6 +28,7 @@ export * from "./task-stop.js";
 export * from "./read-session-context.js";
 export * from "./submit-result.js";
 export * from "./websearch.js";
+export * from "./plugin-discovery.js";
 export * from "./workflow.js";
 export * from "./create-workflow.js";
 // 补全入口：给一个正在等代码的留白补上函数体。名字常量被 core 的分派、权限服务的 owner 规则

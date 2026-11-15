@@ -22,6 +22,8 @@ import {
   normalizeReadFileStateMtimeMs,
 } from "../../tool/read-file-state.js";
 import { resolveEnabledProjectMemoryRoot } from "../helpers/project-memory.js";
+import { ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH } from "../../memory/project-memory-retrieval-branch.js";
+import type { ProjectMemoryRetrievalBranch } from "../../memory/project-memory-retrieval-branch.js";
 import { buildContextHistoryEntries } from "./context-history-entries.js";
 import { resolveRuntimeEmbeddedSearchEnabled } from "./embedded-search-branch.js";
 import { getContextSourceShellDisplayName } from "./session-shell-environment.js";
@@ -29,6 +31,7 @@ import {
   ensureGenUiOutputDirectory,
   resolveGenUiOutputDirectory,
 } from "../helpers/gen-ui-output.js";
+import { recordInstructionAnnouncement } from "../helpers/instruction-announcement.js";
 
 export { buildContextHistoryEntries };
 
@@ -68,13 +71,29 @@ export async function ensureContextInitialized(
   this.startMcpStartup(traceContext);
   this.skillLoadOutcome = await this.discoverSkillsForContext(traceContext);
   this.memoryRoot = await this.loadProjectMemoryRoot(traceContext);
-  this.memoryIndexContent = await loadProjectMemoryIndexContent(this, this.memoryRoot);
+  this.memoryIndexContent = await loadProjectMemoryIndexContent(
+    this,
+    this.memoryRoot,
+    ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+  );
   await ensureGenUiOutputDirectory(this);
   this.contextBuilder = this.createContextBuilderFromSnapshot(snapshot, this.memoryRoot, {
     memoryIndexContent: this.memoryIndexContent,
     model,
   });
   this.initializeMessageHistoryFromContext(this.contextBuilder, traceContext);
+  // 首次公告：把本次构建出的完整指令正文与文件集合记成已公告（已有状态时不覆盖，
+  // 否则冷恢复会把冻结正文换成当前文件内容）。
+  const instructionSection = this.latestContextBuildResult?.sections.find(
+    (section) => section.source === "request_user_context",
+  );
+  if (instructionSection && (instructionSection.instructionFiles?.length ?? 0) > 0) {
+    await recordInstructionAnnouncement(
+      this,
+      { content: instructionSection.content, files: instructionSection.instructionFiles ?? [] },
+      traceContext,
+    );
+  }
   this.contextInitialized = true;
 }
 
@@ -146,6 +165,8 @@ export function createContextBuilderFromSnapshot(
     outputStyle: this.config.outputStyle,
     compact: this.config.compact,
     guidanceToolNames: this.getTools(options.model).map((tool) => tool.name),
+    // 已公告的指令正文（冻结字节）；没有公告时由当前文件渲染。
+    instructionAnnouncementContent: this.instructionAnnouncement?.content,
   };
 
   return createContextBuilder(contextConfig).setToolRegistry(this.registry);
@@ -175,7 +196,10 @@ export async function loadProjectMemoryRoot(
 async function loadProjectMemoryIndexContent(
   runtime: AgentRuntimeInternal,
   memoryRoot: string | undefined,
+  retrievalBranch: ProjectMemoryRetrievalBranch,
 ): Promise<string | undefined> {
+  // semantic-recall 分支不加载 MEMORY.md：pointer/index 与 Selector/Recall 互斥。
+  if (retrievalBranch !== "default-index") return undefined;
   const fileSystemPort = runtime.fileSystemPort;
   if (!fileSystemPort || !memoryRoot) return undefined;
   const indexPath = join(memoryRoot, "MEMORY.md");

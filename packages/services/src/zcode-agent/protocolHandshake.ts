@@ -11,7 +11,7 @@ import {
 
 const PROBE_TIMEOUT_MS = 10_000;
 
-export type AgentProtocolProbeResult =
+type AgentProtocolProbeResult =
   | { status: "verified" | "unverified" }
   | { status: "incompatible" | "invalid"; error: ZCodeProtocolResponseError };
 

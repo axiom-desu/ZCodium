@@ -1,10 +1,14 @@
 import { ProxyChannel, type IChannelServer } from "@zcode/rpc";
 import {
+  IBotsService,
   IGenUiService,
   IMcpSyncService,
+  ISettingService,
+  IZCodeAgentService,
   type ServiceCollection,
   type ServiceExposurePolicy,
   type ZCodeAgentV4ClientMode,
+  WEB_REMOTE_BOTS_ALLOWED_METHODS,
 } from "@zcode/services";
 import { ServiceChannels } from "@zcode/shared";
 
@@ -82,7 +86,7 @@ const WEB_CLIENT_EXPOSURE_POLICY: ServiceExposurePolicy = {
   ),
 };
 
-export function resolveWindowHostServiceExposurePolicy(
+function resolveWindowHostServiceExposurePolicy(
   clientMode: ZCodeAgentV4ClientMode,
   surface: "mobile" | "web-client" = "mobile",
 ): ServiceExposurePolicy | undefined {
@@ -100,19 +104,76 @@ const MOBILE_MCP_SYNC_ALLOWED_METHODS = new Set<string>([
   "listWorkspaceMcpServerStatuses",
 ] satisfies ReadonlyArray<keyof IMcpSyncService>);
 
-function scopeMcpSyncServiceForMobile(service: IMcpSyncService): IMcpSyncService {
-  const rejectMobileSync = async (): Promise<never> => {
-    throw Object.assign(new Error("Remote sync is only available from Desktop"), {
+/**
+ * Bug 原因：远程 attachment 直接发布完整 Setting/ZCodeAgent 服务，新增的
+ * `getUserInstructions/saveUserInstructions` 与 `setWorkspaceMcpTrust` 会被配对手机直接调用，
+ * 造成持久化提示注入与任意工作区信任写入。修复依据见
+ * `.agents/specs/upstream-3.18-security-hardening.md`（B2）：频道内再按方法收窄，
+ * Setting 使用白名单让未来新方法默认拒绝；Agent 只拒绝明确的 trust 方法，保留手机既有事件面。
+ */
+const MOBILE_SETTING_ALLOWED_METHODS = new Set<string>([
+  "get",
+  "update",
+  "updateDataBaseDir",
+  "ensureDefaultProject",
+] satisfies ReadonlyArray<keyof ISettingService>);
+
+const MOBILE_ZCODE_AGENT_DENIED_METHODS = new Set<string>([
+  "setWorkspaceMcpTrust",
+] satisfies ReadonlyArray<keyof IZCodeAgentService>);
+
+/**
+ * 手机/Web attachment 只发布 Bot 管理与读取面；未来新增方法默认拒绝。
+ *
+ * 原因：Bots 通道过去以完整服务面发布。`readTopicResource`/`validateTopicResource` 是
+ * Host 反向 RPC 的字节下载入口，`handleProviderCallback*`/`handleInboundMessage` 是只有
+ * 受信 provider 回调与桥接才可调用的入站面；任意配对客户端直接调用就绕过 CLI 任务归属、
+ * 工具权限与 callback 鉴权。收窄白名单而不是逐条拒绝，保证以后新增的 Bots 方法不会自动开放。
+ */
+const MOBILE_BOTS_ALLOWED_METHODS = new Set<string>(WEB_REMOTE_BOTS_ALLOWED_METHODS);
+
+function rejectRemoteMethod(): Promise<never> {
+  return Promise.reject(
+    Object.assign(new Error("Remote sync is only available from Desktop"), {
       kind: "feature_disabled" as const,
-    });
-  };
-  return new Proxy({} as IMcpSyncService, {
+    }),
+  );
+}
+
+function scopeMcpSyncServiceForMobile(service: IMcpSyncService): IMcpSyncService {
+  return scopeServiceMethods(service, MOBILE_MCP_SYNC_ALLOWED_METHODS);
+}
+
+/** 只发布白名单方法面；未来新增方法默认拒绝。 */
+function scopeServiceMethods<T extends object>(
+  service: T,
+  allowed: ReadonlySet<string>,
+  options?: { keepEvents?: boolean },
+): T {
+  return new Proxy({} as T, {
     get: (_target, key) => {
-      // 只提供方法面；事件和 thenable 探测不能伪装成可调用同步方法。
-      if (typeof key !== "string" || key === "then" || /^on[A-Z]/.test(key)) return undefined;
-      if (!MOBILE_MCP_SYNC_ALLOWED_METHODS.has(key)) return rejectMobileSync;
-      const method = service[key as keyof IMcpSyncService] as (...args: unknown[]) => unknown;
+      if (typeof key !== "string" || key === "then") return undefined;
+      if (/^on[A-Z]/.test(key)) {
+        // Setting 的 onDidChange 是既有 RPC 事件；方法白名单不能连带切断订阅。
+        if (!options?.keepEvents) return undefined;
+        const event = service[key as keyof T];
+        return typeof event === "function" ? event.bind(service) : event;
+      }
+      if (!allowed.has(key)) return rejectRemoteMethod;
+      const method = service[key as keyof T] as (...args: unknown[]) => unknown;
       return (...args: unknown[]) => method.apply(service, args);
+    },
+  });
+}
+
+/** 只拒绝明确列出的方法；事件与其余既有方法保持原绑定。 */
+function denyServiceMethodsForRemote<T extends object>(service: T, denied: ReadonlySet<string>): T {
+  return new Proxy({} as T, {
+    get: (_target, key) => {
+      if (typeof key !== "string" || key === "then") return undefined;
+      if (denied.has(key)) return rejectRemoteMethod;
+      const value = service[key as keyof T];
+      return typeof value === "function" ? value.bind(service) : value;
     },
   });
 }
@@ -128,16 +189,46 @@ export function exposeWindowHostAttachmentServices(params: {
   const { server, services, clientMode } = params;
   let overrides = params.overrides;
   if (clientMode === "web-remote-replayable") {
+    // 只收窄本 attachment 的 override，不改共享集合或调用方 map，避免污染桌面 attachment。
+    const scopedOverrides = new Map(overrides);
     const mcpSync =
-      (overrides?.get(IMcpSyncService.channelName) as IMcpSyncService | undefined) ??
+      (scopedOverrides.get(IMcpSyncService.channelName) as IMcpSyncService | undefined) ??
       services.getOptional(IMcpSyncService);
     if (mcpSync) {
-      // 仅收窄本 attachment 的 override，不改共享集合或调用方 map，避免污染桌面 attachment。
-      overrides = new Map(overrides).set(
-        IMcpSyncService.channelName,
-        scopeMcpSyncServiceForMobile(mcpSync),
+      scopedOverrides.set(IMcpSyncService.channelName, scopeMcpSyncServiceForMobile(mcpSync));
+    }
+    const setting =
+      (scopedOverrides.get(ISettingService.channelName) as ISettingService | undefined) ??
+      services.getOptional(ISettingService);
+    if (setting) {
+      // 个性化指令写入会落到 Host 的 ~/.zcodium/AGENTS.md，远程必须按白名单拒绝。
+      scopedOverrides.set(
+        ISettingService.channelName,
+        scopeServiceMethods(setting, MOBILE_SETTING_ALLOWED_METHODS, { keepEvents: true }),
       );
     }
+    const agent =
+      (scopedOverrides.get(IZCodeAgentService.channelName) as IZCodeAgentService | undefined) ??
+      services.getOptional(IZCodeAgentService);
+    if (agent) {
+      // Agent 通道也能直接调 trust 方法，不能只靠 McpSync 的方法收窄。
+      scopedOverrides.set(
+        IZCodeAgentService.channelName,
+        denyServiceMethodsForRemote(agent, MOBILE_ZCODE_AGENT_DENIED_METHODS),
+      );
+    }
+    const bots =
+      (scopedOverrides.get(IBotsService.channelName) as IBotsService | undefined) ??
+      services.getOptional(IBotsService);
+    if (bots) {
+      // 话题资源字节与 bot 入站回调只允许 Host 内部/受信 provider 调用，
+      // 不能成为配对手机或 Web 客户端的直接下载/注入入口。
+      scopedOverrides.set(
+        IBotsService.channelName,
+        scopeServiceMethods(bots, MOBILE_BOTS_ALLOWED_METHODS),
+      );
+    }
+    overrides = scopedOverrides;
   }
   services.exposeOnChannelServer(
     server,

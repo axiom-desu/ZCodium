@@ -128,6 +128,7 @@ import {
 } from "./workflow-concurrency-ceiling.js";
 import type { WorkflowConcurrencyPort } from "./workflow-concurrency-governor.js";
 import type { AgentRuntimeWorkflowDriverDeps } from "./workflow-driver-types.js";
+import type { WorkflowWebSearchBudgetPort } from "@zcode/contracts";
 import {
   createWorkflowEscalationRegistry,
   type WorkflowEscalationRegistry,
@@ -177,6 +178,11 @@ export interface DynamicWorkflowActorRuntimeInput {
    * driver 在治理器端口在场时给出；工厂原样放进 runtime deps。缺席即不受闸门约束。
    */
   modelRequestAdmission?: ModelRequestAdmission;
+  /**
+   * 本 ask 的 WebSearch 预算端口（计数在 driver 会话状态里，按 actor session 晚查）。
+   * 与 escalate/submit 同族：端口在场即由 core 在 WebSearch 请求前扣减。
+   */
+  webSearchBudgetPort: WorkflowWebSearchBudgetPort;
 }
 
 export interface DynamicWorkflowRunServiceDeps {

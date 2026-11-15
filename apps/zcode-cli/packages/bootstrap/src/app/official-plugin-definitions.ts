@@ -80,6 +80,10 @@ export const OFFICIAL_DOCUMENTS_REQUIRED_SEED_PATHS = BUILTIN_PLUGIN_SEED_PATHS[
 export const OFFICIAL_PDF_REQUIRED_SEED_PATHS = BUILTIN_PLUGIN_SEED_PATHS["pdf-plugin"];
 const OFFICIAL_ZCODE_GUIDE_REQUIRED_SEED_PATHS = BUILTIN_PLUGIN_SEED_PATHS["zcode-guide-plugin"];
 const OFFICIAL_CUA_REQUIRED_SEED_PATHS = BUILTIN_PLUGIN_SEED_PATHS["zcode-cua-plugin"];
+// design 是纯内容型插件（入口技能 + design-resources 资源 + SessionStart hook，无 MCP / 无原生依赖）。
+// 上游 3.18.2 在定义里另抄了一份 15 项清单；本仓沿用单一 seed 源，避免 seed / SEA / desktop / remote
+// 四处清单漂移（清单本身在 packages/shared/src/builtinPluginAssets.ts）。
+const OFFICIAL_DESIGN_REQUIRED_SEED_PATHS = BUILTIN_PLUGIN_SEED_PATHS["design-plugin"];
 
 export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = [
   {
@@ -143,7 +147,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../../node-repl-host",
       "../../../node-repl-host",
     ],
-    version: "0.6.1",
+    version: "0.7.0",
   },
   {
     listing: {
@@ -351,6 +355,36 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../../../zcode-guide-plugin",
     ],
     version: "0.3.0",
+  },
+  {
+    // 上游 3.18.2 的纯内容型设计插件：默认关闭（与上游一致），由用户在插件页显式启用，
+    // 避免首启就给所有会话注入新技能。内容与 hook 的 seed 校验走单一资产契约。
+    listing: {
+      author: ZAI_AUTHOR,
+      category: "productivity",
+      displayName: "Design",
+      // 英文名与描述回退到 manifest（displayName / description）；这里只放 zh-CN 覆盖。
+      displayName_i18n: { "zh-CN": "设计" },
+      description_i18n: {
+        "zh-CN": "做网页设计稿、原型和演示稿；桌面端本地工作区可在内置浏览器里点选修改。",
+      },
+      examplePrompts: [
+        "Design a landing page for a budgeting app",
+        "Build an 8-page HTML deck",
+      ],
+      examplePrompts_i18n: {
+        "zh-CN": ["给记账 App 设计一个落地页", "做一份 8 页的 HTML 演示稿"],
+      },
+    },
+    name: "design",
+    requiredSeedPaths: OFFICIAL_DESIGN_REQUIRED_SEED_PATHS,
+    rootCandidates: [
+      "packages/design-plugin",
+      "../design-plugin",
+      "../../design-plugin",
+      "../../../design-plugin",
+    ],
+    version: "0.7.2",
   },
   {
     // 产品决策：电脑控制回退为默认关闭，需用户在设置页显式开启。

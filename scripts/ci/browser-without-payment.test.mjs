@@ -30,7 +30,17 @@ export class BrowserWindow extends EventEmitter {
 // 它们从 electron 取的符号此前不在 mock 里，esbuild 直接 "No matching export"
 // 构建失败——本用例只验证浏览器访客隔离与对话框 preload，不需要沙箱真实行为，
 // 因此这里只补到「能被解析」的最小形状，不模拟任何语义。
-export const clipboard = { writeImage: async () => {}, readText: async () => "" };
+// Electron 44 移除同步 clipboard.writeImage，生产链改成
+// clipboard.write([new ClipboardItem({...})])；下面按真实导出名补上异步合同。
+export class ClipboardItem {
+  constructor(items) {
+    this.items = items;
+  }
+}
+export const clipboard = {
+  write: async () => {},
+  readText: async () => "",
+};
 export const MessageChannelMain = {};
 export const dialog = { showMessageBox: async () => ({ response: 0 }) };
 export const session = { fromPartition: () => ({}) };

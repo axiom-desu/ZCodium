@@ -29,6 +29,8 @@ export function refreshBranchAwareBuiltInTools(runtime: AgentRuntimeInternal): v
     bashTimeoutPolicy: runtime.config.bashTimeoutPolicy,
     includeSkill: Boolean(runtime.skillPort),
     includeAgent: Boolean(runtime.subagentPort),
+    // 第二次注册入口必须复用同一个可信变体，否则 shell 快照初始化会把 8/12 个工具面洗成另一侧。
+    ...(runtime.sessionControlKind ? { sessionControlKind: runtime.sessionControlKind } : {}),
     embeddedSearchEnabled,
     // 本函数是**第二个**
     // 注册入口，且刻意只传一个精简选项集。对「只有 true 才注册」的门（Cron / Workflow…）

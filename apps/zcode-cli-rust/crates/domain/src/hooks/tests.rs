@@ -15,6 +15,20 @@ fn text(value: &Value) -> Option<&str> {
 }
 
 #[test]
+fn on_error_is_a_per_registration_policy_not_an_event() {
+    let config = json!({"enabled":true,"events":{"PreToolUse":[{"hooks":[
+        {"type":"command","command":"hook","onError":"deny"},
+        {"type":"command","command":"hook"}
+    ]}]}});
+    let registrations = registrations(&config, None);
+    assert_eq!(registrations.len(), 2);
+    assert_eq!(registrations[0].event, HookEvent::PreToolUse);
+    assert_eq!(registrations[0].on_error, OnErrorPolicy::Deny);
+    assert_eq!(registrations[1].on_error, OnErrorPolicy::Allow);
+    assert_eq!(HookEvent::parse("OnError"), None);
+}
+
+#[test]
 fn inputs_and_stdin_match_node() {
     let f = fixtures();
     let cases = f["inputs"].as_array().unwrap();
@@ -343,6 +357,7 @@ fn texts_match_node() {
             status_message: hook["statusMessage"].as_str().map(str::to_owned),
             timeout_ms: case[1].as_u64().unwrap(),
             max_output_bytes: 32768,
+            on_error: super::OnErrorPolicy::Allow,
             review: None,
         };
         let got = display::descriptor(&registration, &json!({"sessionId":"s-1","cwd":"/w"}));

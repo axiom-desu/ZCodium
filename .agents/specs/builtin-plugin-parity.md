@@ -24,16 +24,17 @@ browser-use 之外的插件源码，但 `scripts/prepare-prebuilds.mjs` 的 stag
 > **判定：部分有效**。表内 8 个包名仍都是官方插件、目录形态大体成立；但表格已不是当前全集——`BUILTIN_PLUGIN_SEED_PATHS` 现有 16 项，新增 pdf / spreadsheets / visualize / android-emulator / ios-simulator / superpowers 未列。`documents`（seed 42 项）与 `image-search`（改接用户自配端点）的「运行时依赖」描述也已被上游版 / 本地版改写。
 > 证据：`packages/shared/src/builtinPluginAssets.ts` 的键集合；`git ls-tree aac47556 -- apps/zcode-cli/packages/documents-plugin | wc -l` = 44，与本仓库同级。
 
-| 包                                      | 内容形态                              | 运行时依赖                     |
-| --------------------------------------- | ------------------------------------- | ------------------------------ |
-| `@zcode/presentations-plugin`           | skills + agents（PPTX）               | 无                             |
-| `@zcode/documents-plugin`               | skills + agents + scripts（DOCX）     | 无（Python 脚本由宿主执行）    |
-| `@zcode/skill-creator-plugin`           | skills                                | 无                             |
-| `@zcode/plugin-creator-plugin`          | skills + scripts（纯 `.mjs`，无构建） | 无                             |
-| `@zcode/image-search-plugin`            | `.mcp.json`（HTTP MCP）               | 指向官方后端                   |
-| `@zcode/restore-legacy-sessions-plugin` | skills + commands                     | 无                             |
-| `@zcode/zcode-guide-plugin`             | skills + commands                     | 无                             |
-| `@zcode/zcode-cua-plugin`               | SDK client + skill + docs             | 原生执行由 node_repl host 提供 |
+| 包                                      | 内容形态                                         | 运行时依赖                          |
+| --------------------------------------- | ------------------------------------------------ | ----------------------------------- |
+| `@zcode/presentations-plugin`           | skills + agents（PPTX）                          | 无                                  |
+| `@zcode/documents-plugin`               | skills + agents + scripts（DOCX）                | 无（Python 脚本由宿主执行）         |
+| `@zcode/skill-creator-plugin`           | skills                                           | 无                                  |
+| `@zcode/plugin-creator-plugin`          | skills + scripts（纯 `.mjs`，无构建）            | 无                                  |
+| `@zcode/image-search-plugin`            | `.mcp.json`（HTTP MCP）                          | 指向官方后端                        |
+| `@zcode/restore-legacy-sessions-plugin` | skills + commands                                | 无                                  |
+| `@zcode/zcode-guide-plugin`             | skills + commands                                | 无                                  |
+| `@zcode/zcode-cua-plugin`               | SDK client + skill + docs                        | 原生执行由 node_repl host 提供      |
+| `@zcode/design-plugin`                  | 技能 + design-resources 资源 + SessionStart hook | 无（纯内容，默认关闭，3.18.2 同步） |
 
 ### 排除
 
@@ -56,6 +57,14 @@ browser-use 之外的插件源码，但 `scripts/prepare-prebuilds.mjs` 的 stag
 
 > **判定：部分有效**。四个位置都还在，但「四处逐字一致」已改成「单一源派生」：`packages/shared/src/builtinPluginAssets.ts` 的 `BUILTIN_PLUGIN_ASSETS` 现在被 `scripts/prepare-prebuilds.mjs:61`、`packages/desktop/scripts/prepare-agent-node-bundle.mjs:80`、`packages/server/src/remote/zcodeAgentOfficialPluginAssets.ts:11` 直接引用；后者符号已改名（不再是 `..._ASSET_PATHS`，而是 `REMOTE_AGENT_OFFICIAL_PLUGIN_INCLUDED_TOP_LEVEL_PATHS` / `REMOTE_AGENT_OFFICIAL_PLUGIN_REQUIRED_RELATIVE_PATHS`）。bootstrap 侧 `official-plugin-definitions.ts` 仍独立枚举 16 个定义。
 > 证据：`rg -n 'BUILTIN_PLUGIN_ASSETS|REMOTE_AGENT_OFFICIAL_PLUGIN' scripts packages`。
+
+3.18.2 同步补记：`@zcode/design-plugin` 是纯内容型内置插件（入口技能 + `design-resources/**` +
+`hooks/{hooks.json,run-hook.cmd,design-rules}`，无 MCP / 无原生依赖 / 无构建脚本），
+`BUILTIN_PLUGIN_SEED_PATHS["design-plugin"]` 是它唯一的 seed 清单，`official-plugin-definitions.ts`
+与 SEA 脚本都从这一处派生，`requiresRuntime` 为 false。上游 `packages/design-plugin` 逐字节随包
+（`.zcode-plugin/` 改名 `.zcodium-plugin/`，上游 `.claude-plugin/` 不随包；`BUILTIN_PLUGIN_TOP_LEVEL_PATHS`
+本就不含它），来源与许可登记在 `third-party/copied-components.json`（Open Design 0.7.0 及各子技能）。
+默认关闭，避免首启就给所有会话注入新技能。详见 `.agents/specs/upstream-3.18-plugins-node-repl.md` §4。
 
 插件是否进入安装包，由 **四处清单共同决定**，必须逐字一致：
 

@@ -22,6 +22,8 @@ export type PendingStreamRecoveryRequest = ModelStreamRecoveryStatus;
 export const RAPID_REFILL_TOOL_TURN_THRESHOLD = 3;
 export const MAX_CONSECUTIVE_RAPID_REFILLS = 3;
 export const AUTOMATION_MUTATION_TOOL_NAMES = ["CronCreate", "CronUpdate", "CronDelete"] as const;
+/** 执行轮自暂停工具；只在 loop 带 Host 准入注入的 automationId 时可见，不属于 mutation 列表。 */
+export const AUTOMATION_SELF_PAUSE_TOOL_NAME = "CronPauseSelf";
 const AUTOMATION_QUERY_ID_PREFIX = "automation-";
 
 export interface CompactLoopTracking {
@@ -71,6 +73,8 @@ export interface RegularTurnLoopState {
   /** CronCreate 命中全局上限后，本用户 turn 永久切为纯文本回复，禁止模型自行恢复。 */
   automationCreateLimitReached?: boolean;
   anomalyWarningsInjected: number;
+  /** 工具批次执行期被停止：中断标记用「tool use」变体。 */
+  interruptedDuringToolBatch?: boolean;
   /** 本轮是否已消费来源为 subagent 的后台结果通知。 */
   backgroundSubagentResultConsumed: boolean;
   /** 本轮是否已消费来源为 workflow（dynamic-workflow run）的后台通知。 */

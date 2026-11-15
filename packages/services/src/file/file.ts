@@ -18,6 +18,20 @@ export interface WorkspaceFileSearchParams {
   refresh?: boolean;
 }
 
+export type DesignSourceWriteReason =
+  | "changed"
+  | "invalid_path"
+  | "not_html"
+  | "too_large"
+  | "invalid_utf8"
+  /**
+   * B7：rootPath 不是本 Host 当前批准的项目/任务根（含无 authority 装配、软链接别名、
+   * 已移除 root、远端 Host 路径）。设计端口 fail closed；其它 IFileService 方法不受影响。
+   */
+  | "unauthorized_root"
+  /** 落盘 IO 失败（EACCES/ENOSPC/EIO/fsync 等）：不得报告成功，也不假装是路径问题。 */
+  | "io_failed";
+
 export interface IFileService {
   /** Host 匹配并返回有界候选，避免 Renderer 下载完整文件索引。 */
   searchWorkspaceFiles(params: WorkspaceFileSearchParams): Promise<WorkspaceFileEntry[]>;
@@ -77,6 +91,25 @@ export interface IFileService {
     transform: "sync-gitignore" | "reset-defaults";
   }): Promise<{ content: string }>;
   writeWorkspaceFileSearchIgnore(params: { rootPath: string; content: string }): Promise<void>;
+  /**
+   * 内置浏览器设计工具读源码：rootPath 必须是 Host 批准根（项目/任务目录，每次调用重新授权），
+   * 只接受 root 内、解析软链接后仍在 root 内的 .html/.htm 文件，整份读出并严格按 UTF-8
+   * 解码（保留 BOM），上限 4 MB；无批准/未装配 authority 时抛 design_source_unauthorized_root。
+   */
+  readDesignSourceFile(params: { rootPath: string; path: string }): Promise<{ content: string }>;
+  /**
+   * 设计工具写源码：rootPath 同样先经 Host 批准根授权（页面不能选择 root/path，也不能用
+   * 软链接别名自我授权），同一 root 内路径校验后，只有当前内容仍等于 expectedContent 才原地写。
+   * 内容不是合法 UTF-8 或超限时返回 written=false；路径在 realpath 之后被换成软链接/祖先目录
+   * 或硬链接到 root 外时拒绝（invalid_path），真实落盘失败返回 io_failed；跨进程不合作写入者
+   * 只能靠内容 CAS 发现。
+   */
+  writeDesignSourceFile(params: {
+    rootPath: string;
+    path: string;
+    expectedContent: string;
+    content: string;
+  }): Promise<{ written: boolean; reason?: DesignSourceWriteReason }>;
 }
 
 export const IFileService = createServiceDescriptor<IFileService>(ServiceChannels.File);

@@ -13,6 +13,7 @@ import {
 import type {
   Logger,
   MessageId,
+  ModelRequestSessionFeature,
   ModelSelection,
   ModelToolContract,
   PermissionBrokerPort,
@@ -46,6 +47,7 @@ import type {
 } from "./deps.js";
 import { installAgentRuntimeMethods } from "./methods/index.js";
 import { createWorkflowBlockedReminder } from "./methods/dynamic-workflow-blocked-reminder.js";
+import { createSubagentStallReminder } from "./methods/subagent-stall-reminder.js";
 import { createRuntimeCommandQueue } from "./command-queue.js";
 import type { RuntimeCommandQueue } from "./command-queue.js";
 import { initializeRuntimeTooling } from "./helpers/runtime-tools.js";
@@ -65,11 +67,23 @@ import type { AgentRuntimeSurface } from "./agent-runtime-surface.js";
 import { resolveInitialDynamicWorkflowToolsActivated } from "./methods/dynamic-workflow-activation.js";
 import { InMemoryRuntimeTaskRegistry, type RuntimeTaskRegistry } from "../runtime-task/registry.js";
 import type { WorkflowBlockedReminderClock } from "../runtime-task/workflow-blocked-reminder.js";
+import type { BackgroundSubagentStallClock } from "../subagent/background-stall.js";
 import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
+import type { ProjectMemoryRecallPrefetch } from "./helpers/project-memory-recall.js";
+import type { ProjectMemoryUpdate } from "./helpers/project-memory-dream.js";
+import { createMemoryRecallState, type MemoryRecallState } from "../memory/recall/index.js";
 import { projectPersistentAgentMemoryTools } from "../subagent/persistent-memory.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
 import { disposeNodeReplSession } from "../tool/handlers/node-repl.js";
 import { cloneModelSelection } from "./model-selection.js";
+import type { InstructionRefreshReason } from "../context/types.js";
+import type { InstructionAnnouncementState } from "./helpers/instruction-announcement.js";
+import type { EnvironmentAnnouncement } from "../context/sections/env-info.js";
+import type { PromptSnapshot } from "./helpers/prompt-snapshot.js";
+import {
+  createTotalTokensBudgetState,
+  type TotalTokensBudgetState,
+} from "./helpers/total-tokens-budget.js";
 
 // oxlint-disable typescript-eslint/no-unsafe-declaration-merging
 export class AgentRuntime {
@@ -87,6 +101,7 @@ export class AgentRuntime {
   private eventSinks = new Set<SessionEventSink>();
   private now: () => Date;
   private isRemoteWorkspace: () => boolean;
+  private modelIoDir?: string;
   private registry: ToolRegistry;
   private executor: ToolExecutor;
   private hookRunner?: HookRunner;
@@ -108,6 +123,10 @@ export class AgentRuntime {
   private latestContextBuildResult?: ContextBuildResult;
   private memoryRoot?: string;
   private memoryIndexContent?: string;
+  private memoryRecallState: MemoryRecallState;
+  private memoryRecallPrefetch?: ProjectMemoryRecallPrefetch;
+  private memoryDreamLastScanAtMs = 0;
+  private pendingMemoryUpdate?: ProjectMemoryUpdate;
   private memoryExtractionScheduler?: ProjectMemoryExtractionScheduler;
   private contextSourcePort?: ContextSourcePort;
   private skillPort?: SkillPort;
@@ -125,6 +144,7 @@ export class AgentRuntime {
   private runtimeTaskRegistry: RuntimeTaskRegistry;
   /** 「run 还欠着决定、主代理闲着」的提醒钟；父会话进程内事实，不进 journal。 */
   private workflowBlockedReminder?: WorkflowBlockedReminderClock;
+  private subagentStallReminder?: BackgroundSubagentStallClock;
   private branchGeneration = 0;
   private artifactStore?: ToolArtifactStorePort;
   private executionPort?: ExecutionPort;
@@ -149,6 +169,18 @@ export class AgentRuntime {
   private currentTurnFileChanges: RuntimeTurnFileChangeMap = new Map();
   private lastAssistantCompletedAtMs?: number;
   private lastEmittedLocalDate?: string;
+  /** 已公告的指令文件（上游 3.18.2 F1）；只在内存，另写 session entry。 */
+  private instructionAnnouncement?: InstructionAnnouncementState;
+  /** 已公告的环境快照（上游 3.18.2 environment announcement）；只在内存，另写 session entry。 */
+  private environmentAnnouncement?: EnvironmentAnnouncement;
+  private instructionRefreshReason?: InstructionRefreshReason;
+  /** 主会话 system 快照（F3）；undefined 无快照，null 已清除。 */
+  private promptSnapshot?: PromptSnapshot | null;
+  /** total_tokens 预算（F2）；只在内存，resume 重置。 */
+  private totalTokensBudget: TotalTokensBudgetState = createTotalTokensBudgetState();
+  /** 会话能力标签（F12）；只增不减，唯一事实源是 runtime。 */
+  private sessionFeatures = new Set<ModelRequestSessionFeature>();
+  private sessionFeaturesWrite: Promise<void> = Promise.resolve();
   private autoCompactConsecutiveFailures = 0;
   private runtimeCommandQueue: RuntimeCommandQueue;
   private runtimeCommandDrainActive = false;
@@ -171,6 +203,7 @@ export class AgentRuntime {
   private backgroundTaskNotificationSealReason?: "subagent_terminal" | "subagent_cancelled";
   private pendingModelChangeTimeline?: PendingModelChangeTimeline;
   private sessionStartHookRan = false;
+  private sessionControlKind?: "cli" | "app";
   private sessionTitleGenerationAttempted = false;
 
   constructor(sessionId: SessionId, config: AgentRuntimeConfig, deps: AgentRuntimeDeps) {
@@ -206,6 +239,7 @@ export class AgentRuntime {
     }
     this.now = deps.now ?? (() => new Date());
     this.isRemoteWorkspace = deps.isRemoteWorkspace ?? (() => false);
+    this.modelIoDir = deps.modelIoDir;
     this.modelFactory = deps.modelFactory;
     this.browserControlPort = deps.browserControlPort;
     this.modelRequestAdmission = deps.modelRequestAdmission;
@@ -214,6 +248,7 @@ export class AgentRuntime {
       config.modelSelection && cloneModelSelection(config.modelSelection);
     this.messageHistory = new MessageHistoryImpl();
     this.readFileState = new Map();
+    this.memoryRecallState = createMemoryRecallState();
     this.runtimeCommandQueue = createRuntimeCommandQueue();
     this.workingDirectory = config.workingDirectory ?? ".";
     this.contextSourcePort = deps.contextSourcePort;
@@ -223,6 +258,8 @@ export class AgentRuntime {
     this.runtimeTaskRegistry.setActiveBranchGeneration?.(this.branchGeneration);
     // 提醒钟要在队列/steer/run 事件之前就绪：它们都可能在构造函数收尾前被调用。
     this.workflowBlockedReminder = createWorkflowBlockedReminder(runtime);
+    // 停滞钟与提醒钟同在构造函数里就绪：registry 注册可能早于任何 turn。
+    this.subagentStallReminder = createSubagentStallReminder(runtime);
     this.artifactStore = deps.artifactStore;
     this.executionPort = deps.executionPort;
     this.fileSystemPort = deps.fileSystemPort;
@@ -270,9 +307,11 @@ export class AgentRuntime {
     this.shuttingDown = true;
     // 同一条理由：会话在关，提醒钟不能再到点唤起一轮。
     this.workflowBlockedReminder?.stop();
+    this.subagentStallReminder?.dispose();
     // 关闭单个 session 后进程仍存活，
     // 因此必须先终止该 runtime 的 Extraction，不能只在超时后放弃等待。
     this.memoryExtractionScheduler?.shutdown();
+    this.memoryRecallPrefetch?.abortController.abort();
   }
 }
 

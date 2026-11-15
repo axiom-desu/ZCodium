@@ -1,6 +1,7 @@
 use zcode_cli_core_api as contract;
 use zcode_cli_domain as domain;
 mod agent_profiles;
+mod app_control_tools;
 mod bash_output;
 mod bash_perf;
 mod bash_permission;
@@ -29,6 +30,8 @@ mod mcp_telemetry;
 mod official_auth;
 mod plan_file;
 mod plugin_admin;
+// 3.18 R7b：插件发现的 `plugin_catalog`/`plugin_search` 尚未接线且当前不编译，
+// 本轮只交付 App 会话控制；先移除模块声明让 crate 可验证（文件保留给后续片）。
 mod plugin_io;
 mod plugin_requests;
 mod plugin_suggested;
@@ -44,6 +47,8 @@ mod tool_args;
 mod tool_args_tests;
 mod tool_definitions;
 mod tool_edit;
+#[cfg(test)]
+mod tool_exposure_tests;
 mod tool_files;
 mod tool_process;
 mod tool_search;

@@ -5,6 +5,7 @@ mod input_images;
 pub mod node;
 mod node_store;
 mod node_store_ports;
+mod node_store_session_data;
 mod usage;
 mod usage_query;
 mod workspace_lock;

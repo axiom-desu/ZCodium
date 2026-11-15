@@ -23,6 +23,7 @@ import { commitAtomicConversationFork } from "./session-fork-commit.js";
 import { buildForkedSessionInput } from "./session-fork-bundle.js";
 import { stableForkError } from "./session-fork-errors.js";
 import { copyGoalStateForFork } from "./session-fork-goal.js";
+import { copyPromptSnapshotToFork } from "../helpers/prompt-snapshot.js";
 import {
   buildForkHistoryMessages,
   conversationHistoryBeforeInput,
@@ -179,6 +180,7 @@ export async function forkConversationFromMessage(
     forkedSessionId: options.forkedSessionId,
     parentSession,
   });
+  await copyPromptSnapshotToFork(this, forkedSessionId, options.traceContext);
   const { copiedMessageCount, messageIdMap } = await this.copySessionMessagesForFork({
     forkedSessionId,
     messages: forkHistoryMessages,
@@ -296,6 +298,7 @@ export async function forkStableConversationAtMessage(
     sourceCommandId: options.sourceCommandId,
     target: options.target,
     targetMessageId: options.target.boundaryMessageId as MessageId,
+    ...(options.targetCwd ? { targetCwd: options.targetCwd } : {}),
     traceContext: options.traceContext ?? this.rootTraceContext,
   });
 }

@@ -21,6 +21,7 @@ import { drainInlineGuideForNextRequest } from "./turn-guide-drain.js";
 import { handleToolCallAnomalyWarnings } from "./turn-tool-warnings.js";
 import { emitNestedModelUsageEvents } from "./turn-nested-model-usage.js";
 import type { RegularTurnLoopState } from "./turn-loop-state.js";
+import { withUserStoppedToolResultContent } from "./interrupt-marker.js";
 import { isAutomationMutationRestrictedTurn, recordCompletedToolBatch } from "./turn-loop-state.js";
 import { recordBrowserTurnToolResult } from "../../repl/browser-turn-state.js";
 import type { ToolCallInput } from "../../agent/message-history.js";
@@ -103,6 +104,7 @@ export async function executeToolCallsForModelStep(
     });
     const execution = await this.executeTools(pendingToolCalls, pendingSchedule, {
       automationTurn: isAutomationMutationRestrictedTurn(state),
+      automationId: state.automationId,
       signal: state.turnAbortSignal,
       traceContext: options.modelTraceContext,
       subagentModelOverride: state.subagentModelOverride,
@@ -168,9 +170,14 @@ export async function executeToolCallsForModelStep(
   for (const pending of pendingExecutionResults) {
     resultById.set(pending.toolCallId, pending);
   }
-  const results = coreToolCalls
-    .map((toolCall) => resultById.get(toolCall.id))
-    .filter((result): result is ToolExecutionResult => result !== undefined);
+  // 用户停止的批次：被取消工具对模型统一给停止文字（卡片仍显示各自原因）。
+  const results = withUserStoppedToolResultContent(
+    this,
+    state,
+    coreToolCalls
+      .map((toolCall) => resultById.get(toolCall.id))
+      .filter((result): result is ToolExecutionResult => result !== undefined),
+  );
   for (const result of results) {
     recordBrowserTurnToolResult({
       output: result.output,
@@ -206,14 +213,22 @@ export async function executeToolCallsForModelStep(
   });
 
   this.logger?.debug("Injecting tool results", { resultCount: results.length });
-  const deferredCheckpointCancellation = await settleToolResults.call(this, state, {
-    assistantMessageId: options.assistantMessageId,
-    modelTraceContext: options.modelTraceContext,
-    results,
-    streamedResultsById,
-    toolCallById,
-    toolParts,
-  });
+  let deferredCheckpointCancellation: unknown;
+  try {
+    deferredCheckpointCancellation = await settleToolResults.call(this, state, {
+      assistantMessageId: options.assistantMessageId,
+      modelTraceContext: options.modelTraceContext,
+      results,
+      streamedResultsById,
+      toolCallById,
+      toolParts,
+    });
+  } finally {
+    // 工具执行中停止：中断标记用工具阶段的文字。
+    // 修复原因：checkpoint 被取消时，结算写完结果后自己抛出取消，走不到下面的分支，
+    // 标记会用成模型请求阶段的文字。
+    if (state.turnAbortSignal.aborted) state.interruptedDuringToolBatch = true;
+  }
 
   if (deferredCheckpointCancellation) {
     throw deferredCheckpointCancellation;

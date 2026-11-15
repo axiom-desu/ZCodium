@@ -37,6 +37,12 @@ function createHarness(initial: Partial<AppSettings> = {}): Harness {
     async ensureDefaultProject() {
       return { path: "/home", created: false };
     },
+    async getUserInstructions() {
+      return { content: "", filePath: "/home/.zcodium/AGENTS.md" };
+    },
+    async saveUserInstructions() {
+      return { filePath: "/home/.zcodium/AGENTS.md" };
+    },
   };
   const credentialService: ICredentialService = {
     async load(key) {

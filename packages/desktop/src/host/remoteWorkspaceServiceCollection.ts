@@ -26,6 +26,7 @@ import {
   ISkillsService,
   ISkillSyncService,
   IMcpSyncService,
+  IUserConfigSyncService,
   IPluginSyncService,
   IPluginsService,
   IPluginManagementService,
@@ -310,6 +311,9 @@ export function createRemoteWorkspaceServiceCollection(params: {
     .register(ISkillSyncService, params.connectionServices.skillSyncService)
     .register(IMcpSyncService, params.connectionServices.mcpSyncService)
     .register(IPluginSyncService, params.connectionServices.pluginSyncService)
+    // 数据同步：子智能体/命令/钩子共用 user-config-sync 通道；远端 workspace 与 source-settings
+    // attachment 都要暴露同一实现。旧 Server 缺该方法时调用得到 method-not-found，不视为成功。
+    .register(IUserConfigSyncService, params.connectionServices.userConfigSyncService)
     .register(IPluginsService, params.connectionServices.pluginsService)
     // 远端设置页插件管理也必须打到远端 agent（插件目录在远端文件系统）。
     .register(IPluginManagementService, params.connectionServices.pluginManagementService)

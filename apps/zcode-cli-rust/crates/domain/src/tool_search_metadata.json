@@ -1,4 +1,88 @@
 {
+  "ListProjects": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "list accessible App projects and devices",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "ListSessions": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "find App sessions across projects by title substring",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "ReadSession": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "read session status or message history",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "CreateSession": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "create an independent App session with a first prompt",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "ForkSession": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "fork an App session at a stable message",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "SendToSession": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "send a prompt to an existing App session",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "WaitSessions": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "wait for specific App session operations",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "InterruptSession": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "interrupt an observed App session execution",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "RenameSession": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "rename an App session title",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "OpenSession": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "open a session in the bound App window",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "SetSessionArchived": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "archive or restore an App session",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "SetSessionPinned": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "pin or unpin an App session",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
   "ToolSearch": {
     "shouldDefer": false,
     "alwaysLoad": false,
@@ -69,6 +153,27 @@
     "concurrentSafe": true,
     "providerVisible": true
   },
+  "ReadTopicResource": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": null,
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "SearchPlugins": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "search the official plugin catalog for a capability",
+    "concurrentSafe": true,
+    "providerVisible": true
+  },
+  "SuggestPluginInstall": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "ask the user to install or enable an official plugin",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
   "TodoRead": {
     "shouldDefer": true,
     "alwaysLoad": false,
@@ -108,6 +213,13 @@
     "shouldDefer": true,
     "alwaysLoad": false,
     "searchHint": "cancel a scheduled cron job",
+    "concurrentSafe": false,
+    "providerVisible": true
+  },
+  "CronPauseSelf": {
+    "shouldDefer": true,
+    "alwaysLoad": false,
+    "searchHint": "pause the automation that triggered this run",
     "concurrentSafe": false,
     "providerVisible": true
   },

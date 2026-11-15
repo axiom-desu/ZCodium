@@ -6,11 +6,15 @@
 //! String lengths use UTF-16 code units to match zod (JavaScript `length`).
 //!
 //! `pattern` uses Rust regex; unsupported JS-only patterns fail closed at compile time.
+//! `format` is annotation-only (`uuid`, `date-time`): zod always emits the precise
+//! `pattern` next to it, and that pattern is the only string rule applied here.
 #[path = "json_schema_strip.rs"]
 mod json_schema_strip;
 use regex::Regex;
 use serde_json::Value;
+mod schema_keywords;
 mod schema_shape;
+use schema_keywords::{SUPPORTED, number, size, ty};
 mod string_support;
 pub use string_support::{js_is_trim_space, js_json_equal, js_trim, js_trim_value};
 mod type_support;
@@ -56,70 +60,6 @@ pub struct Node {
     trim: bool,
 }
 
-const SUPPORTED: &[&str] = &[
-    "$schema",
-    "$id",
-    "title",
-    "description",
-    "$comment",
-    "deprecated",
-    "readOnly",
-    "writeOnly",
-    "examples",
-    "type",
-    "enum",
-    "const",
-    "minLength",
-    "maxLength",
-    "pattern",
-    "format",
-    "minimum",
-    "maximum",
-    "exclusiveMinimum",
-    "properties",
-    "required",
-    "additionalProperties",
-    "propertyNames",
-    "items",
-    "minItems",
-    "maxItems",
-    "anyOf",
-    "oneOf",
-    "default",
-    "x-zcode-trim",
-];
-
-fn ty(name: &str) -> Result<Ty, String> {
-    Ok(match name {
-        "string" => Ty::String,
-        "number" => Ty::Number,
-        "integer" => Ty::Integer,
-        "boolean" => Ty::Boolean,
-        "object" => Ty::Object,
-        "array" => Ty::Array,
-        "null" => Ty::Null,
-        other => return Err(format!("unsupported type {other}")),
-    })
-}
-
-fn size(schema: &Value, key: &str) -> Result<Option<usize>, String> {
-    schema
-        .get(key)
-        .map(|v| {
-            v.as_u64()
-                .map(|n| n as usize)
-                .ok_or_else(|| format!("{key} must be a non-negative integer"))
-        })
-        .transpose()
-}
-
-fn number(schema: &Value, key: &str) -> Result<Option<f64>, String> {
-    schema
-        .get(key)
-        .map(|v| v.as_f64().ok_or_else(|| format!("{key} must be a number")))
-        .transpose()
-}
-
 impl Node {
     pub fn compile(schema: &Value) -> Result<Self, String> {
         let object = schema.as_object().ok_or("schema must be an object")?;
@@ -129,11 +69,14 @@ impl Node {
         // 已认识的约束形状异常时不能当作缺省值忽略，否则会静默削弱校验。
         schema_shape::validate(object)?;
         if let Some(format) = schema.get("format").and_then(Value::as_str) {
-            if format != "uuid" {
+            // zod 的 `toJSONSchema` 在输出 `format` 的同时输出精确 `pattern`，本实现只把 format
+            // 当注解、把 pattern 当唯一规则。因此允许 uuid 与 date-time（时间戳字段），但未知
+            // format 与缺 pattern 的 format 仍然 fail closed，不静默放宽校验。
+            if !matches!(format, "uuid" | "date-time") {
                 return Err(format!("unsupported format {format}"));
             }
             if schema.get("pattern").and_then(Value::as_str).is_none() {
-                return Err("format uuid requires a string pattern".into());
+                return Err(format!("format {format} requires a string pattern"));
             }
         }
         if schema

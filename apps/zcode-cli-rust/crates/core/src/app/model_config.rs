@@ -287,8 +287,12 @@ impl Engine {
     }
     fn announce_cancelled(&mut self, released: Vec<(String, super::waiters::HostWait)>) {
         for (key, wait) in released {
+            // 只有声明了取消通知的请求才公告；automation/pause 没有该生命周期方法。
+            let Some(method) = wait.announce else {
+                continue;
+            };
             self.outbox.push(crate::contract::ServerMsg::HostNotification {
-                method: "interaction/providerRuntimeHeadersCancelled",
+                method,
                 params: json!({"requestId":key,"sessionId":wait.owner,"workspace":wait.workspace}),
             });
         }
@@ -318,6 +322,7 @@ impl Engine {
             super::waiters::HostWait {
                 owner: id.into(),
                 workspace,
+                announce: Some("interaction/providerRuntimeHeadersCancelled"),
                 reply,
             },
         );

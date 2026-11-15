@@ -82,6 +82,13 @@ impl Entry {
                 {
                     message[crate::tool_search::ANNOUNCEMENT_KEY] = delta.clone();
                 }
+                // 3.18 F1：公告事实跟着同一条提醒恢复，下一次请求才算得出增量。
+                if let Some(instructions) = metadata
+                    .as_ref()
+                    .and_then(|m| m.get(crate::instruction_files::KEY))
+                {
+                    message[crate::instruction_files::KEY] = instructions.clone();
+                }
                 message
             }
             Self::Message {
@@ -209,6 +216,14 @@ fn assistant(message: &Value) -> Value {
     }
     if !responses.is_empty() {
         out["_zcode_responses_reasoning"] = responses.into();
+    }
+    // 3.18 R2：provider 原生工具轮次随消息冷恢复；热历史与冷恢复的 canonical 必须一致。
+    if let Some(rounds) = message[crate::provider_rounds::KEY]
+        .as_array()
+        .filter(|rounds| !rounds.is_empty())
+    {
+        out[crate::provider_rounds::KEY] = Value::Array(rounds.clone());
+        out["_zcode_anthropic_server_tools"] = crate::provider_rounds::flat_blocks(rounds);
     }
     out
 }

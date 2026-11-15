@@ -2111,7 +2111,7 @@ export function createZCodeTaskServiceAdapter(
       };
     },
 
-    async stopGeneration(params): Promise<void> {
+    async stopGeneration(params) {
       const startedAt = Date.now();
       const target = params.workspacePath
         ? {
@@ -2122,29 +2122,37 @@ export function createZCodeTaskServiceAdapter(
         : getTaskTarget(params.taskId);
       logger.info(params.runId, "ZCode task facade stopGeneration 开始", {
         hasRunId: Boolean(params.runId),
+        hasExpectedExecutionId: Boolean(params.expectedExecutionId),
         taskId: params.taskId,
         workspaceIdentity: target.workspaceIdentity ?? null,
         workspaceKey: resolveWorkspaceKey(target),
         workspacePath: target.workspacePath,
       });
       // session/stop → v4 stop 命令（goal-pause barrier 语义由 CLI 原生 handler 承接）。
+      // expectedForegroundExecutionId 原样下行：只有持有该 execution 的 runtime 能原子比较，
+      // Host 不缓存、不猜测，也不在 mismatch 后重试新 execution。
       const ack = await options.zcodeAgentService.sendConversationCommandV4({
         workspacePath: target.workspacePath,
         workspaceIdentity: target.workspaceIdentity,
         envelope: createHostCommandEnvelope({
           type: "stop",
-          payload: {},
+          payload: params.expectedExecutionId
+            ? { expectedForegroundExecutionId: params.expectedExecutionId }
+            : {},
           sessionId: params.taskId,
         }),
       });
-      assertV4CommandAckOk("stop", ack, `session=${params.taskId}`);
+      const settled = assertV4CommandAckOk("stop", ack, `session=${params.taskId}`);
       logger.info(params.runId, "ZCode task facade stopGeneration ACK", {
         durationMs: Date.now() - startedAt,
+        reasonCode: settled.reasonCode ?? null,
+        status: settled.status,
         taskId: params.taskId,
         workspaceIdentity: target.workspaceIdentity ?? null,
         workspaceKey: resolveWorkspaceKey(target),
         workspacePath: target.workspacePath,
       });
+      return settled;
     },
 
     async compactSession(params) {

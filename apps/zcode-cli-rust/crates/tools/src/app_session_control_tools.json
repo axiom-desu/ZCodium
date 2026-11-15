@@ -1,0 +1,386 @@
+{
+  "ListProjects": {
+    "description": "List projects in trusted discovery scopes without starting a session. searchScope.scopes reports successfully searched ranges; empty results mean no matches only there. Discovery does not grant read or control access.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "ListSessions": {
+    "description": "List App sessions across projects by case-insensitive title substring, not full-text message search. Search unarchived sessions first: omit archived or use archived:\"exclude\". searchScope.scopes reports searched ranges; empty scopes means no range was successfully searched. Does not resume or navigate.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "project": {
+          "description": "A project from ListProjects, replayed exactly as that result returned it.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "app"
+            },
+            "projectId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "sourceServerId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          "required": ["kind", "projectId"],
+          "additionalProperties": false
+        },
+        "archived": {
+          "default": "exclude",
+          "type": "string",
+          "enum": ["exclude", "include", "only"]
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "cursor": {
+          "description": "The nextCursor from the previous page of this same call. Omit it for the first page.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "ReadSession": {
+    "description": "Read a session summary or bounded history without execution, navigation or marking it read.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?:sess|session)_[A-Za-z0-9._-]+$",
+          "description": "The target session id, for example sess_1a2b3c4d-… . Older sessions use session_… . Take it from a tool result or the user, never invent one."
+        },
+        "view": {
+          "type": "string",
+          "enum": ["summary", "messages"]
+        },
+        "cursor": {
+          "description": "The nextCursor from the previous page of this same call. Omit it for the first page.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": ["sessionId", "view"],
+      "additionalProperties": false
+    }
+  },
+  "CreateSession": {
+    "description": "Create a root session in an existing project and submit its first prompt. Creation and input admission are reported separately. Does not steal focus.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "app"
+            },
+            "projectId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "sourceServerId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          "required": ["kind", "projectId"],
+          "additionalProperties": false,
+          "description": "A project from ListProjects, replayed exactly as that result returned it."
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000000
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "A model id from ListModels, either `modelId` or `providerId/modelId`. It must match exactly one configured model. Omit it to use the configured default."
+        },
+        "retryOf": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Only when retrying a request whose result was inconclusive: pass the requestId from that call's result. Leave it out otherwise, and never invent one."
+        }
+      },
+      "required": ["project", "prompt"],
+      "additionalProperties": false
+    }
+  },
+  "ForkSession": {
+    "description": "Fork at an explicit stable message boundary. Reported unavailable when this Host or runtime has no stable fork owner; never silently creates a new session.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?:sess|session)_[A-Za-z0-9._-]+$",
+          "description": "The target session id, for example sess_1a2b3c4d-… . Older sessions use session_… . Take it from a tool result or the user, never invent one."
+        },
+        "atMessage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "A message id from ReadSession with view=messages — the `id` of the entry to fork at. Never invent one."
+        },
+        "retryOf": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Only when retrying a request whose result was inconclusive: pass the requestId from that call's result. Leave it out otherwise, and never invent one."
+        }
+      },
+      "required": ["sessionId", "atMessage"],
+      "additionalProperties": false
+    }
+  },
+  "SendToSession": {
+    "description": "Submit input to the target session owner. Busy targets queue it. Preserve the target model, mode and permissions.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?:sess|session)_[A-Za-z0-9._-]+$",
+          "description": "The target session id, for example sess_1a2b3c4d-… . Older sessions use session_… . Take it from a tool result or the user, never invent one."
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000000
+        },
+        "retryOf": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Only when retrying a request whose result was inconclusive: pass the requestId from that call's result. Leave it out otherwise, and never invent one."
+        }
+      },
+      "required": ["sessionId", "prompt"],
+      "additionalProperties": false
+    }
+  },
+  "WaitSessions": {
+    "description": "Wait for the exact create/send operations, using any or all. timeoutMs=0 queries now. Cancelling this wait does not stop target execution. Never wait for your own future completion.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "operations": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^(?:sess|session)_[A-Za-z0-9._-]+$",
+                "description": "The id of the session that returned this operation, as given in its result."
+              },
+              "commandId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Replay the whole `operation` object from the create or send result; do not rebuild it."
+              }
+            },
+            "required": ["sessionId", "commandId"]
+          }
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["any", "all"]
+        },
+        "timeoutMs": {
+          "default": 30000,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300000
+        }
+      },
+      "required": ["operations", "mode"],
+      "additionalProperties": false
+    }
+  },
+  "InterruptSession": {
+    "description": "Interrupt only expectedExecutionId. A changed execution is rejected; session history is retained.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?:sess|session)_[A-Za-z0-9._-]+$",
+          "description": "The target session id, for example sess_1a2b3c4d-… . Older sessions use session_… . Take it from a tool result or the user, never invent one."
+        },
+        "expectedExecutionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "The executionId reported by ListSessions or WaitSessions for this session. If neither reports one the session is not executing, so there is nothing to interrupt."
+        },
+        "retryOf": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Only when retrying a request whose result was inconclusive: pass the requestId from that call's result. Leave it out otherwise, and never invent one."
+        }
+      },
+      "required": ["sessionId", "expectedExecutionId"],
+      "additionalProperties": false
+    }
+  },
+  "RenameSession": {
+    "description": "Set the target session title through its metadata owner.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?:sess|session)_[A-Za-z0-9._-]+$",
+          "description": "The target session id, for example sess_1a2b3c4d-… . Older sessions use session_… . Take it from a tool result or the user, never invent one."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "retryOf": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Only when retrying a request whose result was inconclusive: pass the requestId from that call's result. Leave it out otherwise, and never invent one."
+        }
+      },
+      "required": ["sessionId", "title"],
+      "additionalProperties": false
+    }
+  },
+  "OpenSession": {
+    "description": "Open the session in the UI bound to this caller. Unavailable UI is reported without fallback navigation.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?:sess|session)_[A-Za-z0-9._-]+$",
+          "description": "The target session id, for example sess_1a2b3c4d-… . Older sessions use session_… . Take it from a tool result or the user, never invent one."
+        }
+      },
+      "required": ["sessionId"],
+      "additionalProperties": false
+    }
+  },
+  "SetSessionArchived": {
+    "description": "Archive or restore a product session. Archiving does not interrupt its execution.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?:sess|session)_[A-Za-z0-9._-]+$",
+          "description": "The target session id, for example sess_1a2b3c4d-… . Older sessions use session_… . Take it from a tool result or the user, never invent one."
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "retryOf": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Only when retrying a request whose result was inconclusive: pass the requestId from that call's result. Leave it out otherwise, and never invent one."
+        }
+      },
+      "required": ["sessionId", "archived"],
+      "additionalProperties": false
+    }
+  },
+  "SetSessionPinned": {
+    "description": "Pin or unpin a product session without changing its execution.",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?:sess|session)_[A-Za-z0-9._-]+$",
+          "description": "The target session id, for example sess_1a2b3c4d-… . Older sessions use session_… . Take it from a tool result or the user, never invent one."
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "retryOf": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Only when retrying a request whose result was inconclusive: pass the requestId from that call's result. Leave it out otherwise, and never invent one."
+        }
+      },
+      "required": ["sessionId", "pinned"],
+      "additionalProperties": false
+    }
+  }
+}

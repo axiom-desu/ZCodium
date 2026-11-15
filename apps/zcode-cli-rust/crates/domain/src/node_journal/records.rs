@@ -6,6 +6,10 @@ use serde_json::{Map, Value, json};
 pub const AGENT: &str = "zcode-agent";
 pub const MODEL_SELECTION_ENTRY: &str = "runtime/model_selection";
 pub const EXECUTION_STATE_ENTRY: &str = "runtime/execution_state";
+/// 3.18 F3：主会话 system 字节快照（与上游同一 entry 类型）。
+pub const PROMPT_SNAPSHOT_ENTRY: &str = "runtime/prompt_snapshot";
+/// 3.18 F12：会话能力标签（与上游同一 entry 类型）。
+pub const SESSION_FEATURES_ENTRY: &str = "runtime/session_features";
 
 /// Node `titleFromInput`.
 pub fn title_from_input(input: &str) -> String {

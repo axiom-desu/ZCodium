@@ -104,8 +104,11 @@ function patchObject(value: unknown, patch: SessionInputPatch): unknown {
   const current = value as Record<string, unknown>;
   const order = current.order;
   const intent = patch.intent;
+  // 编辑 intent 是整份替换：选区引用必须跟着走，否则重启后 promoted user message
+  // 与模型材料都丢批注（正文里没有引用，丢了无法从 transcript 反推）。
+  const { conversationQuotes: _previousQuotes, ...currentWithoutQuotes } = current;
   return {
-    ...current,
+    ...(intent ? currentWithoutQuotes : current),
     ...(patch.text !== undefined ? { text: patch.text } : {}),
     ...(patch.queuePosition !== undefined || intent?.queuePosition !== undefined
       ? {
@@ -128,6 +131,9 @@ function patchObject(value: unknown, patch: SessionInputPatch): unknown {
           steer: intent.fallbackReasonCode
             ? { state: "fellBack", reasonCode: intent.fallbackReasonCode }
             : current.steer,
+          ...(intent.conversationQuotes && intent.conversationQuotes.length > 0
+            ? { conversationQuotes: intent.conversationQuotes }
+            : {}),
         }
       : {}),
   };

@@ -34,6 +34,7 @@ import {
   getZCodePluginsOverview,
   installZCodeMarketplacePlugin,
   removeZCodePluginMarketplace,
+  resolvePluginConfigView,
   resolveZCodePlugins,
   resetZCodePluginConfig,
   restoreBuiltinPlugin as restoreBuiltinPluginCore,
@@ -76,11 +77,14 @@ export async function listPlugins(
   rawParams: unknown,
 ): Promise<ZCodePluginsListResult> {
   const params = parseParams(zcodePluginsListParamsSchema, rawParams);
-  const configResult = createPluginConfigView(
-    context,
-    params.workspace.workspacePath,
-    params.configScope,
-  );
+  // 投影必须读叠加过敏感私有文件的视图，否则迁进私有文件的键在设置页缺少 optionSources。
+  const configResult = await resolvePluginConfigView({
+    configResult: createPluginConfigView(
+      context,
+      params.workspace.workspacePath,
+      params.configScope,
+    ),
+  });
   const outcome = await resolveZCodePlugins({
     configResult,
     logger: context.logger,
@@ -115,9 +119,14 @@ export async function setPluginEnabled(
   });
   // 启用配置写入当前不可回滚；若取消在 IO 期间到达，只阻断后续响应和 UI 写入。
   abortSignal?.throwIfAborted();
+  // setEnabled 的响应也走公开投影：必须用叠加私有文件的视图，避免清单改回普通后
+  // 把仍是私有存储的历史 secret 随 configuredOptions 回显给 renderer。
+  const configResult = await resolvePluginConfigView({
+    configResult: createPluginConfigView(context, params.workspace.workspacePath, undefined),
+  });
   return {
     plugin: {
-      ...toPluginInfo(result.plugin),
+      ...toPluginInfo(result.plugin, configResult),
       enabledSource: params.scope ?? "user",
     },
     enabled: result.enabled,

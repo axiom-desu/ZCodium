@@ -40,6 +40,8 @@ export interface WebRemoteControlRuntime {
   workspaces: WebRemoteControlWorkspaceRef[];
   tasks: WebRemoteControlTaskRef[];
   /** 最近一次推给手机的清单签名；用于避免每 4s 同步都发一遍同样的 payload。 */
+  /** 浏览器（Web 客户端）远控端点；仅由 attachment owner 写入/清理。 */
+  webClientEndpoint?: import("./webClientEndpoint.js").WebClientEndpoint;
   lastWorkspaceListSignature?: string;
   bridge?: WebRemoteControlBridgeState;
 }

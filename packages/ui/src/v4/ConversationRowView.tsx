@@ -113,15 +113,12 @@ import {
 } from "@/v4/composer/composerPromptContexts.js";
 import { WebElementContextAttachmentChip } from "@/v4/composer/WebElementContextAttachmentChip.js";
 import { ConversationSelectionReferenceChip } from "@/v4/composer/ConversationSelectionReferenceChip.js";
+import { mergeRowConversationSelections } from "@/lib/conversationSelectionReference.js";
 import { PptxElementReferenceChip } from "@/v4/composer/PptxElementReferenceChip.js";
 import { useOpenPptxElementReference } from "@/v4/composer/useOpenPptxElementReference.js";
 import { ConversationFileRewindDialog } from "@/v4/ConversationFileRewindDialog.js";
-import { ConversationUserInputBody } from "@/v4/ConversationUserInputBody.js";
-import { ConversationUserInputContent } from "@/v4/ConversationUserInputContent.js";
-import {
-  ConversationUserInputEpilogue,
-  splitUserInputEpilogue,
-} from "@/v4/ConversationUserInputEpilogue.js";
+import { ConversationUserInputBubble } from "@/v4/ConversationUserInputBubble.js";
+import { splitUserInputEpilogue } from "@/v4/ConversationUserInputEpilogue.js";
 import { ConversationHookDetailsAction } from "@/v4/ConversationHookDetailsAction.js";
 import { formatModelChangeLabel } from "@/v4/composer/modelTriggerDisplay.js";
 import { formatMessageTimeLabel } from "@/v4/messageTimeLabel.js";
@@ -908,7 +905,12 @@ const UserInputRowView = memo(function UserInputRowView({
   const codeCommentContexts = parsedPrompt.codeComments;
   const webElementContexts = parsedPrompt.webElements;
   const pptxElementReferences = parsedPrompt.pptxElements;
-  const conversationSelections = parsedPrompt.conversationSelections;
+  // 引用是 turn metadata（结构化 conversationQuotes），不是正文尾块；旧转录可能两种都有。
+  // 只做展示合并，不重新拼回正文，保证重发/编辑时正文仍是用户写的那段。
+  const conversationSelections = mergeRowConversationSelections(
+    row.conversationQuotes,
+    parsedPrompt.conversationSelections,
+  );
   const hasAttachments = (row.attachments?.length ?? 0) > 0;
   const hasMediaAttachments =
     row.attachments?.some(
@@ -993,7 +995,14 @@ const UserInputRowView = memo(function UserInputRowView({
         const result = await onEdit(
           { rowId: row.rowId, entityId: row.entityId! },
           // 不再回写 share URL 尾块：它没有任何消费者，编辑历史消息时顺手清掉。
-          serializeComposerPromptContexts(nextText, editPromptContexts),
+          // 选区引用也不再进正文：CLI 侧按 canonical quotes 重放（未显式修改即沿用），
+          // 重新序列化会同时产生尾块与 metadata 两条材料来源。
+          serializeComposerPromptContexts(nextText, {
+            codeComments: editPromptContexts.codeComments,
+            webElements: editPromptContexts.webElements,
+            pptxElements: editPromptContexts.pptxElements,
+            pluginUiContexts: editPromptContexts.pluginUiContexts,
+          }),
           // 省略空数组会让 CLI 按 attachments 缺省语义恢复 canonical 原附件，
           // 因此 edit 必须始终提交当前完整列表，显式 [] 才能表达“删除全部”。
           editAttachments,
@@ -1249,21 +1258,14 @@ const UserInputRowView = memo(function UserInputRowView({
         // 附件和上下文引用只属于消息行，不属于气泡；否则仅附件消息会留下空气泡。
         // 同一 row 会渲染在主会话和 Subagent 侧栏，固定宽度会忽略实际宿主宽度。
         // 气泡保留 flex item 的自动宽度；宿主至少 624px 时再以 36rem 封顶并保留 48px 余量。
-        <div
-          data-v4-user-input-bubble="true"
-          className="flex max-w-full flex-col gap-2 rounded-xl rounded-tr-xs border border-border bg-surface px-4 py-3 text-ui-base text-foreground @min-[624px]/conversation:max-w-xl"
-        >
-          {hasVisibleText ? (
-            <ConversationUserInputBody contentText={visibleText} rowId={row.rowId}>
-              <ConversationUserInputContent
-                text={visibleText}
-                attachments={row.attachments}
-                contextAttachmentCount={countComposerPromptContexts(parsedPrompt)}
-              />
-            </ConversationUserInputBody>
-          ) : null}
-          {epilogue === undefined ? null : <ConversationUserInputEpilogue text={epilogue} />}
-        </div>
+        <ConversationUserInputBubble
+          text={visibleText}
+          imagePreviewContext={context}
+          rowId={row.rowId}
+          epilogue={epilogue}
+          attachments={row.attachments}
+          contextAttachmentCount={countComposerPromptContexts(parsedPrompt)}
+        />
       ) : null}
       {row.source?.kind === "genUi" && (
         <div

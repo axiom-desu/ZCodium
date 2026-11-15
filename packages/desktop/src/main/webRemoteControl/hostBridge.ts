@@ -339,6 +339,6 @@ function wrapElectronPort(port: MessagePortMain): MessagePortLike {
   };
 }
 
-interface ElectronUtilityProcessLike {
+export interface ElectronUtilityProcessLike {
   postMessage(message: unknown, transfer?: MessagePortMain[]): void;
 }

@@ -21,7 +21,7 @@ import {
  * - 其它形状不符 → response-invalid（给出最多 3 条字段摘要，帮调用方或我们定位）。
  */
 
-export interface ZCodeProtocolResponseErrorDetails {
+interface ZCodeProtocolResponseErrorDetails {
   method: string;
   expected: ZcodeProtocolIdentity;
   actual: ZcodeProtocolIdentity | null;

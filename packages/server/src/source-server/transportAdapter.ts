@@ -74,6 +74,8 @@ export interface TransportContext {
 
 export interface SourceServerInstallOrUpdateOptions {
   force?: boolean;
+  /** 用户已确认把远端切换到更旧版本；方向由远端 CLI 按真实 current 判定。 */
+  allowDowngrade?: boolean;
 }
 
 export interface SourceServerEnsureDaemonOptions {
@@ -89,6 +91,41 @@ export class SourceServerTransportOperationError extends Error {
     super(message);
     this.name = "SourceServerTransportOperationError";
   }
+}
+
+/**
+ * 远端 Server CLI `--json` 失败输出 `{ok:false,error,code?,retryable?}`（写在 stdout）。
+ * 公开错误码必须原样保留给 Host/UI 分类，不能只取 error 文本。
+ */
+function createServerCommandError(result: RemoteExecResult, fallbackMessage: string): Error {
+  try {
+    const response = readLastJsonLine(result.stdout);
+    if (isPublicZCodeErrorCode(response.code)) {
+      return new SourceServerTransportOperationError(
+        typeof response.error === "string" && response.error.trim()
+          ? response.error
+          : fallbackMessage,
+        response.code,
+        typeof response.retryable === "boolean" ? response.retryable : undefined,
+      );
+    }
+  } catch {
+    // 输出不是 JSON 时按文本诊断处理。
+  }
+  // Bug 原因：CLI 的 --json 错误写在 stdout，stderr 可能只有 SQLite warning；
+  // 安装路径与 daemon 启动复用同一错误解析，避免 warning 覆盖真正的失败原因。
+  return new Error(
+    (readStructuredCommandError(result.stdout) ?? result.stderr.trim()) || fallbackMessage,
+  );
+}
+
+/** 读取远端 Server CLI `--json` 命令的最终 JSON；非零退出按 {@link createServerCommandError} 失败。 */
+export function readServerCommandResult(
+  result: RemoteExecResult,
+  fallbackMessage: string,
+): Record<string, unknown> {
+  if (result.exitCode !== 0) throw createServerCommandError(result, fallbackMessage);
+  return readLastJsonLine(result.stdout);
 }
 
 export type SourceServerFileTransfer = Pick<IRemoteBackend, "exec" | "upload">;
@@ -300,7 +337,7 @@ class BackendSourceServerTransportAdapter implements SourceServerTransportAdapte
       `tar -xzf ${remoteArchiveShell} -C ${bootstrapDirShell} --strip-components=1`,
       // Bug 原因：update 会重启完整 daemon；若不把既有 transport 能力边界传给目标 bootstrap CLI，
       // WSL/Docker 会在 handoff 时误尝试注册不可用的 systemd user service。
-      `${this.kind === "ssh" ? "" : "ZCODE_SERVER_SKIP_SERVICE_REGISTRATION=1 "}${bootstrapDirShell}/bin/zcode update --from-archive ${remoteArchiveShell}${options.force ? " --force" : ""} --server-root ${rootShell} --json --progress`,
+      `${this.kind === "ssh" ? "" : "ZCODE_SERVER_SKIP_SERVICE_REGISTRATION=1 "}${bootstrapDirShell}/bin/zcode update --from-archive ${remoteArchiveShell}${options.force ? " --force" : ""}${options.allowDowngrade ? " --allow-downgrade" : ""} --server-root ${rootShell} --json --progress`,
     ].join(" && ");
     // 上传完成后命令仍需解压、整树校验和 daemon 换代；必须实时消费阶段，不能等退出才显示。
     const result = await collectCommand(await backend.exec(command), (line) => {
@@ -424,8 +461,10 @@ class BackendSourceServerTransportAdapter implements SourceServerTransportAdapte
     throwIfAborted(context.signal);
     const backend = await this.getBackend(target);
     const hasServerRoot = argv.includes("--server-root");
+    // `restart` 会在远端重新执行 serve --daemon，必须与它一样保持 detached fallback（R2 §8.1）。
     const daemonEnvironment =
-      this.kind !== "ssh" && argv[0] === "serve" && argv.includes("--daemon")
+      this.kind !== "ssh" &&
+      ((argv[0] === "serve" && argv.includes("--daemon")) || argv[0] === "restart")
         ? "ZCODE_SERVER_SKIP_SERVICE_REGISTRATION=1 "
         : "";
     const command = [

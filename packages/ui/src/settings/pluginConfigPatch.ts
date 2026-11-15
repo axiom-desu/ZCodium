@@ -2,6 +2,39 @@ import type { ZCodePluginInfo, ZCodePluginUserConfigOption } from "@zcode/shared
 
 export type PluginOptionDraftValue = string | number | boolean | null;
 
+/** 单个字段的显示态：值 + 是否「已保存但不回显」（敏感键）。 */
+export interface PluginOptionDisplayState {
+  hasStoredSecret: boolean;
+  value: string | number | boolean;
+}
+
+/**
+ * 当前表单应显示的值：显式 draft > 本 scope 回传的 effective 值 > manifest 默认值 > 类型默认。
+ * 敏感键的 effective 值不会回传（私有存储不回显），因此已有值时得到空字符串 + `hasStoredSecret`。
+ */
+export function resolvePluginOptionValue(
+  plugin: Pick<ZCodePluginInfo, "configuredOptions" | "optionSources">,
+  key: string,
+  option: ZCodePluginUserConfigOption,
+  draft: PluginOptionDraftValue | undefined,
+): PluginOptionDisplayState {
+  if (draft === null) return { hasStoredSecret: false, value: "" };
+  const value =
+    draft ??
+    plugin.configuredOptions?.[key] ??
+    option.default ??
+    (option.type === "boolean" ? false : "");
+  return {
+    // 敏感值有来源标记却没有回传值：说明它已保存在私有存储里，只是不回显。
+    hasStoredSecret:
+      option.sensitive === true &&
+      plugin.optionSources?.[key] !== undefined &&
+      plugin.configuredOptions?.[key] === undefined &&
+      value === "",
+    value,
+  };
+}
+
 interface PluginConfigPatch {
   options: Record<string, string | number | boolean>;
   clearOptionKeys: string[];

@@ -96,14 +96,15 @@ describe("buildToolExposure", () => {
       registry: registryOf(entries),
     });
     assert.equal(exposure.context.mode, "local");
+    // F17：local 模式用独立工具名 LocalToolSearch，不再复用 Native 的 ToolSearch。
     assert.deepEqual(
       exposure.tools.map((tool) => tool.name).sort(),
-      ["DeferredToolCall", "Read", "ToolSearch"].sort(),
+      ["DeferredToolCall", "LocalToolSearch", "Read"].sort(),
     );
     assert.ok(exposure.tools.every((tool) => tool.deferLoading === undefined));
-    // Local 的 ToolSearch 描述与 Native 不同：明确要求通过 DeferredToolCall 调用。
+    // Local 的搜索入口描述与 Native 不同：明确要求通过 DeferredToolCall 调用。
     assert.match(
-      exposure.tools.find((tool) => tool.name === "ToolSearch")?.description ?? "",
+      exposure.tools.find((tool) => tool.name === "LocalToolSearch")?.description ?? "",
       /DeferredToolCall/,
     );
   });

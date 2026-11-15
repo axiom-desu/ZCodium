@@ -1,7 +1,6 @@
 use crate::{ModelFailure, ToolOutput};
-use anyhow::Result;
 use serde_json::Value;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::oneshot;
 
 pub struct RunEvent {
     pub session_id: String,
@@ -60,6 +59,32 @@ pub enum Event {
     PluginCatalog {
         reply: oneshot::Sender<std::sync::Arc<[Value]>>,
     },
+    /// 3.18 F1：指令文件读取结果（会话开始与 compaction 后重读）；owner 只做进程内缓存。
+    InstructionsLoaded {
+        files: std::sync::Arc<[zcode_cli_domain::instruction_files::File]>,
+        /// 存在但读不出来的路径：增量公告不算删除，重读时也不覆盖旧缓存。
+        unreadable: std::sync::Arc<[String]>,
+        /// 读取时的压缩边界（`context.offset`）；缓存据此失效。
+        boundary: usize,
+        committed: oneshot::Sender<()>,
+    },
+    /// 3.18 F2：本 run 的 `total_tokens` 预算（进程内，不落库）。
+    TotalTokensBudget(zcode_cli_domain::total_tokens::Budget),
+    /// 3.18 F3：主会话 system 字节快照的 session_entry 写入（覆盖写）。
+    PromptSystem {
+        data: Value,
+        committed: oneshot::Sender<()>,
+    },
+    /// 3.18 F12：本 run 新用到的能力标签（owner 并集写入 session_entry，只增不减）。
+    SessionFeatures {
+        features: Vec<String>,
+    },
+    /// 3.18 F4：主轮次真实请求的细类别分解（owner 记 revision/measuredAt，不落库）。
+    ContextComposition {
+        categories: Value,
+        model: Option<Value>,
+        context_window: Option<u64>,
+    },
     /// A model-only user message (a `<system-reminder>`) the owner appends to
     /// the canonical history and persists before `committed`.
     ModelOnlyNotice {
@@ -114,6 +139,15 @@ pub enum Event {
     /// A detached workspace request's reply with a protocol error (plugin management).
     AuxiliaryReply {
         result: std::result::Result<Value, crate::RuntimeError>,
+    },
+    /// 3.18：Host 权威请求，其 `params` schema 是 strict（如 `automation/pause` 只允许
+    /// `automationId`），所以 requestId 由 Engine 分配、只存在于 Engine 的 waiter 表，
+    /// 不写入 `params`。`reply` 收到 Host 的原始 result；Host 的错误回执在传输层被
+    /// 投影成 `Null`，因此调用方不能把缺失回执当成 `false`。
+    HostRequest {
+        method: &'static str,
+        params: Value,
+        reply: oneshot::Sender<Value>,
     },
     /// A usage query's reply (spec rust-m9-usage-logs §2.4); the error is a storage failure.
     UsageDone {
@@ -240,158 +274,10 @@ pub enum Event {
         cancelled: bool,
     },
 }
-/// The hooks of a session's runs beyond the startup user hooks.
-pub struct SessionHooks {
-    /// User and enabled plugin hooks (Node configured hooks); `None`: no
-    /// plugin hooks, the startup user hooks stay.
-    pub configured: Option<std::sync::Arc<[zcode_cli_domain::hooks::Registration]>>,
-    /// `None`: no project hooks, or trust is unavailable.
-    pub project: Option<WorkspaceHooks>,
-}
-/// A session's project hooks as admitted for its runs.
-pub struct WorkspaceHooks {
-    pub registrations: Vec<zcode_cli_domain::hooks::Registration>,
-    pub view:
-        tokio::sync::watch::Receiver<std::sync::Arc<zcode_cli_domain::hooks::trust::AdmissionView>>,
-}
-/// The usage facts of a tool result (Node `recordToolUsageFromResult` and
-/// `appendNestedToolModelUsage`).
-#[derive(Clone, Debug, Default)]
-pub struct ToolFacts {
-    /// Bash's exit code (Node `perf.detail.command.exitCode`).
-    pub exit_code: Option<i64>,
-    pub truncated: bool,
-    /// Node `output.modelUsage`: a tool's internal model request (WebSearch).
-    pub model_usage: Option<Value>,
-    /// Node `ToolCallResult.result.perf` without the permission wait: the
-    /// call's `totalMs` and the tool's detail.
-    pub perf: Option<Value>,
-    /// `(error type, code)` of a failure with its own error class (`ToolOutput.error`).
-    pub error: Option<(&'static str, &'static str)>,
-}
 
-pub struct ModelOutput {
-    pub message: Value,
-    pub calls: Vec<Value>,
-    pub usage: Value,
-    pub output_limit: bool,
-    /// The provider's own finish reason (AI SDK `rawFinishReason`): Anthropic
-    /// `stop_reason`, Chat `finish_reason`, Responses `incomplete_details.reason`.
-    pub raw_finish_reason: Option<String>,
-}
-/// A tool call the policy asked the user about.
-pub struct PermissionRequest {
-    /// Decision reason, shown as the prompt summary.
-    pub reason: String,
-    /// Policy risk level (`low` / `medium` / `high` / `critical`).
-    pub risk_level: String,
-    /// Arguments as the policy saw them.
-    pub input: Value,
-    pub suggestions: Vec<zcode_cli_domain::permission::Update>,
-    /// Tool `askOptions.allowAlways`: `no-always-allow` / `session-always-allow`.
-    pub options_policy: Option<String>,
-}
-/// The resolved prompt (Node broker result).
-#[derive(Debug, PartialEq)]
-pub enum PermissionAnswer {
-    Allow,
-    /// `preserve`: user feedback is kept verbatim instead of summarized.
-    Deny {
-        message: String,
-        preserve: bool,
-    },
-    /// Allowed, but the tool fails before running (Node: project rule write failed).
-    Fail(String),
-    /// ExitPlanMode not approved; `Some` carries the user's feedback.
-    PlanRejected(Option<String>),
-}
-/// Messages committed at a step boundary (guided input or subagent mailbox).
-pub struct Guide {
-    pub messages: Vec<Value>,
-    /// The run's new request origin when a guided user input changed it.
-    pub origin: Option<std::sync::Arc<RequestOrigin>>,
-    /// Tools the guided input hides from the rest of the turn (merged into the run).
-    pub tool_disallowlist: Vec<String>,
-}
-/// `modelExecution.requestAuth` (`{apiKey?, headers?}`) frozen for one execution.
-/// It replaces the Host credential request and is never persisted or logged.
-pub struct RequestAuth(pub Value);
-impl std::fmt::Debug for RequestAuth {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("RequestAuth(<redacted>)")
-    }
-}
-/// Model request source, sent as `x-zcode-session-type`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum RequestKind {
-    Main,
-    Subagent,
-    #[default]
-    Other,
-}
-impl RequestKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Main => "main",
-            Self::Subagent => "subagent",
-            Self::Other => "other",
-        }
-    }
-}
-/// Attribution of model requests (Node `ModelStatusContext`). Owned by the
-/// engine; a run only holds a copy that the engine replaces on guided input.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct RequestOrigin {
-    pub kind: RequestKind,
-    pub session_id: Option<String>,
-    pub trace_id: String,
-    pub query_id: Option<String>,
-    /// Node `querySource` (`main_turn`, `subagent`, `compact`); empty when none.
-    pub query_source: &'static str,
-    /// Node `streamRecovery` of a request that recovers a broken stream: added
-    /// to its network statuses and raising its idle timeout.
-    pub stream_recovery: Option<std::sync::Arc<Value>>,
-}
-impl RequestOrigin {
-    /// A request outside any session run, with a trace of its own.
-    pub fn detached(trace_id: String) -> std::sync::Arc<Self> {
-        std::sync::Arc::new(Self {
-            trace_id,
-            ..Self::default()
-        })
-    }
-    /// The same run context for work that is not an agent step (compaction).
-    pub fn auxiliary(&self) -> std::sync::Arc<Self> {
-        self.other("compact")
-    }
-    /// A run's internal request outside the agent step (Node `other` session
-    /// type), e.g. `web_fetch_processing`.
-    pub fn other(&self, query_source: &'static str) -> std::sync::Arc<Self> {
-        std::sync::Arc::new(Self {
-            kind: RequestKind::Other,
-            query_source,
-            ..self.clone()
-        })
-    }
-}
-#[derive(Clone)]
-pub struct EventSink {
-    pub session_id: String,
-    pub run_id: String,
-    pub tx: mpsc::Sender<RunEvent>,
-    pub origin: std::sync::Arc<RequestOrigin>,
-    /// Credentials frozen for this execution; `None` asks the Host when required.
-    pub request_auth: Option<std::sync::Arc<RequestAuth>>,
-}
-impl EventSink {
-    pub async fn send(&self, event: Event) -> Result<()> {
-        self.tx
-            .send(RunEvent {
-                session_id: self.session_id.clone(),
-                run_id: self.run_id.clone(),
-                event,
-            })
-            .await?;
-        Ok(())
-    }
-}
+#[path = "contract_events_parts.rs"]
+mod contract_events_parts;
+pub use contract_events_parts::{
+    EventSink, Guide, ModelOutput, PermissionAnswer, PermissionRequest, RequestAuth, RequestKind,
+    RequestOrigin, SessionHooks, ToolFacts, WorkspaceHooks,
+};

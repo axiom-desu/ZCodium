@@ -313,6 +313,7 @@ async function executeDuringStream(
     model: state.model,
     toolSearch: options.toolSearch,
     automationTurn: isAutomationMutationRestrictedTurn(state),
+    automationId: state.automationId,
     signal: options.abortSignal,
     traceContext: options.traceContext,
     onBatchStart: async () => {

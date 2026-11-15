@@ -1,9 +1,10 @@
 import { SelectionActionMenu } from "@/v4/SelectionActionMenu.js";
 import { useTextSelection } from "@/hooks/useTextSelection.js";
-import { useCallback, useRef, type RefObject } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 import type { ConversationRow } from "@zcode/shared/zcode-protocol-v4";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
+  buildAnnotatedConversationSelection,
   createConversationSelectionReference,
   type ConversationSelectionContentType,
   type ConversationSelectionReference,
@@ -40,6 +41,7 @@ export function ConversationSelectionTooltip({
   rootRef,
   rows,
   sourceSessionId,
+  sourceLogEpoch,
   enabled,
   sideActionDisabled,
   onAddToCurrentTask,
@@ -48,6 +50,8 @@ export function ConversationSelectionTooltip({
   rootRef: RefObject<HTMLDivElement | null>;
   rows: readonly ConversationRow[];
   sourceSessionId: string;
+  /** 捕获选区时的投影代际；随引用一起交给 composer 草稿 owner。 */
+  sourceLogEpoch?: string;
   enabled: boolean;
   sideActionDisabled?: boolean;
   onAddToCurrentTask: (reference: ConversationSelectionReference) => void;
@@ -110,17 +114,32 @@ export function ConversationSelectionTooltip({
       reference: createConversationSelectionReference({
         sourceSessionId,
         sourceRowId: rowId,
+        ...(sourceLogEpoch ? { sourceLogEpoch } : {}),
         contentType,
         text,
       }),
     };
-  }, [enabled, rootRef, sourceSessionId]);
+  }, [enabled, rootRef, sourceLogEpoch, sourceSessionId]);
+  const [annotating, setAnnotating] = useState(false);
+  // 同步标记：批注框获得焦点会让选区塌缩，事件可能早于 React 重渲染到达。
+  const annotatingRef = useRef(false);
   const { state, close } = useTextSelection({
     rootRef,
     enabled,
+    frozen: annotating,
+    frozenRef: annotatingRef,
     inspect: inspectSelection,
     scopeKey: sourceSessionId,
   });
+  const handleAnnotationOpenChange = useCallback((open: boolean) => {
+    annotatingRef.current = open;
+    setAnnotating(open);
+  }, []);
+  const closeAll = useCallback(() => {
+    annotatingRef.current = false;
+    setAnnotating(false);
+    close();
+  }, [close]);
 
   if (!state) return null;
   return (
@@ -131,13 +150,23 @@ export function ConversationSelectionTooltip({
       singleLimit={Boolean(state.error)}
       sideActionDisabled={sideActionDisabled}
       sideDisabledTitle={intl.formatMessage({ id: "chat.selections.sideBlocked" })}
+      onAnnotationOpenChange={handleAnnotationOpenChange}
       onAddToCurrentTask={() => {
         if (state.reference) onAddToCurrentTask(state.reference);
-        close();
+        closeAll();
+      }}
+      onAnnotate={(comment) => {
+        if (!state.reference) return;
+        // 批注 = 同一条引用 + comment：走同一个草稿 owner，不新建第二份引用。
+        // 空/超限批注不产生任何引用（取消路径天然无副作用）。
+        const annotated = buildAnnotatedConversationSelection(state.reference, comment);
+        if (!annotated.ok) return;
+        onAddToCurrentTask(annotated.reference);
+        closeAll();
       }}
       onAskInSideChat={() => {
         if (state.reference) onAskInSideChat(state.reference);
-        close();
+        closeAll();
       }}
     />
   );

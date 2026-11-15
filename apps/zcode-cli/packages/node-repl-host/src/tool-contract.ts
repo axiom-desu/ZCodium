@@ -19,7 +19,9 @@ export const NODE_REPL_DEFAULT_TIMEOUT_MS = 60_000;
 // 升到 0.6.1：browser bridge 不再按 runtime_scope 拒绝 subagent，subagent 也能使用 Browser Use
 // （改由 BrowserControlPort 的 requireSession 按「子会话是否经父 runtime 登记」判定，见
 // .agents/specs/browser-subagent-shared-tabs.md）；已装用户必须换到新缓存目录才能拿到新 server.js。
-export const NODE_REPL_SERVER_VERSION = "0.6.1";
+// 升到 0.7.0：调用账本把可信事实移出 Worker（截图下标、CUA 目标应用、两个会话能力 key 只按账本写），
+// js 结果按 turn 追加无进展提示；旧缓存里的 server.js 没有这些行为，必须换缓存目录才生效。
+export const NODE_REPL_SERVER_VERSION = "0.7.0";
 
 // node_repl 的底层能力是通用 JS，旧文案却没有声明模型路由边界，导致非浏览器任务
 // 也会误选这个高权限工具。Browser Use 与 Computer Use 是合法入口，因此 server 与 tool 文案都要显式限域。

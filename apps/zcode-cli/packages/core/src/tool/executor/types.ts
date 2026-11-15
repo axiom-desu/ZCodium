@@ -17,6 +17,7 @@ import type {
   ModelCatalogPort,
   PdfDocumentPort,
   PermissionBrokerPort,
+  PluginDiscoveryPort,
   SessionEvent,
   SessionId,
   SessionModePort,
@@ -25,16 +26,19 @@ import type {
   SubagentPort,
   SubagentRunOptions,
   ToolArtifactStorePort,
+  TopicResourcePort,
   ToolSearchExecutionContext,
   TraceContext,
   TurnId,
   WorkflowEscalatePort,
   WorkflowPort,
   WorkflowSubmitPort,
+  WorkflowWebSearchBudgetPort,
 } from "@zcode/contracts";
 import type { HookRunner } from "../../hooks/index.js";
 import type { PermissionService } from "../../permission/service.js";
 import type { RuntimeTaskRegistry } from "../../runtime-task/registry.js";
+import type { SessionControlBinding } from "../session-control/contract.js";
 import type { ToolRegistry } from "../registry.js";
 import type { ToolSchedule } from "../scheduler.js";
 import type {
@@ -99,11 +103,18 @@ export interface ToolExecutorOptions {
   workflowSubmitPort?: WorkflowSubmitPort;
   /** actor 的升级端口；存在即为该会话注册 escalate。 */
   workflowEscalatePort?: WorkflowEscalatePort;
+  /** actor 每个 ask 的 WebSearch 预算；缺席即无上限。 */
+  webSearchBudget?: WorkflowWebSearchBudgetPort;
   artifactStore?: ToolArtifactStorePort;
+  topicResourcePort?: TopicResourcePort;
   automationPort?: AutomationPort;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
   workflowPort?: WorkflowPort;
+  /** 独立 CLI 的会话控制绑定；缺席即不注册 8 个会话工具（桌面/远程 Host 会话）。 */
+  sessionControl?: SessionControlBinding;
+  /** 插件发现端口（SearchPlugins/SuggestPluginInstall）；缺席即本 Host 没有插件目录。 */
+  pluginDiscoveryPort?: PluginDiscoveryPort;
   /** workflow run 端口；按工具名查表时 CreateWorkflow 的后台生命周期提供者。 */
   dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   dynamicWorkflowSnippetPort?: DynamicWorkflowSnippetPort;
@@ -171,6 +182,8 @@ export interface ToolExecuteOptions {
   /** 本次请求的搜索上下文；包装调用的准入与未加载 schema 纠错提示共用它。 */
   toolSearch?: ToolSearchExecutionContext;
   automationTurn?: boolean;
+  /** 本轮 automation 身份；只从 runtime loop 状态（Host 准入）下传。 */
+  automationId?: string;
   signal?: AbortSignal;
   traceContext?: TraceContext;
   subagentModelOverride?: SubagentRunOptions["modelOverride"];
@@ -210,11 +223,18 @@ export interface ToolExecutorDeps {
   workflowSubmitPort?: WorkflowSubmitPort;
   /** actor 的升级端口；存在即为该会话注册 escalate。 */
   workflowEscalatePort?: WorkflowEscalatePort;
+  /** actor 每个 ask 的 WebSearch 预算；缺席即无上限。 */
+  webSearchBudget?: WorkflowWebSearchBudgetPort;
   artifactStore?: ToolArtifactStorePort;
+  topicResourcePort?: TopicResourcePort;
   automationPort?: AutomationPort;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
   workflowPort?: WorkflowPort;
+  /** 独立 CLI 的会话控制绑定；缺席即不注册 8 个会话工具（桌面/远程 Host 会话）。 */
+  sessionControl?: SessionControlBinding;
+  /** 插件发现端口；缺席即本 Host 没有插件目录（两个工具都不注册）。 */
+  pluginDiscoveryPort?: PluginDiscoveryPort;
   /** workflow run 端口；按工具名查表时 CreateWorkflow 的后台生命周期提供者。 */
   dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   dynamicWorkflowSnippetPort?: DynamicWorkflowSnippetPort;

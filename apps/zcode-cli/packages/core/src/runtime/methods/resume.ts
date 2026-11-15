@@ -35,6 +35,14 @@ import {
   restoreWorkspaceFileRewindEntries,
 } from "./workspace-checkpoint-persistence.js";
 import { mainTurnCacheHitAggregateFromMessages } from "./turn-model-step-usage.js";
+import { resetProjectMemoryRecall } from "../helpers/project-memory-recall.js";
+import {
+  createTotalTokensBudgetState,
+} from "../helpers/total-tokens-budget.js";
+import { loadInstructionAnnouncement } from "../helpers/instruction-announcement.js";
+import { loadEnvironmentAnnouncement } from "../helpers/environment-announcement.js";
+import { restoreSessionFeaturesOnResume } from "../session-features/contract.js";
+import { loadPromptSnapshot } from "../helpers/prompt-snapshot.js";
 import {
   extractPersistedEnvInfo,
   hasRestoredTitleEvent,
@@ -122,6 +130,18 @@ export async function resumeFromStore(
   this.contextBuilder = null;
   this.contextInitialized = false;
   this.lastEmittedLocalDate = undefined;
+  // 恢复等同新会话启动：增量公告原因回到 session_start（上一次 compaction 不能跨恢复保留）。
+  this.instructionRefreshReason = undefined;
+  // token 预算计数器只在内存：恢复从零开始，下一条真实用户消息重新起算。
+  this.totalTokensBudget = createTotalTokensBudgetState();
+  // Recall 状态是 session-local 内存事实：恢复丢弃 manifest/selector conversation/prefetch。
+  resetProjectMemoryRecall(this);
+  // 冷恢复的指令公告与 prompt 快照必须在 Context 初始化前装好：
+  // 初始化会用已公告正文重建前缀，并避免把当前文件内容当成首次公告重新记录。
+  await loadInstructionAnnouncement(this, traceContext);
+  // 环境公告基线：system 里的 # Environment 已被 prompt 快照冻结，
+  // 恢复后只有靠这条基线才能算出目录/Desktop 的变化。
+  await loadEnvironmentAnnouncement(this, traceContext);
   // cold resume 的历史 hydration 会先清空 runtime-local read-state；必须在
   // Context 初始化前完成，确保随后单次加载的 MEMORY.md 状态与 provider 所见内容一致。
   const readFileStateHydration = await hydrateReadFileStateFromSession({
@@ -135,6 +155,8 @@ export async function resumeFromStore(
     workspaceRoot: this.workspaceRoot,
   });
   await this.ensureContextInitialized(traceContext);
+  // 第一个轮次重建前缀前装好 prompt 快照，恢复后的请求发送会话记录的 system。
+  await loadPromptSnapshot(this, traceContext);
   const recoveredCompactTimelineCount = await this.recoverInterruptedCompactTimelines(
     messages,
     traceContext,
@@ -207,6 +229,8 @@ export async function resumeFromStore(
 
   await restorePermissionGrantMarker(this, traceContext);
   await restoreDynamicWorkflowActivationOnResume.call(this, messages);
+  // 会话能力标签 = entry ∪ 历史推导；只增不减，fork 子会话也靠历史继承 fork 点前的标签。
+  await restoreSessionFeaturesOnResume.call(this, messages, traceContext);
 
   this.mainTurnCacheHitAggregate = mainTurnCacheHitAggregateFromMessages({
     activeMessages,

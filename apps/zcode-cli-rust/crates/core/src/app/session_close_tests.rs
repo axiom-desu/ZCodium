@@ -110,7 +110,7 @@ impl ContextPort for UnusedContext {
     async fn instructions(
         &self,
         _: &CancellationToken,
-    ) -> Result<Vec<crate::domain::prompt::InstructionSource>> {
+    ) -> Result<crate::domain::prompt::InstructionRead> {
         bail!("ContextPort must be unused")
     }
 }

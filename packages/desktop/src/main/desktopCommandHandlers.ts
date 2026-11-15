@@ -11,6 +11,7 @@ import {
   PlatformChannels,
   resolveRuntimeZCodeEndpointOrigin,
   resolveZCodeEndpointOrigin,
+  toZhOrEnLocale,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
   type AppSettings,
@@ -163,7 +164,9 @@ export async function resolveCommunityUrl(options: {
   locale: Locale;
   logger: { warn: (...args: unknown[]) => void };
 }): Promise<string | undefined> {
-  return (await readLocalHelpConfig(options.logger))?.community_urls?.[options.locale];
+  return (await readLocalHelpConfig(options.logger))?.community_urls?.[
+    toZhOrEnLocale(options.locale)
+  ];
 }
 
 async function openFeedback(logger: {

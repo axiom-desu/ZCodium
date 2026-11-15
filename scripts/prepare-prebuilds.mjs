@@ -24,6 +24,8 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { resolveRemoteNativeSearchPrebuiltPlan } from "./remote-native-search-tools-config.mjs";
+// 根 workspace 的 dist 导出依赖不在 apps/zcode-cli 的 turbo 图内，冷 runner 必须先构建。
+import { buildWorkspacePrerequisites } from "./ci/build-workspace-prerequisites.mjs";
 import { prepareNativeSearchTools } from "./prepare-native-search-tools.mjs";
 import {
   stageThirdPartyNotices,
@@ -153,6 +155,11 @@ async function prepareNodeBinaries() {
 
 function buildServerBundle() {
   console.log("==> Building server bundle");
+
+  // server 的 esbuild 直接 import `@zcode/session-control/contracts` 与 `/app`，
+  // 这些包通过 dist 导出且 dist 不入库，warm 本地会掩盖冷 runner 的缺失，
+  // 因此先按依赖序构建根 workspace 前置（见 .agents/specs/ci-cold-build-order.md）。
+  buildWorkspacePrerequisites({ root: rootDir });
 
   try {
     if (isBootstrapWithRemote) {

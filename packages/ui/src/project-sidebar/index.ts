@@ -1,3 +1,4 @@
+export { ProjectManagement } from "./ProjectManagement.js";
 export { ProjectSidebarSection } from "./ProjectSidebarSection.js";
 export { useProjectSidebarTreeContext } from "./ProjectSidebarContext.js";
 export { useProjectSidebarIntl } from "./i18n.js";

@@ -267,6 +267,7 @@ import {
   type AppSlashCommand,
 } from "@/slashCommandHelpers.js";
 import {
+  admitConversationSelectionQuotes,
   clearConversationSelectionReferenceScope,
   dispatchConversationSelectionAdd,
   type ConversationSelectionReference,
@@ -431,6 +432,8 @@ interface QueuedComposerRestoreTarget {
   inputKind: "sendText" | "sendGoalCommand";
   text: string;
   attachments: readonly AttachmentRef[];
+  /** 队列项入队时固化的选区引用（含批注）；撤回编辑必须原样交回草稿。 */
+  conversationSelections?: ComposerRestoreRequest["conversationSelections"];
   config?: ComposerRestoreRequest["config"];
 }
 
@@ -452,6 +455,9 @@ function resolveQueuedComposerRestore(
     inputKind: item.kind,
     text: v4QueuedCommandText(item.kind, item.text),
     attachments: item.attachments.map((attachment) => ({ ...attachment })),
+    ...(item.conversationQuotes?.length
+      ? { conversationSelections: item.conversationQuotes.map((quote) => ({ ...quote })) }
+      : {}),
     ...(Object.keys(config).length > 0 ? { config } : {}),
   };
 }
@@ -2463,6 +2469,29 @@ export function SessionPane({
       const readyAttachments = options?.attachments ?? [];
       const sharedContextRefs = options?.sharedContextRefs;
       const contextAttachmentCount = options?.contextAttachmentCount ?? 0;
+      // 会话选区引用准入（唯一 owner = 当前投影窗口）：跨会话引用与 stale 行锚点在发送前拒绝。
+      // 原因：引用文本来自历史实体，rewind 截断或跨会话「加入对话」后旧锚点已不指向本轮上下文，
+      // 放行会让模型拿到一段它无法在会话里定位的材料；批注（comment）也失去所指对象。
+      let conversationQuotes: import("@/lib/conversationSelectionReference.js").ConversationSelectionText[] | undefined;
+      if (options?.conversationSelections?.length) {
+        const currentSnapshot = snapshotRef.current;
+        const admission = admitConversationSelectionQuotes({
+          references: options.conversationSelections,
+          targetSessionId: sessionId,
+          liveRowIds: new Set((currentSnapshot?.rows.window ?? []).map((row) => row.rowId)),
+          // 代际（logEpoch）与 rowId 一起判定：rewind 后同一行号可能指向另一条消息。
+          ...(currentSnapshot?.logEpoch ? { liveLogEpoch: currentSnapshot.logEpoch } : {}),
+        });
+        if (!admission.ok) {
+          logger.warn("[conversation-quotes] selection anchor rejected", {
+            reason: admission.reason,
+            sessionId,
+          });
+          toast(intl.formatMessage({ id: "chat.selections.staleBlocked" }));
+          return "blocked" as const;
+        }
+        conversationQuotes = admission.quotes;
+      }
       let slashCommand = parseV4VisibleSlashCommand(text, readyAttachments, {
         contextAttachmentCount,
       });
@@ -2661,6 +2690,7 @@ export function SessionPane({
                 ...submission,
                 ...(readyAttachments.length > 0 ? { attachments: readyAttachments } : {}),
                 ...(sharedContextRefs?.length ? { context_refs: sharedContextRefs } : {}),
+                ...(conversationQuotes ? { conversationQuotes } : {}),
               },
               prewarm.sessionId,
               undefined,
@@ -2754,6 +2784,7 @@ export function SessionPane({
             attachments: readyAttachments,
             ...submission,
             ...(sharedContextRefs?.length ? { context_refs: sharedContextRefs } : {}),
+            ...(conversationQuotes ? { conversationQuotes } : {}),
           },
           newSessionId,
           undefined,
@@ -2773,6 +2804,7 @@ export function SessionPane({
           text: effectiveText,
           ...submission,
           ...(readyAttachments.length > 0 ? { attachments: readyAttachments } : {}),
+          ...(conversationQuotes ? { conversationQuotes } : {}),
           ...(options?.requestedDelivery
             ? {
                 // 立即发送曾先投影 QueueItem，再等待二次
@@ -3117,6 +3149,9 @@ export function SessionPane({
           inputKind: restoreTarget.inputKind,
           text: restoreTarget.text,
           attachments: restoreTarget.attachments,
+          ...(restoreTarget.conversationSelections
+            ? { conversationSelections: restoreTarget.conversationSelections }
+            : {}),
           config: restoreTarget.config,
         });
       } catch (error) {
@@ -4659,6 +4694,7 @@ export function SessionPane({
                         partialShareActive: shareActive,
                       }),
                       sideActionDisabled: selectionSideActionBlocked,
+                      logEpoch: snapshot?.logEpoch,
                       onAddToCurrentTask: handleAddSelectionToCurrentTask,
                       onAskInSideChat: handleOpenSelectionSideConversation,
                     }

@@ -224,7 +224,9 @@ export class ManifestUpdateProvider extends Provider<UpdateInfo> {
     }
 
     return {
-      ...(parsed as UpdateInfo),
+      // manifest 是远端 YAML，字段由 electron-updater 消费；runtime 只保证 version 存在，
+      // 其余字段保持透传（与上游同一断言边界，不在生产逐字段捏造）。
+      ...(parsed as unknown as UpdateInfo),
       // preview/stable 切换时旧 manifest 请求可能晚于新请求返回。
       // electron-updater 的 update-available 事件默认不带请求通道，main 进程无法识别过期结果；
       // 这里把本次请求通道随 UpdateInfo 带回去，避免旧通道覆盖更新弹窗内容。

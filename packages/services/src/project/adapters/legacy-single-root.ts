@@ -159,6 +159,10 @@ export function createLegacySingleRootProjectService(
     },
     saveProject: readOnly,
     deleteProject: readOnly,
+    // 旧 Server 只读适配器没有撤销与数据删除能力；显式拒绝而不是默默成功。
+    restoreProject: readOnly,
+    measureProjectData: readOnly,
+    deleteProjectData: readOnly,
     moveTask: readOnly,
     reorderProjects: readOnly,
     moveTaskGroupNode: readOnly,

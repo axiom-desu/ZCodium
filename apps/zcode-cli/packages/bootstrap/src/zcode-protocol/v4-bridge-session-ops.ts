@@ -4,7 +4,7 @@ import {
   createSessionId,
 } from "@zcode/contracts";
 import type { SessionId, StableForkGoalBoundaryMetadata } from "@zcode/contracts";
-import { resolveWorkspaceRefFromId } from "./mapper.js";
+import { buildWorkspaceRef, resolveWorkspaceRefFromId } from "./mapper.js";
 import { hasSessionModelProvider } from "./workspace-model-runtime.js";
 import {
   afterStateMutation,
@@ -156,7 +156,7 @@ export function createCommandEntrySessionOps(
     // running stable fork：只走 core transcript copy，再注册 child record。父 runtime、queue、
     // background/continuation inbox 与 shared workspace 均不读取、不停止、不复制。
     forkStableConversation: async (sessionId, options) => {
-      const { goalBoundary, revisionAtDecision, sourceCommandId, target } = options;
+      const { goalBoundary, revisionAtDecision, sourceCommandId, target, targetCwd } = options;
       const record = context.sessions.get(sessionId);
       if (!record) throw new Error("proto.sessionNotFound");
       const store = context.deps.sessionStore;
@@ -182,10 +182,14 @@ export function createCommandEntrySessionOps(
       );
       const fork = await record.app.runtime.forkStableConversationAtMessage({
         modelSelection,
+        ...(options.forkedSessionId
+          ? { forkedSessionId: options.forkedSessionId as SessionId }
+          : {}),
         target,
         goalBoundary,
         sourceCommandId,
         revisionAtDecision,
+        ...(targetCwd ? { targetCwd } : {}),
         traceContext: record.traceContext,
       });
       await registerCommittedForkBestEffort(context, record, fork, {
@@ -199,6 +203,10 @@ export function createCommandEntrySessionOps(
         },
         // core 已按 copied message/verifier 边界复制 goal；禁止再用 parent 当前 target 覆盖。
         inheritLatestTarget: false,
+        // worktree 子会话的 cwd 是新目录；workspace 由 Host 预分配的任务归属决定。
+        ...(targetCwd
+          ? { workspace: buildWorkspaceRef({ workspacePath: targetCwd.cwd }) }
+          : {}),
       });
       return { forkedSessionId: String(fork.forkedSessionId) };
     },

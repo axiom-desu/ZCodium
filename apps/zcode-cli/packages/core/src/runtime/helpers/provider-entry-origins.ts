@@ -45,6 +45,11 @@ function isCanonicalRealUser(entry: RuntimeMessageEntry): boolean {
   );
 }
 
+/** 轮首的真实用户输入：普通 user 消息且不是 attachment 投影（上游 3.18.2 同名判定）。 */
+export function isRealUserPrompt(entry: RuntimeMessageEntry): boolean {
+  return isCanonicalRealUser(entry) && !isPresentedInput(entry);
+}
+
 export function isPresentedInput(entry: RuntimeMessageEntry): boolean {
   return parseRuntimeInputPresentation(entry.metadata?.inputPresentation) !== undefined;
 }

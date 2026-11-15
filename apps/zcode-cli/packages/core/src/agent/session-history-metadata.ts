@@ -7,6 +7,7 @@ import {
   type SystemReminderSource,
 } from "../system-reminder/source.js";
 import { runtimeInputMetadata } from "./runtime-input-presentation.js";
+import { parseInstructionAnnouncement } from "../context/sections/instruction-files.js";
 import { hydrateToolSearchAnnouncement } from "./tool-search-hydration.js";
 import {
   isKnownSystemReminderSource,
@@ -151,6 +152,12 @@ export function runtimeMessageMetadataFromPartMetadata(
   const presentation = runtimeInputMetadata(runtimeMessage.inputPresentation);
   if (presentation) return presentation;
   const source = runtimeMessage.source;
+  if (source === "context_prefix") {
+    // 指令公告的增量事实（files/removed/reason）与正文分开保存；冷恢复必须还原，
+    // 否则 fork/resume 会把已公告文件当成首次出现并重发整份。
+    const instructions = parseInstructionAnnouncement(runtimeMessage.instructions);
+    return { source, ...(instructions ? { instructions } : {}) };
+  }
   if (source === "real_user") {
     return realUserRuntimeMetadata();
   }
@@ -165,6 +172,10 @@ export function runtimeMessageMetadataFromPartMetadata(
   }
   if (source === "todo_reminder") {
     return todoReminderRuntimeMetadata();
+  }
+  if (source === "interrupt_marker") {
+    // 停止标记是普通 user 文本：冷恢复必须还原同一身份，否则会被当成新的真实用户输入。
+    return { source };
   }
   if (isKnownSystemReminderSource(source)) {
     return systemReminderRuntimeMetadata(source);

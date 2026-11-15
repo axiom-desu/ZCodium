@@ -1,10 +1,15 @@
+import { resolve } from "node:path";
 import { createConfig, resolvePath } from "@zcode/adapters/config";
 import type { Logger, McpConnectionSnapshot, McpPort, McpServerStatus } from "@zcode/contracts";
 import {
+  resolveWorkspaceKey,
   zcodeMcpListParamsSchema,
   zcodeMcpListResultSchema,
+  zcodeWorkspaceMcpTrustParamsSchema,
   type ZCodeMcpListResult,
+  type ZCodeWorkspaceMcpTrustResult,
 } from "@zcode/shared";
+import { createWorkspaceMcpTrust } from "../workspace-mcp-trust/index.js";
 import {
   listMcpServerStatuses,
   omitMcpServers,
@@ -71,17 +76,54 @@ export async function listMcpServers(
     configuredMcpServers,
     pluginOutcome.mcpServers,
   );
-  // 产品决定 workspace MCP 开箱即用：project 作用域 MCP 默认 trusted，并自动连接。
-  const untrustedProjectMcpServers = new Set<string>();
+  // 工作区声明必须先由用户审核摘要后连接；插件/用户/内建来源保持原准入语义。
+  const authority = createWorkspaceMcpTrust({
+    workingDirectory,
+    workspaceIdentity: params.workspace.workspaceIdentity,
+    env: context.deps.env,
+  });
+  const reviews = await authority.inspect();
+  const untrustedProjectMcpServers = new Set(
+    Object.entries(reviews)
+      .filter(([, review]) => !review.trusted)
+      .map(([name]) => name),
+  );
+  for (const [name, config] of Object.entries(configuredMcpServers)) {
+    if (!config.source && configResult.sources.mcp.serverSources[name] === "project") {
+      configuredMcpServers[name] = { ...config, source: { kind: "workspace" } };
+    } else if (!config.source && configResult.sources.mcp.serverSources[name] === "user") {
+      configuredMcpServers[name] = { ...config, source: { kind: "user" } };
+    }
+  }
+  // 只读审核投影附加到状态；不改变连接结果，也不把用户/插件 server 标成工作区信任项。
+  const withReviews = (
+    statuses: Awaited<ReturnType<typeof listMcpServerStatuses>>,
+  ): typeof statuses => {
+    for (const [name, review] of Object.entries(reviews)) {
+      const config = configuredMcpServers[name];
+      if (
+        config?.source?.kind === "user" ||
+        config?.source?.kind === "plugin" ||
+        config?.source?.kind === "builtin"
+      )
+        continue;
+      const current = statuses[name];
+      if (!current) continue;
+      statuses[name] = { ...current, workspaceTrust: review };
+    }
+    return statuses;
+  };
   const mcpPort = context.deps.mcpPort;
   if (mcpPort) {
     if (params.mode === "status") {
       // OAuth 轮询只需要读取当前运行态。传入 pending 子集会落到
       // connectConfiguredServers 的 replace 语义，导致未列出的 MCP 被断开。
-      const statuses = await listMcpServerStatuses(
-        mcpPort,
-        configuredMcpServers,
-        untrustedProjectMcpServers,
+      const statuses = withReviews(
+        await listMcpServerStatuses(
+          mcpPort,
+          configuredMcpServers,
+          untrustedProjectMcpServers,
+        ),
       );
       return zcodeMcpListResultSchema.parse({ statuses });
     }
@@ -122,12 +164,63 @@ export async function listMcpServers(
 
     await connectPromise;
   }
-  const statuses = await listMcpServerStatuses(
-    mcpPort,
-    configuredMcpServers,
-    untrustedProjectMcpServers,
+  const statuses = withReviews(
+    await listMcpServerStatuses(
+      mcpPort,
+      configuredMcpServers,
+      untrustedProjectMcpServers,
+    ),
   );
   return zcodeMcpListResultSchema.parse({ statuses });
+}
+
+/** 用户显式审核动作：持久化成功才返回 accepted，不启用、不连接。 */
+export async function setWorkspaceMcpTrust(
+  context: ZCodeProtocolAgentServerContext,
+  rawParams: unknown,
+): Promise<ZCodeWorkspaceMcpTrustResult> {
+  const params = zcodeWorkspaceMcpTrustParamsSchema.parse(rawParams);
+  // Bug 原因：旧实现直接信任请求里的 workspacePath，远程/手机可用错误 workspace 探测目录
+  // 或给任意 workspaceIdentity 预埋同名同摘要授权。修复依据见
+  // `.agents/specs/upstream-3.18-security-hardening.md`（W3）：只接受本 Agent 的目标工作区，
+  // 且 workspaceKey 必须符合 `workspaceIdentity?.trim() || workspacePath` 的唯一 key 规则。
+  const targetWorkspacePath = resolve(context.deps.cwd ?? process.cwd());
+  if (
+    resolve(params.workspace.workspacePath) !== targetWorkspacePath ||
+    params.workspace.workspaceKey !== resolveWorkspaceKey(params.workspace)
+  ) {
+    return { accepted: false, reasonCode: "workspace_mcp_trust_unavailable" };
+  }
+  // 同一路径已有 session 时，身份必须与 Host 已登记的身份一致；不能借 bind 前的窗口预埋别名。
+  const knownIdentities = new Set(
+    [...context.sessions.values()]
+      .filter((session) => session.workspace.workspacePath === params.workspace.workspacePath)
+      .map((session) => session.workspace.workspaceIdentity)
+      .filter((identity): identity is string => Boolean(identity)),
+  );
+  if (
+    params.workspace.workspaceIdentity &&
+    knownIdentities.size > 0 &&
+    !knownIdentities.has(params.workspace.workspaceIdentity)
+  ) {
+    return { accepted: false, reasonCode: "workspace_mcp_trust_unavailable" };
+  }
+  try {
+    await createWorkspaceMcpTrust({
+      workingDirectory: params.workspace.workspacePath,
+      workspaceIdentity: params.workspace.workspaceIdentity,
+      env: context.deps.env,
+    }).decide(params.serverName, params.declarationDigest, params.trusted);
+    return { accepted: true };
+  } catch (error) {
+    return {
+      accepted: false,
+      reasonCode:
+        error instanceof Error && error.message === "workspace_mcp_declaration_changed"
+          ? "workspace_mcp_declaration_changed"
+          : "workspace_mcp_trust_unavailable",
+    };
+  }
 }
 
 async function waitForOAuthAuthorizationSnapshot(

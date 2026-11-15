@@ -52,7 +52,9 @@ export type PluginDiagnosticCode =
   | "plugin_variable_missing"
   | "plugin_duplicate_id"
   | "plugin_not_found"
-  | "plugin_ambiguous_name";
+  | "plugin_ambiguous_name"
+  | "plugin_secrets_unreadable"
+  | "plugin_startup_timeout";
 
 export interface PluginUserConfigOption {
   default?: string | number | boolean;

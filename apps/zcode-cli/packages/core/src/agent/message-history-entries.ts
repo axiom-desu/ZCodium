@@ -35,6 +35,7 @@ export function cloneRuntimeMessageEntry(entry: RuntimeMessageEntry): RuntimeMes
     message: cloneModelInputMessage(entry.message),
     metadata: cloneRuntimeMessageMetadata(entry.metadata),
     ...(entry.tokens ? { tokens: cloneTokenUsageInfo(entry.tokens) } : {}),
+    ...(entry.compactGroupKey ? { compactGroupKey: entry.compactGroupKey } : {}),
     ...(entry.queryScope ? { queryScope: entry.queryScope } : {}),
   };
 }
@@ -87,6 +88,20 @@ export function cloneRuntimeMessageMetadata(
             addedNames: [...metadata.toolSearchAnnouncement.addedNames],
             removedNames: [...metadata.toolSearchAnnouncement.removedNames],
             readdedNames: [...metadata.toolSearchAnnouncement.readdedNames],
+          },
+        }
+      : {}),
+    // 指令公告是历史事实：复制时各自持有数组，不能共享可变引用。
+    ...(metadata.instructions
+      ? {
+          instructions: {
+            files: metadata.instructions.files.map((file) => ({ ...file })),
+            ...(metadata.instructions.removed
+              ? { removed: [...metadata.instructions.removed] }
+              : {}),
+            ...(metadata.instructions.reason
+              ? { reason: metadata.instructions.reason }
+              : {}),
           },
         }
       : {}),

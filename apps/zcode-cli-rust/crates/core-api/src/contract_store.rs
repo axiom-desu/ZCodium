@@ -60,6 +60,68 @@ pub trait SessionStore: Send + Sync {
     async fn soft_delete_session(&self, _workspace: &str, _id: &str, _at: u64) -> Result<()> {
         anyhow::bail!("Session soft deletion unavailable")
     }
+    // ── v4/storage/sessionData/*（上游 project-management「彻底删除数据」）──
+    // 会话文件与正文行只有 CLI 的存储 owner 能删；Host 只传 ID/目录并消费结果。
+    /// 每个根会话 → 根自身与附属后代（不含 fork）；根不存在为空数组。
+    async fn session_data_trees(&self, _ids: &[String]) -> Result<Value> {
+        anyhow::bail!("Session data trees unavailable")
+    }
+    /// 每个目标会话 → 仍引用其附件的未删除会话（`zcode-artifact://<目标>/…`）。
+    async fn session_data_referrers(&self, _ids: &[String]) -> Result<Value> {
+        anyhow::bail!("Session data referrers unavailable")
+    }
+    /// `{sessionId: bytes}`：只统计磁盘上真实文件。
+    async fn session_data_measure(&self, _ids: &[String]) -> Result<Value> {
+        anyhow::bail!("Session data measure unavailable")
+    }
+    /// `[{workspacePath, bytes}]`：项目记忆目录。
+    async fn session_data_memory(&self, _directories: &[Value]) -> Result<Value> {
+        anyhow::bail!("Session data memory measurement unavailable")
+    }
+    /// 删除会话文件并返回删除前字节数；`retained` 是仍被外部引用的 artifact id。
+    async fn session_data_remove(&self, _id: &str, _retained: &[String]) -> Result<u64> {
+        anyhow::bail!("Session data file deletion unavailable")
+    }
+    async fn session_data_memory_remove(&self, _directory: &Value) -> Result<u64> {
+        anyhow::bail!("Session data memory deletion unavailable")
+    }
+    /// `[{name,relativePath,kind,bytes}]`：预检文件清单。
+    async fn session_data_files(&self, _id: &str) -> Result<Value> {
+        anyhow::bail!("Session data file listing unavailable")
+    }
+    /// 删除正文行（级联正文 + 显式无级联表）；已不存在的会话是空操作。
+    async fn session_data_purge(&self, _ids: &[String]) -> Result<()> {
+        anyhow::bail!("Session data purge unavailable")
+    }
+    /// 预检 revision：对 `[snapshotRevision, files, blockedReason]` 做存储侧稳定摘要。
+    async fn session_data_revision(&self, _parts: &Value) -> Result<String> {
+        anyhow::bail!("Session deletion revision unavailable")
+    }
+    /// 只读删除预检：owned tree、fork、附件引用、跨进程运行态、凭据与 revision。
+    async fn session_data_inspect(&self, _id: &str) -> Result<Value> {
+        anyhow::bail!("Session deletion inspection unavailable")
+    }
+    /// 写入跨进程删除凭据；旧 revision/不存在/运行中在事务内拒绝。
+    async fn session_data_begin(
+        &self,
+        _id: &str,
+        _revision: &str,
+        _operation_id: &str,
+        _retained: &[(String, String)],
+    ) -> Result<()> {
+        anyhow::bail!("Session deletion admission unavailable")
+    }
+    /// 文件清理完成后删正文并标记凭据 deleted；重复调用幂等。
+    async fn session_data_complete(&self, _id: &str) -> Result<()> {
+        anyhow::bail!("Session deletion completion unavailable")
+    }
+    /// 本进程持有会话运行时的跨进程事实；缺省实现不登记（无运行态概念的实现）。
+    async fn session_presence_register(&self, _id: &str) -> Result<()> {
+        Ok(())
+    }
+    async fn session_presence_unregister(&self, _id: &str) -> Result<()> {
+        Ok(())
+    }
     /// Node `listSessionSubagents`' stored facts of `parent`; `None` without a
     /// session row.
     async fn subagent_facts(

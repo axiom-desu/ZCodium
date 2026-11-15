@@ -33,6 +33,7 @@ export function buildPersistedConversationInputIntent(
     ...(intent.mode ? { mode: intent.mode } : {}),
     ...(intent.planEnabled !== undefined ? { planEnabled: intent.planEnabled } : {}),
     ...(intent.sharedContextRefs ? { sharedContextRefs: intent.sharedContextRefs } : {}),
+    ...(intent.conversationQuotes ? { conversationQuotes: intent.conversationQuotes } : {}),
     delivery: {
       requested: intent.requestedDelivery,
       admitted: intent.admittedDelivery,

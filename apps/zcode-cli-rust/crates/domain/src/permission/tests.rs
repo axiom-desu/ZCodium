@@ -173,6 +173,7 @@ fn rule_content_matching_follows_node() {
 #[test]
 fn tool_search_capability_is_read_only_in_plan_and_build() {
     let cap = tool_capability("ToolSearch").expect("ToolSearch capability");
+    assert_eq!(tool_capability("LocalToolSearch"), Some(cap));
     assert_eq!(cap.read_only, Some(true));
     assert_eq!(cap.destructive, Some(false));
     assert_eq!(cap.needs_approval, Some(false));

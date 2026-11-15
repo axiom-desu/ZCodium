@@ -1,8 +1,7 @@
 import { BrowserWindow } from "electron";
 import { MessagePortProtocol } from "@zcode/rpc";
-import type { ElectronUtilityProcessLike } from "electron";
 import { wrapElectronPort } from "../../host/electronPort.js";
-import { attachWorkspaceHostPort } from "./hostBridge.js";
+import { attachWorkspaceHostPort, type ElectronUtilityProcessLike } from "./hostBridge.js";
 import {
   createWebClientEndpoint,
   type WebClientEndpoint,
@@ -16,7 +15,7 @@ import type { WebRemoteControlLogger } from "./logger.js";
  * 不新建 Host、不新起 Agent、不复制业务状态：浏览器与桌面 renderer 看到的是同一个 owner。
  * 远端 workspace scope 由 B4 片单独接入，这里刻意只做 local，避免把「按路径猜 identity」带进来。
  */
-export function openWebClientAttachment(params: {
+function openWebClientAttachment(params: {
   windowId: number;
   workspacePath: string;
   resolveHostProcess(webContentsId: number): ElectronUtilityProcessLike | undefined;
@@ -52,7 +51,7 @@ export function openWebClientAttachment(params: {
  * 启动浏览器远控端点：QR 指向它，配对成功即换 Cookie，随后 `/ws` 复用上面的 attachment。
  * 失败一律抛出，由调用方停止整个远控运行时——不允许「一半可用」。
  */
-export async function startWindowWebClientEndpoint(params: {
+async function startWindowWebClientEndpoint(params: {
   windowId: number;
   deviceSid: string;
   passHash: string;
@@ -85,7 +84,7 @@ export async function startWindowWebClientEndpoint(params: {
   };
 }
 
-export interface WebClientRuntimeLike {
+interface WebClientRuntimeLike {
   windowId: number;
   deviceSid: string;
   passHash: string;

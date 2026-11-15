@@ -7,12 +7,16 @@ import type {
 import { requestMcpElicitation } from "./interaction-broker.js";
 import { InMemoryWorkspaceHookPolicyProvider } from "@zcode/core";
 import { parseConversationTopic } from "@zcode/shared/zcode-protocol-v4";
-import type {
-  ZCodeProtocolError,
-  ZCodeProtocolMessage,
-  ZCodeProtocolRequest,
-  ZCodeProtocolRequestId,
-  ZCodeProtocolResponse,
+import {
+  sessionLifecycleActivationParamsSchema,
+  sessionLifecycleParamsSchema,
+  sessionLifecycleSnapshotSchema,
+  zcodeProtocolMethods,
+  type ZCodeProtocolError,
+  type ZCodeProtocolMessage,
+  type ZCodeProtocolRequest,
+  type ZCodeProtocolRequestId,
+  type ZCodeProtocolResponse,
 } from "@zcode/shared";
 import { ProtocolRuntimeResources } from "./runtime-resources.js";
 import { routeMcpServerNotification } from "./mcp-ui/index.js";
@@ -22,6 +26,8 @@ import {
 } from "../zcode-protocol-v4/interaction-registry.js";
 import { createConversationV4Gateway } from "./v4-bridge.js";
 import { createSessionResidentPoolHost } from "./session-residency.js";
+import { getSessionLifecycle } from "../session-lifecycle/index.js";
+import { setWorkspaceMcpTrust } from "./mcp.js";
 import {
   DEFAULT_SESSION_RESIDENT_HIGH_WATER_COUNT,
   SessionResidentPool,
@@ -163,6 +169,8 @@ export class ZCodeProtocolAgentServer {
     };
     // v4 通道：gateway 闭包持有 context 做帧出口与命令副作用，构造完立即挂回。
     this.context.v4Gateway = createConversationV4Gateway(this.context);
+    // 生命周期 owner 挂在既有 context 上：create/resume/close/LRU 均读写同一状态机。
+    this.context.sessionLifecycle = getSessionLifecycle(this.context);
     this.browserControlPort = createProtocolBrowserControlBroker(this.context);
     const sessionResidentTargetCount =
       deps.sessionResidentPoolOptions?.targetCount ?? deps.sessionResidentTargetCount;
@@ -274,6 +282,8 @@ export class ZCodeProtocolAgentServer {
   /** app drain 有界结束后释放投影；即使某个 app.close 挂起也必须执行。 */
   disposeProjections(): void {
     this.context.v4Gateway?.dispose();
+    // 连接断开/进程关闭：中止全部在途预测并清空结果缓存。
+    this.context.inputPrediction?.dispose();
     this.context.sessions.clear();
   }
 
@@ -330,12 +340,19 @@ export class ZCodeProtocolAgentServer {
     // request id 可在前一请求完成后复用；新请求不能继承未消费的旧 outbox。
     this.postResponseOutbox.delete(request.id);
     let releaseResidencyOperation: (() => void) | undefined;
+    const lifecycleQuery = request.method === zcodeProtocolMethods.sessionLifecycleGetState;
+    const lifecycleMutation =
+      request.method === zcodeProtocolMethods.sessionLifecycleEnsureReady ||
+      request.method === zcodeProtocolMethods.sessionLifecycleStop ||
+      request.method === zcodeProtocolMethods.sessionLifecycleRestart;
     try {
       // subscribe hydration、workspace 配置与 resume 都可能跨 await。若只看
       // session 当前状态，sampler 会在 handler 持有旧 record 时把它关闭。进程级 lease
       // 覆盖整个 request；能识别的 sessionIds 额外用于冷恢复闸门与 LRU touch。
+      // 生命周期查询/变更按 session 的互斥由 controller 管理，不再叠加 session lease，
+      // 否则 stop 等待的正是自己持有的租约。
       releaseResidencyOperation = await this.context.sessionResidentPool?.acquireOperation(
-        collectResidencySessionIds(request.params),
+        lifecycleQuery || lifecycleMutation ? [] : collectResidencySessionIds(request.params),
       );
       const result = await this.dispatchRequest(request);
       return this.ok(request.id, result);
@@ -356,6 +373,31 @@ export class ZCodeProtocolAgentServer {
   }
 
   private async dispatchRequest(request: ZCodeProtocolRequest) {
+    // 生命周期与 MCP 信任属于进程级 owner，先于 v4/legacy 命名空间分派。
+    switch (request.method) {
+      case zcodeProtocolMethods.sessionLifecycleGetState: {
+        const params = sessionLifecycleParamsSchema.parse(request.params);
+        return sessionLifecycleSnapshotSchema.parse(
+          await getSessionLifecycle(this.context).getState(params.sessionId),
+        );
+      }
+      case zcodeProtocolMethods.sessionLifecycleStop: {
+        const params = sessionLifecycleParamsSchema.parse(request.params);
+        await getSessionLifecycle(this.context).stop(params.sessionId);
+        return { completed: true as const };
+      }
+      case zcodeProtocolMethods.sessionLifecycleEnsureReady:
+      case zcodeProtocolMethods.sessionLifecycleRestart: {
+        const params = sessionLifecycleActivationParamsSchema.parse(request.params);
+        const lifecycle = getSessionLifecycle(this.context);
+        if (request.method === zcodeProtocolMethods.sessionLifecycleEnsureReady)
+          await lifecycle.ensureReady(params.sessionId, params.workspace);
+        else await lifecycle.restart(params.sessionId, params.workspace);
+        return { completed: true as const };
+      }
+      case zcodeProtocolMethods.workspaceMcpTrust:
+        return await setWorkspaceMcpTrust(this.context, request.params);
+    }
     // 分派顺序固定：v4 竖切先判定，未命中才落到旧 namespace。
     // 两层都只返回结果，method-not-found 由这里统一抛出，错误码与文案不变。
     const v4Result = await dispatchV4Request(this.dispatchHost, request);

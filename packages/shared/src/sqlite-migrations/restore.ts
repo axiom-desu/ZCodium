@@ -3,10 +3,11 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { BACKUP_DATABASE_FILE } from "./backup.js";
-import { identifier, insertSnapshot, snapshotTable } from "./table-snapshot.js";
+import { copyTable, hashTable, identifier } from "./table-snapshot.js";
 
 const backupSchema = z.object({
-  version: z.literal(1),
+  // v2 = 排序行摘要增量校验；v1 旧备份仍可恢复（保持原 JSON 数组排序哈希）。
+  version: z.union([z.literal(1), z.literal(2)]),
   database: z.string(),
   journalTable: z.enum(["schema_migration", "tasks_schema_migration"]).optional(),
   migrations: z.array(z.string()),
@@ -30,12 +31,14 @@ export async function restore(db: DatabaseSync, backupPath: string): Promise<voi
   const backup = new DatabaseSync(join(backupPath, BACKUP_DATABASE_FILE), { readOnly: true });
   const foreignKeys = db.prepare("pragma foreign_keys").get()?.foreign_keys === 1;
   try {
-    const tables = metadata.tables.map((table) => {
-      const snapshot = snapshotTable(backup, table.name, table.columns);
+    // 校验与复制共用备份库读快照，避免两次读取之间文件被修改；不在 JS 保留整表。
+    backup.exec("pragma cache_size=-2048; begin");
+    const tables = metadata.tables;
+    for (const table of tables) {
+      const snapshot = hashTable(backup, table, metadata.version);
       if (snapshot.rows !== table.rows || snapshot.hash !== table.hash)
         throw new Error(`Backup row count/hash mismatch: ${table.name}`);
-      return snapshot;
-    });
+    }
     // 恢复不能在 foreign_keys=ON 时先删父表，否则级联引用会阻止或误删。
     db.exec("pragma foreign_keys=off; begin immediate");
     for (const table of tables) {
@@ -44,11 +47,11 @@ export async function restore(db: DatabaseSync, backupPath: string): Promise<voi
         .get(table.name);
       if (exists) db.exec(`delete from ${identifier(table.name)}`);
     }
-    for (const table of tables) insertSnapshot(db, table);
-    if (db.prepare("pragma foreign_key_check").all().length)
+    for (const table of tables) copyTable(backup, db, table);
+    if (db.prepare("pragma foreign_key_check").get())
       throw new Error("Restore foreign key check failed");
     for (const table of tables) {
-      const restored = snapshotTable(db, table.name, table.columns);
+      const restored = hashTable(db, table, metadata.version);
       if (restored.rows !== table.rows || restored.hash !== table.hash)
         throw new Error(`Restored row count/hash mismatch: ${table.name}`);
     }

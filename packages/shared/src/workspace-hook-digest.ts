@@ -28,6 +28,8 @@ export interface CanonicalWorkspaceHookEntryData {
   resolvedTimeoutMs: number;
   resolvedMaxOutputBytes: number;
   statusMessage?: string;
+  /** 失败语义参与声明摘要：加/改 onError 会让旧信任变成 stale，必须重新审核一次。 */
+  onError?: "allow" | "deny";
   sourceRootEnabled: boolean;
   declarationEnabled: boolean;
   runtimeHooksEnabled: boolean;
@@ -95,6 +97,7 @@ export function resolveWorkspaceHookEntries(input: {
             resolvedTimeoutMs,
             resolvedMaxOutputBytes: input.runtimeRoot.maxOutputBytes,
             ...(hook.statusMessage ? { statusMessage: hook.statusMessage } : {}),
+            ...(hook.onError ? { onError: hook.onError } : {}),
             ...gates,
             editable: source.editable,
             declarationDigestAlgorithm: "sha256" as const,
@@ -221,7 +224,12 @@ function canonicalDeclarationPayload(input: {
 }): unknown[] {
   const execution =
     input.hook.type === "process"
-      ? ["process", input.hook.command, [...(input.hook.args ?? [])]]
+      ? [
+          "process",
+          input.hook.command,
+          [...(input.hook.args ?? [])],
+          canonicalOptional(input.hook.onError),
+        ]
       : [
           "command",
           input.hook.command,
@@ -231,6 +239,7 @@ function canonicalDeclarationPayload(input: {
             : input.hook.shell === true
               ? ["true"]
               : ["string", input.hook.shell],
+          canonicalOptional(input.hook.onError),
         ];
   return [
     "workspace-hook-declaration",
@@ -252,7 +261,7 @@ function normalizeRelativeSourcePath(workspacePath: string, sourcePath: string):
   return value || basename(sourcePath);
 }
 
-function canonicalOptional(value: boolean | number | undefined): unknown[] {
+function canonicalOptional(value: boolean | number | string | undefined): unknown[] {
   return value === undefined ? ["unset"] : ["set", value];
 }
 

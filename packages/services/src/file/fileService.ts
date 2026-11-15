@@ -11,8 +11,9 @@ import type {
   WorkspaceFileEntry,
 } from "@zcode/shared";
 import { getMediaPreviewFormat } from "@zcode/shared";
+import { REMOTE_WORKSPACE_PREPARATION_TIMEOUT_MS } from "@zcode/shared";
 import { packWorkspaceFileEntries } from "@zcode/shared/workspaceFileEntriesCodec";
-import type { IFileService, WorkspaceFileSearchParams } from "./file.js";
+import type { DesignSourceWriteReason, IFileService, WorkspaceFileSearchParams } from "./file.js";
 import { WORKSPACE_FILE_SEARCH_DISPLAY_CAP } from "@zcode/shared/workspaceFileSearch";
 import { buildHostFileSearchCandidates, searchHostFileCandidates } from "./workspaceFileSearch.js";
 import {
@@ -29,6 +30,11 @@ import {
 } from "./workspaceFileIgnore.js";
 import { createServiceLogger } from "../logger/serviceLogger.js";
 import { getConversationWorkspaceDir } from "../paths.js";
+import type { DesignSourceAuthority } from "./designSourceAuthority.js";
+import {
+  readDesignSourceFile as readDesignSourceFileFromDisk,
+  writeDesignSourceFile as writeDesignSourceFileToDisk,
+} from "./designSourceFile.js";
 const DEFAULT_TEXT_READ_BYTES = 128 * 1024;
 const MAX_TEXT_READ_BYTES = 256 * 1024;
 const DEFAULT_MEDIA_PREVIEW_BYTES = 4 * 1024 * 1024;
@@ -196,6 +202,12 @@ async function resolveReaddirEntryType(
 
 export interface CreateFileServiceOptions {
   workspaceFileSearchFilter?: WorkspaceFileSearchFilter;
+  /**
+   * B7：设计源码读写唯一的批准根来源（只读，每次调用重新求值）。
+   * 生产装配只在本机桌面 Host 注入；缺省（旧构造、Web/server、远端 Host）时
+   * designSource* 端口 fail closed，其它文件方法行为不变。
+   */
+  designSourceAuthority?: DesignSourceAuthority;
 }
 
 /**
@@ -209,6 +221,28 @@ export interface CreateFileServiceOptions {
 const WORKSPACE_FILE_LIST_CACHE_TTL_MS = 60_000;
 const WORKSPACE_FILE_LIST_SCAN_CONCURRENCY = 8;
 const WORKSPACE_FILE_LIST_CACHE_MAX_ENTRIES = 4;
+
+// Bug 原因（ZCT-2113660144497782784）：目录的 readdir 可能永久不返回（例如 macOS 等待文件夹访问授权、
+// 网络盘无响应），且无法取消，每次调用都占住一个 libuv 线程。Desktop 重启、重连或手机端再次打开同一项目时
+// 会再读一次，线程池（默认 4 个）占满后，本进程所有文件操作都不再返回。
+// 修复：同一路径已有读取超过无响应阈值仍未返回时，复用它，不再占新线程；返回后立即删除，不缓存结果。
+// 阈值沿用 R8 的目录无响应判定；健康目录的读取到不了阈值，行为与过去相同。
+const inFlightDirectoryReads = new Map<string, { startedAt: number; entries: Promise<Dirent[]> }>();
+
+function readDirectoryEntries(path: string): Promise<Dirent[]> {
+  const pending = inFlightDirectoryReads.get(path);
+  if (pending && Date.now() - pending.startedAt >= REMOTE_WORKSPACE_PREPARATION_TIMEOUT_MS)
+    return pending.entries;
+  const read = { startedAt: Date.now(), entries: readdir(path, { withFileTypes: true }) };
+  if (!pending) {
+    const clear = () => {
+      if (inFlightDirectoryReads.get(path) === read) inFlightDirectoryReads.delete(path);
+    };
+    read.entries.then(clear, clear);
+    inFlightDirectoryReads.set(path, read);
+  }
+  return read.entries;
+}
 interface WorkspaceFileIndex {
   at: number;
   signature: string;
@@ -369,7 +403,7 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
 
   return {
     async readdir(params: { path: string; includeHidden?: boolean }): Promise<FileEntry[]> {
-      const entries = await readdir(params.path, { withFileTypes: true });
+      const entries = await readDirectoryEntries(params.path);
       const visibleEntries = await Promise.all(
         entries
           .filter((e) => {
@@ -637,6 +671,19 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
       content: string;
     }): Promise<void> {
       await writeWorkspaceFileSearchIgnore(params.rootPath, params.content);
+    },
+    async readDesignSourceFile(params: { rootPath: string; path: string }): Promise<{
+      content: string;
+    }> {
+      return readDesignSourceFileFromDisk(params, options.designSourceAuthority);
+    },
+    async writeDesignSourceFile(params: {
+      rootPath: string;
+      path: string;
+      expectedContent: string;
+      content: string;
+    }): Promise<{ written: boolean; reason?: DesignSourceWriteReason }> {
+      return writeDesignSourceFileToDisk(params, options.designSourceAuthority);
     },
   };
 }

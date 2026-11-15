@@ -24,6 +24,39 @@ TS CLI workspace config 用户路径为 `.zcodium`，Rust runtime fallback `home
 
 Rust state SQL 逐 migration id、statement bytes 对照 CLI `SQLITE_MIGRATIONS`（含 0020、0021、0022、0023 源文件）并以 Node session-store 为唯一账本。历史 SQL/checksum 冻结，不为通过校验而修改旧 checksum，也不删除历史 DWF SQL；本适配不启用动态工作流。聚焦 check driver 复用现有 `syncNodeMigrations` 原流程并验证 ids/bytes 与 TS 一致。差异先记录、解释并按 TS 正确生成/校验，不能改写历史迁移掩盖差异。
 
+## 生成物重生成的判定规则（P8）
+
+同一份 `--check` 失败可能来自两种完全不同的原因，处置相反：
+
+1. **线格式 / 读取投影**：生成物描述“对端会写什么”，Rust 侧消费时只是解析、投影或准入校验。
+   这类漂移必须重生成——不重生成会让 Rust 静默丢掉 Node 已写入的数据或无法识别其字段。
+   允许带着“显式拒绝”的准入层：`protocol/schema/v4-command.json` 包含 `conversationQuotes`
+   与 `forkAssistant.targetCwd`，而 `crates/protocol/src/command_schema.rs` 的 `refinements`
+   对未实现的字段显式 unsupported，schema 接受 ≠ 行为宣称支持。
+2. **能力声明**：生成物本身就是 Rust 侧“我能做什么”的事实来源（工具清单/权限元数据、
+   config 接受面）。这类漂移在对应功能实现前**不得**重生成：重生成等于把未交付能力当已交付，
+   而且没有准入层去拒绝。
+
+本批实际处置（P8 只重生成线格式；R9 补齐实现后重生成其余源派生资产）：
+
+| 生成物                                                                                    | 分类               | 处置                                                                                                                                        |
+| ----------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/protocol/schema/v4-command.json` + `tests/fixtures/ts-command-{trim,}oracle.json` | 线格式             | 重生成（新增 `forkAssistant.targetCwd` 与 5 处 `conversationQuotes`；trim oracle 63/70→65/72）                                              |
+| `crates/domain/schema/node-projection.json`                                               | 读取投影           | 重生成（`conversationInputIntent.conversationQuotes`；不重生成时 Rust 冷读会丢弃整个 intent）                                               |
+| `crates/domain/schema/system-reminders.json`                                              | 读取投影           | 重生成（`environment_announcement`、`total_tokens_reminder`）                                                                               |
+| `crates/domain/schema/config.json`                                                        | 能力声明           | 重生成：`hooks.*[].onError` 是 Rust 已实现的逐 Hook 失败策略（用户/插件读入注册；工作区声明进入 canonical 摘要/重新信任），不是“接受后丢弃” |
+| `crates/domain/schema/tool-permissions.json`                                              | 能力声明           | 重生成：唯一来源是 TS `builtInTools` 投影；未注册的名字在 `tool_capability(name)` 中永远不会被查到                                          |
+| `crates/tools/src/tool_search_metadata.json` + `tool_search_descriptions.json`            | 元数据，不是注册表 | 重生成：`exposure.rs` 只对真实 `definitions` 逐个查元数据；`tool_definitions.rs` 才是工具注册目录，多出来的元数据键不注册、不暴露、不可执行 |
+| `crates/domain/fixtures/workspace-hooks.json`                                             | TS oracle 重放     | 重生成：工作区 `onError` 进入 canonical entry/声明摘要/审核记录（执行语义仍按 TS 缺省 allow）                                               |
+| `crates/state/fixtures/node-{db,cold,sessions}.json`                                      | 真实 TS 重放       | `node-cold.json` 的差异先定位到 TS 冷恢复回归（带合法 usage 的空 assistant 锚点被丢弃），修 TS 实现后 oracle 不变即通过；不是改 expected    |
+
+判定顺序（R9 固化）：`--check` 失败先读生成物的消费方源码，区分“Rust 没实现这项能力”与“生成物是名字/元数据但不是注册/暴露事实”。
+只有前者需要实现或显式准入拒绝；后者允许直接重生成，并必须补一条从真实注册目录出发的回归，证明未实现名字不会进入候选/搜索/执行。
+
+- ToolSearch 回归：`crates/tools/src/tool_exposure_tests.rs` 用真实 `definitions()` 构造 native exposure，断言候选集合等于注册目录（去 `DeferredToolCall`）；取自生成元数据的未注册名字（`SearchPlugins`、`SuggestPluginInstall` 等）不在候选、`select:`/普通搜索都取不到、也不在请求定义里。测试只读生成资产 + 真实注册表，不另写工具名单。
+- 工作区 hook `onError` 回归：`crates/domain/src/hooks/workspace_tests.rs` 断言缺省/`deny` 产生不同声明摘要与 bundle 摘要、旧 grant 变成 `stale_digest`、注册表仍为 `allow`，且 `HookEvent::parse("OnError")` 为 `None`（不新增伪事件）。
+- 冷恢复锚点回归：`apps/zcode-cli/packages/core/test/provider-tool-rounds.test.ts` 断言无服务端轮次、正文为空但 usage 合法时仍保留 assistant 估算锚点；`check:zcode-cli-rust-state-fixtures` 直接重放该 TS 行为。
+
 ## 验收
 
 - Node 生成器运行后紧接 `--check`；Rust assets 可由 TS 真源重现。CI 依次运行 `check:zcode-cli-rust-protocol-schema`、`check:zcode-cli-rust-contract-assets`、`check:zcode-cli-rust-domain-fixtures`、`check:zcode-cli-rust-state-fixtures`。

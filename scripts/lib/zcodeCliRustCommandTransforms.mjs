@@ -36,6 +36,10 @@ export const trimPathAllowlist = new Set([
   ...["forkAssistant", "applyFileRewind", "editUserQuery", "retryTurn", "setAssistantFeedback"].map(
     (kind) => `${kind}.target.entityId`,
   ),
+  // forkAssistant 的受管 worktree 目标 cwd（上游 3.18.2）。两条都是单叶 trim 路径，
+  // 不做前缀/通配注册；Rust 运行时不实现该语义时由 refinements 显式拒绝。
+  "forkAssistant.targetCwd.cwd",
+  "forkAssistant.targetCwd.childSessionId",
   ...[
     "respondWorkspaceHookReview",
     "toggleWorkspaceHookReviewItem",

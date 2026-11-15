@@ -62,8 +62,12 @@ impl Engine {
                 Ok(json!({"operationId":operation,"cancelled":cancelled}))
             }
             // 握手身份是静态事实：不读 workspace/model/网络，响应只含能力与协议身份。
+            // `worktreeCwd: false`：Rust 没有 forkAssistant.targetCwd 与
+            // session/releaseUnderDirectory 的 native 实现。Host 按 `=== true` 判定，
+            // 所以这里即使显式 false 也不会收到 targetCwd；解析层另有一道显式拒绝
+            // （见 protocol::command_schema 的 refinements），两者不得单方面松动。
             Method::RuntimeCapabilities => Ok(
-                json!({"protocol":{"name":PROTOCOL_NAME,"version":PROTOCOL_VERSION},"workspaceExecutionCapabilities":true,"independentPlanState":true,"accountProviderConfig":self.registry.is_some()}),
+                json!({"protocol":{"name":PROTOCOL_NAME,"version":PROTOCOL_VERSION},"workspaceExecutionCapabilities":true,"independentPlanState":true,"accountProviderConfig":self.registry.is_some(),"worktreeCwd":false}),
             ),
             Method::ProcessChildProcesses => Ok(json!({"processes": self.tools.child_processes()})),
             Method::WorkspaceReadPresentation => {
@@ -205,17 +209,16 @@ mod tests {
         async fn instructions(
             &self,
             _: &CancellationToken,
-        ) -> Result<Vec<crate::domain::prompt::InstructionSource>> {
+        ) -> Result<crate::domain::prompt::InstructionRead> {
             bail!("ContextPort must be unused")
         }
     }
 
     #[tokio::test]
     async fn runtime_capabilities_announce_the_legacy_protocol_identity() {
-        let workspace = std::env::temp_dir()
-            .join(format!("zcode-runtime-caps-{}", std::process::id()))
-            .to_string_lossy()
-            .into_owned();
+        // 应用层不做进程/文件系统 IO：这里只需要一个不会出现在响应里的不透明 workspace 标识，
+        // 不读取真实 pid 也不落盘（Engine 的 NoStore/NoTools 不会触碰该路径）。
+        let workspace = "/tmp/zcode-runtime-caps-workspace-probe".to_owned();
         let mut engine = Engine::new(
             workspace.clone(),
             None,
@@ -235,6 +238,7 @@ mod tests {
             .unwrap();
 
         // 与 legacy session 快照同名的协议身份；V4 physical wire 版本不在此响应里。
+        // worktreeCwd 显式 false：未实现受管 worktree 的 cwd 语义时不得声明支持。
         assert_eq!(
             capabilities,
             json!({
@@ -242,8 +246,10 @@ mod tests {
                 "workspaceExecutionCapabilities": true,
                 "independentPlanState": true,
                 "accountProviderConfig": false,
+                "worktreeCwd": false,
             })
         );
+        assert_ne!(capabilities["worktreeCwd"], json!(true));
         // 不泄露 workspace 路径，也不附加模型/账号/会话事实。
         let text = capabilities.to_string();
         assert!(!text.contains(&workspace), "{text}");

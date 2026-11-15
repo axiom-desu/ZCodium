@@ -1,4 +1,5 @@
 import {
+  HookOnError,
   HookOutcome,
   SessionEventType,
   isCoreError,
@@ -9,6 +10,7 @@ import {
   type Logger,
   type SessionEvent,
 } from "@zcode/contracts";
+import { resolveDenyOnErrorReason, preToolUseDenyOutput } from "./on-error.js";
 import { mergeHookRunResult, processHookOutput } from "./output.js";
 import { sanitizeHookDiagnostics, unwrapHookCallbackResult } from "./callback-result.js";
 import { sanitizeHookDisplayText } from "./display-metadata.js";
@@ -212,8 +214,17 @@ export class InMemoryHookRunner implements HookRunner {
         const durationMs = Date.now() - startedAt;
         const outcome = resolveHookFailureOutcome(error);
         const errorMessage = sanitizeHookDisplayText(readHookErrorMessage(error));
+        // hook 自身出错原先一律放行（fail-open）。`onError: "deny"` 让这次出错与
+        // 「hook 以退出码 2 拦截」同形，交给下游同一条 deny 路径。
+        const denyReason = resolveDenyOnErrorReason(hook, input, outcome, errorMessage);
+        if (denyReason !== undefined) {
+          mergeHookRunResult(
+            result,
+            processHookOutput(input.hookEventName, preToolUseDenyOutput(denyReason)),
+          );
+        }
         await this.emitHookEvent(
-          SessionEventType.HookRunFailed,
+          denyReason === undefined ? SessionEventType.HookRunFailed : SessionEventType.HookRunBlocked,
           input,
           hookInvocationId,
           hookRunId,
@@ -226,8 +237,9 @@ export class InMemoryHookRunner implements HookRunner {
             durationMs,
             errorCode: isCoreError(error) ? error.code : undefined,
             errorMessage,
-            outcome,
+            outcome: denyReason === undefined ? outcome : HookOutcome.Blocked,
             stderrPreview: errorMessage,
+            ...(denyReason === undefined ? {} : { blockReason: denyReason }),
           },
         );
 
@@ -243,6 +255,7 @@ export class InMemoryHookRunner implements HookRunner {
           hookIndex,
           matcher: hook.matcher,
           module: "core.hooks",
+          ...(denyReason === undefined ? {} : { onError: HookOnError.Deny }),
           source: hook.source,
         });
       }

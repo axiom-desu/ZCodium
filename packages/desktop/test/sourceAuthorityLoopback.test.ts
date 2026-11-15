@@ -11,6 +11,7 @@ import { IFileService, ServiceCollection, type IServiceAccessor } from "@zcode/s
 import {
   HostMessageTypes,
   HostResponseTypes,
+  REMOTE_BIND_CANCELED_ERROR_CODE,
   hostIncomingMessageSchema,
   buildRemoteWorkspaceIdentity,
   type RemoteTarget,
@@ -157,11 +158,17 @@ async function loopback() {
   return { token, url: `http://127.0.0.1:${address.port}/team`, requests };
 }
 
-/** 只替换 Electron IPC/端口投递；实际 Main manager、registry 与连接器都保留。 */
+/**
+ * 只替换 Electron IPC/端口投递；实际 Main manager、registry 与连接器都保留。
+ * `bindFault` 是一次性 Host 侧 bind 失败注入：真实 Host 也会在 preflight 失败时回
+ * `RemoteWorkspaceContextBindFailed`，这里用来验证 Main 不把失败 ACK 当成功。
+ */
 function mainHarness(
   registry: ReturnType<typeof createWindowRemoteConnectionRegistry<IServiceAccessor>>,
+  bindFault: { next?: { error: string; reasonCode: string } } = {},
 ) {
   const scopes: Array<{ clientMode: string; scope: WindowHostAttachmentScope }> = [];
+  const pendingBinds = new Map<string, AbortController>();
   const child = new EventEmitter() as EventEmitter & {
     pid: number;
     postMessage(raw: unknown): void;
@@ -201,7 +208,59 @@ function mainHarness(
         }),
       );
     } else if (message.type === HostMessageTypes.BindRemoteWorkspaceContext) {
-      void registry.bindWorkspaceContext(message);
+      // 复刻 packages/desktop/src/host/index.ts 的 bind 桥：Host 自己完成 preflight 后才回
+      // `RemoteWorkspaceContextBound`，异常/取消回 `...BindFailed`。旧夹具只调用 registry 从不回包，
+      // 而 B3 之后 Main 只认 ACK，两个用例因此静默挂到超时（Bug 原因：夹具落后于生产桥接）。
+      const abort = new AbortController();
+      pendingBinds.set(message.requestId, abort);
+      const fault = bindFault.next;
+      bindFault.next = undefined;
+      void (async () => {
+        try {
+          if (fault) {
+            throw Object.assign(new Error(fault.error), {
+              code: fault.reasonCode,
+              retryable: true,
+            });
+          }
+          await registry.bindWorkspaceContext({
+            remoteSessionId: message.remoteSessionId,
+            workspacePath: message.workspacePath,
+            workspaceIdentity: message.workspaceIdentity,
+            ...(message.workspacePurpose ? { workspacePurpose: message.workspacePurpose } : {}),
+            ...(message.legacyRouteHint ? { legacyRouteHint: message.legacyRouteHint } : {}),
+            signal: abort.signal,
+          });
+          abort.signal.throwIfAborted();
+          child.emit("message", {
+            type: HostResponseTypes.RemoteWorkspaceContextBound,
+            requestId: message.requestId,
+          });
+        } catch (error) {
+          const aborted = abort.signal.aborted;
+          const code = (error as { code?: unknown }).code;
+          const reasonCode = aborted
+            ? REMOTE_BIND_CANCELED_ERROR_CODE
+            : typeof code === "string"
+              ? code
+              : undefined;
+          child.emit("message", {
+            type: HostResponseTypes.RemoteWorkspaceContextBindFailed,
+            requestId: message.requestId,
+            error:
+              error instanceof Error && error.message
+                ? error.message
+                : "Remote workspace bind failed",
+            ...(reasonCode ? { reasonCode } : {}),
+            retryable: !aborted,
+          });
+        } finally {
+          pendingBinds.delete(message.requestId);
+        }
+      })();
+    } else if (message.type === HostMessageTypes.CancelRemoteWorkspaceBind) {
+      // 取消只 abort 本次 attempt；已提交的状态与旧 attachment 由 Main 保守保留。
+      pendingBinds.get(message.requestId)?.abort();
     } else if (message.type === HostMessageTypes.AttachServicePort) {
       registry.resolveScopedServices(message.scope);
       scopes.push({ clientMode: message.clientMode, scope: message.scope });
@@ -278,7 +337,8 @@ describe("Source form → authenticated loopback Host → actual Main → tempor
       },
     });
     cleanup.push(() => registry.dispose());
-    const { manager, win, scopes } = mainHarness(registry);
+    const bindFault: { next?: { error: string; reasonCode: string } } = {};
+    const { manager, win, scopes } = mainHarness(registry, bindFault);
     const dir = await mkdtemp(join(tmpdir(), "s9-source-authority-"));
     const historyPath = join(dir, "history.json");
     const credentialsPath = join(dir, "credentials.json");
@@ -407,6 +467,29 @@ describe("Source form → authenticated loopback Host → actual Main → tempor
     expect(await readFile(credentialsPath, "utf8")).toBe(beforeCredentials);
     expect(fixture.requests.filter((path) => path.endsWith("/api/server-info"))).toHaveLength(2);
     expect(JSON.stringify(registry.listSessions())).not.toContain(fixture.token);
+
+    // 负向回归：Host 拒绝 bind 时 Main 不得提交 descriptor，也不得代换 attachment。
+    // 依据 `.agents/specs/upstream-3.18-security-hardening.md` B3：失败/取消保留旧 session、
+    // 旧 attachment 与旧 runtime，只有 `RemoteWorkspaceContextBound` 才是成功信号。
+    const scopesBeforeFailure = scopes.length;
+    bindFault.next = { error: "fixture host rejected bind", reasonCode: "fixture-bind-rejected" };
+    await expect(
+      manager.bindRemoteWorkspaceSessionContext(
+        descriptor.remoteSessionId,
+        { workspacePath: "/work", workspaceIdentity: actualKey },
+        7,
+      ),
+    ).rejects.toMatchObject({ code: "fixture-bind-rejected" });
+    expect(scopes).toHaveLength(scopesBeforeFailure);
+    expect(registry.getSession(descriptor.remoteSessionId)?.workspaceIdentity).toBe(actualKey);
+    // 失败注入是一次性的：同一 context 重试仍能成功（失败不能卡住 bind flight）。
+    await manager.bindRemoteWorkspaceSessionContext(
+      descriptor.remoteSessionId,
+      { workspacePath: "/work", workspaceIdentity: actualKey },
+      7,
+    );
+    expect(scopes).toHaveLength(scopesBeforeFailure + 1);
+    expect(scopes.at(-1)?.scope).toMatchObject({ workspaceIdentity: actualKey });
   });
 
   it("Main/mobile exact scopes distinguish six verified legacy keys on one Source/proof/path", async () => {

@@ -54,7 +54,13 @@ fn provider_and_request_auth_headers_override_identity_but_not_attribution() {
     let auth =
         json!({"requestAuth":{"headers":{"X-TITLE":"Auth Title","authorization":"Token t"}}});
     let headers = model
-        .headers(Some("key"), &auth, &origin(), &mut Attempt::new(1))
+        .headers(
+            Some("key"),
+            &auth,
+            &origin(),
+            &ModelRequestOptions::default(),
+            &mut Attempt::new(1),
+        )
         .unwrap();
     assert_eq!(header(&headers, "x-title"), Some("Auth Title"));
     assert_eq!(header(&headers, "authorization"), Some("Token t"));
@@ -69,7 +75,13 @@ fn provider_and_request_auth_headers_override_identity_but_not_attribution() {
     assert_eq!(names.len(), unique.len(), "{names:?}");
     // 每次尝试都有新的 x-request-id。
     let again = model
-        .headers(Some("key"), &auth, &origin(), &mut Attempt::new(1))
+        .headers(
+            Some("key"),
+            &auth,
+            &origin(),
+            &ModelRequestOptions::default(),
+            &mut Attempt::new(1),
+        )
         .unwrap();
     assert_ne!(
         header(&headers, "x-request-id"),
@@ -81,7 +93,13 @@ fn provider_and_request_auth_headers_override_identity_but_not_attribution() {
 fn anthropic_adds_bearer_only_without_explicit_authorization() {
     let plain = model("anthropic-messages", "https://example.invalid", &[]);
     let headers = plain
-        .headers(Some("k"), &Value::Null, &origin(), &mut Attempt::new(1))
+        .headers(
+            Some("k"),
+            &Value::Null,
+            &origin(),
+            &ModelRequestOptions::default(),
+            &mut Attempt::new(1),
+        )
         .unwrap();
     assert_eq!(header(&headers, "x-api-key"), Some("k"));
     assert_eq!(header(&headers, "authorization"), Some("Bearer k"));
@@ -92,7 +110,13 @@ fn anthropic_adds_bearer_only_without_explicit_authorization() {
         &[("Authorization", "Custom c")],
     );
     let headers = explicit
-        .headers(Some("k"), &Value::Null, &origin(), &mut Attempt::new(1))
+        .headers(
+            Some("k"),
+            &Value::Null,
+            &origin(),
+            &ModelRequestOptions::default(),
+            &mut Attempt::new(1),
+        )
         .unwrap();
     assert_eq!(header(&headers, "authorization"), Some("Custom c"));
 }
@@ -109,7 +133,13 @@ fn official_coding_plan_endpoints_go_through_the_gateway_without_host() {
         "https://zcode.z.ai/api/v1/ultra-zai/anthropic/v1/messages"
     );
     let headers = model
-        .headers(None, &Value::Null, &origin(), &mut Attempt::new(1))
+        .headers(
+            None,
+            &Value::Null,
+            &origin(),
+            &ModelRequestOptions::default(),
+            &mut Attempt::new(1),
+        )
         .unwrap();
     assert_eq!(header(&headers, "host"), None);
     let direct = self::model("anthropic-messages", "https://example.invalid", &[]);
@@ -244,7 +274,66 @@ fn non_string_request_auth_headers_fail_authentication() {
     let model = model("openai-responses", "https://example.invalid", &[]);
     let auth = json!({"requestAuth":{"headers":{"x":1}}});
     let failure = model
-        .headers(None, &auth, &origin(), &mut Attempt::new(1))
+        .headers(
+            None,
+            &auth,
+            &origin(),
+            &ModelRequestOptions::default(),
+            &mut Attempt::new(1),
+        )
         .unwrap_err();
     assert_eq!(failure.reason, "auth_failed");
+}
+
+#[test]
+fn session_features_are_a_context_owned_header() {
+    // 3.18 F12：会话能力标签由调用上下文独占；provider 静态配置同名头（任意大小写）被剔除。
+    let model = model(
+        "openai-chat-completions",
+        "https://example.invalid",
+        &[("X-ZCode-Session-Features", "provider_static")],
+    );
+    let options = ModelRequestOptions {
+        session_features: vec!["tool_search_called".into(), "browser_use".into()],
+        ..Default::default()
+    };
+    let headers = model
+        .headers(
+            Some("k"),
+            &Value::Null,
+            &origin(),
+            &options,
+            &mut Attempt::new(1),
+        )
+        .unwrap();
+    assert_eq!(
+        header(&headers, "x-zcode-session-features"),
+        Some("browser_use,tool_search_called")
+    );
+    // 没有标签时不发送；非法标签整头省略，也不回退到静态值。
+    let plain = self::model("openai-chat-completions", "https://example.invalid", &[]);
+    let headers = plain
+        .headers(
+            Some("k"),
+            &Value::Null,
+            &origin(),
+            &ModelRequestOptions::default(),
+            &mut Attempt::new(1),
+        )
+        .unwrap();
+    assert_eq!(header(&headers, "x-zcode-session-features"), None);
+    let invalid = ModelRequestOptions {
+        session_features: vec!["Not A Feature".into()],
+        ..Default::default()
+    };
+    let headers = model
+        .headers(
+            Some("k"),
+            &Value::Null,
+            &origin(),
+            &invalid,
+            &mut Attempt::new(1),
+        )
+        .unwrap();
+    assert_eq!(header(&headers, "x-zcode-session-features"), None);
 }

@@ -78,6 +78,9 @@ pub struct RuntimeOptions {
     pub legacy_tokens: u64,
     /// 启动偏好确定的 ToolSearch 模式（创建/冷恢复时固定，不写 session 配置）。
     pub tool_search_mode: crate::tool_search::Mode,
+    /// 本次激活的 App 会话控制能力（3.18）：只由 Host 偏好回包置位，
+    /// 与 `toolSearch.mode` 同一次 materialization，不落库、不跨冷恢复继承。
+    pub app_control: bool,
 }
 
 /// A transient reminder kept in the process history (never persisted).
@@ -118,13 +121,18 @@ impl ToolFilter {
 
     /// MCP tools (`mcp__<server>__<tool>`) also match by their declared name.
     pub fn allows(&self, name: &str) -> bool {
-        let declared = name
+        let canonical = if name == crate::tool_search::LOCAL_TOOL_SEARCH_NAME {
+            crate::tool_search::TOOL_SEARCH_NAME
+        } else {
+            name
+        };
+        let declared = canonical
             .strip_prefix("mcp__")
             .and_then(|rest| rest.split_once("__"))
             .map(|(_, tool)| tool);
         let hit = |list: &[String]| {
             list.iter()
-                .any(|n| n == name || Some(n.as_str()) == declared)
+                .any(|n| n == canonical || Some(n.as_str()) == declared)
         };
         self.allowlist.as_deref().is_none_or(hit) && !hit(&self.denylist)
     }

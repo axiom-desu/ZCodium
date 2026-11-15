@@ -1,8 +1,9 @@
 import type { ConfigResult } from "@zcode/adapters/config";
 import type { ResolveZCodePluginsOptions } from "./plugin-types.js";
-import { join, resolve, win32 } from "node:path";
-import { createConfig, resolvePath } from "@zcode/adapters/config";
+import { join, resolve } from "node:path";
+import { createConfig, normalizePluginConfigPathForComparison, resolvePath } from "@zcode/adapters/config";
 import { getCliStorageRoot, getPluginStorageRoot } from "./app/paths.js";
+import { resolvePluginSecretsPath, withPluginSecrets } from "./plugin-secrets.js";
 export function resolvePluginContext(options: ResolveZCodePluginsOptions): {
   configResult: ConfigResult;
   pluginStorageRoot: string;
@@ -25,6 +26,21 @@ export function resolvePluginContext(options: ResolveZCodePluginsOptions): {
       options.pluginStorageRoot ?? getPluginStorageRoot(getCliStorageRoot(storageRoot)),
     workingDirectory,
   };
+}
+
+/**
+ * 叠加敏感插件选项私有文件后的配置视图。协议投影读 `optionSources` 必须用这一份，
+ * 否则迁进私有文件的敏感键在设置页没有来源标记（scope 徽标与显式 clear 依赖它）。
+ */
+export async function resolvePluginConfigView(
+  options: ResolveZCodePluginsOptions,
+): Promise<ConfigResult> {
+  const { configResult, pluginStorageRoot } = resolvePluginContext(options);
+  const { configResult: withSecrets } = await withPluginSecrets(
+    configResult,
+    resolvePluginSecretsPath(pluginStorageRoot),
+  );
+  return withSecrets;
 }
 
 export function resolvePluginConfigPath(
@@ -51,12 +67,4 @@ export function resolvePluginConfigPath(
   );
   if (existingWorkspaceConfig) return existingWorkspaceConfig;
   return workspaceConfigPath;
-}
-
-function normalizePluginConfigPathForComparison(
-  path: string,
-  platform: NodeJS.Platform = process.platform,
-): string {
-  const resolvedPath = platform === "win32" ? win32.resolve(path) : resolve(path);
-  return platform === "win32" ? resolvedPath.replaceAll("\\", "/").toLowerCase() : resolvedPath;
 }

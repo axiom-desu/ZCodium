@@ -23,6 +23,12 @@ export function installPluginSandboxHostBridge(): void {
         PlatformChannels.PluginSandboxConsumeUserGesture,
         sandboxId,
       ) as Promise<boolean>,
+    setExecutionActive: (sandboxId: string, active: boolean) =>
+      ipcRenderer.invoke(
+        PlatformChannels.PluginSandboxExecutionActive,
+        sandboxId,
+        active,
+      ) as Promise<void>,
   });
 
   ipcRenderer.on(

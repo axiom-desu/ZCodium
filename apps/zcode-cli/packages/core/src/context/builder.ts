@@ -20,12 +20,14 @@ import { buildSkillsSection } from "./sections/skills.js";
 import { buildRequestUserContextSection } from "./sections/request-user-context.js";
 import { buildCurrentDateSection } from "./sections/current-date.js";
 import { buildMemorySection } from "./sections/memory.js";
+import { ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH } from "../memory/project-memory-retrieval-branch.js";
 import { buildDesktopContextSection } from "./sections/desktop.js";
 import {
   buildContextManagementSection,
   buildDynamicBehaviorSection,
   buildOutputStyleSection,
   buildSessionGuidanceSection,
+  buildTotalTokensSection,
 } from "./dynamic-sections.js";
 
 // -----------------------------------------------
@@ -150,7 +152,10 @@ export class ContextBuilder {
 
       // Memory
       if (this.config.memoryRoot) {
-        const memorySection = buildMemorySection(this.config.memoryRoot);
+        const memorySection = buildMemorySection(
+          this.config.memoryRoot,
+          ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+        );
         if (memorySection) {
           sections.push(memorySection);
         }
@@ -171,6 +176,8 @@ export class ContextBuilder {
 
       // Context Management
       sections.push(buildContextManagementSection());
+      // 固定的 token 预算行放在 system 末尾（上游 3.18.2 语义）。
+      sections.push(buildTotalTokensSection());
 
       const gitSystemContextSection = buildGitSystemContextSection(this.config.envInfo);
       if (gitSystemContextSection) {
@@ -197,6 +204,7 @@ export class ContextBuilder {
       userInstructions: this.config.userInstructions,
       memoryIndexContent: this.config.memoryIndexContent,
       memoryRoot: this.config.memoryRoot,
+      instructionAnnouncementContent: this.config.instructionAnnouncementContent,
     });
     if (requestUserContextSection) {
       sections.push(requestUserContextSection);
@@ -303,9 +311,12 @@ export class ContextBuilder {
       ),
     );
     if (contextContent) {
+      // 指令文件区块是 context_prefix 的一部分；记录随正文一起带出，供增量公告比较。
+      const instructionFiles = sections.flatMap((section) => section.instructionFiles ?? []);
       attachments.push({
         source: "context_prefix",
         content: contextContent,
+        ...(instructionFiles.length > 0 ? { files: instructionFiles } : {}),
       });
     }
 

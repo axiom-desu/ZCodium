@@ -236,6 +236,8 @@ export function createSessionFacadeCommands(
           : {}),
       };
       deps.runtime.setSessionModelSelection(sessionSelection);
+      // 换模型后下一个请求的组成必然不同：作废最近一次请求组成并通知（子 spec §2.1）。
+      deps.runtime.markContextCompositionChanged();
       if (!options?.transient) {
         deps.runtime.recordPendingModelChange({
           fromModel: previousSelection,

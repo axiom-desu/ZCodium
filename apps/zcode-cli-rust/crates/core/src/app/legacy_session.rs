@@ -203,12 +203,14 @@ impl Engine {
             workspace: Some(workspace),
             fresh: true,
             tool_search_mode: self.session_tool_search_mode(p),
+            app_control: self.session_app_control(p),
             ..Default::default()
         };
         if let Some(servers) = p.get("mcpServers") {
             self.tools.configure_mcp(&id, servers).await?;
         }
         self.sessions.insert(id.clone(), session);
+        self.store.session_presence_register(&id).await?;
         self.apply_selection(&id, selection)?;
         self.legacy_thought_level(&id, p["thoughtLevel"].as_str());
         self.legacy_snapshot(&id)
@@ -240,6 +242,7 @@ impl Engine {
         }
         let rebuilt = self.rebuilt_workspace(&id);
         let tool_search_mode = self.session_tool_search_mode(&p);
+        let app_control = self.session_app_control(&p);
         let s = self.sessions.get_mut(&id).unwrap();
         s.runtime = RuntimeOptions {
             additional_directories: crate::domain::session_runtime::directories(&p),
@@ -247,6 +250,7 @@ impl Engine {
             tools: tool_filter(&p),
             workspace: Some(p.get("workspace").cloned().unwrap_or(rebuilt)),
             tool_search_mode,
+            app_control,
             ..Default::default()
         };
         // Node 以最后一条 assistant 消息记录的模式恢复，并跳过已保存的执行状态。

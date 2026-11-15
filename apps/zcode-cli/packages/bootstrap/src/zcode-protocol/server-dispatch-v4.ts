@@ -1,13 +1,23 @@
 // v4 conversation 通道的命令入口/查询入口分派。这里只做「方法 → 网关能力」的
 // 静态映射与 initial frame 交付；会话投影、序号与订阅表都在 gateway 内部。
-import type { ZCodeProtocolRequest } from "@zcode/shared";
+import { zcodeProtocolErrorCodes, type ZCodeProtocolRequest } from "@zcode/shared";
 import {
   V4_METHODS,
   V4_NOTIFICATIONS,
+  parseCommandEnvelope,
   parseSessionsIndexTopic,
   parseWorkspaceConfigTopic,
 } from "@zcode/shared/zcode-protocol-v4";
+import { ProtocolRequestError, type ZCodeProtocolAgentServerContext } from "./server-types.js";
 import { getTaskTokenUsage, getUsageStats } from "./server-operations.js";
+import {
+  executeSessionDeletion,
+  measureSessionData,
+  previewSessionDeletion,
+  purgeSessionData,
+} from "./session-data/index.js";
+import { getConversationContextComposition } from "./context-composition/index.js";
+import { getConversationInputPredictionHandler } from "./input-prediction/index.js";
 import {
   UNHANDLED_REQUEST,
   requireV4Gateway,
@@ -127,11 +137,53 @@ export async function dispatchV4Request(
       return await getUsageStats(host.context, request.params);
     case V4_METHODS.conversationUsage:
       return await getTaskTokenUsage(host.context, request.params);
+    // context 组成查询（existing-only，只读、无状态）：不经 v4Gateway，也不冷启动会话。
+    case V4_METHODS.conversationContextComposition:
+      return await getConversationContextComposition(host.context, request.params);
+    // 输入预测（ghost hint）：只读、existing-only；不进入 CommandInbox，也不冷启动会话。
+    case V4_METHODS.conversationInputPrediction:
+      return await getConversationInputPredictionHandler(host.context).handle(request.params);
+    case V4_METHODS.conversationInputPredictionCancel:
+      getConversationInputPredictionHandler(host.context).cancel(request.params);
+      return {};
+    // 项目数据彻底删除（docs/superpowers/specs/2026-10-24-project-management.md「彻底删除数据」）：
+    // 会话行与 cli/* 文件的唯一删除者是 CLI；Host 只是发起方。旧 CLI 未实现时返回 method-not-found。
+    case V4_METHODS.sessionDataMeasure:
+      return await measureSessionData(host.context, request.params);
+    case V4_METHODS.sessionDataPurge:
+      return await purgeSessionData(host.context, request.params);
+    // 归档永久删除：写跨进程凭据，文件/正文按顺序清理；schema 已在基础版本冻结。
+    case V4_METHODS.sessionDeletionPreview:
+      return await previewSessionDeletion(host.context, request.params);
+    case V4_METHODS.sessionDeletionExecute:
+      return await executeSessionDeletion(host.context, request.params);
     case V4_METHODS.command:
+      assertV4CommandSessionReady(host.context, request.params);
       return requireV4Gateway(host).handleCommand(request.params);
     case V4_METHODS.commandsQuery:
       return requireV4Gateway(host).queryCommands(request.params);
     default:
       return UNHANDLED_REQUEST;
+  }
+}
+
+/**
+ * v4/command 的 lifecycle 闸门：stop/restart 期间 record 可能仍在，但新命令不得进入 inbox。
+ * 生命周期 owner 是唯一 readiness 来源，与 legacy requireSession 共用同一个 runtimeNotReady
+ * 语义；createSession（sessionId=null）和非法信封不受影响（后者由 inbox 返回标准错误）。
+ */
+export function assertV4CommandSessionReady(
+  context: ZCodeProtocolAgentServerContext,
+  rawParams: unknown,
+): void {
+  if (!context.sessionLifecycle) return;
+  const parsed = parseCommandEnvelope(rawParams);
+  const sessionId = parsed.ok ? parsed.envelope.sessionId : null;
+  if (sessionId && context.sessionLifecycle.isReady(sessionId) === false) {
+    throw new ProtocolRequestError(
+      zcodeProtocolErrorCodes.sessionUnavailable,
+      "Session runtime is not ready",
+      { code: "runtimeNotReady" },
+    );
   }
 }

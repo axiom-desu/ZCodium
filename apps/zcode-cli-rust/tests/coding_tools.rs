@@ -205,6 +205,9 @@ async fn background_registration_requires_commit_and_eof_reaps_processes() {
     })
     .await
     .unwrap();
+    // pid 只在 unix 的兜底 kill 分支使用；Windows 没有等价进程组信号。
+    #[cfg(not(unix))]
+    let _ = pid;
     let shutdown = tokio::time::timeout(std::time::Duration::from_secs(3), tools.shutdown()).await;
     if shutdown.is_err() {
         #[cfg(unix)]

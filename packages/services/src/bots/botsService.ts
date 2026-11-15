@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Bots 服务仍复用原 RPC 文件名，先把鉴权、命令路由、ZCode Agent 桥接收口集中在同一服务内。 */
 import { Buffer } from "node:buffer";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { IDisposable } from "@zcode/rpc";
@@ -69,6 +69,7 @@ import type {
 import type { ZCodeAgentAppRuntimePreferences } from "../zcode-agent/zcodeAgent.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import type {
+  BotTopicResourceReadParams,
   BotBindCodeResult,
   BotAutomationRunWatchParams,
   BotCreateBindCodeParams,
@@ -93,6 +94,12 @@ import {
 import { BOT_MENU_COMMAND_ORDER } from "./commandOrder.js";
 import { parseBotCommand } from "./commandParser.js";
 import { BotsRepo } from "./repo.js";
+import { BotsTopicArchive } from "./topicArchive.js";
+import {
+  authorizeTopicResource,
+  readAuthorizedTopicResource,
+  topicResourceRequestOf,
+} from "./topicResource.js";
 import type {
   BotProviderAdapter,
   BotStreamingReplyCardBlock,
@@ -683,6 +690,8 @@ export function createBotsService(
 ): IBotsService & { disposeAll(): void; disposeAllAndWait(): Promise<void> } {
   const runStartupBackgroundTasks = deps.runStartupBackgroundTasks !== false;
   const repo = new BotsRepo();
+  // 话题资源接纳归档：唯一 owner，写入只发生在真实 bot 入站接纳之后。
+  const topicArchive = new BotsTopicArchive();
   const bindCodes = new Map<string, BindCodeRecord>();
   const automationDeliveryWarningAtByKey = new Map<string, number>();
   const streamSubscriptions = new Map<string, IDisposable>();
@@ -4765,6 +4774,42 @@ export function createBotsService(
     return lines.join("\n");
   }
 
+  /**
+   * 话题资源接纳：只有真实入站接纳成功才发布资源索引与 inputId。
+   * 失败时不伪造接纳——模型拿不到 inputId/索引，工具因此无从读取。
+   */
+  async function admitTopicInput(params: {
+    bot: BotConfig;
+    message: BotInboundMessage;
+    context: BotContextState;
+    taskId: string;
+  }): Promise<{ inputId?: string; indexAttachment?: ZCodePromptAttachment }> {
+    const inputId = `bot-input-${randomUUID()}`;
+    const scope = {
+      taskId: params.taskId,
+      workspacePath: params.context.workspacePath,
+      ...(params.context.workspaceIdentity
+        ? { workspaceIdentity: params.context.workspaceIdentity }
+        : {}),
+    };
+    try {
+      await topicArchive.admit({
+        ...scope,
+        inputId,
+        bot: params.bot,
+        message: params.message,
+      });
+      const indexAttachment = await topicArchive.indexAttachment(scope);
+      return { inputId, ...(indexAttachment ? { indexAttachment } : {}) };
+    } catch (error) {
+      botsLogger.warn(
+        undefined,
+        `topic archive admission skipped task=${params.taskId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return {};
+    }
+  }
+
   function sendPromptInBackground(
     bot: BotConfig,
     actor: BotActor,
@@ -4775,6 +4820,7 @@ export function createBotsService(
     attachments: ZCodePromptAttachment[],
     botDeliveryTarget?: ZCodeAutomationBotDeliveryTarget,
     modelSelection?: ModelSelection,
+    inputId?: string,
   ): void {
     // Bugfix: Telegram polling 是单循环顺序处理 update。如果这里 await session/prompt，
     // 权限按钮 callback 会一直排队到整轮任务结束，导致用户点 inline keyboard 没反应。
@@ -4788,6 +4834,7 @@ export function createBotsService(
           attachments: attachments.length > 0 ? attachments : undefined,
           botDeliveryTarget,
           modelSelection,
+          ...(inputId ? { inputId } : {}),
         }),
       )
       .catch(async (error) => {
@@ -4941,15 +4988,22 @@ export function createBotsService(
         });
       }
       runningTasks.add(task.taskId);
+      // 接纳事实先落盘，再发布资源索引；索引里的 inputId/messageId/index 是模型唯一可用的选择器。
+      const topicAdmission = await admitTopicInput({
+        bot: auth.bot,
+        message,
+        context,
+        taskId: task.taskId,
+      });
+      const promptAttachments = topicAdmission.indexAttachment
+        ? [...preparedMessage.zcodeAttachments, topicAdmission.indexAttachment]
+        : preparedMessage.zcodeAttachments;
       await watchTaskStream(auth.bot, message.actor, context, auth.user);
       await broadcastTaskListChange(context, task.taskId, "prompt_sent", {
         task: broadcastTask,
         prompt: {
           content: preparedMessage.content,
-          attachments:
-            preparedMessage.zcodeAttachments.length > 0
-              ? preparedMessage.zcodeAttachments
-              : undefined,
+          attachments: promptAttachments.length > 0 ? promptAttachments : undefined,
           messageId: `bot-${traceId}`,
           sentAt: Date.now(),
         },
@@ -4961,9 +5015,10 @@ export function createBotsService(
         task.taskId,
         traceId,
         preparedMessage.content,
-        preparedMessage.zcodeAttachments,
+        promptAttachments,
         resolveAutomationBotDeliveryTarget(message.actor),
         submissionDraftOptions.modelSelection,
+        topicAdmission.inputId,
       );
       return [];
     }
@@ -4987,15 +5042,21 @@ export function createBotsService(
     }
     await broadcastTaskListChange(auth.context, auth.context.activeTaskId, "resumed");
     runningTasks.add(auth.context.activeTaskId);
+    const topicAdmission = await admitTopicInput({
+      bot: auth.bot,
+      message,
+      context: auth.context,
+      taskId: auth.context.activeTaskId,
+    });
+    const promptAttachments = topicAdmission.indexAttachment
+      ? [...preparedMessage.zcodeAttachments, topicAdmission.indexAttachment]
+      : preparedMessage.zcodeAttachments;
     await watchTaskStream(auth.bot, message.actor, auth.context, auth.user);
     const traceId = generateTraceId(auth.context.activeTaskId);
     await broadcastTaskListChange(auth.context, auth.context.activeTaskId, "prompt_sent", {
       prompt: {
         content: preparedMessage.content,
-        attachments:
-          preparedMessage.zcodeAttachments.length > 0
-            ? preparedMessage.zcodeAttachments
-            : undefined,
+        attachments: promptAttachments.length > 0 ? promptAttachments : undefined,
         messageId: `bot-${traceId}`,
         sentAt: Date.now(),
       },
@@ -5007,9 +5068,10 @@ export function createBotsService(
       auth.context.activeTaskId,
       traceId,
       preparedMessage.content,
-      preparedMessage.zcodeAttachments,
+      promptAttachments,
       resolveAutomationBotDeliveryTarget(message.actor),
       effectiveSelection,
+      topicAdmission.inputId,
     );
     return [];
   }
@@ -5188,6 +5250,28 @@ export function createBotsService(
   service = {
     async syncAppRuntimePreferences(preferences) {
       await deps.remoteWorkspaceService?.syncAppRuntimePreferences?.(preferences);
+    },
+    async validateTopicResource(params: BotTopicResourceReadParams): Promise<void> {
+      // 只复核授权，不下载：validate 由传输层在分块前调用。
+      await authorizeTopicResource(topicResourceRequestOf(params), {
+        archive: topicArchive,
+        readConfig: () => repo.readConfig(),
+      });
+    },
+    async readTopicResource(params: BotTopicResourceReadParams) {
+      return readAuthorizedTopicResource(topicResourceRequestOf(params), {
+        archive: topicArchive,
+        readConfig: () => repo.readConfig(),
+        download: async (bot, attachment, target, signal) => {
+          const provider = providers[bot.provider];
+          if (!provider?.downloadTopicResource) {
+            throw new Error("Topic resource provider is unavailable");
+          }
+          const downloaded = await provider.downloadTopicResource(bot, attachment, target, signal);
+          if (!downloaded) throw new Error("Topic resource download is unavailable");
+          return downloaded;
+        },
+      });
     },
     async getStatus() {
       const config = await repo.readConfig();

@@ -29,6 +29,16 @@ export const sourceServerRunningTaskSchema = z
 export type SourceServerRunningTask = z.infer<typeof sourceServerRunningTaskSchema>;
 export const sourceServerRunningTasksSchema = z.array(sourceServerRunningTaskSchema);
 
+/**
+ * 停止 / 重启远端服务确认前按设备读取的运行中任务（RDLC-01）。`available: false` 表示设备没有提供
+ * 可信清单（远端输出 null、命令失败或输出不符 schema），不能当作“没有任务”；空数组才是没有任务。
+ */
+export const sourceServerRunningTasksResultSchema = z.discriminatedUnion("available", [
+  z.object({ available: z.literal(true), tasks: sourceServerRunningTasksSchema }).strict(),
+  z.object({ available: z.literal(false) }).strict(),
+]);
+export type SourceServerRunningTasksResult = z.infer<typeof sourceServerRunningTasksResultSchema>;
+
 /** 只读安装预览；sizeBytes 是安装包实际大小，不代表解压后的磁盘占用。 */
 export const sourceServerInstallPreviewSchema = z
   .object({
@@ -50,6 +60,10 @@ export const sourceServerConnectionStateSnapshotSchema = z
     availableVersion: sourceServerNonEmptyStringSchema.optional(),
     minimumVersion: sourceServerNonEmptyStringSchema.optional(),
     upgradeTarget: z.enum(["controller", "server"]).optional(),
+    /** 远端当前 release 由显式降级安装时，被替换的版本；向导据此不自动升级。 */
+    downgradedFrom: sourceServerNonEmptyStringSchema.optional(),
+    /** 更新处于本机阶段（probe、release 解析与本机下载），`cancelSourceUpdate` 可取消（R3 §6.3）。 */
+    updateCancelable: z.literal(true).optional(),
     errorCode: publicZCodeErrorCodeSchema.optional(),
     retryable: z.boolean().optional(),
     installPreview: sourceServerInstallPreviewSchema.optional(),
@@ -148,7 +162,7 @@ export type SourceServerInstallProgress = z.infer<typeof sourceServerInstallProg
 export const sourceServerOperationLogSchema = z
   .object({
     profileId: z.string().uuid(),
-    operation: z.enum(["connect", "update"]),
+    operation: z.enum(["connect", "update", "stop", "restart"]),
     phase: sourceServerNonEmptyStringSchema,
     level: z.enum(["info", "warn", "error"]),
     message: z.string(),

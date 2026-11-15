@@ -150,6 +150,8 @@ export default defineConfig([
       "main/browserWebmRecorder": "src/main/browserView/electronBrowserWebmRecorder.ts",
       // 资源管理器「存储」tab 的扫描 Worker：main 持有 StorageService，遍历放独立线程，供 new Worker(new URL()) 解析。
       "main/storageScanWorker": "src/main/storageScanWorker.ts",
+      // 扩展宿主子进程入口：由 Main supervisor 以 stdio 拉起，独立 bundle 避免扩展代码接触 main 模块图。
+      "main/extensionHostWorker": "src/main/extensionHost/worker.ts",
     },
     outDir: "out",
     format: "esm",

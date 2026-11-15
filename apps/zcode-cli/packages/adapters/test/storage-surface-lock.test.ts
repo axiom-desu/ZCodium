@@ -15,6 +15,7 @@ const EXPECTED_STORAGE_EXPORTS = [
   "createDwfJournalStore",
   "createFileWorkspaceHookTrustStore",
   "createInMemorySessionEventStore",
+  "createNodeSessionDataFiles",
   "createNodeToolArtifactStore",
   "createSqliteSessionStore",
   "getDefaultSessionDbPath",

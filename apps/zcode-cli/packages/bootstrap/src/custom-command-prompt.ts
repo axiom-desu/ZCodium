@@ -1,22 +1,27 @@
 import {
   expandCustomCommandPrompt,
-  expandCustomCommandTemplate,
-  formatCustomCommandPrompt,
   type ExecutionPort,
   type SessionId,
   type TraceContext,
 } from "@zcode/contracts";
 import { loadZCodeCustomCommand, type ListZCodeCustomCommandsOptions } from "./custom-commands.js";
-import { expandCustomCommandShellSyntax } from "./custom-command-shell-expansion.js";
 import { isReservedZCodeSlashCommandName } from "./slash-command-surface.js";
 
 const CUSTOM_COMMAND_NOT_FOUND_PATTERN = /not found/i;
 const PROMPT_CUSTOM_COMMAND_PATTERN = /^\/([^\s]+)(?:\s+([\s\S]*))?$/;
 
 interface ResolveZCodeCustomCommandPromptOptions extends ListZCodeCustomCommandsOptions {
+  /**
+   * @deprecated 自定义命令的 `!` 块不再由 CLI 执行，改写成交给模型 Bash 工具的说明
+   * （contracts 的 handOffCustomCommandShellBlocks）。字段保留只为兼容 create-app-runtime 的
+   * 现有传参；该调用点属 C4 写域，删除传参随集成清单进行。读取它是错的。
+   */
   executionPort?: ExecutionPort;
+  /** @deprecated 同上：shell 展开取消后不再需要会话身份。 */
   sessionId?: SessionId;
+  /** @deprecated 同上：解析阶段不再执行任何子进程，因此没有可取消的执行。 */
   signal?: AbortSignal;
+  /** @deprecated 同上：解析阶段不再产生执行 trace。 */
   traceContext?: TraceContext;
 }
 
@@ -36,34 +41,7 @@ export async function resolveZCodeCustomCommandPrompt(
       ...options,
       name: invocation.name,
     });
-    if (options.executionPort) {
-      // 调用 slash command 时先执行并替换输出，避免 unsupported error
-      // 在 turn 创建前抛出后让 UI 长时间停在“正在思考”。
-      //
-      // 复用 contracts 的底层 template/format 函数，而非 expandCustomCommandPrompt：
-      // 后者内部 detectUnsupportedDynamicSyntax 会对 `!` 语法直接抛错，而本路径
-      // 恰恰要支持 shell 展开，只能在 expandCustomCommandTemplate 与
-      // formatCustomCommandPrompt 之间插入 expandCustomCommandShellSyntax。
-      const expanded = expandCustomCommandTemplate({
-        args: invocation.args,
-        command,
-      });
-      const body = await expandCustomCommandShellSyntax({
-        command,
-        content: expanded.body,
-        executionPort: options.executionPort,
-        sessionId: options.sessionId,
-        signal: options.signal,
-        traceContext: options.traceContext,
-        workingDirectory: options.workingDirectory ?? process.cwd(),
-      });
-      return formatCustomCommandPrompt({
-        argumentCount: expanded.argumentCount,
-        body,
-        command,
-        usedArgumentsPlaceholder: expanded.usedArgumentsPlaceholder,
-      }).prompt;
-    }
+    // 解析只改写文本：`!` 块交给模型经 Bash 工具执行，见 contracts 的 handOffCustomCommandShellBlocks。
     return expandCustomCommandPrompt({
       args: invocation.args,
       command,

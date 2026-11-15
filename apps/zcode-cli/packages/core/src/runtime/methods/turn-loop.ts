@@ -18,11 +18,29 @@ import {
   shouldBuildTodoReminder,
 } from "../helpers/index.js";
 import {
+  isRuntimeAttachmentEntry,
   systemReminderAttachmentEntry,
   todoReminderRuntimeMetadata,
+  type RuntimeMessageEntry,
 } from "../../agent/message-history.js";
+import type { DrainedPendingInputDiagnostics } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { buildToolSearchAnnouncement } from "../../tool/search/exposure.js";
+import {
+  appendEnvironmentAnnouncement,
+  appendInstructionAnnouncement,
+} from "./context-refresh.js";
+import { formatTotalTokensReminder } from "../../context/total-tokens.js";
+import {
+  consumeTotalTokensBudget,
+  decideTotalTokensReminder,
+  reanchorTotalTokensBudget,
+  type InputAttachmentCollectionReason,
+} from "../helpers/total-tokens-budget.js";
+import { recordPromptSnapshot } from "../helpers/prompt-snapshot.js";
+import { recordSessionFeatureFromToolSearchExposure } from "../session-features/contract.js";
+import { isRealUserPrompt } from "../helpers/provider-entry-origins.js";
+import { latestContextTokens, querySourceForTask } from "./turn-model-step-usage.js";
 import { runModelBackedTurnStep } from "./turn-model-step.js";
 import {
   evaluateRapidRefill,
@@ -38,6 +56,9 @@ import {
   commitTurnRequestEntries,
   filterOutputTokenContinuationEntries,
 } from "./turn-output-token-continuation.js";
+import { consumeSettledProjectMemoryRecall } from "../helpers/project-memory-recall.js";
+import { consumePendingProjectMemoryUpdate } from "../helpers/project-memory-dream.js";
+import { ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH } from "../../memory/project-memory-retrieval-branch.js";
 
 export async function runRegularTurnLoop(
   this: AgentRuntimeInternal,
@@ -61,6 +82,19 @@ export async function runRegularTurnLoop(
         state.repeatedToolCallSignature = undefined;
         state.repeatedToolCallStreakCount = 0;
       }
+      // 完整真实 tool-result batch 且 queued 输入已 drain 后：Recall prefetch 只在此边界消费一次，
+      // selector 未完成时不等待；Dream 的 memory_update 同样只注入一次。
+      // 两者都是 per-request 提醒（不写入 canonical history），与上游 turn request entries 语义一致。
+      const recallEntry = consumeSettledProjectMemoryRecall(
+        this,
+        ACTIVE_PROJECT_MEMORY_RETRIEVAL_BRANCH,
+      );
+      appendTurnRequestEntries(
+        state.turnRequestState,
+        [recallEntry, consumePendingProjectMemoryUpdate(this)].filter(
+          (entry): entry is RuntimeMessageEntry => entry !== undefined,
+        ),
+      );
     }
 
     const compactPhase =
@@ -193,6 +227,12 @@ export async function runRegularTurnLoop(
         });
         commitTurnRequestEntries(this, state.turnRequestState, [announcement]);
       }
+      // 指令文件增量公告（F1）：只有文件内容或集合变化时才追加，不重发整份。
+      await appendInstructionAnnouncement(this, state.turnRequestState, state.turnTraceContext);
+      // 环境公告（3.18.2）：system 的 # Environment 被 prompt 快照冻结，变化只能靠这里补。
+      await appendEnvironmentAnnouncement(this, state.turnRequestState, state.turnTraceContext);
+      // token 预算倒数（F2）：数值来自 runtime 计数器与最近一条带 usage 的 assistant。
+      await appendTotalTokensReminder(this, state, drainedSteerForNextRequest);
     }
     // （2026-09-12）：原"回合开始注入 plugin_ui_state reminder"已删除，插件给模型的信息
     // 一律走 ui/update-model-context。
@@ -208,6 +248,13 @@ export async function runRegularTurnLoop(
       entries: requestEntries,
       applyCacheControl: true,
     });
+    // 主会话没有可用的 prompt 快照时，按本次请求的前缀记录 system（F3）。
+    await recordPromptSnapshot(this, {
+      entries: requestEntries,
+      model: state.model,
+      modelSelectionScope: state.modelSelectionScope,
+      traceContext: state.turnTraceContext,
+    });
     this.logger?.debug("ToolSearch request exposure", {
       event: "tool.search.exposure",
       enabled: prepared.toolSearch.enabled,
@@ -216,6 +263,12 @@ export async function runRegularTurnLoop(
       catalogSize: prepared.toolSearch.catalog.length,
       schemaCount: prepared.request.tools.length,
     });
+    // 能力标签取本次主循环请求的生效模式，在模型调用前打，本次请求就带上。
+    recordSessionFeatureFromToolSearchExposure.call(
+      this,
+      prepared.toolSearch,
+      state.turnTraceContext,
+    );
     const providerProjection = prepared.projection;
     const { messages } = prepared.request;
     const recordableEntries = filterOutputTokenContinuationEntries(prepared.entries);
@@ -261,4 +314,60 @@ export async function runRegularTurnLoop(
       break;
     }
   }
+}
+
+/**
+ * token 预算倒数：数值来自 runtime 计数器与最近一条带 usage 的 assistant。
+ * 先算出新状态再提交附件，最后才更新计数器：附件没进请求时不推进已用量。
+ * 只进 turn request entries，不落 session——预算本身不持久化，落库的倒数会与恢复后的计数器矛盾。
+ */
+async function appendTotalTokensReminder(
+  runtime: AgentRuntimeInternal,
+  state: RegularTurnLoopState,
+  drainedSteer: DrainedPendingInputDiagnostics | undefined,
+): Promise<void> {
+  const entries = state.turnRequestState.entries;
+  const reason = resolveInputAttachmentCollectionReason(state, drainedSteer);
+  const decision = decideTotalTokensReminder({
+    fromUser: inputFromUser(entries, reason, drainedSteer),
+    mainSession: querySourceForTask(runtime.config.taskType) === "main_turn",
+    reason,
+  });
+  if (!decision.emit) return;
+  const context = latestContextTokens(entries);
+  const budget = decision.reanchor
+    ? reanchorTotalTokensBudget(runtime.totalTokensBudget, context)
+    : runtime.totalTokensBudget;
+  const consumed = consumeTotalTokensBudget(budget, context);
+  appendTurnRequestEntries(state.turnRequestState, [
+    systemReminderAttachmentEntry(
+      "total_tokens_reminder",
+      formatTotalTokensReminder(consumed.remaining),
+    ),
+  ]);
+  runtime.totalTokensBudget = consumed.state;
+}
+
+/** 本次请求的输入附件收集原因：轮首、完整工具批次之后、文本回复后续上 guide。 */
+function resolveInputAttachmentCollectionReason(
+  state: RegularTurnLoopState,
+  drainedSteer: DrainedPendingInputDiagnostics | undefined,
+): InputAttachmentCollectionReason {
+  if (state.modelStepCount === 0) return "turn_input";
+  return drainedSteer ? "text_guide" : "tool_batch";
+}
+
+/** 触发本次收集的输入是否出自用户本人：轮首看最新输入，guide 看本次取出的 steer 是否用户亲手输入。 */
+function inputFromUser(
+  entries: readonly RuntimeMessageEntry[],
+  reason: InputAttachmentCollectionReason,
+  drainedSteer: DrainedPendingInputDiagnostics | undefined,
+): boolean {
+  if (reason === "text_guide") {
+    return (drainedSteer?.runtimeEntries ?? []).some(
+      (entry) => entry.metadata?.inputPresentation === "user_steer",
+    );
+  }
+  const latestMessage = entries.findLast((entry) => !isRuntimeAttachmentEntry(entry));
+  return latestMessage !== undefined && isRealUserPrompt(latestMessage);
 }

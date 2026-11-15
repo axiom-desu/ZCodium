@@ -56,6 +56,11 @@ function findExternalTurnFault(error: unknown): ExternalTurnFaultError | null {
   return null;
 }
 
+/** 宿主外部故障中止本轮：与用户取消一样给模型留中断标记。 */
+export function isExternalTurnFault(reason: unknown): boolean {
+  return findExternalTurnFault(reason) !== null;
+}
+
 export function createTurnAbortScope(parentSignal?: AbortSignal): TurnAbortScope {
   const controller = new AbortController();
 

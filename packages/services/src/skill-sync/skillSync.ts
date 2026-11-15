@@ -1,4 +1,5 @@
 import type {
+  SkillDataSyncPayload,
   SkillSyncArchiveExportResult,
   SkillSyncCandidateListResult,
   SkillSyncImportResult,
@@ -6,9 +7,14 @@ import type {
   RemoteSyncWriteAccessResult,
 } from "@zcode/shared";
 import { ServiceChannels } from "@zcode/shared";
+import type { IDataSyncCategoryService } from "../data-sync/contract.js";
 import { createServiceDescriptor } from "../descriptors.js";
 
-export interface ISkillSyncService {
+/**
+ * 技能通道：旧候选/归档同步方法（设置页同步弹窗仍在调用，保留为同一 owner 适配面）
+ * + 数据同步五方法（IDataSyncCategoryService）。
+ */
+export interface ISkillSyncService extends IDataSyncCategoryService<SkillDataSyncPayload> {
   listLocalUserSkillCandidates(): Promise<SkillSyncCandidateListResult>;
   listRemoteUserSkillStatuses(params: {
     directoryNames: string[];

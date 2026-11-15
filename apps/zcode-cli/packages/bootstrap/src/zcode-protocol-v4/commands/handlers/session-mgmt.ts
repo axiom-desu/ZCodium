@@ -94,6 +94,10 @@ async function createSession(
         text: payload.firstInput.text,
         requestedDelivery: "startNow",
         attachmentRefs: payload.firstInput.attachments,
+        // 首发也要带上选区引用：草稿会话 promotion 后与原会话行为一致。
+        ...(payload.firstInput.conversationQuotes
+          ? { conversationQuotes: payload.firstInput.conversationQuotes }
+          : {}),
         ...resolveSubmittedExecutionState(record, payload.firstInput),
       });
       const started = await startPromptTurn(host, record, {

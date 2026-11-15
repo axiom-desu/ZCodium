@@ -57,6 +57,26 @@ export interface TaskNotificationPayload {
   body: string;
 }
 
+/**
+ * 显式 App 导航目标：只来自 Host 已授权的会话事实（项目/任务已由 AppControlService 校验）。
+ * renderer 用它调用既有 Root 导航动作，不建立第二份导航状态。
+ */
+export interface AppNavigationTarget {
+  workspacePath: string;
+  workspaceIdentity?: string;
+  taskId: string;
+}
+
+/** 实际提交结果：`opened` 只能由真正完成导航的 renderer 回执产生。 */
+export type AppNavigationResult =
+  | { status: "opened"; uiTarget?: string }
+  | { status: "unavailable"; reason?: string; uiTarget?: string };
+
+export type AppNavigationHandler = (
+  target: AppNavigationTarget,
+  signal: AbortSignal,
+) => Promise<AppNavigationResult>;
+
 /** Main 将一次能够定位真实 tab 的 browser-use 操作投递给其 origin renderer。 */
 export interface BrowserViewOperationPayload {
   workspaceKey: string;
@@ -235,6 +255,67 @@ export type ApplicationIconLocator =
 
 export interface ApplicationIconRequest {
   locators: ApplicationIconLocator[];
+}
+
+/**
+ * 系统对当前文件类型注册的应用；id 仅由宿主解析，不能当作命令执行。
+ * 只有 Desktop 实现：Web/手机端不提供本机应用枚举。
+ */
+export interface FileApplicationInfo {
+  id: string;
+  name: string;
+  iconDataUrl?: string;
+  isDefault: boolean;
+}
+
+/**
+ * 本机文件的应用关联查询目标。`remoteTarget`/`workspaceIdentity` 非空表示远端或身份隔离路径，
+ * 即使本机恰好存在同路径文件也不属于本机文件，main 必须失败关闭。
+ */
+export interface FileApplicationTarget {
+  path: string;
+  pathKind: "file" | "directory";
+  workspaceIdentity?: string;
+  remoteTarget?: OpenInEditorRemoteTarget;
+}
+
+/** guest 视口内的裁剪区域，全部是 guest CSS px；视口宽高用于换算实际帧的像素比例。 */
+export interface CaptureBrowserGuestPageClip {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}
+
+export interface CaptureBrowserGuestPageRequest {
+  /** 内置浏览器 `<webview>` 的 guest webContents id（renderer 由 `getWebContentsId()` 取得） */
+  webContentsId: number;
+  /** 只要视口内某一块（选元素截图）；不传时返回整个可见视口 */
+  clip?: CaptureBrowserGuestPageClip;
+}
+
+export interface CaptureBrowserGuestPageResult {
+  success: boolean;
+  /** PNG 字节；success 时存在 */
+  data?: ArrayBuffer;
+  /** "guest_not_found" | "guest_not_owned" | "capture_in_progress" | "capture_timeout" | "capture_failed" | "clip_out_of_view" */
+  error?: string;
+}
+
+/** 内置浏览器 guest 页面「导出 PDF」：由 main 对既有 manager 里当前 tab 的当前代 guest 打印。 */
+export interface PrintBrowserGuestPageRequest {
+  /** 内置浏览器 `<webview>` 的 guest webContents id；main 反查 owner 后拒绝跨窗口/换代请求 */
+  webContentsId: number;
+}
+
+export interface PrintBrowserGuestPageResult {
+  success: boolean;
+  /** PDF 字节；success 时存在 */
+  data?: ArrayBuffer;
+  /** "guest_not_found" | "guest_not_owned" | "print_in_progress" | "print_timeout" | "print_failed" */
+  error?: string;
 }
 
 export type OpenInEditorRemoteTarget =
@@ -557,6 +638,12 @@ export interface IPlatformService {
   canSelectFilePath?: boolean;
 
   /**
+   * 当前平台能否把路径交给本机应用打开（桌面端 true，Web/手机 false）。
+   * 远程 workspace 的路径即使平台为 true 也不能交给本机应用，判断由调用方完成。
+   */
+  canOpenLocalFiles?: boolean;
+
+  /**
    * 插件 UI 沙箱平台端口。只有桌面端实现；
    * web / 手机远控为 undefined，plugin-ui 据此回退到普通 MCP 工具卡片。
    */
@@ -658,10 +745,10 @@ export interface IPlatformService {
    */
   requestSourceSettingsAttachment?(sourceServerId: string): Promise<{ attachmentId: string }>;
 
-  /** 将 canonical workspace 身份绑定到已创建的远程 logical session。 */
+  /** 将 canonical workspace 身份绑定到已创建的远程 logical session，返回 guest 绑定结果。 */
   bindRemoteWorkspaceSessionContext?(
     context: BindRemoteWorkspaceSessionContextRequest,
-  ): Promise<void>;
+  ): Promise<BrowserGuestAttachResult>;
 
   /** 释放当前窗口里已创建的远程 session */
   disposeRemoteSession(sessionId: string): Promise<void>;
@@ -892,6 +979,12 @@ export interface IPlatformService {
   /** 注册用户点击系统通知后跳转到对应任务的回调，返回 disposer */
   onTaskNotificationClick(handler: (taskId: string) => void): () => void;
 
+  /**
+   * 显式 App 导航能力：只在桌面导航 owner（Root）挂载后注册，返回 disposer。
+   * Web/手机不实现，因此不会接收桌面导航；`opened` 必须来自真实导航提交。
+   */
+  onAppControlNavigation?(handler: AppNavigationHandler): () => void;
+
   /** 导出日志：打包 ~/.zcodium/v2 及外部 agent 日志为 zip 并在系统文件浏览器中显示 */
   exportLogs(): Promise<{ success: boolean; path?: string; error?: string }>;
 
@@ -1005,8 +1098,34 @@ export interface IPlatformService {
   /** 用户确认重启安装更新 */
   quitAndInstallUpdate(): Promise<void>;
 
-  /** 获取系统中已安装的编辑器/终端列表（含图标） */
-  getInstalledEditors(): Promise<EditorInfo[]>;
+  /** 获取系统中已安装的编辑器/终端列表（含图标）；传文件路径时追加匹配该类型的本机应用。 */
+  getInstalledEditors(filePath?: string): Promise<EditorInfo[]>;
+
+  /** 本机文件的系统关联应用；Web/远端/目录/非本机路径不提供。仅 Desktop 实现。 */
+  getFileApplications?(target: FileApplicationTarget): Promise<FileApplicationInfo[]>;
+
+  /** 重新确认系统关联后，用该应用打开本机文件；仅 Desktop 实现。 */
+  openFileWithApplication?(
+    applicationId: string,
+    target: FileApplicationTarget,
+  ): Promise<{ success: boolean; error?: string }>;
+
+  /**
+   * 在 main 进程截取内置浏览器 guest 当前可见视口为 PNG。renderer 侧 `<webview>.capturePage()`
+   * 会让 renderer 原生崩溃（V8 FATAL），与 Agent 截图一样只能由 main 取帧；仅 Desktop 实现。
+   */
+  captureBrowserGuestPage?(
+    payload: CaptureBrowserGuestPageRequest,
+  ): Promise<CaptureBrowserGuestPageResult>;
+
+  /**
+   * 在 main 进程把内置浏览器 guest 当前页面打印成 PDF（`webContents.printToPDF`，矢量文本）。
+   * renderer 不直接调用 `<webview>.printToPDF`：owner 校验、串行化与超时都在 main 一处完成；
+   * 仅 Desktop 实现，Web/手机缺席即不支持。
+   */
+  printBrowserGuestPage?(
+    payload: PrintBrowserGuestPageRequest,
+  ): Promise<PrintBrowserGuestPageResult>;
 
   /** 用指定编辑器打开路径 */
   openInEditor(

@@ -87,7 +87,9 @@ pub fn declaration_digest(raw: &Value, slot: &Slot) -> String {
         json!([
             "process",
             raw["command"],
-            raw["args"].as_array().cloned().unwrap_or_default()
+            raw["args"].as_array().cloned().unwrap_or_default(),
+            // `onError` 是失败语义，进声明摘要：加/改它会让旧信任 stale。
+            optional(&raw["onError"])
         ])
     } else {
         let shell = match &raw["shell"] {
@@ -95,7 +97,13 @@ pub fn declaration_digest(raw: &Value, slot: &Slot) -> String {
             Value::Bool(true) => json!(["true"]),
             other => json!(["string", other]),
         };
-        json!(["command", raw["command"], raw["async"] == true, shell])
+        json!([
+            "command",
+            raw["command"],
+            raw["async"] == true,
+            shell,
+            optional(&raw["onError"])
+        ])
     };
     sha256(&json!([
         "workspace-hook-declaration",

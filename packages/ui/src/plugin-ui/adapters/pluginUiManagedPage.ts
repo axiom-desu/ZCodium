@@ -21,15 +21,17 @@ import type {
 } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { buildPluginSandboxScopeId, type PluginSandboxHandle } from "@zcode/shared/mcp-apps";
 import { clearPluginUiSurfaceFeed } from "../app/pluginUiSurfaceFeedStore.js";
-import { PLUGIN_UI_CARD_DEFAULT_HEIGHT_PX } from "../contract.js";
 import { buildPluginUiHostCapabilities } from "../domain/buildPluginUiHostCapabilities.js";
 import { buildPluginUiHostContext } from "../domain/buildPluginUiHostContext.js";
 import { acquireWorkspaceConnection } from "@/v4/workspaceConnectionRegistry.js";
 import type { IServiceAccessor } from "@zcode/services";
 import type { IPlatformService } from "@zcode/shared";
 import { buildPluginUiSessionKey } from "../contract.js";
-import type { Page, UsePluginUiHostInput, UsePluginUiHostResult } from "./pluginUiHostTypes.js";
-import { createPluginUiPagePlane } from "./pluginUiPagePlane.js";
+import type { Page, UsePluginUiHostInput } from "./pluginUiHostTypes.js";
+import { createPluginUiPageHostContextUpdater } from "./pluginUiPageHostContext.js";
+import { createPageExecutionHandler, createPluginUiPagePlane } from "./pluginUiPagePlane.js";
+import { createPluginUiPageRetention } from "./pluginUiPageRetention.js";
+import { createPluginUiPageSnapshot } from "./pluginUiPageSnapshot.js";
 import { pluginUiPages } from "./pluginUiPageRegistry.js";
 import { createPluginUiToolFeed } from "./pluginUiManagedPageToolFeed.js";
 import { clampCardHeight } from "./pluginUiCardHeight.js";
@@ -55,54 +57,62 @@ export function createPage(
   let starting = false;
   let incarnation = 0;
   let releasing: Promise<unknown> = Promise.resolve();
-  let contextInputs = "";
-  let lastContext = "";
   const updateToolFeed = createPluginUiToolFeed();
   let appIdentity: string | undefined;
-  const notify = () => {
-    for (const listener of listeners) listener();
-  };
-  let snapshot: UsePluginUiHostResult = {
-    pageKey: key,
-    supported: true,
-    phase: "idle",
-    handle: null,
-    height: PLUGIN_UI_CARD_DEFAULT_HEIGHT_PX,
-    error: null,
-    appCapabilities: undefined,
+  const pageSnapshot = createPluginUiPageSnapshot({
+    key,
     reload: () => {
       clearPluginUiWidgetState(key);
       void page.suspend(true).then(ensure);
     },
-  };
-  const patch = (value: Partial<UsePluginUiHostResult>) => {
-    snapshot = { ...snapshot, ...value };
-    notify();
-  };
+    notify: () => {
+      for (const listener of listeners) listener();
+    },
+  });
+  const patch = pageSnapshot.patch,
+    snapshot = () => pageSnapshot.read();
   const setPhase = (phase: PluginUiHostPhase) => patch({ phase });
   const setHandle = (handle: PluginSandboxHandle) => {
     if (appIdentity && appIdentity !== handle.instance.appIdentity) clearPluginUiWidgetState(key);
     appIdentity = handle.instance.appIdentity;
+    const fresh =
+      snapshot().handle?.sandboxId !== handle.sandboxId ||
+      snapshot().handle?.initId !== handle.initId;
     patch({ handle });
+    if (fresh) retention.prepared(handle);
     plane.mount(handle);
-    plane.setExecutionActive(controller !== null);
+    retention.syncExecution();
   };
-  const setHeight = (height: number) => patch({ height });
-  const setError = (error: string) => patch({ error });
+  const setHeight = (height: number) => patch({ height }),
+    setError = (error: string) => patch({ error });
   const setAppCapabilities = (appCapabilities: McpUiAppCapabilities | undefined) =>
     patch({ appCapabilities });
   const plane = createPluginUiPagePlane({
     onVisibility(visible) {
       if (page.visible !== visible) pluginUiPages.visibility(page, visible);
       if (visible) ensure();
+      retention.syncExecution();
     },
     onCrash() {
       void page.suspend(true);
       patch({ phase: "error", error: "MCP App page stopped" });
     },
+    onExecutionActive: createPageExecutionHandler(() => snapshot().handle, sandboxPlatform),
   });
+  const retention = createPluginUiPageRetention({
+    page: () => page,
+    handle: () => snapshot().handle,
+    hasController: () => controller !== null,
+    phase: () => snapshot().phase,
+    ensure: () => void ensure(),
+    hasVisibleAnchor: () => plane.hasVisibleAnchor(),
+    setExecutionActive: (active) => plane.setExecutionActive(active),
+  });
+  const updateHostContext = createPluginUiPageHostContextUpdater((context) =>
+    controller?.updateHostContext(context),
+  );
   async function ensure() {
-    if (disposed || controller || starting || snapshot.phase === "error") return;
+    if (disposed || controller || starting || snapshot().phase === "error") return;
     starting = true;
     const epoch = ++incarnation;
     try {
@@ -173,8 +183,8 @@ export function createPage(
       scope,
       presentation,
       getInstance: () => {
-        if (!snapshot.handle) throw new Error("MCP App is not prepared");
-        return snapshot.handle.instance;
+        if (!snapshot().handle) throw new Error("MCP App is not prepared");
+        return snapshot().handle!.instance;
       },
     });
     const nextController = createPluginUiHostController({
@@ -197,8 +207,7 @@ export function createPage(
         ...(latest.current.toolResult ? { toolResult: latest.current.toolResult } : {}),
         ...(latest.current.toolCancelled ? { toolCancelled: true } : {}),
       }),
-      // widgetState 初值直接读宿主内存 store（唯一 owner），不经 props 再缓存一份；
-      // 端口投递时才读，离屏回收后重建也拿到页面最近一次主动保存的值。
+      // widgetState 初值直接读宿主内存 store（唯一 owner）；端口投递时才读，离屏重建也拿到最近一次保存值。
       getWidgetState: () => getPluginUiWidgetState(surfaceKey),
       getHostCapabilities: () =>
         buildPluginUiHostCapabilities({
@@ -264,15 +273,18 @@ export function createPage(
       onBusyChange: () => {
         if (controller === nextController) pluginUiPages.settled(page);
       },
+      onActivity: () => {
+        if (controller === nextController) pluginUiPages.activity(page);
+      },
       onAppCapabilities: setAppCapabilities,
-      onHeight: (next) => setHeight(clampCardHeight(next, snapshot.handle)),
+      onHeight: (next) => setHeight(clampCardHeight(next, snapshot().handle)),
       onDisplayModeRequest: (mode) => latest.current.onDisplayModeRequest?.(mode) ?? mode,
       onOpenExternal: (url) => latest.current.onOpenExternal?.(url),
       log: (message, detail) => logger.warn(message, detail),
     });
 
     controller = nextController;
-    plane.setExecutionActive(true);
+    retention.syncExecution();
     controller.start();
   }
   const task = buildPluginUiSessionKey(input.scope);
@@ -292,7 +304,7 @@ export function createPage(
     key,
     task,
     visible: false,
-    snapshot: () => snapshot,
+    snapshot,
     start: () => void ensure(),
     subscribe(listener) {
       listeners.add(listener);
@@ -315,35 +327,19 @@ export function createPage(
       // 背景内联锚点不能覆盖侧栏当前的交互上下文。
       if (next.enabled === false) return;
       latest.current = next;
-      const nextContextInputs = JSON.stringify([
-        next.theme,
-        next.locale,
-        next.displayMode,
-        next.width,
-        next.titleBar,
-        next.availableDisplayModes,
-      ]);
-      if (nextContextInputs !== contextInputs) {
-        contextInputs = nextContextInputs;
-        const context = buildPluginUiHostContext({
-          theme: next.theme,
-          locale: next.locale,
-          displayMode: next.displayMode,
-          width: next.width,
-          titleBar: next.titleBar,
-          availableDisplayModes: next.availableDisplayModes,
-          styleVariables: readPluginUiStyleVariables(),
-        });
-        const contextKey = JSON.stringify(context);
-        if (contextKey !== lastContext) {
-          lastContext = contextKey;
-          controller?.updateHostContext(context);
-        }
-      }
+      updateHostContext({
+        theme: next.theme,
+        locale: next.locale,
+        displayMode: next.displayMode,
+        width: next.width,
+        titleBar: next.titleBar,
+        availableDisplayModes: next.availableDisplayModes,
+      });
       page.updateToolFeed(next);
     },
     updateToolFeed(next) {
       if (disposed) return;
+      retention.noteToolFeed(next);
       latest.current = {
         ...latest.current,
         toolCallId: next.toolCallId,
@@ -354,24 +350,27 @@ export function createPage(
       updateToolFeed(controller, next);
     },
     async suspend(force = false) {
-      const candidate = controller;
-      if (!force && (starting || (candidate && !(await candidate.tryRecycle().catch(() => false)))))
-        return false;
-      // 审批接纳与后台回收在 Agent 原子裁决；等待期间替换的 controller 不受旧结果影响。
-      if (!force && candidate !== controller) return false;
+      if (!force)
+        return retention.recycle({
+          starting,
+          current: () => controller,
+          disposed: () => disposed,
+          tryRecycle: async () => !controller || (await controller.tryRecycle().catch(() => false)),
+          release: () => page.suspend(true),
+          canReenter: () => !document.hidden && !disposed && plane.hasVisibleAnchor(),
+        });
       incarnation++;
       starting = false;
       const previous = controller;
       controller = null;
       plane.setExecutionActive(false);
-      const previousHandle = snapshot.handle;
+      const previousHandle = snapshot().handle;
       const offFeed = releaseFeed,
         offLease = releaseLease;
       releaseFeed = undefined;
       releaseLease = undefined;
       patch({ phase: "idle", handle: null, appCapabilities: undefined });
-      // 先前释放未完成时不能重新预备；反复重试也只等待同一个释放链。
-      // Main 主动导航到 about:blank 会触发 navigation；先解除旧代际观察，避免回收被误报为崩溃。
+      // 先前释放未完成时只等待同一释放链；先解除旧代际观察，避免 about:blank 导航被误报为崩溃。
       if (previousHandle) plane.prepareUnmount(previousHandle.sandboxId);
       const closing = previous?.dispose();
       releasing = Promise.all([releasing, closing]).then(() => {
@@ -386,6 +385,7 @@ export function createPage(
       return true;
     },
     destroy() {
+      unregisterWindowVisibility();
       workspaceEvents.dispose();
       clearPluginUiSurfaceFeed(key);
       disposed = true;
@@ -394,5 +394,6 @@ export function createPage(
       listeners.clear();
     },
   };
+  const unregisterWindowVisibility = retention.registerWindowListener();
   return page;
 }

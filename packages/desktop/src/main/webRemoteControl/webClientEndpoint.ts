@@ -57,13 +57,13 @@ export interface WebClientRpcAttachment {
   dispose(): void;
 }
 
-export interface WebClientPairingCredentials {
+interface WebClientPairingCredentials {
   deviceSid: string;
   passHash: string;
   timestamp: number;
 }
 
-export interface WebClientEndpointOptions {
+interface WebClientEndpointOptions {
   logger: WebRemoteControlLogger;
   appVersion: string;
   serverId: string;

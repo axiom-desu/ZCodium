@@ -16,3 +16,12 @@ export {
   type NodeToolArtifactStoreOptions,
 } from "./tool-artifact-store.js";
 export * from "./workspace-hook-trust-store.js";
+export {
+  createNodeSessionDataFiles,
+  type NodeSessionDataFilesOptions,
+} from "./session-data-files/index.js";
+export type {
+  SessionDataDirectory,
+  SessionDataFile,
+  SessionDataFilesPort,
+} from "./session-data-files/contract.js";

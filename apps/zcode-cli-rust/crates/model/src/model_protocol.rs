@@ -73,6 +73,10 @@ pub(super) fn body(
                 "reasoning_content",
                 "_zcode_anthropic_thinking",
                 "_zcode_responses_reasoning",
+                // 3.18 F11：provider 原生工具块绑定请求模型，跨模型不能回放。
+                "_zcode_anthropic_server_tools",
+                // 3.18 R2：轮次与平铺块是同一事实的两种视图，一起剥离。
+                super::anthropic_stream::SERVER_ROUNDS_KEY,
             ] {
                 message.as_object_mut().unwrap().remove(key);
             }
@@ -107,7 +111,7 @@ pub(super) fn body(
                 }
                 let role = message["role"].as_str().ok_or_else(ModelFailure::invalid)?;
                 if role == "tool" {
-                    let (output, deferred) = responses_tool_output(message, &names)?;
+                    let (output, deferred) = tools::responses_tool_output(message, &names)?;
                     input.push(json!({"type":"function_call_output","call_id":message["tool_call_id"],"output":output}));
                     if let Some(deferred) = deferred {
                         let content = super::model_media::responses(&deferred["content"], "user")?;
@@ -182,11 +186,50 @@ fn anthropic_body(
             system.push(block);
             continue;
         }
+        // 3.18 R2：provider 原生工具轮次按「assistant(调用) + user(结果)」回放。
+        // 把多轮正文拼进一条 assistant 会让模型照着服务端渲染的文字假装调用工具；
+        // 没有配对结果的调用只回放正文，不留下没有结果的 tool_use。
+        if let Some(rounds) = message[super::anthropic_stream::SERVER_ROUNDS_KEY]
+            .as_array()
+            .filter(|rounds| !rounds.is_empty())
+        {
+            for round in rounds {
+                let mut content = round["thinking"].as_array().cloned().unwrap_or_default();
+                if let Some(text) = round["text"].as_str().filter(|text| !text.is_empty()) {
+                    content.push(json!({"type":"text","text":text}));
+                }
+                let paired = round["call"].is_object() && round["result"].is_object();
+                if paired {
+                    content.push(round["call"].clone());
+                }
+                if content.is_empty() {
+                    continue;
+                }
+                match output.last_mut() {
+                    // 相邻纯正文段合并为一条 assistant；带调用的段不合并。
+                    Some(last)
+                        if !paired
+                            && last["role"] == "assistant"
+                            && !last["content"].as_array().is_some_and(|blocks| {
+                                blocks.iter().any(|b| b["type"] == "tool_use")
+                            }) =>
+                    {
+                        last["content"].as_array_mut().unwrap().extend(content);
+                    }
+                    _ => output.push(json!({"role":"assistant","content":content})),
+                }
+                if paired {
+                    output.push(json!({"role":"user","content":[round["result"].clone()]}));
+                }
+            }
+            continue;
+        }
         if let Some(blocks) = message["_zcode_anthropic_thinking"].as_array() {
             content.extend_from_slice(blocks);
         }
+
         if role == "tool" {
-            let (blocks, deferred) = anthropic_tool_content(message, &names, tool_search)?;
+            let (blocks, deferred) = tools::anthropic_tool_content(message, &names, tool_search)?;
             let mut result = json!({"type":"tool_result","tool_use_id":message["tool_call_id"],"content":blocks});
             // AI SDK 只在失败时写 is_error。
             if message["_zcode_tool_failed"] == true {
@@ -201,6 +244,11 @@ fn anthropic_body(
             content.extend(super::model_media::anthropic(&message["content"], false)?);
         } else if message["content"].as_str().is_some_and(|s| !s.is_empty()) {
             content.push(json!({"type":"text","text":message["content"]}));
+        }
+        // 3.18 F11：provider 原生工具块（服务端调用与结果）按到达顺序回放，
+        // 位置在可见正文之后、本地工具调用之前；调用与结果的相邻关系保持不变。
+        if let Some(blocks) = message["_zcode_anthropic_server_tools"].as_array() {
+            content.extend_from_slice(blocks);
         }
         if let Some(calls) = message["tool_calls"].as_array() {
             for call in calls {
@@ -251,55 +299,14 @@ fn anthropic_body(
     body["tools"] = tools.into();
     Ok(body)
 }
-/// A tool result's content split into what the protocol carries in the
-/// result and the media that follow it (video has no tool-result form).
-fn split_tool_media(
-    message: &Value,
-    names: &std::collections::HashMap<String, String>,
-) -> Option<(Vec<Value>, Option<Value>)> {
-    let parts = message["content"].as_array()?;
-    let (videos, kept): (Vec<Value>, Vec<Value>) =
-        parts.iter().cloned().partition(super::tool_media::is_video);
-    let name = names
-        .get(message["tool_call_id"].as_str().unwrap_or(""))
-        .map_or("", String::as_str);
-    let mut kept: Vec<Value> = kept.into_iter().map(super::tool_media::clean).collect();
-    if !videos.is_empty() {
-        // 视频以文本占位留在结果中，媒体随后作为 user 内容发送（Node 所有协议相同）。
-        let text = super::tool_media::text_form(&videos);
-        kept.push(json!({"type":"text","text":text}));
-    }
-    Some((kept, super::tool_media::deferred(name, videos)))
-}
-fn anthropic_tool_content(
-    message: &Value,
-    names: &std::collections::HashMap<String, String>,
-    tool_search: bool,
-) -> Result<(Value, Option<Value>), ModelFailure> {
-    match split_tool_media(message, names) {
-        Some((kept, deferred)) => {
-            let blocks = super::model_media::anthropic(&Value::Array(kept), tool_search)?;
-            Ok((blocks.into(), deferred))
-        }
-        None => Ok((message["content"].clone(), None)),
-    }
-}
-fn responses_tool_output(
-    message: &Value,
-    names: &std::collections::HashMap<String, String>,
-) -> Result<(Value, Option<Value>), ModelFailure> {
-    match split_tool_media(message, names) {
-        Some((kept, deferred)) => {
-            let output = super::model_media::responses(&Value::Array(kept), "user")?;
-            Ok((output.into(), deferred))
-        }
-        None => Ok((message["content"].clone(), None)),
-    }
-}
+#[path = "model_protocol_tools.rs"]
+mod tools;
+
 pub(super) enum ProtocolStream {
     Chat(Assembly),
     Responses(super::responses_stream::Responses),
-    Anthropic(super::anthropic_stream::Anthropic),
+    // 3.18 R2：流状态含轮次/缓冲正文，按指针存放避免撑大 enum 的固定尺寸。
+    Anthropic(Box<super::anthropic_stream::Anthropic>),
 }
 impl ProtocolStream {
     /// `server_tools`: the request carried provider-native tools, whose blocks
@@ -308,9 +315,9 @@ impl ProtocolStream {
         match api {
             ApiType::Chat => Self::Chat(Default::default()),
             ApiType::Responses => Self::Responses(Default::default()),
-            ApiType::Anthropic => {
-                Self::Anthropic(super::anthropic_stream::Anthropic::new(server_tools))
-            }
+            ApiType::Anthropic => Self::Anthropic(Box::new(
+                super::anthropic_stream::Anthropic::new(server_tools),
+            )),
         }
     }
     pub fn named_call(&self) -> bool {
@@ -342,7 +349,7 @@ impl ProtocolStream {
         match self {
             Self::Chat(s) => s.finish(),
             Self::Responses(s) => s.finish(),
-            Self::Anthropic(s) => s.finish(),
+            Self::Anthropic(s) => (*s).finish(),
         }
     }
 }

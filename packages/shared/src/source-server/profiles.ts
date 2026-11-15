@@ -125,10 +125,21 @@ export const sourceServerUpdateRequestSchema = z
   .object({
     profileId: sourceServerNonEmptyStringSchema,
     force: z.boolean().optional(),
+    /** 用户已确认把较新的远端切换到本机 Desktop 版本；方向由远端 CLI 判定。 */
+    allowDowngrade: z.boolean().optional(),
     expectedTarget: sourceServerUpdateTargetSchema.optional(),
   })
   .strict();
 export type SourceServerUpdateRequest = z.input<typeof sourceServerUpdateRequestSchema>;
+
+/** 取消更新只接收线路身份；是否处于可取消的本机阶段由 Host 判断（R3 §6.3）。 */
+export const sourceServerUpdateCancelProfileIdSchema = z.string().uuid();
+
+/**
+ * 设备级生命周期操作（停止、重启远端服务，RDLC-01）只接收设备身份；具体走哪条连接由 Host 路由，
+ * Renderer 不传 profileId。
+ */
+export const sourceServerLifecycleSourceIdSchema = z.string().uuid();
 
 const connectionProfileBaseShape = {
   profileId: z.string().uuid(),

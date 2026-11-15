@@ -1,5 +1,161 @@
 {
   "tools": {
+    "ListProjects": {
+      "readOnly": true,
+      "destructive": false,
+      "sideEffectScope": "none",
+      "riskLevel": "low",
+      "needsApproval": false,
+      "permission": {
+        "permission": "session_control.listProjects",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "needsApproval": false
+      }
+    },
+    "ListSessions": {
+      "readOnly": true,
+      "destructive": false,
+      "sideEffectScope": "none",
+      "riskLevel": "low",
+      "needsApproval": false,
+      "permission": {
+        "permission": "session_control.listSessions",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "needsApproval": false
+      }
+    },
+    "ReadSession": {
+      "readOnly": true,
+      "destructive": false,
+      "sideEffectScope": "none",
+      "riskLevel": "low",
+      "needsApproval": false,
+      "permission": {
+        "permission": "session_control.readSession",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "needsApproval": false
+      }
+    },
+    "CreateSession": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "system",
+      "riskLevel": "medium",
+      "needsApproval": true,
+      "permission": {
+        "permission": "session_control.createSession",
+        "riskLevel": "medium",
+        "sideEffectScope": "system",
+        "needsApproval": true
+      }
+    },
+    "ForkSession": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "system",
+      "riskLevel": "medium",
+      "needsApproval": true,
+      "permission": {
+        "permission": "session_control.forkSession",
+        "riskLevel": "medium",
+        "sideEffectScope": "system",
+        "needsApproval": true
+      }
+    },
+    "SendToSession": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "system",
+      "riskLevel": "medium",
+      "needsApproval": true,
+      "permission": {
+        "permission": "session_control.sendToSession",
+        "riskLevel": "medium",
+        "sideEffectScope": "system",
+        "needsApproval": true
+      }
+    },
+    "WaitSessions": {
+      "readOnly": true,
+      "destructive": false,
+      "sideEffectScope": "none",
+      "riskLevel": "low",
+      "needsApproval": false,
+      "permission": {
+        "permission": "session_control.waitSessions",
+        "riskLevel": "low",
+        "sideEffectScope": "none",
+        "needsApproval": false
+      }
+    },
+    "InterruptSession": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "system",
+      "riskLevel": "medium",
+      "needsApproval": true,
+      "permission": {
+        "permission": "session_control.interruptSession",
+        "riskLevel": "medium",
+        "sideEffectScope": "system",
+        "needsApproval": true
+      }
+    },
+    "RenameSession": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "system",
+      "riskLevel": "medium",
+      "needsApproval": true,
+      "permission": {
+        "permission": "session_control.renameSession",
+        "riskLevel": "medium",
+        "sideEffectScope": "system",
+        "needsApproval": true
+      }
+    },
+    "OpenSession": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "system",
+      "riskLevel": "medium",
+      "needsApproval": true,
+      "permission": {
+        "permission": "session_control.openSession",
+        "riskLevel": "medium",
+        "sideEffectScope": "system",
+        "needsApproval": true
+      }
+    },
+    "SetSessionArchived": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "system",
+      "riskLevel": "medium",
+      "needsApproval": true,
+      "permission": {
+        "permission": "session_control.setSessionArchived",
+        "riskLevel": "medium",
+        "sideEffectScope": "system",
+        "needsApproval": true
+      }
+    },
+    "SetSessionPinned": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "system",
+      "riskLevel": "medium",
+      "needsApproval": true,
+      "permission": {
+        "permission": "session_control.setSessionPinned",
+        "riskLevel": "medium",
+        "sideEffectScope": "system",
+        "needsApproval": true
+      }
+    },
     "ToolSearch": {
       "readOnly": true,
       "destructive": false,
@@ -130,6 +286,50 @@
         "needsApproval": false
       }
     },
+    "ReadTopicResource": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "session",
+      "riskLevel": "low",
+      "needsApproval": false,
+      "permission": {
+        "permission": "session.topic_resource.read",
+        "riskLevel": "low",
+        "sideEffectScope": "session",
+        "needsApproval": false
+      }
+    },
+    "SearchPlugins": {
+      "readOnly": true,
+      "destructive": false,
+      "sideEffectScope": "network",
+      "riskLevel": "low",
+      "needsApproval": false,
+      "permission": {
+        "permission": "plugins.search",
+        "riskLevel": "low",
+        "sideEffectScope": "network",
+        "needsApproval": false
+      }
+    },
+    "SuggestPluginInstall": {
+      "readOnly": false,
+      "destructive": false,
+      "requiresUserInteraction": true,
+      "sideEffectScope": "system",
+      "riskLevel": "medium",
+      "needsApproval": true,
+      "permission": {
+        "permission": "plugins.suggestInstall",
+        "riskLevel": "medium",
+        "sideEffectScope": "system",
+        "needsApproval": true,
+        "alwaysAsk": true,
+        "askOptions": {
+          "allowAlways": false
+        }
+      }
+    },
     "TodoRead": {
       "readOnly": true,
       "destructive": false,
@@ -206,6 +406,19 @@
         "riskLevel": "medium",
         "sideEffectScope": "workspace",
         "needsApproval": true
+      }
+    },
+    "CronPauseSelf": {
+      "readOnly": false,
+      "destructive": false,
+      "sideEffectScope": "workspace",
+      "riskLevel": "low",
+      "needsApproval": false,
+      "permission": {
+        "permission": "automation.pause",
+        "riskLevel": "medium",
+        "sideEffectScope": "workspace",
+        "needsApproval": false
       }
     },
     "EnterPlanMode": {

@@ -27,6 +27,13 @@ export interface PoolEntry {
   closeTimer?: ReturnType<typeof setTimeout>;
   connectionContext: McpConnectionContext;
   connecting: Promise<McpServerStatus>;
+  /**
+   * entry 级取消：连接/重连只受它约束。关闭 entry 时先 abort，再 adapter.close()，
+   * 在途握手与共享该连接的请求不会和 transport 关闭抢同一条链路。
+   */
+  controller: AbortController;
+  /** 关闭只执行一次：idle timer、session 独占释放和 pool.close 可能并发到达。 */
+  closing?: Promise<void>;
   key: string;
   refs: Set<string>;
   /** 同一 entry 的并发存活校验共享一次探测，避免重复 ping / 重复重连。 */
@@ -52,32 +59,38 @@ export function createPoolEntryLifecycle(options: PoolEntryLifecycleOptions): {
 } {
   const { entries, idleGraceMs, logger, processTracker } = options;
 
-  const closeEntry = async (entry: PoolEntry): Promise<void> => {
-    const startedAt = Date.now();
-    if (entry.closeTimer) clearTimeout(entry.closeTimer);
-    entry.closeTimer = undefined;
-    if (entries.get(entry.key) === entry) entries.delete(entry.key);
-    try {
-      await entry.adapter.close();
-      logger?.info("MCP pooled connection closed", {
-        ...entry.connectionContext,
-        durationMs: Date.now() - startedAt,
-        event: "mcp.pool.connection.closed",
-        mcpServerName: entry.serverName,
-        status: "completed",
-      });
-    } catch (error) {
-      logger?.warn("MCP pooled connection close failed", {
-        ...entry.connectionContext,
-        error: error instanceof Error ? error.message : String(error),
-        event: "mcp.pool.connection.close.failed",
-        mcpServerName: entry.serverName,
-      });
-    } finally {
-      processTracker?.unregisterConnection({
-        connectionId: entry.connectionContext.mcpConnectionId,
-      });
-    }
+  const closeEntry = (entry: PoolEntry): Promise<void> => {
+    entry.closing ??= (async () => {
+      const startedAt = Date.now();
+      if (entry.closeTimer) clearTimeout(entry.closeTimer);
+      entry.closeTimer = undefined;
+      if (entries.get(entry.key) === entry) entries.delete(entry.key);
+      // 先中止 entry 级信号再关 transport：在途 connect/重连和共享该连接的请求立即结算，
+      // 不会和 adapter.close() 抢同一 transport（上游 pool.ts 同序）。
+      entry.controller.abort(new Error("MCP connection closed"));
+      try {
+        await entry.adapter.close();
+        logger?.info("MCP pooled connection closed", {
+          ...entry.connectionContext,
+          durationMs: Date.now() - startedAt,
+          event: "mcp.pool.connection.closed",
+          mcpServerName: entry.serverName,
+          status: "completed",
+        });
+      } catch (error) {
+        logger?.warn("MCP pooled connection close failed", {
+          ...entry.connectionContext,
+          error: error instanceof Error ? error.message : String(error),
+          event: "mcp.pool.connection.close.failed",
+          mcpServerName: entry.serverName,
+        });
+      } finally {
+        processTracker?.unregisterConnection({
+          connectionId: entry.connectionContext.mcpConnectionId,
+        });
+      }
+    })();
+    return entry.closing;
   };
 
   const scheduleClose = (entry: PoolEntry): void => {
@@ -140,7 +153,12 @@ export function createPoolEntryLifecycle(options: PoolEntryLifecycleOptions): {
         mcpServerName: entry.serverName,
         status: "started",
       });
-      entry.connecting = entry.adapter.connectServer(entry.serverName, config, connectOptions);
+      entry.controller.signal.throwIfAborted();
+      entry.connecting = entry.adapter.connectServer(entry.serverName, config, {
+        ...connectOptions,
+        // 连接归 entry：重连只继承 entry 信号，不继承触发重连的 lease 的 caller signal。
+        signal: entry.controller.signal,
+      });
       // 失败由 status()/调用方 await entry.connecting 表达，这里不重复冒泡。
       await entry.connecting.catch(() => undefined);
     })();

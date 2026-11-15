@@ -8,6 +8,7 @@ import { PROVIDER_MODEL_SELECTION_MIGRATION_SQL } from "./migrations/0020-provid
 import { OFFICIAL_GLM_SELECTION_MIGRATION_SQL } from "./migrations/0021-official-glm-selection.js";
 import { BACKFILLED_SESSION_REASONING_MIGRATION_SQL } from "./migrations/0022-backfilled-session-reasoning.js";
 import { SESSION_SOFT_DELETE_OUTCOME_MIGRATION } from "./migrations/0023-session-soft-delete-outcome.js";
+import { SESSION_PERMANENT_DELETION_MIGRATION } from "./migrations/0025-session-permanent-deletion.js";
 import type { SqliteMigration } from "./migrations/types.js";
 
 // 拆分只移动对象字面量；各组按既有 id 顺序静态拼接，SQL 字节由 lock test 与 Rust
@@ -35,4 +36,5 @@ export const SQLITE_MIGRATIONS: readonly SqliteMigration[] = [
     sql: BACKFILLED_SESSION_REASONING_MIGRATION_SQL,
   },
   SESSION_SOFT_DELETE_OUTCOME_MIGRATION,
+  SESSION_PERMANENT_DELETION_MIGRATION,
 ];

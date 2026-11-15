@@ -5,15 +5,25 @@ import { resolveWorkspaceKey } from "@zcode/shared";
 import type {
   AutoArchiveInput,
   ProjectDirectories,
+  ProjectDirectoryReference,
   ProjectRepositoryContract,
   ProjectTaskGroupMoveInput,
   ProjectTaskRef,
   ProjectTaskReservationSettlement,
   ProjectTree,
+  ReserveCreatedTaskInput,
+  ProjectWorktreeTask,
   SaveProjectInput,
   VirtualProject,
 } from "#src/project-storage/domain/contract.js";
 import { ensureHost, OWNERSHIP_DECIDED } from "#src/project-storage/app/legacy-tasks.js";
+import * as purgeTasks_ from "#src/project-storage/app/purge-tasks.js";
+import * as worktreeTasks_ from "#src/project-storage/app/worktree-tasks.js";
+import {
+  bindExistingForkReservation,
+  insertReservedTaskRow,
+  resolveForkReservationInheritance,
+} from "#src/project-storage/app/fork-reservation.js";
 import {
   parseExecutionDirectories,
   readProjects,
@@ -278,18 +288,19 @@ export class ProjectRepository implements ProjectRepositoryContract {
     return transaction(this.db, () => resolveDirectories(this.db, task, this.owner), false);
   }
 
-  reserveCreatedTask(input: {
-    task: ProjectTaskRef;
-    projectId: string | null;
-    additionalDirectories?: string[];
-    freezeAdditionalDirectories?: true;
-  }): ProjectDirectories {
+  reserveCreatedTask(input: ReserveCreatedTaskInput): ProjectDirectories {
     return transaction(this.db, () => {
       const key = resolveWorkspaceKey(input.task);
       const host = ensureHost(this.db, key, this.ownerHostId);
       // 身份无法证明时不回落到 local；拒绝写入而不是伪造归属。
       if (!host) throw new Error("project.host-authority-unknown");
       if (host !== this.owner) throw new Error("project.cross-host-move");
+      // fork 子任务沿用父 owner 的 root/执行目录/worktree；父行不存在直接拒绝。
+      const inheritedFork = resolveForkReservationInheritance(this.db, input);
+      const worktreeRoot = input.worktreeRoot ?? inheritedFork?.worktreeRoot;
+      // worktree 任务只允许本地 workspace，并必须在同一事务里记录项目与受管根。
+      if (worktreeRoot !== undefined)
+        worktreeTasks_.assertWorktreeAdmission({ ...input, worktreeRoot });
       if (!readTask(this.db, input.task)) {
         const project = input.projectId ? requireProject(this.db, input.projectId) : null;
         assertRemoteTaskDirectories(
@@ -304,27 +315,23 @@ export class ProjectRepository implements ProjectRepositoryContract {
           if (project.hostId !== host) throw new Error("project.cross-host-move");
           if (
             input.additionalDirectories === undefined &&
+            // 受管 worktree 的 cwd 本就不在项目 roots 内；上面已用 worktree admission 校验。
+            worktreeRoot === undefined &&
             !project.roots.some((root) => root.rootPath === input.task.workspacePath)
           )
             throw new Error("project.cwd-not-in-roots");
         }
         // 创建归属必须先于 CLI 首发；空事实不是假会话，列表只读取已有 CLI 事实的行。
-        this.db
-          .prepare(`INSERT INTO tasks(workspace_key,workspace_path,workspace_identity,task_id,created_at,updated_at,host_id,root_path,project_id,handoff_pending,execution_directories)
-          VALUES(?,?,?,?,0,0,?,?,?,?,?)`)
-          .run(
-            key,
-            input.task.workspacePath,
-            input.task.workspaceIdentity ?? null,
-            input.task.taskId,
-            host,
-            input.task.workspacePath,
-            input.projectId,
-            OWNERSHIP_DECIDED,
-            input.additionalDirectories === undefined
-              ? null
-              : JSON.stringify(parseExecutionDirectories(input.additionalDirectories)),
-          );
+        insertReservedTaskRow(this.db, {
+          workspaceKey: key,
+          task: input.task,
+          host,
+          projectId: input.projectId,
+          additionalDirectories: input.additionalDirectories,
+          inherited: inheritedFork,
+          forkedFromTaskId: input.forkedFromTaskId,
+          worktreeRoot,
+        });
         // 创建前的预占必须把“本次派生目录”固化成快照：roots 之后的编辑只影响新任务，
         // 不能改写已创建会话的冷恢复目录。普通预占（非创建路径）仍保留 NULL 语义。
         if (input.additionalDirectories === undefined && input.freezeAdditionalDirectories) {
@@ -340,6 +347,14 @@ export class ProjectRepository implements ProjectRepositoryContract {
           hostId: host,
           now: Date.now(),
         });
+      } else {
+        if (worktreeRoot !== undefined)
+          worktreeTasks_.bindExistingWorktreeTask(this.db, {
+            workspaceKey: key,
+            taskId: input.task.taskId,
+            worktreeRoot,
+          });
+        bindExistingForkReservation(this.db, input);
       }
       return resolveDirectories(this.db, input.task, this.owner);
     });
@@ -353,5 +368,32 @@ export class ProjectRepository implements ProjectRepositoryContract {
     return transaction(this.db, () =>
       settleTaskReservation(this.db, input.task, this.owner, input.outcome),
     );
+  }
+  listTasksByWorktree(input: { worktreeRoot: string }): ProjectWorktreeTask[] {
+    return worktreeTasks_.listTasksByWorktree(this.db, this.owner, input);
+  }
+  listDirectoryReferencingTasks(input: { directory: string }): ProjectDirectoryReference[] {
+    return worktreeTasks_.listDirectoryReferencingTasks(this.db, this.owner, input);
+  }
+  // ── 彻底删除项目数据的行操作（ProjectDataRepositoryContract） ──
+
+  readProjectTaskRefs(id: string): Array<ProjectTaskRef & { cwd: string }> {
+    return purgeTasks_.readProjectTaskRefs(this.db, this.owner, id);
+  }
+
+  readTaskDirectories(): Array<{ projectId: string | null; cwd: string }> {
+    return purgeTasks_.readTaskDirectories(this.db, this.owner);
+  }
+
+  purgeTasks(tasks: readonly ProjectTaskRef[]): void {
+    purgeTasks_.purgeTasks(this.db, this.owner, tasks);
+  }
+
+  markTasksDeleted(tasks: readonly ProjectTaskRef[]): void {
+    purgeTasks_.markTasksDeleted(this.db, this.owner, tasks);
+  }
+
+  purgeProjectIfUnreferenced(id: string): boolean {
+    return purgeTasks_.purgeProjectIfUnreferenced(this.db, this.owner, id);
   }
 }

@@ -1,7 +1,18 @@
-import { mkdir, writeFile, rename, rm, readdir, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  writeFile,
+  rename,
+  rm,
+  readdir,
+  readFile,
+  stat,
+} from "node:fs/promises";
 import { dirname, basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { acquireFileLock } from "@zcode/shared/node";
+import { acquireFileLock, atomicWritePrivateTextFile } from "@zcode/shared/node";
 import { isInjectedFsFaultError, maybeThrowInjectedFsFault } from "./fsFaultInjection.js";
 
 const DEFAULT_RENAME_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1600, 3200] as const;
@@ -163,4 +174,130 @@ export async function atomicWriteJson(
   options?: AtomicWriteTextOptions,
 ): Promise<void> {
   await atomicWriteText(filePath, JSON.stringify(data, null, 2), options);
+}
+
+async function withAtomicFileLock<T>(
+  filePath: string,
+  task: () => Promise<T>,
+  options?: Pick<
+    AtomicWriteTextOptions,
+    "lockRetryDelaysMs" | "lockOwnerlessGraceMs" | "lockMaxWaitMs"
+  >,
+): Promise<T> {
+  const releaseLock = await acquireFileLock(
+    filePath,
+    options?.lockRetryDelaysMs ?? DEFAULT_LOCK_RETRY_DELAYS_MS,
+    options?.lockOwnerlessGraceMs ?? DEFAULT_LOCK_OWNERLESS_GRACE_MS,
+    options?.lockMaxWaitMs ?? DEFAULT_LOCK_MAX_WAIT_MS,
+  );
+  try {
+    return await task();
+  } finally {
+    await releaseLock();
+  }
+}
+
+/** 路径本身是否存在（lstat，不跟随软链：悬空软链也算存在）。其他错误原样抛出。 */
+export async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if (getErrorCode(error) === "ENOENT") return false;
+    throw error;
+  }
+}
+
+/**
+ * 同目录临时文件（`.` 开头，扫描会跳过）+ rename，原子替换目标文件；传入 mode 时保留原文件权限位。
+ * 写临时文件用 `wx`，不会覆盖已有文件；失败时删除临时文件。不加锁、不重试。
+ */
+export async function writeFileAtomically(
+  path: string,
+  content: Uint8Array,
+  mode?: number,
+): Promise<void> {
+  const temp = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temp, content, { flag: "wx" });
+    if (mode !== undefined) await chmod(temp, mode & 0o777);
+    await rename(temp, path);
+  } finally {
+    await rm(temp, { force: true });
+  }
+}
+
+/**
+ * 配置文件存在但读不出来、不是合法 JSON 或根节点不是对象时抛出。
+ * 调用方必须中止写入，把错误交给界面现有的失败反馈。
+ */
+class JsonObjectFileUnreadableError extends Error {
+  constructor(
+    readonly filePath: string,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "JsonObjectFileUnreadableError";
+  }
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * 写入前读取 JSON 对象文件：不存在视为空对象；读失败、JSON 无效或根节点不是对象时抛错。
+ * 只读展示路径可以把损坏文件当作空配置，写入路径不行，否则会把整份文件写回成只剩自己的字段。
+ */
+export async function readJsonObjectFileForUpdate(
+  filePath: string,
+): Promise<Record<string, unknown>> {
+  let raw: string;
+  try {
+    raw = await readFile(filePath, "utf-8");
+  } catch (error) {
+    if (getErrorCode(error) === "ENOENT") return {};
+    throw new JsonObjectFileUnreadableError(filePath, `Failed to read config file ${filePath}`, {
+      cause: error,
+    });
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new JsonObjectFileUnreadableError(filePath, `Config file ${filePath} is not valid JSON`, {
+      cause: error,
+    });
+  }
+  if (!isJsonObject(parsed)) {
+    throw new JsonObjectFileUnreadableError(
+      filePath,
+      `Config file ${filePath} must contain a JSON object`,
+    );
+  }
+  return parsed;
+}
+
+/**
+ * 用户 CLI 配置文件有多个写入方（命令、钩子、技能、MCP、插件、同步导入，以及 CLI 自身）。
+ * 每个写入方都按「写前重读 → 只改自己的字段 → 原子替换」执行：
+ * - update 拿到的是读取那一刻磁盘上的内容，只能改自己负责的字段；
+ * - 临时文件 + rename 替换，写入中途失败不会留下半截文件；
+ * - 不做 rename 重试，失败直接抛给调用方。
+ *
+ * Bug 原因：原实现的 CAS 读取/比较/替换没有锁，两个同步导入可各自读到旧值后互相覆盖，
+ * `expectedTargetHash` 的乐观并发承诺不成立。修复依据见
+ * `.agents/specs/upstream-3.18-security-hardening.md`（W1）：读改写整体放进与普通写入同一把
+ * `withAtomicFileLock`，底层 `atomicWritePrivateTextFile` 不再取锁，避免同路径嵌套死锁。
+ */
+export async function updateJsonObjectFile(
+  filePath: string,
+  update: (current: Record<string, unknown>) => Record<string, unknown>,
+): Promise<void> {
+  await withAtomicFileLock(filePath, async () => {
+    const next = update(await readJsonObjectFileForUpdate(filePath));
+    await atomicWritePrivateTextFile(filePath, `${JSON.stringify(next, null, 2)}\n`, []);
+  });
 }

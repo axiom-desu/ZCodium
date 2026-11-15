@@ -101,7 +101,14 @@ async function editQueueItem(
     throw new V4QueueItemNotEditableError(payload.queueItemId);
   }
   // core reducer 同 id 原地更新（保位）；未命中 = noop + warn（同 delete 的竞态语义）。
-  const edited = await record.app.editQueueItem(payload.queueItemId, payload.newText);
+  // 缺省 = 保留原引用；显式 [] 才是用户清空。正文与引用一起成为新的 queue 事实。
+  const edited = await record.app.editQueueItem(
+    payload.queueItemId,
+    payload.newText,
+    payload.conversationQuotes === undefined
+      ? undefined
+      : { conversationQuotes: payload.conversationQuotes },
+  );
   if (!edited) {
     host.logger?.warn?.("v4 editQueueItem missed", {
       queueItemId: payload.queueItemId,

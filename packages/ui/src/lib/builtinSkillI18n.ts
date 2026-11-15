@@ -1,4 +1,4 @@
-import type { Locale, SkillScope } from "@zcode/shared";
+import { toZhOrEnLocale, type Locale, type SkillScope } from "@zcode/shared";
 
 interface SkillDisplayCandidate {
   name: string;
@@ -41,7 +41,7 @@ const OFFICIAL_PLUGIN_PATH_MARKERS = [
   "/zcode-guide-plugin/",
 ];
 
-const BUILTIN_SKILL_DESCRIPTIONS: Record<string, Record<Locale, string>> = {
+const BUILTIN_SKILL_DESCRIPTIONS: Record<string, Partial<Record<Locale, string>>> = {
   "android-dev": {
     "zh-CN": "通过 android-emulator MCP 工具构建、运行、检查并轻量自动化 Android 应用。",
     "en-US":
@@ -183,7 +183,7 @@ export function resolveSkillDisplayDescription(
   locale?: Locale,
 ): string {
   const localized = isOfficialBuiltinSkill(skill)
-    ? BUILTIN_SKILL_DESCRIPTIONS[skill.name]?.[locale ?? "en-US"]
+    ? BUILTIN_SKILL_DESCRIPTIONS[skill.name]?.[toZhOrEnLocale(locale)]
     : undefined;
   return localized ?? skill.description;
 }

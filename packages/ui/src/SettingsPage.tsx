@@ -50,6 +50,10 @@ import { PluginsSection } from "@/settings/PluginsSection.js";
 import { HooksSection } from "@/settings/HooksSection.js";
 import { WorkspaceFileSearchSection } from "@/settings/WorkspaceFileSearchSection.js";
 import { MemorySettingsSection } from "@/settings/MemorySettingsSection.js";
+import { ProjectManagement } from "@/project-sidebar/index.js";
+import { SettingsSearch } from "@/settings-search/SettingsSearch.js";
+import { SettingsSearchTargetContext, type SettingsSearchId } from "@/settings-search/index.js";
+import { PersonalizationSection } from "@/settings/PersonalizationSection.js";
 import { BrowserSettingsSection } from "@/settings/BrowserSettingsSection.js";
 import { ComputerUseSection } from "@/settings/ComputerUseSection.js";
 import { ShortcutSettingsSection } from "@/settings/ShortcutSettingsSection.js";
@@ -85,6 +89,7 @@ import {
 } from "./settingsPageHelpers.js";
 import { AppearanceSectionContent } from "./settingsCodePreview.js";
 import type { SettingsSectionId } from "@/lib/settingsNavigation.js";
+import { DataSyncSection } from "@/data-sync/index.js";
 import { requestPluginStoreOpen } from "@/lib/pluginStoreNavigation.js";
 
 function SettingsSidebarButton({
@@ -147,14 +152,20 @@ export function SettingsPage({
   allowOpenWorkspace?: boolean;
 }) {
   const { intl, localePreference, setLocalePreference } = useZCodeIntl();
+  // 数据同步只属于桌面本机 base 设置：远端 workspace scope 复用同一设置页，但不能读到本机设备状态。
+  const activeWorkspaceIdentityForSettingsSurface = useTabStore(
+    (state) => state.activeWorkspaceIdentity ?? undefined,
+  );
+  const showDataSync = Boolean(isDesktop && !activeWorkspaceIdentityForSettingsSurface?.trim());
   const { settingsSectionGroups, settingsSections } = useMemo(
     () =>
       createSettingsPageConfig({
         isDesktop: Boolean(isDesktop),
         isMacDesktop: Boolean(isMacDesktop),
         isWindowsDesktop: Boolean(isWindowsDesktop),
+        showDataSync,
       }),
-    [isDesktop, isMacDesktop, isWindowsDesktop],
+    [isDesktop, isMacDesktop, isWindowsDesktop, showDataSync],
   );
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const usesInlineWindowControls = Boolean(isWindowsDesktop || isLinuxDesktop);
@@ -177,6 +188,8 @@ export function SettingsPage({
   const [pluginScopeKey, setPluginScopeKey] = useState(() =>
     consumePendingSettingsPluginScopeKey(),
   );
+  // 搜索定位目标：SettingsPage 是唯一持有者，分类导航会立即清空它。
+  const [searchTarget, setSearchTarget] = useState<{ id: SettingsSearchId } | null>(null);
   const [settingsSectionNavigationVersion, setSettingsSectionNavigationVersion] = useState(0);
   useEffect(() => {
     // React Strict Mode 会双执行 state initializer；来源和 scopeKey 都在挂载完成后再清理，
@@ -208,10 +221,21 @@ export function SettingsPage({
   const setActiveSettingsSection = useCallback(
     (section: SettingsSectionId, fallbackSection: SettingsSectionId = activeSection) => {
       const resolvedSection = resolveSettingsSection(section, fallbackSection);
+      // 普通分类导航立即清除定位目标与高亮；只有搜索选中会重新写入目标。
+      setSearchTarget(null);
       setActiveSection(resolvedSection);
       writeLastSettingsSectionPreference(resolvedSection);
     },
     [activeSection],
+  );
+  const navigateToSettingsSection = useCallback(
+    (section: SettingsSectionId, setting?: SettingsSearchId) => {
+      setPluginNavigationOrigin(undefined);
+      setSettingsSectionNavigationVersion((version) => version + 1);
+      setActiveSettingsSection(section);
+      if (setting) setSearchTarget({ id: setting });
+    },
+    [setActiveSettingsSection],
   );
   const handleOpenModelProviderSettings = useCallback(() => {
     setActiveSettingsSection("modelProvider");
@@ -680,7 +704,7 @@ export function SettingsPage({
     (activeSection === "plugin" && pluginNavigationOrigin === "plugin-store");
 
   return (
-    <>
+    <SettingsSearchTargetContext.Provider value={searchTarget}>
       <DesktopWindowFrame
         title={intl.formatMessage({ id: "settings.title" })}
         isDesktop={isDesktop}
@@ -750,6 +774,20 @@ export function SettingsPage({
                       {intl.formatMessage({ id: "settings.title" })}
                     </h1>
                   </div> */}
+              </div>
+
+              <div className="px-3 pb-3 max-lg:flex max-lg:justify-center">
+                <SettingsSearch
+                  sections={settingsSections}
+                  availability={{
+                    desktop: Boolean(isDesktop),
+                    windowsHost: hostPlatform === "win32",
+                    tray: Boolean(isWindowsDesktop || isLinuxDesktop),
+                    notWindows: !isWindowsDesktop,
+                    macDesktop: Boolean(isDesktop && isMacDesktop),
+                  }}
+                  onSelect={({ section, setting }) => navigateToSettingsSection(section, setting)}
+                />
               </div>
 
               <nav
@@ -929,6 +967,10 @@ export function SettingsPage({
                         </div>
                         {activeSection === "general" ? (
                           <GeneralSectionHeader localePreference={localePreference} />
+                        ) : activeSection === "projects" ? (
+                          <p className="mt-2 max-w-2xl text-ui-base text-foreground-subtle">
+                            {intl.formatMessage({ id: "projectManagement.intro" })}
+                          </p>
                         ) : null}
                       </div>
                       <div className="space-y-8">
@@ -1049,6 +1091,15 @@ export function SettingsPage({
                               }
                             />
                           </ServiceProvider>
+                        ) : activeSection === "personalization" ? (
+                          // 个性化指令编辑本机 {HOME}/.zcodium/AGENTS.md（CLI 实际读取的文件）。
+                          // 仅桌面本地入口可编辑：手机远控的 base services 可能归属远程
+                          // Source（remoteWorkspaceServiceCollection 注册的是远端 settingService），
+                          // 编辑会写错机器；Web/手机只显示本地桌面端指引。
+                          <PersonalizationSection
+                            settingService={localHostServices.settingService}
+                            isDesktop={Boolean(isDesktop)}
+                          />
                         ) : activeSection === "memory" ? (
                           <ServiceProvider services={localHostServices}>
                             {/* Memory catalog 始终使用本地 Host，避免远程 workspace 误读本机数据。 */}
@@ -1112,6 +1163,13 @@ export function SettingsPage({
                           />
                         ) : activeSection === "usage" ? (
                           <UsageStatsSection />
+                        ) : activeSection === "projects" ? (
+                          <ProjectManagement
+                            workspacePath={activeWorkspacePath ?? captionWorkspacePath ?? ""}
+                            {...(activeWorkspaceIdentity
+                              ? { workspaceIdentity: activeWorkspaceIdentity }
+                              : {})}
+                          />
                         ) : activeSection === "subagents" ? (
                           <SubagentsSection
                             onManageModels={handleOpenModelProviderSettings}
@@ -1158,6 +1216,8 @@ export function SettingsPage({
                               handleEmbeddedBrowserAllowInsecureCertificatesChange
                             }
                           />
+                        ) : activeSection === "dataSync" ? (
+                          <DataSyncSection />
                         ) : activeSection === "computerUse" ? (
                           <ComputerUseSection
                             isDesktop={Boolean(isDesktop)}
@@ -1178,7 +1238,8 @@ export function SettingsPage({
             </div>
           </section>
         </div>
+        {/* 唯一弹窗 owner：最小化后切换设置分区也不卸载推送 session。 */}
       </DesktopWindowFrame>
-    </>
+    </SettingsSearchTargetContext.Provider>
   );
 }

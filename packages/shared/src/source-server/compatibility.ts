@@ -8,6 +8,12 @@ export const ZCODE_MIN_COMPATIBLE_VERSION =
     ? __ZCODE_MIN_COMPATIBLE_VERSION__
     : ZCODE_VERSION;
 
+/**
+ * 远端服务支持设备卡停止 / 重启合同（`zcode stop --wait` 等，RDLC-01）的首个版本，桌面端据此做版本门禁。
+ * 取首个包含本合同的正式版 3.17.0；不提升最低兼容版本。
+ */
+export const SOURCE_SERVER_LIFECYCLE_CONTROL_MIN_VERSION = "3.17.0";
+
 export const compatibilityManifestSchema = z
   .object({
     schemaVersion: z.literal(1),

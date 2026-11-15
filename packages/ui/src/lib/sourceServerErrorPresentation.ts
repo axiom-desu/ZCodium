@@ -1,6 +1,10 @@
 import {
+  SOURCE_SERVER_CONTROL_UNRESPONSIVE_ERROR_CODE,
+  SOURCE_SERVER_DOWNGRADE_UNCONFIRMED_ERROR_CODE,
   SOURCE_SERVER_IDENTITY_CHANGE_PENDING_ERROR_CODE,
   SOURCE_SERVER_INSTALL_REQUIRED_ERROR_CODE,
+  SOURCE_SERVER_STOP_FAILED_ERROR_CODE,
+  SOURCE_SERVER_UPDATE_IN_PROGRESS_ERROR_CODE,
   SOURCE_SERVER_UPDATE_RUNNING_TASKS_ERROR_CODE,
   SOURCE_SERVER_UPGRADE_REQUIRED_ERROR_CODE,
 } from "@zcode/shared";
@@ -29,6 +33,26 @@ const PRESENTATIONS: Record<string, SourceServerErrorPresentation> = {
   [SOURCE_SERVER_UPDATE_RUNNING_TASKS_ERROR_CODE]: {
     titleId: "source.error.runningTasks.title",
     reasonId: "source.error.runningTasks.reason",
+    retryable: true,
+  },
+  [SOURCE_SERVER_UPDATE_IN_PROGRESS_ERROR_CODE]: {
+    titleId: "source.error.updateInProgress.title",
+    reasonId: "source.error.updateInProgress.reason",
+    retryable: true,
+  },
+  [SOURCE_SERVER_DOWNGRADE_UNCONFIRMED_ERROR_CODE]: {
+    titleId: "source.error.downgradeUnconfirmed.title",
+    reasonId: "source.error.downgradeUnconfirmed.reason",
+    retryable: true,
+  },
+  [SOURCE_SERVER_STOP_FAILED_ERROR_CODE]: {
+    titleId: "source.error.stopFailed.title",
+    reasonId: "source.error.stopFailed.reason",
+    retryable: true,
+  },
+  [SOURCE_SERVER_CONTROL_UNRESPONSIVE_ERROR_CODE]: {
+    titleId: "source.error.controlUnresponsive.title",
+    reasonId: "source.error.controlUnresponsive.reason",
     retryable: true,
   },
   [SOURCE_SERVER_IDENTITY_CHANGE_PENDING_ERROR_CODE]: {

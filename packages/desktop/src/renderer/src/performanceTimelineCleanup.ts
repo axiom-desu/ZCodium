@@ -1,6 +1,6 @@
 const PERFORMANCE_TIMELINE_CLEANUP_INTERVAL_MS = 10_000;
 
-let cleanupTimer: ReturnType<typeof window.setInterval> | undefined;
+let cleanupTimer: number | undefined;
 
 export function startPerformanceTimelineCleanup(): void {
   if (!import.meta.env.DEV || cleanupTimer != null) {

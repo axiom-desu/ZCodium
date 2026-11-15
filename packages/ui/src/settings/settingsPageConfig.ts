@@ -1,4 +1,5 @@
 import {
+  ArrowRightLeft,
   Monitor,
   Moon,
   Settings,
@@ -6,8 +7,10 @@ import {
   Package,
   Bot,
   Palette,
+  User,
   Sun,
   BarChart3,
+  Folders,
   Terminal,
   AlarmClock,
   Anchor,
@@ -72,6 +75,14 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     icon: Package,
     titleId: "settings.modelProviderTitle",
     groupId: "basics",
+  },
+  // 个性化（用户自定义指令）是 Agent 能力组的第一项：编辑 {HOME}/.zcodium/AGENTS.md，
+  // 对所有会话生效（spec：.agents/specs/upstream-3.18-ui-settings-files.md）。
+  {
+    id: "personalization",
+    icon: User,
+    titleId: "settings.personalization.title",
+    groupId: "agentCapabilities",
   },
   {
     id: "memory",
@@ -156,28 +167,51 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     titleId: "settings.usageTitle",
     groupId: "dataAndStats",
   },
+  // 项目管理（本机软删除/恢复/测容彻底删除）；不恢复上游远程入口移除的第二权威。
+  {
+    id: "projects",
+    icon: Folders,
+    titleId: "projectManagement.nav",
+    contentTitleId: "projectManagement.nav",
+    groupId: "dataAndStats",
+  },
+  // 数据同步：只在桌面本机 base 设置显示（需要本机设备状态、Provisioning lane 与 source-settings
+  // attachment）；Web / 手机远控没有这些能力，入口不出现，也不放宽 RPC 策略。
+  {
+    id: "dataSync",
+    icon: ArrowRightLeft,
+    titleId: "settings.dataSync.title",
+    groupId: "dataAndStats",
+  },
 ];
 
 // 兼容既有只读消费者：默认配置代表不带桌面平台能力的 Web 视图；
 // macOS/Windows/Linux 必须继续通过 createSettingsPageConfig 动态加入 Computer Use。
 export const SETTINGS_SECTIONS = BASE_SETTINGS_SECTIONS.filter(
-  (section) => section.id !== "computerUse" && isSettingsSectionEnabled(section.id),
+  (section) =>
+    section.id !== "computerUse" &&
+    section.id !== "dataSync" &&
+    isSettingsSectionEnabled(section.id),
 );
 
 interface SettingsPageConfigOptions {
   isDesktop?: boolean;
   isMacDesktop?: boolean;
   isWindowsDesktop?: boolean;
+  /** 桌面本机 base 设置：Web / 手机远控与远端 workspace scope 不显示数据同步分区。 */
+  showDataSync?: boolean;
 }
 
 export function createSettingsPageConfig({
   isDesktop = false,
   isMacDesktop = false,
   isWindowsDesktop = false,
+  showDataSync = false,
 }: SettingsPageConfigOptions = {}) {
   const showComputerUse = isDesktop || isMacDesktop || isWindowsDesktop;
   const settingsSections = BASE_SETTINGS_SECTIONS.filter((section) => {
     if (section.id === "computerUse" && !showComputerUse) return false;
+    if (section.id === "dataSync" && !(isDesktop && showDataSync)) return false;
     return isSettingsSectionEnabled(section.id);
   });
   const settingsSectionGroups = BASE_SETTINGS_SECTION_GROUPS.map((group) => ({

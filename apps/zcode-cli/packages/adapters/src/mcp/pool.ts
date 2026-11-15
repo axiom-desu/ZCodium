@@ -20,6 +20,8 @@ import {
   type CreateMcpAdapterForPoolInput,
   type PoolEntry,
 } from "./pool-entry.js";
+import { createLeaseCancellation } from "./pool-lease-cancel.js";
+import { createPoolSnapshotReader } from "./pool-snapshot.js";
 
 const DEFAULT_IDLE_GRACE_MS = 30_000;
 
@@ -64,17 +66,15 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         watcher.listener();
       }
     };
-    let leaseClosed = false;
-    let sessionStartupReported = false;
-
     const requireEntry = (serverName: string): PoolEntry => {
+      lease.assertOpen();
       const key = leased.get(serverName);
       const entry = key ? entries.get(key) : undefined;
       if (!entry) throw new Error(`MCP server is not leased by this session: ${serverName}`);
       return entry;
     };
 
-    const release = (serverName: string): void => {
+    const release = (serverName: string, immediate = false): Promise<void> | undefined => {
       const key = leased.get(serverName);
       if (!key) return;
       leased.delete(serverName);
@@ -94,14 +94,36 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         refCount: entry.refs.size,
         ...(sessionId ? { sessionId } : {}),
       });
-      if (entry.refs.size === 0) scheduleClose(entry);
+      if (entry.refs.size === 0) {
+        // session 隔离的 entry 只服务本 lease，lease 关闭即关连接（不再等 idle grace）；
+        // workspace 隔离的连接仍可能被其它 lease 持有，统一走 idle 调度。
+        if (immediate && entry.connectionContext.mcpIsolation === "session") {
+          return closeEntry(entry);
+        }
+        scheduleClose(entry);
+      }
     };
+    // lease 级取消域只合并信号，不拥有连接：entry 的 controller 在 pool-entry 生命周期里。
+    const lease = createLeaseCancellation({
+      isPoolClosed: () => closed,
+      releaseLeases: () => [...leased.keys()].map((serverName) => release(serverName, true)),
+    });
+    const callOptionsWithSignal = (
+      entry: PoolEntry,
+      callOptions?: McpCallToolOptions,
+    ): McpCallToolOptions => ({
+      ...callOptions,
+      signal: lease.requestSignal(entry, callOptions?.signal),
+    });
 
     const acquire = async (
       serverName: string,
       config: McpServerConfig,
       connectOptions: McpConnectOptions = {},
     ): Promise<McpServerStatus> => {
+      lease.assertOpen();
+      const signal = lease.callerSignal(connectOptions.signal);
+      signal.throwIfAborted();
       const key = connectionKey({
         config,
         connectOptions,
@@ -118,7 +140,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         entry.refs.add(leaseId);
         ownerAdded = entry.refs.size !== previousRefCount;
         if (connectOptions.revalidate) {
-          await revalidateEntry(entry, config, connectOptions);
+          await lease.wait(revalidateEntry(entry, config, connectOptions), signal);
         }
       } else {
         // 过去 pool、adapter 和 stdio PID 的日志彼此没有稳定关联键，无法从一个
@@ -132,7 +154,16 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
           connectionId: connectionContext.mcpConnectionId,
           isolation: connectionContext.mcpIsolation,
           serverName,
-          ...(config.source ? { source: config.source.kind } : {}),
+          // 遥测词表只有 custom/plugin/builtin：workspace/user 来源在资源遥测里按 custom 归类，
+          // 不新增第二套 source 词表（连接来源仍由 config.source 保持原值）。
+          ...(config.source
+            ? {
+                source:
+                  config.source.kind === "workspace" || config.source.kind === "user"
+                    ? ("custom" as const)
+                    : config.source.kind,
+              }
+            : {}),
         });
         const adapter = options.createAdapter({
           connectionContext,
@@ -140,10 +171,16 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
           serverName,
           workingDirectory: connectOptions.workingDirectory,
         });
+        // 连接归 pool，不能继承第一个 session 的关闭信号，否则会连带中止其他 lease。
+        const controller = new AbortController();
         entry = {
           adapter,
+          controller,
           connectionContext,
-          connecting: adapter.connectServer(serverName, config, connectOptions),
+          connecting: adapter.connectServer(serverName, config, {
+            ...connectOptions,
+            signal: controller.signal,
+          }),
           key,
           refs: new Set([leaseId]),
           serverName,
@@ -198,40 +235,17 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
           ...(sessionId ? { sessionId } : {}),
         });
       }
-      return await entry.connecting;
+      return await lease.wait(entry.connecting, signal);
     };
 
-    const snapshot = async (): Promise<McpConnectionSnapshot> => {
-      const statuses: Record<string, McpServerStatus> = {};
-      const tools: McpToolDescriptor[] = [];
-      for (const [serverName, key] of leased) {
-        const entry = entries.get(key);
-        if (!entry) continue;
-        const status = (await entry.adapter.status())[serverName];
-        if (status) statuses[serverName] = status;
-        tools.push(...(await entry.adapter.listTools()));
-      }
-      if (sessionId && !sessionStartupReported) {
-        sessionStartupReported = true;
-        const enabledServers = [...configuredServers].filter(
-          ([, config]) => config.enabled !== false,
-        );
-        const connectedCount = enabledServers.filter(
-          ([serverName]) => statuses[serverName]?.status === "connected",
-        ).length;
-        options.processTracker?.recordSessionStartup({
-          configuredCount: enabledServers.length,
-          connectedCount,
-          failedCount: enabledServers.length - connectedCount,
-          processCount: enabledServers.filter(
-            ([serverName, config]) =>
-              config.type === "stdio" && statuses[serverName]?.status === "connected",
-          ).length,
-          sessionId,
-        });
-      }
-      return { statuses, tools };
-    };
+    const snapshot = createPoolSnapshotReader({
+      assertOpen: lease.assertOpen,
+      configuredServers,
+      entries,
+      leased,
+      ...(options.processTracker ? { processTracker: options.processTracker } : {}),
+      ...(sessionId ? { sessionId } : {}),
+    });
 
     return {
       appConnectionSnapshot(serverName) {
@@ -257,44 +271,45 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         request: McpCallToolRequest,
         callOptions?: McpCallToolOptions,
       ): Promise<McpToolCallResult> {
-        return await requireEntry(request.serverName).adapter.callTool(request, callOptions);
+        const entry = requireEntry(request.serverName);
+        return await entry.adapter.callTool(request, callOptionsWithSignal(entry, callOptions));
       },
       async readResource(
         request: McpReadResourceRequest,
         callOptions?: McpCallToolOptions,
       ): Promise<McpReadResourceResult> {
-        const adapter = requireEntry(request.serverName).adapter;
-        if (!adapter.readResource) {
+        const entry = requireEntry(request.serverName);
+        if (!entry.adapter.readResource) {
           throw new Error(`MCP adapter does not support resources: ${request.serverName}`);
         }
-        return await adapter.readResource(request, callOptions);
+        return await entry.adapter.readResource(request, callOptionsWithSignal(entry, callOptions));
       },
       // 资源列表与订阅经同一 entry 的 adapter；登记表在 adapter（连接层）里，多 session 共享。
       async listResources(request, callOptions) {
-        const adapter = requireEntry(request.serverName).adapter;
-        if (!adapter.listResources) {
+        const entry = requireEntry(request.serverName);
+        if (!entry.adapter.listResources) {
           throw new Error(`MCP adapter does not support resources: ${request.serverName}`);
         }
-        return await adapter.listResources(request, callOptions);
+        return await entry.adapter.listResources(request, callOptionsWithSignal(entry, callOptions));
       },
       async listResourceTemplates(request, callOptions) {
-        const adapter = requireEntry(request.serverName).adapter;
-        if (!adapter.listResourceTemplates) {
+        const entry = requireEntry(request.serverName);
+        if (!entry.adapter.listResourceTemplates) {
           throw new Error(`MCP adapter does not support resources: ${request.serverName}`);
         }
-        return await adapter.listResourceTemplates(request, callOptions);
+        return await entry.adapter.listResourceTemplates(request, callOptionsWithSignal(entry, callOptions));
       },
       async subscribeResource(request, callOptions) {
-        const adapter = requireEntry(request.serverName).adapter;
-        if (!adapter.subscribeResource) {
+        const entry = requireEntry(request.serverName);
+        if (!entry.adapter.subscribeResource) {
           throw new Error(`MCP adapter does not support resources: ${request.serverName}`);
         }
-        await adapter.subscribeResource(request, callOptions);
+        await entry.adapter.subscribeResource(request, callOptionsWithSignal(entry, callOptions));
       },
       async unsubscribeResource(request, callOptions) {
-        const adapter = requireEntry(request.serverName).adapter;
-        if (!adapter.unsubscribeResource) return;
-        await adapter.unsubscribeResource(request, callOptions);
+        const entry = requireEntry(request.serverName);
+        if (!entry.adapter.unsubscribeResource) return;
+        await entry.adapter.unsubscribeResource(request, callOptionsWithSignal(entry, callOptions));
       },
       async unsubscribeResourcesBySubscriber(prefix) {
         let released = 0;
@@ -309,15 +324,15 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         }
         return released;
       },
-      async close(): Promise<void> {
-        if (leaseClosed) return;
-        leaseClosed = true;
-        for (const serverName of Array.from(leased.keys())) release(serverName);
+      close(): Promise<void> {
+        return lease.close();
       },
       async connectConfiguredServers(
         servers: Record<string, McpServerConfig>,
         connectOptions: McpConnectOptions = {},
       ): Promise<McpConnectionSnapshot> {
+        lease.assertOpen();
+        lease.callerSignal(connectOptions.signal).throwIfAborted();
         configuredServers.clear();
         for (const [serverName, config] of Object.entries(servers)) {
           configuredServers.set(serverName, config);
@@ -331,7 +346,8 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
             acquire(serverName, config, connectOptions),
           ),
         );
-        return await snapshot();
+        lease.callerSignal(connectOptions.signal).throwIfAborted();
+        return await lease.wait(snapshot(lease.callerSignal(connectOptions.signal)));
       },
       async connectServer(
         serverName: string,

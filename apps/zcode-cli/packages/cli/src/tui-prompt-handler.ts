@@ -160,6 +160,8 @@ export function createTuiSubmitPrompt(
         },
         permissionBroker,
         sessionId,
+        // 独立 CLI/TUI 主根提供 8 个会话工具；桌面与远程 Host 会话不写该标志。
+        standaloneSessionControl: true,
         skipUserConfig: deps.skipUserConfig,
         uiDetectedLocale,
         uiLocale: activeUiLocale,

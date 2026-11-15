@@ -10,6 +10,10 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
+#[path = "agent_loop_turn.rs"]
+mod turn;
+use turn::prepare;
+
 pub(super) async fn run(
     model: &dyn ModelPort,
     tools: &dyn ToolPort,
@@ -25,56 +29,19 @@ pub(super) async fn run(
     {
         return Ok(());
     }
-    let manual = history.manual.take();
-    let mut reactive_compacted = false;
-    let mut continuations = 0;
-    super::skills::initialize(tools, context, history, sink, cancel).await?;
-    let skills = history.skills.clone().unwrap_or_default();
-    let profile = history.agent_profile.clone();
-    let mut definitions = tools.scoped_definitions(&sink.session_id, cancel).await?;
-    if let Some(profile) = &profile {
-        // 子代理不注册 plan 工具（Node subagent tool-policy）。
-        definitions.retain(|d| {
-            let name = d["function"]["name"].as_str().unwrap_or("");
-            profile.allows(name) && !matches!(name, "EnterPlanMode" | "ExitPlanMode")
-        });
-    }
-    if !skills.enabled {
-        definitions.retain(|d| d["function"]["name"] != "Skill");
-    }
-    tools.model_definitions(&mut definitions, &model.format_properties()["inputFormat"]);
-    // Node getTools(model)：只有声明 supportsNativeWebSearch 的模型提供 WebSearch。
-    if !model.supports_native_web_search() {
-        definitions.retain(|d| d["function"]["name"] != "WebSearch");
-    }
-    let tool_filter = history.tool_filter.clone();
-    definitions.retain(|d| tool_filter.allows(d["function"]["name"].as_str().unwrap_or("")));
-    // 与 Node 一致：禁用集合只从提供给模型的定义中移除；执行边界不据此拦截（D1）。
-    super::tool_search::hide(&mut definitions, &history.tool_disallowlist);
-    let profiles = if definitions.iter().any(|d| d["function"]["name"] == "Agent") {
-        tools
-            .agent_profiles(cancel, &history.additional_directories)
-            .await?
-    } else {
-        vec![]
-    };
-    super::subagent_tools::describe_catalog(&mut definitions, &profiles);
-    super::plugin_reference::inject(tools, history, (&skills, &definitions), sink, cancel).await?;
-    if let Some(instructions) = manual {
-        super::manual_compact::run(
-            model,
-            tools,
-            context,
-            history,
-            (&skills, profile.as_ref()),
-            &definitions,
-            &instructions,
-            sink,
-            cancel,
-        )
-        .await?;
+    let prepared = prepare(model, tools, context, history, sink, cancel).await?;
+    let turn::Prepared {
+        skills,
+        profile,
+        mut definitions,
+        profiles,
+        tool_filter,
+        manual_done,
+    } = prepared;
+    if manual_done {
         return Ok(());
     }
+    let (mut reactive_compacted, mut continuations) = (false, 0);
     let mut turns = 0;
     let permissions = history.permissions.clone();
     // 本 run 的请求归属副本；Engine 在引导输入提交时下发新 origin。
@@ -117,13 +84,31 @@ pub(super) async fn run(
             };
             history.push(message);
         }
-        let (prefix, chars) =
-            step_prefix(model, context, history, (&skills, profile.as_ref()), cancel).await?;
+        let (prefix, chars) = step_prefix(
+            model,
+            context,
+            history,
+            sink,
+            (&skills, profile.as_ref()),
+            cancel,
+        )
+        .await?;
         let identity = model.identity();
         super::plan_tools::remind(history, sink).await?;
+        // 3.18 F1：指令公告按历史事实算增量；落库后才进入本次请求。
+        super::instructions::announce(context, history, sink, cancel).await?;
+        // 3.18 F2：本步的余额提醒替换上一步的，并交给 owner 保存新预算。
+        super::total_tokens::remind(history);
+        sink.send(Event::TotalTokensBudget(history.total_tokens))
+            .await?;
         // ToolSearch：每步一次请求准备，再投影最终请求消息。
         let mut search_plan =
             super::tool_search::plan(model, tools, &sink.session_id, history, &definitions)?;
+        // 3.18 F12：真实生效模式在模型调用前打点，所以本次请求就带上；compact 等隐藏请求不经过这里。
+        if let Some(feature) = search_plan.session_feature() {
+            super::session_features::record(history, feature, sink).await?;
+        }
+        super::session_features::apply(history, &mut search_plan.options);
         let tool_tokens = super::tool_search::definition_tokens(&search_plan.tools);
         let (base, base_tokens) = history.projection(&prefix, tool_tokens);
         let mut messages = search_plan.project(&base);
@@ -170,6 +155,19 @@ pub(super) async fn run(
                 Err(error) if compaction_failed(&error) => history.compact_failures += 1,
                 Err(error) => return Err(error),
             }
+        }
+        // 3.18 F4：主轮次的 composition 用真实请求（曝光后的工具、投影后的消息）分类。
+        if profile.is_none() {
+            let categories =
+                crate::domain::context_composition::classify(&messages, &search_plan.tools);
+            sink.send(Event::ContextComposition {
+                categories,
+                model: identity.as_ref().map(
+                    |m| serde_json::json!({"providerId": m.provider_id, "modelId": m.model_id}),
+                ),
+                context_window: Some(policy.window as u64),
+            })
+            .await?;
         }
         // Node 只给主轮次请求算 contextUsageBreakdown；子代理（带 profile）不算。
         let breakdown = profile
@@ -278,6 +276,7 @@ pub(super) async fn run(
             result => result?,
         };
         history.anchor_usage(&output.usage);
+        history.set_usage_context(&output.usage);
         // 包装调用在准入处解包为目标调用（同一 callID）；无效包装由执行返回普通错误。
         let output = super::tool_search::admit_output(output, search_plan.search.as_ref());
         let response = output.message["content"].as_str().unwrap_or("").to_owned();
@@ -325,6 +324,8 @@ pub(super) async fn run(
         if let Some(turn) = &mut turn {
             turn.tool_calls += output.calls.len();
         }
+        // 本轮 automationId 副本：Scope 借用它，历史随后按可变借用交给 run_calls。
+        let automation_id = history.automation_id.clone();
         let scope = super::tool_execution::Scope {
             search: search_plan.search.as_ref(),
             skills: &skills,
@@ -335,6 +336,8 @@ pub(super) async fn run(
             tool_filter: &tool_filter,
             hooks: turn.as_ref().map(|t| &t.hooks),
             model,
+            automation_id: automation_id.as_deref(),
+            app_control: history.app_control,
         };
         let called = output.calls.clone();
         // 与 Node turnControl 一致：结果要求停轮时，其后的工具取消且本轮不再请求模型。

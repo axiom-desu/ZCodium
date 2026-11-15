@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, type Locale } from "./protocol.js";
+import type { Locale } from "./protocol.js";
 
 export const desktopMenuMessageIds = {
   file: "titleBar.menu.file",
@@ -58,7 +58,7 @@ export type DesktopMenuMessageId =
 
 type DesktopMenuLocaleMessages = Record<DesktopMenuMessageId, string>;
 
-export const desktopMenuMessages: Record<Locale, DesktopMenuLocaleMessages> = {
+export const desktopMenuMessages: Record<"zh-CN" | "en-US", DesktopMenuLocaleMessages> = {
   "zh-CN": {
     "titleBar.menu.file": "文件",
     "titleBar.menu.edit": "编辑",
@@ -166,7 +166,7 @@ export const desktopMenuMessages: Record<Locale, DesktopMenuLocaleMessages> = {
 };
 
 export function getDesktopMenuMessage(locale: Locale, id: DesktopMenuMessageId): string {
-  const messages = desktopMenuMessages[locale] ?? desktopMenuMessages[DEFAULT_LOCALE];
+  const messages = desktopMenuMessages[locale === "zh-CN" ? "zh-CN" : "en-US"];
   return messages[id];
 }
 

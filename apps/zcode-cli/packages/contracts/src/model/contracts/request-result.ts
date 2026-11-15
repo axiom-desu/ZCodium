@@ -193,6 +193,14 @@ export type ModelStreamEvent =
       toolCall: ModelToolCall;
     }
   | {
+      /** 服务端已执行的工具结果（provider 内置工具）；本地工具结果由 core 自己产生。 */
+      type: "provider_tool_result";
+      toolCallId: string;
+      toolName: string;
+      output: unknown;
+      isError: boolean;
+    }
+  | {
       type: "finish";
       finishReason: string;
       providerMetadata?: Record<string, unknown>;

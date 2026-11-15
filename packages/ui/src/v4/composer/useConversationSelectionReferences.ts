@@ -5,18 +5,19 @@ import {
   getConversationSelectionReferenceLimitReason,
   getConversationSelectionAddEventName,
   isConversationSelectionAddEvent,
+  isConversationSelectionReference,
   setConversationSelectionReferenceScope,
+  type ConversationSelectionDisplayReference,
   type ConversationSelectionLimitReason,
-  type ConversationSelectionReference,
 } from "@/lib/conversationSelectionReference.js";
 
 export function useConversationSelectionReferences(options: {
   sessionId: string | null;
   workspaceKey: string;
 }) {
-  const [references, setReferencesState] = useState<readonly ConversationSelectionReference[]>(() =>
-    getConversationSelectionReferenceScope(options.sessionId, options.workspaceKey),
-  );
+  const [references, setReferencesState] = useState<
+    readonly ConversationSelectionDisplayReference[]
+  >(() => getConversationSelectionReferenceScope(options.sessionId, options.workspaceKey));
   const [limitReason, setLimitReason] = useState<ConversationSelectionLimitReason | null>(() =>
     getConversationSelectionReferenceLimitReason(options.sessionId, options.workspaceKey),
   );
@@ -33,10 +34,10 @@ export function useConversationSelectionReferences(options: {
   const setReferences = useCallback(
     (
       update:
-        | readonly ConversationSelectionReference[]
+        | readonly ConversationSelectionDisplayReference[]
         | ((
-            current: readonly ConversationSelectionReference[],
-          ) => readonly ConversationSelectionReference[]),
+            current: readonly ConversationSelectionDisplayReference[],
+          ) => readonly ConversationSelectionDisplayReference[]),
     ) => {
       setReferencesState((current) => {
         const next = typeof update === "function" ? update(current) : update;
@@ -69,7 +70,11 @@ export function useConversationSelectionReferences(options: {
 
   const removeReference = useCallback(
     (id: string) => {
-      setReferences((current) => current.filter((reference) => reference.id !== id));
+      setReferences((current) =>
+        current.filter(
+          (reference) => !(isConversationSelectionReference(reference) && reference.id === id),
+        ),
+      );
       setLimitReason(null);
     },
     [setReferences],
@@ -86,6 +91,7 @@ export function useConversationSelectionReferences(options: {
   return {
     references,
     limitReason,
+    setReferences,
     dismissLimitReason,
     removeReference,
     clearReferences,

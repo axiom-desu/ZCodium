@@ -6,6 +6,7 @@ import { attachmentRefSchema } from "./attachment-ref.js";
 import { modelSelectionSchema } from "../model-selection.js";
 import { submissionModeSchema } from "./submission.js";
 import { sharedContextRefSchema } from "./shared-context-ref.js";
+import { conversationQuotesSchema } from "../conversationSelection.js";
 
 /**
  * 用户输入的结构化来源：插件 UI 经 `ui/message`
@@ -73,6 +74,8 @@ export const conversationInputIntentSchema = z
     mode: submissionModeSchema.optional(),
     planEnabled: z.boolean().optional(),
     sharedContextRefs: z.array(sharedContextRefSchema).max(1).optional(),
+    // 会话选区引用随 intent 一同固化：queue / guide / 冷恢复只能读同一份，不重读 Composer。
+    conversationQuotes: conversationQuotesSchema.optional(),
     delivery: conversationInputDeliverySchema,
     order: conversationInputOrderSchema,
     steer: conversationInputSteerSchema,

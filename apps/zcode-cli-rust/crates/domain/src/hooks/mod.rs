@@ -119,6 +119,31 @@ pub struct Plugin {
     pub source_path: Option<String>,
 }
 
+/// Per-hook execution failure policy; this is configuration, not a hook event.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OnErrorPolicy {
+    #[default]
+    Allow,
+    Deny,
+}
+
+impl OnErrorPolicy {
+    fn from_config(value: &Value) -> Self {
+        if value["onError"] == "deny" {
+            Self::Deny
+        } else {
+            Self::Allow
+        }
+    }
+    /// 声明的字面值（canonical entry 的 `onError`）。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Allow => "allow",
+            Self::Deny => "deny",
+        }
+    }
+}
+
 /// One registered hook (Node `HookRegistration` built by `configured-runner.ts`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Registration {
@@ -133,6 +158,7 @@ pub struct Registration {
     pub status_message: Option<String>,
     pub timeout_ms: u64,
     pub max_output_bytes: usize,
+    pub on_error: OnErrorPolicy,
     /// Project hooks: `(reviewItemId, declaration digest)` checked by the
     /// workspace-trust admission before every dispatch.
     pub review: Option<(String, String)>,
@@ -277,6 +303,7 @@ pub fn registrations(hooks: &Value, user_path: Option<&str>) -> Vec<Registration
                     status_message: hook["statusMessage"].as_str().map(str::to_owned),
                     timeout_ms: timeout_ms(hook, default_ms),
                     max_output_bytes: max_output_bytes as usize,
+                    on_error: OnErrorPolicy::from_config(hook),
                     review: None,
                 });
             }

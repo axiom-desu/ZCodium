@@ -248,7 +248,8 @@ export class TaskRealtimeBus {
 
     switch (parsed.data.type) {
       case HostResponseTypes.TaskRealtimePublish:
-        this.handleRealtimePublish(origin, parsed.data.event);
+        // Zoom schema 只校验信封，流事件字段保持 passthrough；这里恢复到领域类型由上游 owner 消费。
+        this.handleRealtimePublish(origin, parsed.data.event as TaskRealtimeEvent);
         break;
       case HostResponseTypes.TaskRunLeaseAcquire:
         this.handleLeaseAcquire(origin, parsed.data.request);
@@ -257,7 +258,11 @@ export class TaskRealtimeBus {
         this.releaseLease(origin.hostId, parsed.data.target);
         break;
       case HostResponseTypes.TaskStreamOpPublish:
-        this.handleStreamOpPublish(origin, parsed.data.target, parsed.data.op);
+        this.handleStreamOpPublish(
+          origin,
+          parsed.data.target,
+          parsed.data.op as TaskStreamMirrorPublishOp,
+        );
         break;
       case HostResponseTypes.TaskOwnerCommandRequest:
         this.handleOwnerCommandRequest(origin, parsed.data.command);
@@ -592,11 +597,15 @@ export class TaskRealtimeBus {
     for (const op of ops) {
       const previous = coalesced[coalesced.length - 1];
       if (this.canMergeTextChunk(previous, op)) {
+        // canMergeTextChunk 只收窄 previous；op 的流事件正文同样是校验过的 pub op。
+        const current = op as Extract<TaskStreamMirrorPublishOp, { kind: "stream_event" }> & {
+          event: { content: string };
+        };
         coalesced[coalesced.length - 1] = {
           kind: "stream_event",
           event: {
             ...previous.event,
-            content: previous.event.content + op.event.content,
+            content: previous.event.content + current.event.content,
           },
         };
         continue;

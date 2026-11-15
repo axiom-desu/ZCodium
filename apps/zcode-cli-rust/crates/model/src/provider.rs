@@ -73,7 +73,7 @@ impl HttpModel {
                 .api_key()
                 .map_err(|_| ModelFailure::new("auth_failed", false))?,
         };
-        let mut headers = self.headers(key.as_deref(), auth, &output.origin(), attempt)?;
+        let mut headers = self.headers(key.as_deref(), auth, &output.origin(), options, attempt)?;
         if options.tool_search_enabled {
             // Native ToolSearch 只对 Anthropic 生效；与既有 websearch beta 共存不覆盖。
             super::tool_search::append_beta(&mut headers, super::tool_search::BETA);

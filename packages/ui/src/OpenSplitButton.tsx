@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button.js";
 import { toast } from "@/components/ui/toast.js";
 import type { MessageFileLinkTarget } from "@/components/ai-elements/message.js";
+import { FileApplicationChoices, FileSaveAsMenuItem } from "@/file-menu/index.js";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,7 @@ import { usePlatform } from "@/hooks/usePlatform.js";
 import { useFileContextActions } from "@/hooks/useFileContextActions.js";
 import { useWorkspaceOpenInEditorTarget } from "@/hooks/useWorkspaceOpenInEditorTarget.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { persistLastSelectedEditorId, readLastSelectedEditorId } from "@/lib/editorPreference.js";
+import { persistLastSelectedEditorId } from "@/lib/editorPreference.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { getWorkspaceFileRelativePath } from "@/workspace-file-tree/model.js";
 import { resolveWorkspaceEditorSelection } from "@/lib/workspaceEditorSelection.js";
@@ -86,13 +87,6 @@ export function OpenSplitButton({
     target.type === "website"
       ? Boolean(onOpenBrowserUrl)
       : Boolean(onOpenFileLink || onOpenCodeViewer);
-  const selectedEditor = useMemo(() => {
-    const selectedEditorId = readLastSelectedEditorId();
-    return (
-      sortedEditors.find((editor) => editor.id === selectedEditorId) ?? sortedEditors[0] ?? null
-    );
-  }, [sortedEditors]);
-
   const stopEventPropagation = (event: { stopPropagation: () => void }) => {
     if (stopPropagation) {
       event.stopPropagation();
@@ -106,7 +100,9 @@ export function OpenSplitButton({
 
     setLoadingEditors(true);
     try {
-      setEditors(await platform.getInstalledEditors());
+      // 传入具体文件路径：Desktop 用系统关联追加该类型的本机应用（PDF/Office/媒体），
+      // 不传时只返回 IDE/终端，文件类型的「打开方式」会缺失。
+      setEditors(await platform.getInstalledEditors(target.path));
       setEditorsLoaded(true);
     } catch (error) {
       logger.warn("[OpenSplitButton] 获取第三方打开方式失败", {
@@ -192,6 +188,35 @@ export function OpenSplitButton({
       .catch(reportFailure);
   };
 
+  const handleOpenWithDefaultApp = () => {
+    if (target.type !== "file" || isRemoteSource || !platform.canOpenLocalFiles) {
+      return;
+    }
+    if (!platform.openExternalFile) {
+      toast(intl.formatMessage({ id: "chat.previewCards.openFileFailed" }));
+      return;
+    }
+    const filePath = target.path;
+    void platform
+      .openExternalFile(filePath)
+      .then((result) => {
+        if (!result.success) {
+          logger.warn("[OpenSplitButton] 默认应用打开文件失败", {
+            path: filePath,
+            error: result.error ?? "unknown-error",
+          });
+          toast(intl.formatMessage({ id: "chat.previewCards.openFileFailed" }));
+        }
+      })
+      .catch((error) => {
+        logger.warn("[OpenSplitButton] 默认应用打开文件失败", {
+          path: filePath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        toast(intl.formatMessage({ id: "chat.previewCards.openFileFailed" }));
+      });
+  };
+
   if (hideOpenWithMenu) {
     return (
       <div
@@ -262,20 +287,22 @@ export function OpenSplitButton({
           </DropdownMenuItem>
         ) : (
           <>
-            {selectedEditor ? (
-              sortedEditors.map((editor) => (
-                <DropdownMenuItem key={editor.id} onSelect={() => handleOpenInEditor(editor)}>
-                  <img src={editor.iconDataUrl} alt={editor.name} className="size-4 shrink-0" />
-                  <span>{editor.name}</span>
-                </DropdownMenuItem>
-              ))
-            ) : (
-              <DropdownMenuItem disabled>
-                {intl.formatMessage({
-                  id: loadingEditors ? "common.loading" : "chat.previewCards.noOpenApps",
-                })}
-              </DropdownMenuItem>
-            )}
+            {/* 打开方式与另存为共用 file-menu 公开组件，A3-lite 直接用 EditorInfo 候选。 */}
+            <FileApplicationChoices
+              applications={sortedEditors}
+              loading={loadingEditors}
+              onSelect={handleOpenInEditor}
+              onOpenDefault={
+                isRemoteSource || !platform.canOpenLocalFiles ? undefined : handleOpenWithDefaultApp
+              }
+            />
+            <FileSaveAsMenuItem
+              variant="dropdown"
+              path={target.path}
+              workspacePath={target.previewSource?.workspacePath}
+              workspaceIdentity={target.previewSource?.workspaceIdentity}
+              workspaceRemoteSessionId={target.previewSource?.workspaceRemoteSessionId}
+            />
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => void fileActions.copyAbsolutePath({ path: target.path })}

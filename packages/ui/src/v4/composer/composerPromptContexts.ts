@@ -5,7 +5,6 @@ import {
 } from "@/lib/codeCommentContext.js";
 import { stripGenUiModelContext } from "@zcode/shared/gen-ui";
 import {
-  buildPromptWithConversationSelections,
   parsePromptConversationSelections,
   type ConversationSelectionDisplayReference,
 } from "@/lib/conversationSelectionReference.js";
@@ -51,18 +50,17 @@ export function countComposerPromptContexts(contexts: {
 }
 
 /**
- * 五类 context parser 都只识别 prompt 尾块，因此序列化顺序和解析顺序必须严格相反。
+ * 四类 context parser 只识别 prompt 尾块，因此序列化顺序和解析顺序必须严格相反。
  * 插件上下文最后序列化（最外层），解析时最先剥离。
+ *
+ * 会话选区不在其中：它是 turn metadata（`conversationQuotes`），正文只保留用户自己写的内容。
+ * 序列化器不再接受选区参数，历史解析仍识别旧 `# userselect:` 尾块（只读，用于旧转录）。
  */
 export function serializeComposerPromptContexts(
   text: string,
-  contexts: ComposerPromptContexts,
+  contexts: Omit<ComposerPromptContexts, "conversationSelections">,
 ): string {
-  const withSelections = buildPromptWithConversationSelections(
-    text,
-    contexts.conversationSelections,
-  );
-  const withCodeComments = buildPromptWithCodeComments(withSelections, contexts.codeComments);
+  const withCodeComments = buildPromptWithCodeComments(text, contexts.codeComments);
   const withWebElements = buildPromptWithWebElementContexts(withCodeComments, contexts.webElements);
   const withPptx = buildPromptWithPptxElementReferences(withWebElements, contexts.pptxElements);
   return buildPromptWithPluginUiContexts(withPptx, contexts.pluginUiContexts ?? []);

@@ -13,9 +13,11 @@ import { resolveOfficialPluginHostMcpServerNames } from "../app/official-plugin-
 
 export function toPluginInfo(plugin: PluginMetadata, configResult?: ConfigResult): ZCodePluginInfo {
   const hostMcpServerNames = resolveOfficialPluginHostMcpServerNames(plugin.id);
+  // 私有文件里保存过的键即使当前清单改回普通也不能回显：值仍是历史 secret。
+  const privateKeys = new Set(configResult?.sources.plugins.secretKeys?.[plugin.id] ?? []);
   const configuredOptions = Object.fromEntries(
     Object.entries(plugin.configuredOptions ?? {}).filter(
-      ([key]) => plugin.userConfig?.[key]?.sensitive !== true,
+      ([key]) => plugin.userConfig?.[key]?.sensitive !== true && !privateKeys.has(key),
     ),
   );
   const enabledSource = configResult?.sources.plugins.enabled[plugin.id];

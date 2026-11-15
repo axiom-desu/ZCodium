@@ -63,6 +63,11 @@ export function findLatestCommittedAssistantUsage(
   return undefined;
 }
 
+export function latestContextTokens(entries: readonly (RuntimeMessageEntry | undefined)[]): number {
+  const baseline = findLatestCommittedAssistantUsage(entries)?.baseline;
+  return baseline ? (baseline.contextUsageTokens ?? baseline.inputTokens) : 0;
+}
+
 export function mainTurnCacheHitAggregateFromMessages(input: {
   activeMessages: readonly MessageWithParts[];
   persistedMessages: readonly MessageWithParts[];

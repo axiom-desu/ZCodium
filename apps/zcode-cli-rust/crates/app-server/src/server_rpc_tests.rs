@@ -133,6 +133,64 @@ async fn old_host_preference_failure_falls_back_without_runtime_config() {
     .await;
 }
 
+/// 3.18 App 会话控制：能力只由 Host 偏好回包的 `appControlEnabled` 置位，
+/// 与既有 `toolSearch.mode` 同一次 materialization，非 `true` 都不写。
+#[tokio::test]
+async fn desktop_preferences_carry_the_host_app_control_capability() {
+    checked(async {
+        for (reply, expected_mode, expected_control) in [
+            (
+                json!({"toolSearchMode":"off","appControlEnabled":true}),
+                "off",
+                Some(true),
+            ),
+            (
+                json!({"toolSearchMode":"local","appControlEnabled":false}),
+                "local",
+                None,
+            ),
+            // 旧 Host 根本没有该字段；非布尔值也不能被当成能力。
+            (json!({"toolSearchMode":"local"}), "local", None),
+            (
+                json!({"toolSearchMode":"local","appControlEnabled":"true"}),
+                "local",
+                None,
+            ),
+        ] {
+            let mut h = Harness::start_with(ServeOptions {
+                request_session_preferences: true,
+            })
+            .await;
+            h.rpc(
+                "create",
+                "session/create",
+                json!({"workspace":{"workspacePath":"/w","workspaceKey":"/w"}}),
+            )
+            .await;
+            let host = h.output().await;
+            assert_eq!(host[0]["method"], "session/requestRuntimePreferences");
+            h.respond(host[0]["id"].as_str().unwrap(), reply.clone())
+                .await;
+            let (token, params) = h.routed(Method::SessionCreate).await;
+            assert_eq!(
+                params["runtimeConfig"]["toolSearch"]["mode"], expected_mode,
+                "{reply}"
+            );
+            match expected_control {
+                Some(value) => assert_eq!(params["runtimeConfig"]["appControl"], value),
+                None => assert!(
+                    params["runtimeConfig"].get("appControl").is_none(),
+                    "{reply}"
+                ),
+            }
+            h.reply(token, json!({})).await;
+            assert_eq!(h.output().await[0]["id"], "create");
+            assert!(h.finish().await.is_empty());
+        }
+    })
+    .await;
+}
+
 #[tokio::test]
 async fn in_process_serve_keeps_routing_without_a_host_preference_request() {
     checked(async {

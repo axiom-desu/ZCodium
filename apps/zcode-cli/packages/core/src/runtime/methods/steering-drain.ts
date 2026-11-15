@@ -20,6 +20,7 @@ import {
   measureUtf8Bytes,
   previewInput,
   resolveTurnAttachments,
+  withConversationQuotes,
 } from "../helpers/index.js";
 import {
   unpublishedPermissionGrants,
@@ -110,7 +111,11 @@ async function drainPendingInputUnlocked(
         ? parseRuntimeInputPresentation(pendingInput.inputPresentation)
         : undefined;
     const runtimeEntry = createRuntimeUserEntry(
-      buildUserContentFromTurn(pendingInput.input, resolvedAttachments),
+      // guide/queue 消费与普通轮一致：引用在模型边界转为材料，正文保持 canonical。
+      buildUserContentFromTurn(
+        withConversationQuotes(pendingInput.input, pendingInput.intent?.conversationQuotes),
+        resolvedAttachments,
+      ),
       runtimeInputMetadata(inputPresentation) ?? realUserRuntimeMetadata(),
     );
     this.messageHistory.addEntries([runtimeEntry]);

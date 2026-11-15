@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { APP_RUNTIME_PREFERENCES_CHANGED_BROADCAST_CHANNEL, type AppSettings } from "@zcode/shared";
 import type { ISettingService } from "@zcode/services";
 import { useServices } from "./useServices.js";
+import type { IServiceAccessor } from "@zcode/services";
 import { usePlatform } from "./usePlatform.js";
 
 type SettingsSnapshot = {
@@ -105,9 +106,17 @@ async function refreshSettingsStore(settingService: ISettingService | undefined)
   return store.inflightRefresh;
 }
 
-/** 获取和更新应用设置 */
-export function useSettings() {
-  const { botsService, broadcastService, settingService, zcodeAgentService } = useServices();
+/**
+ * 获取和更新应用设置。
+ *
+ * 默认绑定当前 workspace 的 ServiceProvider；需要本机事实源的调用方（例如文件树读取
+ * 「单击 HTML 进浏览器」）显式传入 `useBaseWorkspaceServices()`，仍共享同一个按服务实例
+ * 隔离的 snapshot store，不建立第二份设置缓存。
+ */
+export function useSettings(options?: { services?: IServiceAccessor }) {
+  const contextServices = useServices();
+  const boundServices = options?.services ?? contextServices;
+  const { botsService, broadcastService, settingService, zcodeAgentService } = boundServices;
   const platform = usePlatform();
   const settingsStore = getSettingsStore(settingService);
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>(settingsStore.snapshot);

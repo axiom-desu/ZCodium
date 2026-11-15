@@ -4,11 +4,13 @@ import type {
   ZCodeAgentRuntimeLifecycleEvent,
   ZCodeAgentWorkspaceTarget,
 } from "@zcode/services";
+import type { SourceServerRunningTask } from "@zcode/shared";
 import type { SessionActivity } from "@zcode/shared/zcode-protocol-v4";
 
 interface TaskActivityTracker extends IDisposable {
   readonly onDidChangeRunningTaskCount: Event<number>;
   readRunningTaskCount(): number;
+  readRunningTasks(): SourceServerRunningTask[];
 }
 
 type AgentActivitySource = Pick<
@@ -17,6 +19,7 @@ type AgentActivitySource = Pick<
 >;
 
 interface WorkspaceActivity {
+  target: ZCodeAgentWorkspaceTarget;
   activeSessionIds: Set<string>;
   runtimeIdentity: string;
   activity: IDisposable;
@@ -79,6 +82,10 @@ export function createTaskActivityTracker(
     );
     if (!activity) return;
     workspaces.set(key, {
+      target: {
+        workspacePath: event.workspacePath,
+        ...(event.workspaceIdentity ? { workspaceIdentity: event.workspaceIdentity } : {}),
+      },
       activeSessionIds,
       runtimeIdentity: event.runtimeIdentity.identity,
       activity,
@@ -89,6 +96,10 @@ export function createTaskActivityTracker(
   return {
     onDidChangeRunningTaskCount: changed.event,
     readRunningTaskCount: () => runningTaskCount,
+    readRunningTasks: () =>
+      [...workspaces.values()].flatMap((workspace) =>
+        [...workspace.activeSessionIds].map((sessionId) => ({ ...workspace.target, sessionId })),
+      ),
     dispose: () => {
       if (disposed) return;
       disposed = true;

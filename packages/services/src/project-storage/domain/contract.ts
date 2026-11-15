@@ -1,4 +1,9 @@
 import type { AppSettings, ZCodeTaskMeta } from "@zcode/shared";
+import type { ProjectWorktreeRepositoryContract } from "#src/project-storage/domain/worktree-contract.js";
+export type {
+  ProjectDirectoryReference,
+  ProjectWorktreeTask,
+} from "#src/project-storage/domain/worktree-contract.js";
 
 export interface ProjectMigrationContext {
   /** 可信持库 Host 身份；不受客户端请求或旧 canonical route 影响。 */
@@ -147,7 +152,30 @@ export interface ProjectTaskReservationSettlement {
     | "organized"
     | "input-forwarded";
 }
-export interface ProjectRepositoryContract {
+export interface ReserveCreatedTaskInput {
+  task: ProjectTaskRef;
+  projectId: string | null;
+  /** Host 已固化的执行目录；首次预留持久化，重试不改。undefined 为普通新建。 */
+  additionalDirectories?: string[];
+  /**
+   * 创建路径专用：additionalDirectories 缺席时把本次派生目录固化成快照（同一写事务）。
+   * 之后编辑项目 roots / 移动任务不得改写已创建会话的恢复目录。
+   */
+  freezeAdditionalDirectories?: true;
+  /**
+   * fork 子任务的父任务：首次预留沿用父 root/执行目录/worktree 归属，避免 ACK 先于
+   * CLI 事实时子任务丢失受管 worktree 标记。
+   */
+  forkedFromTaskId?: string;
+  /**
+   * 受管 worktree 任务：workspace 就是受管根目录，必须同时给出项目归属；
+   * 在同一写事务里记录 tasks.worktree_root，形成删除闸门读取的唯一受管关系。
+   * 只允许本地 workspace（workspaceIdentity 为空），远端 entry 不能被标记为本地 worktree。
+   */
+  worktreeRoot?: string;
+}
+
+export interface ProjectRepositoryContract extends ProjectWorktreeRepositoryContract {
   /** 可只取目录，并参与调用方已有的 SQLite 读快照。 */
   readTree(options?: {
     includeDeleted?: boolean;
@@ -166,17 +194,8 @@ export interface ProjectRepositoryContract {
   archiveInactive(input: AutoArchiveInput): ProjectTaskRef[];
   resolveSessionDirectories(task: ProjectTaskRef): ProjectDirectories;
   /** CLI 创建之前原子预留归属；无事实的预留行不进入列表，重试不覆盖组织操作。 */
-  reserveCreatedTask(input: {
-    task: ProjectTaskRef;
-    projectId: string | null;
-    /** Host 已固化的执行目录；首次预留持久化，重试不改。undefined 为普通新建。 */
-    additionalDirectories?: string[];
-    /**
-     * 创建路径专用：additionalDirectories 缺席时把本次派生目录固化成快照（同一写事务）。
-     * 之后编辑项目 roots / 移动任务不得改写已创建会话的恢复目录。
-     */
-    freezeAdditionalDirectories?: true;
-  }): ProjectDirectories;
+  reserveCreatedTask(input: ReserveCreatedTaskInput): ProjectDirectories;
+
   /**
    * 预热/取消后的预留收口（receipt 唯一 owner）：
    * `input-forwarded` 只弃用 receipt；`cli-closed` 在 CLI 关闭回执后释放仍未认领的空行。

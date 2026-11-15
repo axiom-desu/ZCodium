@@ -93,7 +93,7 @@ export function buildPluginMentionMarkdown(label: string, pluginId: string): str
 
 type MentionTextPart =
   | { type: "text"; text: string }
-  | { type: "file"; label: string }
+  | { type: "file"; label: string; href: string }
   | { type: "directory"; label: string }
   | { type: "skill"; label: string }
   | { type: "command"; label: string }
@@ -207,7 +207,13 @@ export function parseMentionMarkdown(content: string): MentionTextPart[] {
       // 于是文件夹候选在气泡里会继续显示成普通文件图标。这里根据链接目标是否以斜杠结尾恢复目录类型。
       parts.push({ type: "directory", label: label.startsWith("@") ? label.slice(1) : label });
     } else {
-      parts.push({ type: "file", label: label.startsWith("@") ? label.slice(1) : label });
+      // 文件引用曾丢弃 destination，只剩蓝色 label，消息层无法打开真实图片。
+      // 仅还原 Markdown 标点转义，保留 Windows 路径中的普通反斜杠。
+      parts.push({
+        type: "file",
+        label: label.startsWith("@") ? label.slice(1) : label,
+        href: destination.replace(/\\([\\()[\]<>])/g, "$1"),
+      });
     }
     cursor = matchStart + fullMatch.length;
   }

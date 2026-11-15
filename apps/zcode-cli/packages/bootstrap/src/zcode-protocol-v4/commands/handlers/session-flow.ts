@@ -261,6 +261,8 @@ async function sendText(
         : {}),
       attachmentRefs: payload.attachments,
       sharedContextRefs: payload.context_refs,
+      // 选区引用随本次 admission 固定进 intent；后续 queue/guide/恢复都读同一份。
+      ...(payload.conversationQuotes ? { conversationQuotes: payload.conversationQuotes } : {}),
       ...(payload.source ? { source: payload.source } : {}),
     });
     started = await startPromptTurn(host, record, {

@@ -127,6 +127,59 @@ describe("project repository", () => {
     expect(repo.readTree().tasks).toEqual([]);
   });
 
+  it("reserves a fork child in a managed worktree with the parent ownership", async () => {
+    const { db, repo } = await fixture();
+    const project = repo.saveProject({ name: "Fork", roots: ["/repo", "/extra"] });
+    db.prepare(
+      `INSERT INTO tasks(workspace_key,workspace_path,task_id,title,provider,created_at,updated_at,
+        host_id,root_path,project_id,handoff_pending,execution_directories,worktree_root)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      "/worktrees/a",
+      "/worktrees/a",
+      "parent",
+      "Parent",
+      "glm",
+      1,
+      2,
+      "local",
+      "/worktrees/a",
+      project.id,
+      1,
+      JSON.stringify(["/extra"]),
+      "/worktrees/a",
+    );
+    // worktree cwd 不在项目 roots 内：只有继承父 worktree admission 才能成功预留。
+    repo.reserveCreatedTask({
+      task: { taskId: "child", workspacePath: "/worktrees/a" },
+      projectId: project.id,
+      forkedFromTaskId: "parent",
+    });
+    expect(
+      db
+        .prepare(
+          "SELECT forked_from_task_id,root_path,execution_directories,worktree_root FROM tasks WHERE task_id='child'",
+        )
+        .get(),
+    ).toEqual({
+      forked_from_task_id: "parent",
+      root_path: "/worktrees/a",
+      execution_directories: JSON.stringify(["/extra"]),
+      worktree_root: "/worktrees/a",
+    });
+    // 父任务不存在时拒绝，不写入半行。
+    expect(() =>
+      repo.reserveCreatedTask({
+        task: { taskId: "child2", workspacePath: "/worktrees/a" },
+        projectId: project.id,
+        forkedFromTaskId: "missing",
+      }),
+    ).toThrow("project.task-not-found");
+    expect(db.prepare("SELECT count(*) AS n FROM tasks WHERE task_id='child2'").get()).toEqual({
+      n: 0,
+    });
+  });
+
   it("rejects an unprovable remote authority instead of coercing it to local", async () => {
     const { repo } = await fixture();
     expect(() =>

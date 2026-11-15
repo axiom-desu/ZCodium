@@ -16,13 +16,15 @@ import {
 import { Switch } from "@/components/ui/switch.js";
 import { toast } from "@/components/ui/toast.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
-import { useServices } from "@/hooks/useServices.js";
+import { ServiceProvider, useServices } from "@/hooks/useServices.js";
+import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useZCodeSessionService } from "@/hooks/useZCodeSessionService.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { invalidateDeferredDraftSessionForSkillChange } from "@/lib/zcodeDraftSkillInvalidation.js";
 import { logger } from "@/logger.js";
 
 import { SettingsGroupCard, SettingsRow } from "@/settings/SettingsPageParts.js";
+import { FileTreeHtmlOpenSetting } from "@/settings/FileTreeHtmlOpenSetting.js";
 import { usePluginManagementStore } from "@/store/pluginManagementStore.js";
 import { useSkillStore } from "@/store/skillStore.js";
 import { formatImportSummary } from "./browserImportSummary.js";
@@ -214,6 +216,8 @@ export function BrowserSettingsSection({
     [intl, platform],
   );
 
+  // HTML 打开方式是本机界面偏好：即使激活远端 workspace，也必须读写 base Host 设置。
+  const localHostServices = useBaseWorkspaceServices();
   const pluginTogglePending = togglingPluginId === OFFICIAL_BROWSER_USE_PLUGIN_ID;
   const pluginUnavailable = !workspacePath || loading || !browserUsePlugin;
   const operationDisabled = !nativeActionsAvailable;
@@ -223,6 +227,7 @@ export function BrowserSettingsSection({
       <section className="space-y-3">
         <SettingsGroupCard>
           <SettingsRow
+            searchId="settings.browser.control.title"
             label={intl.formatMessage({ id: "settings.browser.control.title" })}
             description={intl.formatMessage({
               id: "settings.browser.control.description",
@@ -248,6 +253,7 @@ export function BrowserSettingsSection({
               Windows App-Bound 导入链路暂未开放，先隐藏入口但保留底层实现和清理能力。*/}
           {!isWindowsDesktop ? (
             <SettingsRow
+              searchId="settings.browser.import.title"
               label={intl.formatMessage({ id: "settings.browser.import.title" })}
               description={intl.formatMessage({
                 id: "settings.browser.import.description",
@@ -282,6 +288,7 @@ export function BrowserSettingsSection({
           </div>
           <SettingsGroupCard>
             <SettingsRow
+              searchId="settings.embeddedBrowserAllowInsecureCertificates"
               label={intl.formatMessage({
                 id: "settings.embeddedBrowserAllowInsecureCertificates",
               })}
@@ -304,6 +311,20 @@ export function BrowserSettingsSection({
         </section>
       ) : null}
 
+      {/* 单击 HTML 进浏览器只在本机内置浏览器可用时提供；Web/手机不显示该分组。 */}
+      {isDesktop ? (
+        <section className="space-y-3">
+          <div className="text-ui-base font-medium text-foreground-subtle">
+            {intl.formatMessage({ id: "settings.browser.open.section" })}
+          </div>
+          <SettingsGroupCard>
+            <ServiceProvider services={localHostServices}>
+              <FileTreeHtmlOpenSetting />
+            </ServiceProvider>
+          </SettingsGroupCard>
+        </section>
+      ) : null}
+
       <section className="space-y-3">
         <div className="text-ui-base font-medium text-foreground-subtle">
           {intl.formatMessage({ id: "settings.browser.data.section" })}
@@ -315,6 +336,7 @@ export function BrowserSettingsSection({
         ) : null}
         <SettingsGroupCard>
           <SettingsRow
+            searchId="settings.browser.clearCache.title"
             label={intl.formatMessage({
               id: "settings.browser.clearCache.title",
             })}
@@ -335,6 +357,7 @@ export function BrowserSettingsSection({
             }
           />
           <SettingsRow
+            searchId="settings.browser.clearAll.title"
             label={intl.formatMessage({
               id: "settings.browser.clearAll.title",
             })}

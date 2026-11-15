@@ -135,6 +135,20 @@ export { IWindowControllerService } from "./window-controller/windowController.j
 // createProjectService / legacy-single-root 等 Node 工厂依赖 node:crypto/node:fs，
 // 只能从 @zcode/services/node 取，否则 renderer 打包会把 node:* 带进来。
 export { IProjectService } from "./project/contract.js";
+export {
+  IManagedWorktreeService,
+  type IManagedWorktreeService as IManagedWorktreeServiceType,
+} from "./managed-worktree-tasks/contract.js";
+export {
+  IRemoteProjectService,
+  type IRemoteProjectService as IRemoteProjectServiceType,
+  type ProjectCatalog,
+} from "./remote-projects/contract.js";
+export type {
+  RemoteProjectEntry,
+  RemoteProjectEntryInput,
+  RemoteProjectRefreshEntry,
+} from "./project-storage/contract.js";
 export type {
   ProjectDirectories,
   ProjectRoot,
@@ -224,7 +238,7 @@ export type {
 } from "./zcode-session/zcodeSession.js";
 
 // Bots service — IBotsService is both a type (interface) and value (descriptor).
-export { IBotsService } from "./bots/bots.js";
+export { IBotsService, WEB_REMOTE_BOTS_ALLOWED_METHODS } from "./bots/bots.js";
 export type {
   BotBindCodeResult,
   BotCreateBindCodeParams,
@@ -253,7 +267,7 @@ export { IFileWatcherService } from "./fileWatcher/fileWatcher.js";
 export { IUsageStatsService } from "./usage-stats/usageStats.js";
 
 // Storage（资源管理器「存储」tab）：数据类型在 @zcode/shared；这里只导出服务接口与卷分组纯函数
-export type { IStorageService } from "./storage/contract.js";
+export type { IStorageService, StorageRootSpec } from "./storage/contract.js";
 
 // CodingPlanSubscription service — ICodingPlanSubscriptionService is both a type (interface) and value (descriptor)
 export { ICodingPlanSubscriptionService } from "./coding-plan-subscription/codingPlanSubscription.js";
@@ -272,6 +286,10 @@ export { ISkillsService } from "./skills/skills.js";
 export { ISkillSyncService } from "./skill-sync/skillSync.js";
 export { IMcpSyncService } from "./mcp-sync/mcpSync.js";
 export { IPluginSyncService } from "./plugin-sync/pluginSync.js";
+// 数据同步契约（浏览器安全入口）：只在 Renderer 侧做类型与 descriptor，实现从 node 入口取。
+export type { IDataSyncCategoryService } from "./data-sync/index.js";
+export { IDeviceSyncStateService, IUserConfigSyncService } from "./data-sync/index.js";
+export { IProviderProvisioningStatusService } from "./provider-provisioning-status/contract.js";
 export {
   ICuaPermissionService,
   type CuaPermissionState,
@@ -338,3 +356,7 @@ export { IClientConfigService } from "./client-config/clientConfig.js";
 
 export { IGenUiService } from "./gen-ui/contract.js";
 export type { GenUiPrepareParams } from "./gen-ui/contract.js";
+export * from "./extensions/index.js";
+// App control 的 factory/执行层依赖 node:crypto，只属于 Host composition；
+// 根入口必须 browser-safe，不能把 Node 实现经 barrel 带进共享 UI。
+export type * from "./app-control/index.js";

@@ -74,6 +74,11 @@ import type {
   RuntimeBackgroundStopOptions,
   RuntimeBackgroundStopResult,
 } from "./methods/background.js";
+import type {
+  ContextCompositionChangeListener,
+  ContextCompositionMeasurement,
+} from "./context-composition/state.js";
+import type { ContextCompositionQuery } from "./context-composition/query.js";
 
 /**
  * AgentRuntime 的公开调用面（纯类型声明）。
@@ -192,10 +197,12 @@ export interface AgentRuntimeSurface {
     reservationId: string;
     traceContext?: TraceContext;
   }): Promise<boolean>;
-  /** v4 queue 单项编辑：按 pendingInputId 替换排队输入文本（保位）。 */
+  /** v4 queue 单项编辑：按 pendingInputId 替换排队输入文本与选区引用（保位）。 */
   editPendingInputById(options: {
     pendingInputId: string;
     newText: string;
+    /** undefined = 保留原 quotes；[] = 清空。 */
+    conversationQuotes?: TurnInputIntentMetadata["conversationQuotes"];
     traceContext?: TraceContext;
   }): Promise<boolean>;
   /** v4 queue 重排：移动 pendingInputId 到 beforePendingInputId 之前（null=队尾）。 */
@@ -331,6 +338,15 @@ export interface AgentRuntimeSurface {
   resolvePermission(toolCallId: ToolCallId, decision: PermissionBrokerResult): Promise<void>;
   getPendingPermissionRequests(): PermissionBrokerRequest[];
   getProjection(): Promise<SessionProjection>;
+  /**
+   * context 组成查询：有效的请求组成且模型相同时返回它，否则按所查模型预演。
+   * existing-only：调用方保证会话已在内存；没有模型选择或 runtime 正在关闭时返回 null。
+   */
+  getContextComposition(input?: ContextCompositionQuery): Promise<ContextCompositionMeasurement | null>;
+  /** 订阅组成变更（观测旁路，失败不影响请求/compact/换模型）。 */
+  subscribeContextCompositionChanged(listener: ContextCompositionChangeListener): () => void;
+  /** 会话外部改了会影响组成的状态（换模型）：作废最近一次请求组成并通知。 */
+  markContextCompositionChanged(): void;
   readBackgroundBashOutput(workId: string, sessionId?: string): Promise<BackgroundBashOutputResult>;
   cancelBackgroundTask(
     taskId: string,

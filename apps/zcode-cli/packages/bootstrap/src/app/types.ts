@@ -18,6 +18,7 @@ import type {
   ImageProcessorPort,
   InputDelivery,
   InputHistoryStorePort,
+  PluginDiscoveryPort,
   LoggerFactory,
   McpPort,
   MessageWithParts,
@@ -35,6 +36,7 @@ import type {
   SkillPort,
   SupportedLocale,
   ToolArtifactStorePort,
+  TopicResourcePort,
   TraceContext,
   TurnId,
   TurnInputIntentMetadata,
@@ -43,6 +45,7 @@ import type {
   WorkflowEvent,
   WorkspaceHookPolicy,
 } from "@zcode/contracts";
+import type { SessionControlBinding } from "@zcode/core";
 import type {
   AgentRuntime,
   AgentRuntimeConfig,
@@ -107,6 +110,8 @@ export interface ZCodeAppOptions {
   loggerFactory?: LoggerFactory;
   officialPluginRoots?: string[];
   pluginStorageRoot?: string;
+  /** 插件根解析 + discovery 启动预算；默认 30s，正值可覆盖，<=0 显式关闭。 */
+  pluginStartupTimeoutMs?: number;
   executionPort?: ExecutionPort;
   /** 本地资源诊断旁路；由协议宿主注入，主任务和 workflow 的执行适配器共用。 */
   onToolExecResource?: (sample: ZCodeToolExecResource) => void;
@@ -119,6 +124,8 @@ export interface ZCodeAppOptions {
   imageProcessorPort?: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;
   artifactStore?: ToolArtifactStorePort;
+  /** Host 注入的话题资源读取端口：只在本任务已接纳 bot 输入时可用；缺省不注册该工具。 */
+  topicResourcePort?: TopicResourcePort;
   contextSourcePort?: ContextSourcePort;
   skillPort?: SkillPort;
   mcpPort?: McpPort;
@@ -145,6 +152,18 @@ export interface ZCodeAppOptions {
   workspaceHookTrustEnabled?: boolean;
   /** Presence means this owner Host supports the dedicated Workspace Hook review route. */
   workspaceHookReviewHost?: WorkspaceHookReviewHostContext;
+  /**
+   * 独立 CLI 根的会话控制绑定；由启动装配构造，子根也会拿到指向自己的绑定。
+   * 只在独立 CLI/TUI 主根注入：桌面与远程 Host 会话不提供第二个会话控制面。
+   */
+  sessionControl?: SessionControlBinding;
+  /** 只在独立 CLI/TUI 主根为 true：创建 manager 并提供 8 个会话工具。 */
+  standaloneSessionControl?: boolean;
+  /**
+   * 插件发现端口（SearchPlugins / SuggestPluginInstall）。缺省时 app 用本进程既有插件 store
+   * 自建；Host 若要换成自己的目录实现，也必须实现同一个契约（目录与安装意图单一所有者）。
+   */
+  pluginDiscoveryPort?: PluginDiscoveryPort;
 }
 
 export interface SubmitPromptOptionsBase {

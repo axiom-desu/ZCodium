@@ -38,7 +38,19 @@ export {
   ZCODE_WORKSPACE_CONFIG_FILE_NAME,
   ZCODE_WORKSPACE_IGNORE_FILE_NAME,
 } from "./appDirNames.js";
-export { DEFAULT_LOCALE } from "./protocol.js";
+export { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "./protocol.js";
+export {
+  LOCALE_NATIVE_NAMES,
+  hasLegacyIncompatiblePersistedLocale,
+  isLocale,
+  isLocalePreference,
+  resolveLocaleFromLanguageTag,
+  resolvePersistedUiLocale,
+  resolvePersistedUiLocalePreference,
+  toLegacyPersistedLocalePreference,
+  toPersistedSettingsLocaleFields,
+  toZhOrEnLocale,
+} from "./locale.js";
 export { ZCODE_VERSION, ZCODE_COMMIT, ZCODE_BUILD_TIME } from "./version.js";
 export type { HelloMessage, HelloAckMessage } from "./handshake.js";
 export type { ZCodeEnv, ZCodeProductFlavor } from "./env.js";
@@ -169,6 +181,7 @@ export type {
   BrowserViewScreenshotSurfacePreparePayload,
   BrowserViewScreenshotSurfaceReadyPayload,
   BrowserViewScreenshotSurfaceReleasePayload,
+  BrowserViewSurfaceScaleMode,
   BrowserViewViewportChangedPayload,
   ChromeBrowserDataImportError,
   ChromeBrowserDataImportOptions,
@@ -183,12 +196,23 @@ export type {
   DesktopCommandId,
   CuaOsSupport,
   DesktopWindowChromeState,
+  DesktopZoomState,
   DesktopTitleBarTheme,
   DockerContainerInfo,
   EditorInfo,
+  FileApplicationInfo,
+  FileApplicationTarget,
+  CaptureBrowserGuestPageClip,
+  CaptureBrowserGuestPageRequest,
+  CaptureBrowserGuestPageResult,
+  PrintBrowserGuestPageRequest,
+  PrintBrowserGuestPageResult,
   ApplicationIconInfo,
   ApplicationIconLocator,
   ApplicationIconRequest,
+  AppNavigationHandler,
+  AppNavigationResult,
+  AppNavigationTarget,
   BrowserGuestAttachRejectReason,
   BrowserGuestAttachResult,
   EmbeddedBrowserDataClearResult,
@@ -206,6 +230,8 @@ export type {
   UpdateCheckResultPayload,
   UpdateStatePayload,
   WSLDistro,
+  WindowControlsOverlayMetrics,
+  WindowControlsOverlayReadyPayload,
   ZCodeStdioTapDevState,
 } from "./platform.js";
 export type {
@@ -282,6 +308,7 @@ export {
 export * from "./memoryDiagnostics.js";
 export * from "./database-startup.js";
 export * from "./execution-state.js";
+export * from "./userInstructions.js";
 
 export { bashOutputDisplaySchema } from "./bash-output-display.js";
 

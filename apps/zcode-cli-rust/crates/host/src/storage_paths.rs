@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 pub struct StoragePaths {
     pub database: PathBuf,
     pub artifacts: PathBuf,
+    /// `<storage.dir>/cli`：项目记忆等 CLI 级数据的根（Node `getCliStorageRoot`）。
+    pub cli: PathBuf,
 }
 
 /// Bash 输出首选的 tmp 父目录。唯一的注入点是 `ShellTasks::new` 的构造参数
@@ -45,8 +47,10 @@ pub fn resolve(cwd: &Path, config: &crate::domain::config::ConfigSnapshot) -> Re
         .str("storage", "sessionDbPath")
         .unwrap_or(&default_database);
     let root = config.str("storage", "dir").unwrap_or(&default_root);
+    let cli = expand(root, cwd, &home).join("cli");
     Ok(StoragePaths {
         database: expand(database, cwd, &home),
-        artifacts: expand(root, cwd, &home).join("cli/artifacts"),
+        artifacts: cli.join("artifacts"),
+        cli,
     })
 }

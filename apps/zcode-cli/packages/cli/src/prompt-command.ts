@@ -1,5 +1,3 @@
-import { safeLogArgs, safeDiagnosticFrames } from "@zcode/shared";
-import { extname } from "node:path";
 import { formatJson, PresentationSurface } from "@zcode/core";
 import type { RunContext, GlobalOptions } from "@zcode/shared-types";
 import { loadBootstrapModule } from "./bootstrap-loader.js";
@@ -10,6 +8,11 @@ import {
 } from "./command-center.js";
 import { loadCliDotenv } from "./env.js";
 import { createCliHeadlessBrowserRuntime } from "./headless-browser.js";
+import {
+  formatHeadlessWorkspaceHookTrustSummary,
+  resolveHeadlessWorkspaceHookTrustDiagnostic,
+  writeHeadlessWorkspaceHookTrustDiagnostic,
+} from "./headless-workspace-hook-trust.js";
 import {
   createHeadlessPermissionBroker,
   createHeadlessSessionObserver,
@@ -41,9 +44,10 @@ import {
   runPromptCommandCenterCommand,
   listCustomCommandsForPrompt,
 } from "./prompt-command-center.js";
+import { inferAttachmentTypeFromPath } from "./prompt-attachment-type.js";
+import { createCliProviderCheckReporter } from "./provider-runtime-env.js";
+import { writePromptCommandError } from "./prompt-command-error.js";
 
-const IMAGE_EXTENSIONS = new Set([".gif", ".jpeg", ".jpg", ".png", ".webp"]);
-const VIDEO_EXTENSIONS = new Set([".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi"]);
 const EMPTY_PROMPT_ERROR = "--prompt requires non-empty text.";
 const MEMORY_BENCH_DISABLED_ERROR =
   "--memory-bench 目前只在 bootstrap 会话可用；请移除 --memory-bench 或改用受支持的会话。";
@@ -208,6 +212,9 @@ export const runPrompt = async (
         workingDirectory,
       },
       sessionId,
+      // 独立 CLI（含 -p）是唯一的会话控制 surface：本地根可被 List/Read/Create/Fork/Send/
+      // Wait/Interrupt/Rename 管理，执行仍由各会话自己的 Core runtime 与 CommandInbox 决定。
+      standaloneSessionControl: true,
       uiDetectedLocale: options.detectedLocale,
       uiLocale: options.locale,
       version,
@@ -351,26 +358,7 @@ export const runPrompt = async (
           ...(multiTurn ? { turnResponses } : {}),
           ...(result.usage ? { usage: { ...result.usage } } : {}),
           eventCount: result.events.length,
-          ...(hookTrustDiagnostic
-            ? {
-                workspaceHookTrust: {
-                  workspacePath: hookTrustDiagnostic.workspacePath,
-                  workspaceIdentity: hookTrustDiagnostic.workspaceIdentity,
-                  bundleDigest: hookTrustDiagnostic.bundleDigest,
-                  reasonCode: hookTrustDiagnostic.reasonCode,
-                  items: hookTrustDiagnostic.items.map((item) => ({
-                    reviewItemId: item.reviewItemId,
-                    event: item.event,
-                    matcher: item.matcher,
-                    displayCommand: item.displayCommand,
-                    sourcePath: item.sourcePath,
-                    configuredEnabled: item.configuredEnabled,
-                    hookDeclarationDigest: item.hookDeclarationDigest,
-                    trustState: item.trustState,
-                  })),
-                },
-              }
-            : {}),
+          ...formatHeadlessWorkspaceHookTrustSummary(hookTrustDiagnostic),
           projection: {
             status: result.projection.status,
             turnCount: result.projection.turnCount,
@@ -389,16 +377,7 @@ export const runPrompt = async (
     ctx.stdout.write(`${turnResponses.join("\n\n")}\n`);
     return 0;
   } catch (error) {
-    const message = JSON.stringify(safeLogArgs([error]));
-    ctx.stderr.write(`Error: ${message}\n`);
-    if (options.verbose) {
-      if (error instanceof Error && error.cause) {
-        ctx.stderr.write(`Cause: ${JSON.stringify(safeLogArgs([error.cause]))}\n`);
-      }
-      if (error instanceof Error && error.stack) {
-        ctx.stderr.write(`${safeDiagnosticFrames(error.stack).join("\n")}\n`);
-      }
-    }
+    writePromptCommandError(ctx, error, options.verbose);
     return 1;
   } finally {
     stopObservingEvents();
@@ -406,69 +385,3 @@ export const runPrompt = async (
     await closeApp();
   }
 };
-
-function inferAttachmentTypeFromPath(path: string): "file" | "image" | "video" | "pdf" {
-  const extension = extname(path).toLowerCase();
-  if (IMAGE_EXTENSIONS.has(extension)) return "image";
-  if (VIDEO_EXTENSIONS.has(extension)) return "video";
-  if (extension === ".pdf") return "pdf";
-  return "file";
-}
-
-const HEADLESS_WORKSPACE_HOOK_BLOCK_REASONS = [
-  "workspace_hooks_pending_trust",
-  "workspace_hooks_require_trust_capable_host",
-  "workspace_hooks_feature_disabled",
-] as const;
-type HeadlessWorkspaceHookBlockReason = (typeof HEADLESS_WORKSPACE_HOOK_BLOCK_REASONS)[number];
-
-async function resolveHeadlessWorkspaceHookTrustDiagnostic(input: {
-  bootstrapModule: Awaited<ReturnType<typeof loadBootstrapModule>> | undefined;
-  deps: RunDependencies;
-  events: readonly unknown[];
-  workingDirectory: string;
-}) {
-  let reasonCode: HeadlessWorkspaceHookBlockReason | undefined;
-  for (const event of input.events) {
-    if (!event || typeof event !== "object") continue;
-    const value = event as {
-      type?: string;
-      payload?: { errorCode?: string; descriptor?: { sourceKind?: string } };
-    };
-    if (value.type !== "hook_run_blocked" || value.payload?.descriptor?.sourceKind !== "project") {
-      continue;
-    }
-    const errorCode = value.payload.errorCode;
-    if (isHeadlessWorkspaceHookBlockReason(errorCode)) {
-      reasonCode = errorCode;
-      break;
-    }
-  }
-  if (!reasonCode) return undefined;
-  const inspect =
-    input.deps.inspectWorkspaceHookTrust ?? input.bootstrapModule?.inspectWorkspaceHookTrust;
-  if (!inspect) return undefined;
-  const status = await inspect({
-    workspacePath: input.workingDirectory,
-    ...(input.deps.userConfigPath ? { userConfigPath: input.deps.userConfigPath } : {}),
-  });
-  return { ...status, reasonCode };
-}
-
-function isHeadlessWorkspaceHookBlockReason(
-  value: string | undefined,
-): value is HeadlessWorkspaceHookBlockReason {
-  return HEADLESS_WORKSPACE_HOOK_BLOCK_REASONS.some((candidate) => candidate === value);
-}
-
-function writeHeadlessWorkspaceHookTrustDiagnostic(
-  ctx: RunContext,
-  status: Awaited<ReturnType<NonNullable<RunDependencies["inspectWorkspaceHookTrust"]>>>,
-): void {
-  ctx.stderr.write(
-    [`Workspace Hooks skipped: ${status.reasonCode}`, "Review with: zcode hooks trust review"].join(
-      "\n",
-    ) + "\n",
-  );
-}
-import { createCliProviderCheckReporter } from "./provider-runtime-env.js";

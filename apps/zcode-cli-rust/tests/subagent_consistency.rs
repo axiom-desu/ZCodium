@@ -73,7 +73,12 @@ impl ModelPort for Model {
         _: &EventSink,
         _: &CancellationToken,
     ) -> std::result::Result<ModelOutput, ModelFailure> {
-        let last = messages.last().unwrap();
+        // 3.18：每条请求末尾带 total_tokens 提醒；脚本按真正的最后一条消息判定。
+        let last = messages
+            .iter()
+            .rev()
+            .find(|m| m["_zcode_source"] != "total_tokens_reminder")
+            .unwrap();
         self.calls
             .send(last["content"].as_str().unwrap().into())
             .unwrap();
@@ -141,6 +146,7 @@ async fn child_start_and_result_require_both_owners_to_commit_and_failure_releas
                         std::env::temp_dir().join("fixture-empty-home"),
                         false,
                         std::env::vars().collect(),
+                        None,
                     )),
                     store: Arc::new(Store {
                         stage,

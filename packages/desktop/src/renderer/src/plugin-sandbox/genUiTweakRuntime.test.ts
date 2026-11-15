@@ -66,11 +66,11 @@ it("serializes registration ACKs, applies previews, and restores original values
   });
   panel.addSlider(values, "size", { min: 0, max: 40 });
   panel.addToggle(values, "enabled");
-  await new Promise(setImmediate);
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
   expect(calls).toHaveLength(1);
   gate.resolve();
   await second.promise;
-  await new Promise(setImmediate);
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
   expect(calls[1].type).toBe("update");
   expect(calls[1].annotationControls.controls).toHaveLength(2);
   const control = calls[0].annotationControls.controls[0];
@@ -90,7 +90,7 @@ it("serializes registration ACKs, applies previews, and restores original values
   expect(values.size).toBe(12);
   runtime.globals(command(20));
   panel.dispose();
-  await new Promise(setImmediate);
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
   expect(values.size).toBe(12);
   expect(calls.at(-1).type).toBe("dispose");
   expect(seen).toEqual([20, 12, 20, 12]);
@@ -107,7 +107,7 @@ it("rejects invalid bindings before sending and rolls back a rejected registrati
   expect(calls).toHaveLength(0);
   panel.addToggle({ enabled: true }, "enabled");
   panel.addToggle({ enabled: false }, "enabled");
-  await new Promise(setImmediate);
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
   expect(calls.map((call) => call.type)).toEqual(["register", "dispose"]);
   expect(() => panel.addToggle({ enabled: true }, "enabled")).toThrow();
 });

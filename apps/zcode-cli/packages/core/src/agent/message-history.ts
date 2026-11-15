@@ -14,6 +14,7 @@ import {
   type TokenUsageInfo,
 } from "@zcode/contracts";
 import { SYSTEM_REMINDER_SOURCES, type SystemReminderSource } from "../system-reminder/source.js";
+import type { InstructionAnnouncement } from "../context/types.js";
 import {
   cloneEntryInput,
   cloneReasoningBlock,
@@ -72,7 +73,10 @@ export type RuntimeMessageSource =
   | SystemReminderSource
   | "shared_context"
   | "real_user"
-  | "legacy_synthetic";
+  | "legacy_synthetic"
+  // 用户停止本轮后留下的普通 user 文本标记（上游 3.18.2）。不是 system reminder：
+  // 它按对话消息计入组成，也不把轮次变成「有真实用户输入」。
+  | "interrupt_marker";
 
 export interface RuntimeMessageMetadata {
   source: RuntimeMessageSource;
@@ -88,6 +92,8 @@ export interface RuntimeMessageMetadata {
     removedNames: readonly string[];
     readdedNames: readonly string[];
   };
+  /** context_prefix 公告了哪些指令文件；之后的请求据此判断是否追加增量。 */
+  instructions?: InstructionAnnouncement;
 }
 
 export interface RuntimeMessageMessageEntry {
@@ -96,6 +102,11 @@ export interface RuntimeMessageMessageEntry {
   metadata?: RuntimeMessageMetadata;
   /** 已提交 assistant 自己的 provider tokens；不会发送到 provider。 */
   tokens?: TokenUsageInfo;
+  /**
+   * compact 分组键：同一持久化 assistant 因服务端内置工具拆出的多条 runtime assistant 共用，
+   * 使 runtime 分组与数据库消息边界一致。无服务端轮次时缺席。
+   */
+  compactGroupKey?: string;
   /** 仅在当前 query 内生效；不得进入 canonical history 或 Session persistence。 */
   queryScope?: "output_token_continuation";
 }
@@ -423,6 +434,18 @@ export function createRuntimeAssistantEntry(
     },
     ...(tokens ? { tokens: cloneTokenUsageInfo(tokens) } : {}),
   };
+}
+
+export function withCompactGroupKey<T extends RuntimeMessageEntry>(
+  entries: readonly T[],
+  key: string | undefined,
+): T[] {
+  if (!key) return [...entries];
+  return entries.map((entry) =>
+    !isRuntimeAttachmentEntry(entry) && entry.message.role === "assistant"
+      ? { ...entry, compactGroupKey: key }
+      : entry,
+  );
 }
 
 export function createRuntimeToolResultEntry(

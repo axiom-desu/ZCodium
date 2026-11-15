@@ -1,6 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
-import { ServiceCollection } from "@zcode/services";
+import { ChannelClient, Emitter, SocketProtocol, VSBuffer, type ISocket } from "@zcode/rpc";
+import {
+  IBotsService,
+  ServiceCollection,
+  type IBotsService as IBotsServiceContract,
+} from "@zcode/services";
 import {
   ZCODE_RPC_HOST_CAPABILITY_HEADER,
   serverRemoteAnonymousInfoSchema,
@@ -15,8 +20,8 @@ afterEach(async () => {
   for (const server of servers.splice(0)) await server.close();
 });
 
-async function startServer(ingressToken?: string) {
-  const server = await createCoreHttpServer(new ServiceCollection(), { ingressToken });
+async function startServer(ingressToken?: string, services = new ServiceCollection()) {
+  const server = await createCoreHttpServer(services, { ingressToken });
   servers.push(server);
   return {
     base: `http://${server.host}:${server.port}`,
@@ -59,6 +64,22 @@ async function expectWebSocketRejected(
     });
     socket.once("error", reject);
   });
+}
+
+function socketFor(ws: WebSocket): ISocket {
+  const data = new Emitter<VSBuffer>();
+  const close = new Emitter<void>();
+  ws.on("message", (raw) => data.fire(VSBuffer.wrap(Buffer.from(raw as ArrayBuffer))));
+  ws.on("close", () => close.fire());
+  return {
+    onData: data.event,
+    onClose: close.event,
+    onEnd: close.event,
+    write: (buffer) => ws.send(buffer.buffer),
+    end: () => ws.close(),
+    dispose: () => ws.close(),
+    drain: async () => {},
+  };
 }
 
 describe("Core HTTP/WS ingress authentication", () => {
@@ -106,6 +127,83 @@ describe("Core HTTP/WS ingress authentication", () => {
       ...authorizationHeaders(),
       [ZCODE_RPC_HOST_CAPABILITY_HEADER]: capability,
     });
+  });
+
+  it("limits replayable HTTP WebSocket Bots RPC to the shared management method surface", async () => {
+    const getStatus = async () => ({ status: "ok" });
+    const listBots = async () => [{ id: "bot-1" }];
+    const saveBot = vi.fn(async ({ bot }: { bot: { id: string } }) => bot);
+    const denied = vi.fn(async () => "should-not-run");
+    const service = {
+      getStatus,
+      listBots,
+      saveBot,
+      readTopicResource: denied,
+      validateTopicResource: denied,
+      handleInboundMessage: denied,
+      handleProviderCallback: denied,
+      watchAutomationRun: denied,
+      futurePrivilegedMethod: denied,
+    };
+    const services = new ServiceCollection().register(
+      IBotsService,
+      service as unknown as IBotsServiceContract,
+    );
+    const { base, wsBase } = await startServer(undefined, services);
+    const ws = new WebSocket(`${wsBase}/ws`);
+    // Attach RPC listeners before opening: server sends Initialize immediately on upgrade.
+    const protocol = new SocketProtocol(socketFor(ws));
+    const client = new ChannelClient(protocol);
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", resolve);
+      ws.once("error", reject);
+    });
+    try {
+      const bots = client.getChannel(IBotsService.channelName);
+      await expect(bots.call("getStatus")).resolves.toEqual({ status: "ok" });
+      await expect(bots.call("listBots")).resolves.toEqual([{ id: "bot-1" }]);
+      await expect(bots.call("saveBot", [{ bot: { id: "bot-managed" } }])).resolves.toEqual({
+        id: "bot-managed",
+      });
+      expect(saveBot).toHaveBeenCalledOnce();
+      for (const method of [
+        "readTopicResource",
+        "validateTopicResource",
+        "handleInboundMessage",
+        "handleProviderCallback",
+        "watchAutomationRun",
+        "futurePrivilegedMethod",
+      ]) {
+        await expect(bots.call(method)).rejects.toMatchObject({ kind: "feature_disabled" });
+      }
+      expect(denied).not.toHaveBeenCalled();
+
+      const capabilityResponse = await fetch(`${base}/api/rpc-host-capability`, { method: "POST" });
+      const { capability } = (await capabilityResponse.json()) as { capability: string };
+      const hostWs = new WebSocket(`${wsBase}/ws/host`, {
+        headers: { [ZCODE_RPC_HOST_CAPABILITY_HEADER]: capability },
+      });
+      const hostProtocol = new SocketProtocol(socketFor(hostWs));
+      const hostClient = new ChannelClient(hostProtocol);
+      await new Promise<void>((resolve, reject) => {
+        hostWs.once("open", resolve);
+        hostWs.once("error", reject);
+      });
+      try {
+        await expect(
+          hostClient.getChannel(IBotsService.channelName).call("readTopicResource"),
+        ).resolves.toBe("should-not-run");
+        expect(denied).toHaveBeenCalledOnce();
+      } finally {
+        hostClient.dispose();
+        hostProtocol.dispose();
+        hostWs.close();
+      }
+    } finally {
+      client.dispose();
+      protocol.dispose();
+      ws.close();
+    }
   });
 
   it("keeps loopback without a token unauthenticated for local development", async () => {

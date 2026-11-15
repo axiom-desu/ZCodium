@@ -1,0 +1,23 @@
+{
+  "name": "@zcode-dev/plugin-api",
+  "version": "1.4.0",
+  "private": true,
+  "description": "Type definitions for ZCodium plugin extensions (private workspace package).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifest": "./src/manifest.ts",
+    "./contract": "./src/contract.ts"
+  },
+  "scripts": {
+    "lint": "oxlint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@zcode/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
+  }
+}

@@ -40,8 +40,14 @@ pub(super) fn definitions() -> Vec<Value> {
     let description = crate::domain::web::search::description(template, &month);
     definitions.push(json!({"type":"function","function":{"name":"WebSearch","description":description,"parameters":schemas["WebSearch"]}}));
     definitions.extend(crate::domain::plan_mode::definitions());
+    // 3.18 F14：CronPauseSelf 的定义随目录注册；可见性由 run 的本轮 automationId 决定
+    // （agent_loop 过滤），执行由 core 经 Host automation/pause 完成。
+    definitions.push(crate::domain::automation::pause_self_definition());
     // ToolSearch / DeferredToolCall 控制入口也在注册目录里（Off 时请求准备隐藏）。
     definitions.extend(super::tool_search_meta::definitions());
+    // 3.18 App 会话控制十二工具同样随目录注册；本轮是否有 Host 能力、是否根会话
+    // 由请求准备裁剪（`core::app::agent_loop_turn`），目录本身不按环境改写。
+    definitions.extend(super::app_control_tools::definitions());
     definitions
 }
 

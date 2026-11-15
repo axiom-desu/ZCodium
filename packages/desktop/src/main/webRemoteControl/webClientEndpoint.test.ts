@@ -10,6 +10,7 @@ import {
   SocketProtocol,
   VSBuffer,
   type IMessagePassingProtocol,
+  type IChannel,
   type ISocket,
 } from "@zcode/rpc";
 import { createWebClientEndpoint, type WebClientRpcAttachment } from "./webClientEndpoint.js";
@@ -115,7 +116,7 @@ async function createFixture() {
           server ??= new ChannelServer(pair.host as unknown as IMessagePassingProtocol, "host");
           server.registerChannel("probe", {
             call: async <T>(_ctx: string, command: string) => ({ command }) as T,
-            listen: () => Emitter.None as never,
+            listen: () => () => ({ dispose() {} }),
           });
         },
         dispose() {
@@ -212,9 +213,7 @@ describe("web client endpoint", () => {
     const socket = createClientSocket(ws);
     const client = new ChannelClient(new SocketProtocol(socket));
     await waitForOpen(ws);
-    const result = await client
-      .getChannel<{ call<T>(name: string): Promise<T> }>("probe")
-      .call("ping");
+    const result = await client.getChannel<IChannel>("probe").call("ping");
     expect(result).toEqual({ command: "ping" });
     client.dispose();
     ws.close();
@@ -234,7 +233,7 @@ describe("web client endpoint", () => {
     const socket = createClientSocket(ws);
     const client = new ChannelClient(new SocketProtocol(socket));
     await waitForOpen(ws);
-    await client.getChannel<{ call<T>(name: string): Promise<T> }>("probe").call("ping");
+    await client.getChannel<IChannel>("probe").call("ping");
     client.dispose();
     ws.close();
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));

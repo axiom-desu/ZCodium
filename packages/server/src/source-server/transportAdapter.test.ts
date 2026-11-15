@@ -12,7 +12,11 @@ import {
   connectSourceServerTransport,
 } from "./connectSourceServer.js";
 import { collectCommand, duplexFromStdio } from "./sourceServerTransportRuntime.js";
-import { createSourceServerTransportAdapter, type ServerReleaseAsset } from "./transportAdapter.js";
+import {
+  createSourceServerTransportAdapter,
+  readServerCommandResult,
+  type ServerReleaseAsset,
+} from "./transportAdapter.js";
 
 interface FakeExecResult {
   stdout?: string;
@@ -26,6 +30,7 @@ interface FakeBackendOptions {
   installResult?: FakeExecResult;
   daemonStatus?: Record<string, unknown>;
   ingressToken?: string;
+  commandResult?: FakeExecResult;
 }
 
 function createStdioStream(result: FakeExecResult): StdioStream {
@@ -124,7 +129,7 @@ class FakeBackend implements IRemoteBackend {
     if (command.includes("proxy-stdio")) {
       return createStdioStream({ echo: true });
     }
-    return createStdioStream({ stdout: "" });
+    return createStdioStream(this.options.commandResult ?? { stdout: "" });
   }
 
   public exists(remotePath: string): Promise<boolean> {
@@ -385,6 +390,41 @@ describe("Source Server transport adapter", () => {
       code: "source-server-update-running-tasks",
       message: "3 running tasks",
     });
+  });
+
+  it("runs restart under detached fallback like serve --daemon", async () => {
+    const backend = new FakeBackend({ probe: { installed: true } });
+    const adapter = createAdapter(backend);
+    const result = await adapter.exec(target, ["restart", "--json"], {});
+    const command = backend.execCommands.at(-1) ?? "";
+    expect(command).toContain("ZCODE_SERVER_SKIP_SERVICE_REGISTRATION=1");
+    expect(command).toContain("'restart' '--json'");
+    expect(result.exitCode).toBe(0);
+    adapter.dispose?.();
+  });
+
+  it("preserves the CLI public error code for lifecycle commands", async () => {
+    const backend = new FakeBackend({
+      probe: { installed: true },
+      commandResult: {
+        exitCode: 1,
+        stdout: `${JSON.stringify({
+          ok: false,
+          code: "source-server-stop-failed",
+          error: "core did not stop",
+          retryable: false,
+        })}\n`,
+      },
+    });
+    const adapter = createAdapter(backend);
+    const result = await adapter.exec(target, ["stop", "--wait", "--json"], {});
+    expect(() => readServerCommandResult(result, "stop failed")).toThrowError(/core did not stop/);
+    try {
+      readServerCommandResult(result, "stop failed");
+    } catch (error) {
+      expect(error).toMatchObject({ code: "source-server-stop-failed", retryable: false });
+    }
+    adapter.dispose?.();
   });
 
   it("reuses one backend per target across probe, daemon and channel", async () => {

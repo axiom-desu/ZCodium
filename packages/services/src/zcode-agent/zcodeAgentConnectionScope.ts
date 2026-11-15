@@ -22,6 +22,7 @@ import type {
   ZCodeAgentRuntimePolicy,
   ZCodeAgentWorkspaceTarget,
 } from "./zcodeAgent.js";
+import { isRemoteInputPredictionEnabled } from "./inputPredictionSwitch.js";
 
 export type ZCodeAgentV4ClientMode = "desktop-continuous" | "web-remote-replayable";
 
@@ -107,6 +108,9 @@ function withTrustedConnection<T extends object>(
   forwarded[TRUSTED_CONNECTION_FIELD] = context;
   return forwarded as T;
 }
+
+/** Host 内部可信调用（AppForkSession 等）注入连接事实的唯一入口；不暴露给 RPC 调用方。 */
+export { withTrustedConnection as withTrustedZCodeAgentV4Connection };
 
 function withTrustedUnsubscribeRoute<T extends object>(
   value: T,
@@ -221,6 +225,8 @@ function createHello(context: ZCodeAgentV4ConnectionContext): HelloMessage {
       // 本 Host 会转发 `workflowRun.*` 键级增量；客户端见到它才能在 clientHello 里回声明
       // （那个 capabilities 是 .strict() 的，反过来会让老 Host 握不上手）。
       workflowRunDeltas: true,
+      // 手机远控输入预测：受 Host 开关控制；缺席/false 时手机不得发起 inputPrediction。
+      inputPrediction: isRemoteInputPredictionEnabled(),
     },
     auth: {},
   };

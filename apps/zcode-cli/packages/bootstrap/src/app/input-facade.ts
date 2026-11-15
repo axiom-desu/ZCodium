@@ -323,10 +323,14 @@ export function createInputFacade(deps: CreateInputFacadeDeps): InputFacade {
         traceContext: options?.traceContext ?? deps.traceContext,
       }),
     editQueueItem: async (pendingInputId, newText, options) => {
-      // v4 queue 单项编辑：替换排队输入文本（reducer 同 id 原地更新，保位）。
+      // v4 queue 单项编辑：替换排队输入文本与选区引用（reducer 同 id 原地更新，保位）。
+      // quotes 必须随编辑一起落到 session_input：否则重启后模型材料与投影行都丢批注。
       return deps.runtime.editPendingInputById({
         pendingInputId,
         newText,
+        ...(options?.conversationQuotes !== undefined
+          ? { conversationQuotes: options.conversationQuotes }
+          : {}),
         traceContext: options?.traceContext ?? deps.traceContext,
       });
     },

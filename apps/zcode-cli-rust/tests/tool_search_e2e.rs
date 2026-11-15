@@ -123,7 +123,7 @@ async fn local_wraps_targets_rejects_resident_and_promotes_after_compact() {
     let script = vec![
         tool_reply(
             "s1",
-            "ToolSearch",
+            "LocalToolSearch",
             json!({"query":"select:TodoWrite","max_results":5}),
         ),
         tool_reply(
@@ -153,7 +153,7 @@ async fn local_wraps_targets_rejects_resident_and_promotes_after_compact() {
     assert_eq!(bodies.len(), 4, "{bodies:#?}");
     // Local 只发常驻 + 两个控制入口，目标 schema 在真实结果位置展开。
     let second = tools(&bodies[1]);
-    assert!(second.iter().any(|(name, _)| name == "ToolSearch"));
+    assert!(second.iter().any(|(name, _)| name == "LocalToolSearch"));
     assert!(second.iter().any(|(name, _)| name == "DeferredToolCall"));
     assert!(!second.iter().any(|(name, _)| name == "TodoWrite"));
     let text = bodies[1].to_string();
@@ -219,7 +219,7 @@ async fn local_wraps_targets_rejects_resident_and_promotes_after_compact() {
     assert!(summary_text.contains("<functions>"), "{summary_request:#?}");
     let names = tools(&summary_request);
     assert!(!names.iter().any(|(name, _)| name == "TodoWrite"));
-    assert!(names.iter().any(|(name, _)| name == "ToolSearch"));
+    assert!(names.iter().any(|(name, _)| name == "LocalToolSearch"));
     assert!(names.iter().any(|(name, _)| name == "DeferredToolCall"));
     let before = h.bodies().len();
     h.send(4, &session, "continue").await;
@@ -241,7 +241,7 @@ async fn local_wraps_targets_rejects_resident_and_promotes_after_compact() {
         names.contains(&("TodoWrite".to_owned(), false)),
         "{names:?}"
     );
-    assert!(names.iter().any(|(name, _)| name == "ToolSearch"));
+    assert!(names.iter().any(|(name, _)| name == "LocalToolSearch"));
     assert!(names.iter().any(|(name, _)| name == "DeferredToolCall"));
 
     let (root, dir) = h.close().await;
@@ -312,13 +312,13 @@ async fn tool_search_needs_no_approval_in_build_or_plan() {
     let script = vec![
         tool_reply(
             "s1",
-            "ToolSearch",
+            "LocalToolSearch",
             json!({"query":"select:TodoWrite","max_results":5}),
         ),
         text_reply("build done."),
         tool_reply(
             "s2",
-            "ToolSearch",
+            "LocalToolSearch",
             json!({"query":"select:TodoWrite","max_results":5}),
         ),
         text_reply("plan done."),

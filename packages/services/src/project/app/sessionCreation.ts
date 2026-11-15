@@ -45,6 +45,7 @@ export function createProjectSessionCreationPort(options: {
             taskId: target.sessionId,
           },
           projectId: target.projectId,
+          ...(target.worktreeRoot ? { worktreeRoot: target.worktreeRoot } : {}),
           ...(target.additionalDirectories !== undefined
             ? { additionalDirectories: target.additionalDirectories }
             : { freezeAdditionalDirectories: true as const }),

@@ -33,8 +33,8 @@ import {
 } from "@zcode/contracts";
 import type { ToolEntry, ToolExecutionContext, ToolHandler } from "../types.js";
 
-const CRON_TOOL_TIMEOUT_MS = 30_000;
-const CRON_MODEL_BYTES = 32_000;
+export const CRON_TOOL_TIMEOUT_MS = 30_000;
+export const CRON_MODEL_BYTES = 32_000;
 
 function assertNotAutomationTurn(
   context: ToolExecutionContext,
@@ -57,9 +57,9 @@ function assertNotAutomationTurn(
   );
 }
 
-function assertAutomationPort(
+export function assertAutomationPort(
   context: ToolExecutionContext,
-  toolName: "CronCreate" | "CronList" | "CronUpdate" | "CronDelete",
+  toolName: "CronCreate" | "CronList" | "CronUpdate" | "CronDelete" | "CronPauseSelf",
 ): asserts context is ToolExecutionContext & {
   automationPort: NonNullable<ToolExecutionContext["automationPort"]>;
 } {
@@ -150,7 +150,7 @@ const cronDeleteHandler: ToolHandler = async (input, context) => {
   } satisfies CronDeleteOutput;
 };
 
-function cronPermission(
+export function cronPermission(
   permission: string,
   reason: string,
   needsApproval: boolean,
@@ -167,7 +167,7 @@ function cronPermission(
   };
 }
 
-const cronResultBudget = {
+export const cronResultBudget = {
   maxInlineBytes: CRON_MODEL_BYTES,
   maxModelBytes: CRON_MODEL_BYTES,
   strategy: "truncate" as const,
@@ -177,7 +177,7 @@ const cronResultBudget = {
   },
 };
 
-const cronTimeout = {
+export const cronTimeout = {
   defaultMs: CRON_TOOL_TIMEOUT_MS,
   maxMs: CRON_TOOL_TIMEOUT_MS,
   allowCallOverride: false,

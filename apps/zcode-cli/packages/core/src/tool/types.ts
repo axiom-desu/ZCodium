@@ -38,6 +38,7 @@ import type {
   SubagentPort,
   SubagentRunOptions,
   ToolArtifactStorePort,
+  TopicResourcePort,
   ToolCancellationPolicy,
   ToolContractDeclaration,
   ToolExecutionMode,
@@ -51,8 +52,11 @@ import type {
   WorkflowEscalatePort,
   WorkflowPort,
   WorkflowSubmitPort,
+  WorkflowWebSearchBudgetPort,
 } from "@zcode/contracts";
 import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
+import type { SessionControlBinding } from "./session-control/contract.js";
+import type { PluginDiscoveryPort } from "@zcode/contracts";
 import type {
   PersistedReadFileStateMetadata,
   PersistedReadFileStateTool,
@@ -141,6 +145,11 @@ export interface ToolExecutionContext {
   toolCallId: string;
   /** 当前工具调用是否属于 automation 派发轮；写工具 handler 用它做最终权限校验。 */
   automationTurn?: boolean;
+  /**
+   * 本轮 automation 身份：只由 Host 准入注入，绝不从模型输入或持久元数据推断。
+   * CronPauseSelf 只能停这条任务。
+   */
+  automationId?: string;
   traceContext?: TraceContext;
   traceId: TraceId;
   spanId?: string;
@@ -168,10 +177,24 @@ export interface ToolExecutionContext {
   /** 工作流 actor 升级阻塞问题并等待主代理作答的端口；仅在 workflow actor 会话注入。 */
   workflowEscalatePort?: WorkflowEscalatePort;
   artifactStore?: ToolArtifactStorePort;
+  /** 当前任务已接纳话题资源的读取端口；缺省即本执行面没有 bot 接纳事实，不注册该工具。 */
+  topicResourcePort?: TopicResourcePort;
+  /** 本 actor 每个 ask 的 WebSearch 预算；缺席即无上限。 */
+  webSearchBudget?: WorkflowWebSearchBudgetPort;
   automationPort?: AutomationPort;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
   workflowPort?: WorkflowPort;
+  /**
+   * 独立 CLI 的会话控制绑定：只由启动装配写入，模型输入不参与。
+   * 缺席即本执行面没有 8 个会话工具（桌面/远程 Host 会话不提供第二个控制面）。
+   */
+  sessionControl?: SessionControlBinding;
+  /**
+   * 插件发现端口：只由启动装配写入。缺席即本执行面没有插件目录；子代理即便拿到端口也在
+   * handler 里 fail closed（那里没有审批窗，安装意图无法获得用户确认）。
+   */
+  pluginDiscoveryPort?: PluginDiscoveryPort;
   /** workflow run 提交端口；缺席则 CreateWorkflow 回占位诊断而不启动。 */
   dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   /** dwf snippet 同步执行端口；缺席则 EvalWorkflowSnippet 报能力缺席的业务失败。 */

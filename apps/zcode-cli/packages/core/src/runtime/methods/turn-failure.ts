@@ -1,10 +1,15 @@
 import { CoreErrorType } from "../deps.js";
 import type { MessageId, SessionEvent, SessionGoal, TraceContext, TurnId } from "../deps.js";
-import { appendTurnOutcomeEvent, createTurnFailureError } from "../helpers/index.js";
+import {
+  appendTurnOutcomeEvent,
+  createTurnFailureError,
+  isExternalTurnFault,
+} from "../helpers/index.js";
 import type { ExecuteTurnOptions } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import type { RegularTurnLoopState } from "./turn-loop-state.js";
 import { recordTurnUsageFact } from "./usage-observability.js";
+import { appendInterruptMarker } from "./interrupt-marker.js";
 
 /** Turn 失败收口：保留 accepted queue、owner/lease 与 stale run 判定原分支。 */
 export async function failTurnExecution(
@@ -50,6 +55,14 @@ export async function failTurnExecution(
   });
   if (finishedTarget?.targetID === startedTarget?.targetID) {
     startedTarget = finishedTarget;
+  }
+  // 停止的轮次给模型留中断标记；send-now 抢占是为了交付下一条输入，不加标记。
+  // 修复原因：宿主外部故障中止本轮时，被取消的工具结果已写成停止文字，却没有标记；
+  // 它同样是中止，与用户停止一样留标记。
+  const abortedTurn =
+    coreError.type === CoreErrorType.TurnCancelled || isExternalTurnFault(turnAbortSignal.reason);
+  if (loopState && abortedTurn && !preserveQueueAutoDrainOnCancel) {
+    await appendInterruptMarker(this, loopState, turnTraceContext);
   }
   if (coreError.type === CoreErrorType.TurnCancelled) {
     await this.pauseActiveTargetForCancellation(turnTraceContext);

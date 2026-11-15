@@ -74,6 +74,8 @@ import {
   type CodeCommentRange,
 } from "@/lib/codeCommentContext.js";
 import { getWorkspaceFileRelativePath } from "@/workspace-file-tree/model.js";
+import { isWorkspaceFilePathInside } from "@/workspace-file-tree/model.js";
+import type { WorkspaceFileDragPayload } from "@/lib/workspaceFileDrag.js";
 import { resolveWorkspaceEditorSelection } from "@/lib/workspaceEditorSelection.js";
 import {
   assertPptxPreviewDataComplete,
@@ -478,6 +480,35 @@ function buildCodeViewerBreadcrumb(
   };
 }
 
+function resolvePreviewPaneImageFileReference(
+  source: CodeViewerSource | null,
+  workspacePath?: string,
+  targetWorkspaceKey?: string,
+): WorkspaceFileDragPayload | undefined {
+  const sourceWorkspacePath = source?.workspacePath ?? workspacePath;
+  const workspaceIdentity = source?.workspaceIdentity?.trim();
+  if (!source?.path || !sourceWorkspacePath) return undefined;
+  const sourceWorkspaceKey = workspaceIdentity || sourceWorkspacePath;
+  const sourceIsRemote = Boolean(workspaceIdentity || source.workspaceRemoteSessionId);
+  const targetIsRemote = Boolean(
+    workspacePath && targetWorkspaceKey && targetWorkspaceKey !== workspacePath,
+  );
+  // 本地文件沿用文件树的跨工作区绝对引用；远端必须匹配身份，不能把另一 Host 的 path 交给当前草稿。
+  if ((sourceIsRemote || targetIsRemote) && sourceWorkspaceKey !== targetWorkspaceKey)
+    return undefined;
+  return {
+    type: "file",
+    workspacePath: sourceWorkspacePath,
+    ...(workspaceIdentity ? { workspaceIdentity } : {}),
+    path: source.path,
+    // 预览允许工作区外路径；文件树的相对路径 helper 对外部文件只返回文件名，会误指向同名文件。
+    relativePath: isWorkspaceFilePathInside(sourceWorkspacePath, source.path)
+      ? getWorkspaceFileRelativePath(sourceWorkspacePath, source.path)
+      : source.path,
+    name: getPathLeaf(source.path) || source.title,
+  };
+}
+
 export function PreviewPane({
   source: rawSource,
   workspacePath,
@@ -518,11 +549,27 @@ export function PreviewPane({
     matchedOpenContext.isRemoteWorkspace,
   );
   const fileActions = useFileContextActions();
+  const imageFileReference = useMemo(
+    () =>
+      resolvePreviewPaneImageFileReference(
+        source,
+        workspacePath,
+        markdownSelectionTarget?.workspaceKey,
+      ),
+    [source, workspacePath, markdownSelectionTarget?.workspaceKey],
+  );
+  const sourceFilePath = source?.path;
   const { fileService, fileWatcherService, mediaPreviewService } = useWorkspaceServices(
     sourceWorkspacePath,
     source?.workspaceRemoteSessionId,
     source?.workspaceIdentity,
   );
+  const loadImageDownloadSource = useCallback(async () => {
+    if (!sourceFilePath) throw new Error("Image source path is unavailable");
+    // SVG 文本预览按 UTF-8 解码；下载必须从同一来源 Host 读取原字节，保留其他编码及 XML 声明。
+    const original = await fileService.readMediaPreview({ path: sourceFilePath });
+    return `data:${original.mediaType};base64,${original.dataBase64}`;
+  }, [fileService, sourceFilePath]);
   const [filePreview, setFilePreview] = useState<FileTextSlice | null>(null);
   const [fileTooLarge, setFileTooLarge] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(false);
@@ -1744,6 +1791,8 @@ export function PreviewPane({
             loadingInitial={loadingInitial}
             loadingImagePreview={loadingImagePreview}
             imagePreview={imagePreview}
+            imageFileReference={imageFileReference}
+            loadImageDownloadSource={sourceFilePath ? loadImageDownloadSource : undefined}
             mediaSource={mediaSource}
             loadingMediaPreview={loadingMediaPreview}
             mediaPreviewUrl={mediaPreviewUrl}

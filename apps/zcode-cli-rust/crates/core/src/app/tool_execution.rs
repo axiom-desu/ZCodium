@@ -12,7 +12,6 @@ use crate::{
 use anyhow::{Context, Result, bail};
 use futures_util::{StreamExt, stream};
 use serde_json::{Value, json};
-use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
@@ -29,6 +28,10 @@ pub(super) struct Scope<'a> {
     pub hooks: Option<&'a std::sync::Arc<super::hook_runner::Hooks>>,
     /// The run's model, for tools that ask it (WebFetch).
     pub model: &'a dyn crate::contract::ModelPort,
+    /// Host-admitted automationId of this run (`CronPauseSelf` only).
+    pub automation_id: Option<&'a str>,
+    /// 本轮 App 会话控制授予（三分支都只读这一份本轮事实）。
+    pub app_control: bool,
 }
 async fn execute(
     tools: &dyn ToolPort,
@@ -47,6 +50,8 @@ async fn execute(
         tool_filter,
         hooks,
         model,
+        automation_id,
+        app_control,
     } = context;
     let (search, skills, profile, profiles, permissions, hooks) =
         (*search, *skills, *profile, *profiles, *permissions, *hooks);
@@ -160,6 +165,14 @@ async fn execute(
                 )
                 .await
             }
+            Some(args) if name == crate::domain::automation::PAUSE_SELF => {
+                super::automation_tool::execute(&args, *automation_id, sink, cancel).await
+            }
+            // 3.18 App 会话控制十二工具：执行边界只读本轮的授予事实与身份，
+            // 模型输入只承载 `input`（RequestId 由这里注入）。
+            Some(args) if crate::domain::app_control::is_tool(name) => {
+                super::app_control_tool::execute(name, &args, &id, *app_control, sink, cancel).await
+            }
             Some(args) if plan_tool => {
                 super::plan_tools::execute(tools, name, &args, &id, permissions, sink, cancel).await
             }
@@ -169,7 +182,7 @@ async fn execute(
             Some(args) if matches!(name, "TodoRead" | "TodoWrite") => {
                 super::todos::execute(name, &id, args, sink, cancel).await
             }
-            Some(args) if name == crate::domain::tool_search::TOOL_SEARCH_NAME => match search {
+            Some(args) if crate::domain::tool_search::is_tool_search_name(name) => match search {
                 Some(search) => search.execute(&args),
                 None => Err(anyhow::anyhow!(
                     "ToolSearch is not enabled for this request."
@@ -229,7 +242,7 @@ async fn execute(
         // Node serializeOutput：空结果给出占位，避免模型误读为缺失结果。
         content.content = format!("({name} completed with no output)");
     } else if !failed {
-        apply_budget(tools, name, (&sink.session_id, &id), &mut content).await;
+        results::apply_budget(tools, name, (&sink.session_id, &id), &mut content).await;
     }
     let mut contexts = pre.additional_contexts;
     if let (Some(h), Some(args)) = (hooks, &parsed) {
@@ -271,29 +284,6 @@ async fn execute(
 /// Runs one model step's calls. Consecutive concurrency-safe calls run together
 /// and commit in call order; a result with `stop_turn` cancels every later call.
 /// Returns whether the turn must end.
-/// Node `serializeOutput`'s resultBudget (spec rust-m5-tools §2.3).
-async fn apply_budget(
-    tools: &dyn ToolPort,
-    name: &str,
-    (session, call): (&str, &str),
-    output: &mut ToolOutput,
-) {
-    use crate::domain::result_budget::{self, Plan};
-    let budget = result_budget::for_tool(name);
-    let text = match result_budget::plan(&output.content, budget) {
-        Plan::Inline => return,
-        Plan::Truncate(text) => text,
-        Plan::Persist => match tools.persist_result(session, call, &output.content).await {
-            Ok(path) => result_budget::persisted(&output.content, &path),
-            // 写入失败时退回截断：结果仍可见，原始大输出不进入模型上下文。
-            Err(_) => result_budget::truncated(&output.content, budget),
-        },
-    };
-    output.content = text;
-    output.model_content = None;
-    output.truncated = true;
-}
-
 pub(super) async fn run_calls(
     tools: &dyn ToolPort,
     scope: &Scope<'_>,
@@ -323,7 +313,7 @@ pub(super) async fn run_calls(
                 sink.send(Event::ToolStart { call: call.clone() }).await?;
                 let mut output = ToolOutput::text(plan_mode::TURN_STOP_CANCELLED.into());
                 (output.failed, output.denied) = (true, true);
-                commit(
+                results::commit(
                     history,
                     call["id"].as_str().unwrap_or(""),
                     output,
@@ -339,61 +329,33 @@ pub(super) async fn run_calls(
             .iter()
             .map(|call| call["id"].as_str().unwrap_or("").to_owned())
             .collect();
+        // 结果按 callID → 工具名对账：F12 的标签派生需要真实结算结果，不能从调用参数猜。
+        let names: std::collections::HashMap<String, String> = group
+            .iter()
+            .filter_map(|call| {
+                Some((
+                    call["id"].as_str()?.to_owned(),
+                    call["function"]["name"].as_str()?.to_owned(),
+                ))
+            })
+            .collect();
         // 只读工具并发执行，但按原始 call 顺序持久化结果；写/Shell 不跨越该屏障。
         let mut results = stream::iter(group)
             .map(|call| execute(tools, scope, call, sink, cancel))
             .buffered(4);
         while let Some(result) = results.next().await {
             let (id, output, failed) = result?;
+            if let Some(name) = names.get(&id) {
+                super::session_features::from_tool_result(history, name, failed, &output, sink)
+                    .await?;
+            }
             stop |= output.stop_turn;
-            commit(history, &id, output, failed, sink, cancel).await?;
+            results::commit(history, &id, output, failed, sink, cancel).await?;
         }
         sink.send(Event::ToolBatch { ids }).await?;
     }
     Ok(stop)
 }
 
-async fn commit(
-    history: &mut super::context::RunContext,
-    id: &str,
-    output: ToolOutput,
-    failed: bool,
-    sink: &EventSink,
-    cancel: &CancellationToken,
-) -> Result<()> {
-    let content = output.content;
-    // 失败结果总是文本形态（Node：is_error 结果展平为 error-text）。
-    let message = match output.model_content.clone().filter(|_| !failed) {
-        Some(blocks) => blocks,
-        None => Value::String(content.clone()),
-    };
-    history.push(
-        json!({"role":"tool","tool_call_id":id,"content":message,"_zcode_tool_failed":failed}),
-    );
-    let (committed, receipt) = oneshot::channel();
-    let checkpoint = (!failed)
-        .then(|| crate::domain::node_journal::checkpoint::candidate(&output.data))
-        .flatten()
-        .map(Box::new);
-    let facts = crate::contract::ToolFacts {
-        exit_code: output.data["exitCode"].as_i64(),
-        truncated: output.truncated,
-        model_usage: Some(output.data["modelUsage"].clone())
-            .filter(|u| u.as_object().is_some_and(|u| !u.is_empty())),
-        perf: output.perf,
-        error: output.error,
-    };
-    sink.send(Event::ToolDone {
-        id: id.into(),
-        result: content,
-        model_content: output.model_content.filter(|_| !failed),
-        display: output.display,
-        failed,
-        denied: output.denied,
-        checkpoint,
-        facts,
-        committed,
-    })
-    .await?;
-    super::durable::durable(receipt, cancel).await
-}
+#[path = "tool_execution_results.rs"]
+mod results;

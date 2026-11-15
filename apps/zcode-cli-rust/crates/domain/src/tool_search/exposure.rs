@@ -2,8 +2,8 @@
 use super::discovery::collect_discovered;
 use super::projection::project_messages;
 use super::{
-    Candidate, DEFERRED_TOOL_CALL_NAME, Metadata, Mode, ResolvedMode, TOOL_SEARCH_NAME, candidate,
-    definition_name, resolve_mode,
+    Candidate, DEFERRED_TOOL_CALL_NAME, LOCAL_TOOL_SEARCH_NAME, Metadata, Mode, ResolvedMode,
+    TOOL_SEARCH_NAME, candidate, definition_name, resolve_mode,
 };
 use crate::model::ToolSearchCapability;
 use serde_json::Value;
@@ -124,6 +124,9 @@ pub fn build_exposure(input: &ExposureInput<'_>) -> Result<Exposure, &'static st
                 } else {
                     super::native_description().into()
                 };
+                if resolved.mode == ResolvedMode::Local {
+                    definition["function"]["name"] = LOCAL_TOOL_SEARCH_NAME.into();
+                }
                 tools.push(definition);
             }
             continue;

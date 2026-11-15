@@ -1,0 +1,40 @@
+{
+  "name": "@zcode/session-control",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/contract.js",
+  "types": "./dist/contract.d.ts",
+  "exports": {
+    "./contracts": {
+      "types": "./dist/contract.d.ts",
+      "import": "./dist/contract.js"
+    },
+    "./cli": {
+      "types": "./dist/application/cli/index.d.ts",
+      "import": "./dist/application/cli/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    },
+    "./app": {
+      "types": "./dist/application/app/index.d.ts",
+      "import": "./dist/application/app/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "node ../../scripts/clean-dist.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-isolation=none test/*.test.ts",
+    "lint": "oxlint src test",
+    "lint:fix": "oxlint --fix src test"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  }
+}

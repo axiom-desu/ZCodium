@@ -94,6 +94,7 @@ export function createAppAgentRuntime(input: AppAgentRuntimeInput): AgentRuntime
     imageProcessorPort,
     pdfDocumentPort,
     artifactStore,
+    topicResourcePort: options.topicResourcePort,
     contextSourcePort:
       options.contextSourcePort ?? createNodeContextSourceAdapter({ env: options.env }),
     skillPort:
@@ -125,6 +126,10 @@ export function createAppAgentRuntime(input: AppAgentRuntimeInput): AgentRuntime
     dynamicWorkflowRunPort,
     dynamicWorkflowSnippetPort,
     modelCatalogPort,
+    // 会话控制绑定由启动装配注入；缺席的会话（桌面/远程 Host、子代理）不注册 8 个工具。
+    sessionControl: options.sessionControl,
+    // 插件发现端口同样只来自启动装配；子代理执行面在 runtime-tools 里被收口。
+    pluginDiscoveryPort: options.pluginDiscoveryPort,
     automationPort: options.automationPort,
     appVersion,
     traceContext,

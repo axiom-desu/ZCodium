@@ -421,6 +421,18 @@ export class ConversationV4Gateway {
   }
 
   /**
+   * 彻底删除（项目数据删除）后从全部 sessions-index 投影中移除该会话。会话未加载时没有
+   * 注册表记录可查 workspace，所以遍历所有投影；会话 ID 全局唯一，不会误删别的会话。
+   * 不移除会让已存在的投影在下次快照里带回该会话，Host 会把它当作新发现的会话重新登记。
+   */
+  forgetIndexedSession(sessionId: string): void {
+    for (const workspaceId of this.state.indexPublishers.keys()) {
+      if (this.state.indexPublishers.get(workspaceId)?.removeSession(sessionId))
+        indexconfig.flushIndex(this.state, workspaceId);
+    }
+  }
+
+  /**
    * Resident 回收纯预检：调用方可在拆 runtime event subscription 前拒绝不安全回收。
    * deactivateSession 内仍复用同一校验，防止未来新增调用方绕过执行面 preflight。
    */

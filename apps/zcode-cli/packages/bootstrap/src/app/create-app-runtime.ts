@@ -235,13 +235,9 @@ export function createAppRuntime(
       return await resolveZCodeCustomCommandPrompt(text, {
         additionalDirectories: options.additionalDirectories,
         env: options.env,
-        executionPort,
         logger,
         projectConfigPath: options.projectConfigPath,
-        sessionId,
-        signal: resolverOptions?.abortSignal,
         skipUserConfig: options.skipUserConfig,
-        traceContext: resolverOptions?.traceContext ?? traceContext,
         userConfigPath: options.userConfigPath,
         workingDirectory,
       });

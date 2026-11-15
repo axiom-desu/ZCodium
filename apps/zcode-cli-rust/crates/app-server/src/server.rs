@@ -253,13 +253,22 @@ impl Server {
             .await
     }
 
-    /// 把 Host 返回的模式写入既有 `runtimeConfig.toolSearch.mode`；旧 Host 缺字段时回退 Off。
+    /// 把 Host 的偏好写进既有 `runtimeConfig`：`toolSearch.mode` 与 3.18 的
+    /// `appControl`。旧 Host 缺字段时都不写（ToolSearch 回退 Off，App 控制不可用）；
+    /// `appControlEnabled` 只有 Host 明确回 `true` 才置位，不从别的字段推断。
     async fn resume_request(&mut self, mut request: Request, result: Value) -> Result<()> {
+        let mut runtime_config = serde_json::Map::new();
         if let Some(mode) = result["toolSearchMode"]
             .as_str()
             .filter(|mode| matches!(*mode, "auto" | "native" | "local" | "off"))
         {
-            request.params["runtimeConfig"] = json!({"toolSearch": {"mode": mode}});
+            runtime_config.insert("toolSearch".into(), json!({"mode": mode}));
+        }
+        if result["appControlEnabled"] == true {
+            runtime_config.insert("appControl".into(), Value::Bool(true));
+        }
+        if !runtime_config.is_empty() {
+            request.params["runtimeConfig"] = Value::Object(runtime_config);
         }
         self.route_request(request).await
     }

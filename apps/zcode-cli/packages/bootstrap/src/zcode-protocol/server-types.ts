@@ -11,6 +11,7 @@ import {
   type TraceContext,
 } from "@zcode/contracts";
 import type { McpProcessTracker } from "@zcode/adapters";
+import type { SessionDataFilesPort } from "@zcode/adapters/storage";
 import type { WorkspaceHookPolicyProvider } from "@zcode/core";
 import {
   zcodeProtocolErrorCodes,
@@ -32,6 +33,8 @@ import type { ZCodeApp, ZCodeAppOptions } from "../app/types.js";
 import type { V4InteractionRegistry } from "../zcode-protocol-v4/interaction-registry.js";
 import type { ConversationV4Gateway } from "../zcode-protocol-v4/v4-gateway.js";
 import type { SessionResidentPool, SessionResidentPoolOptions } from "./session-resident-pool.js";
+import type { ContextCompositionRevisionTracker } from "./context-composition/tracker.js";
+import type { ConversationInputPredictionHandler } from "./input-prediction-handler.js";
 
 export interface ParamsSchema<T> {
   parse(input: unknown): T;
@@ -56,6 +59,8 @@ export interface ZCodeProtocolAgentDependencies {
   /** 兼容旧测试/嵌入调用；新代码应通过 sessionResidentPoolOptions 设置 low-water。 */
   sessionResidentTargetCount?: number;
   sessionStore?: SessionStorePort;
+  /** 项目数据彻底删除的文件端口（cli/{artifacts,exec,agents,sessions,debug,rollout} + 记忆）；未注入时该方法不可用。 */
+  sessionDataFiles?: SessionDataFilesPort;
   version?: string;
   /** 受信 Host 管理的 Hook policy；workspace/project 配置不得覆盖。 */
   workspaceHookPolicyProvider?: WorkspaceHookPolicyProvider;
@@ -82,6 +87,8 @@ export interface ZCodeProtocolSessionRecord {
   app: ZCodeApp;
   /** 启动时解析的工具搜索模式：fork/子 Agent 继承，热 resume 保持原值。 */
   toolSearchMode: AppToolSearchMode;
+  /** Host 能力回包声明的 App control 开关：fork 继承，只决定注册/执行面。 */
+  appControlEnabled?: boolean;
   /** 本次运行冻结的附加执行目录；继承给 child，热 resume 不改写。 */
   additionalDirectories?: readonly string[];
   memoryEnabled: boolean;
@@ -152,6 +159,18 @@ export interface ZCodeProtocolAgentServerContext {
   // 单 CLI resident session 池。冷恢复入口经 waitForDeactivation 等待旧 app.close 收尾，
   // 协议请求则持有 operation lease，禁止异步 handler 与容量回收交错。
   sessionResidentPool?: SessionResidentPool;
+  /** 进程内 session runtime 生命周期唯一 owner；不持有持久会话事实。 */
+  sessionLifecycle?: import("../session-lifecycle/index.js").SessionLifecycleController;
+  /**
+   * context 组成修订号的唯一 owner（每协议 server 一份）。首查时由 tracker 模块惰性创建；
+   * 只在内存里计数并发通知，不缓存组成。
+   */
+  contextCompositionTracker?: ContextCompositionRevisionTracker;
+  /**
+   * 手机远控输入预测的唯一 owner（in-flight + 结果缓存）。每协议 server 一份，
+   * 惰性创建；不持有会话事实，不进入 CommandInbox。
+   */
+  inputPrediction?: ConversationInputPredictionHandler;
   /** 正在 materialize 的预占 sessionId（native/V4 并发去重）。 */
   sessionCreationIds?: Set<string>;
   sessions: Map<string, ZCodeProtocolSessionRecord>;
@@ -311,6 +330,14 @@ export function requireSession(
   sessionId: string,
   options: { deliveryKind?: ZCodeDeliveryKind; operation?: string } = {},
 ): ZCodeProtocolSessionRecord {
+  // stop/restart 期间 record 可能尚未摘除，但已不能再接受新命令。
+  if (context.sessionLifecycle && !context.sessionLifecycle.isReady(sessionId)) {
+    throw new ProtocolRequestError(
+      zcodeProtocolErrorCodes.sessionUnavailable,
+      "Session runtime is not ready",
+      { code: "runtimeNotReady" },
+    );
+  }
   const record = context.sessions.get(sessionId);
   if (!record) {
     // 诊断：readSession 只读取活跃 runtime；记录缺失时要区分“冷会话尚未恢复”和“ID 已失效”，

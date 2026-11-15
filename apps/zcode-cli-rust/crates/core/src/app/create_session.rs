@@ -60,6 +60,8 @@ impl Engine {
             self.tools.configure_mcp(&id, servers).await?;
         }
         self.sessions.insert(id.clone(), session);
+        // 跨进程运行态：永久删除预检据此拒绝删除本进程正在物化的会话。
+        self.store.session_presence_register(&id).await?;
         self.apply_selection(&id, config)?;
         let mut ack = c.ack("accepted", 0, None);
         ack["result"] = json!({"type":"createSession","sessionId":id});

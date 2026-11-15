@@ -47,6 +47,8 @@ export interface PluginUiToolFeed {
 
 export interface PluginUiHostControllerDeps extends PluginUiInteractionCallbacks {
   onBusyChange?(): void;
+  /** 页面交付了真实工作（App 工具/sampling/`zcode/activity`）；只用于保留页面的活跃时间。 */
+  onActivity?(): void;
   onInstanceClosed?(): void;
   createTransport(port: PluginSandboxTransportPort): Transport;
   bridge: Pick<

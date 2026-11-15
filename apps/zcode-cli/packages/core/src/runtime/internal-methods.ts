@@ -36,6 +36,12 @@ import type {
 } from "./deps.js";
 import type { BackgroundResultOriginMeta, ContextUsageBreakdownItem } from "@zcode/contracts";
 import type { RuntimeCommand, RuntimeCommandId } from "./command-queue.js";
+import type {
+  ContextCompositionChangeListener,
+  ContextCompositionMeasurement,
+} from "./context-composition/state.js";
+import type { ContextCompositionQuery } from "./context-composition/query.js";
+import type { ContextUsageSnapshot } from "./methods/context-usage.js";
 import type { RuntimeMessageEntry } from "../agent/message-history.js";
 import type {
   ActiveTurnInfo,
@@ -210,6 +216,7 @@ export interface AgentRuntimeCoreMethods {
   editPendingInputById(options: {
     pendingInputId: string;
     newText: string;
+    conversationQuotes?: TurnInputIntentMetadata["conversationQuotes"];
     traceContext: TraceContext;
   }): Promise<boolean>;
   reorderPendingInput(options: {
@@ -248,6 +255,12 @@ export interface AgentRuntimeCoreMethods {
   getTools(model?: Model): ModelToolContract[];
   invalidateToolCache(): void;
   getToolRegistry(): ToolRegistry;
+  /** context 组成查询（existing-only：不冷启动会话）；必要时按所查模型预演。 */
+  getContextComposition(
+    input?: ContextCompositionQuery,
+  ): Promise<ContextCompositionMeasurement | null>;
+  subscribeContextCompositionChanged(listener: ContextCompositionChangeListener): () => void;
+  markContextCompositionChanged(): void;
   getToolExecutor(): ToolExecutor;
   subscribeEvents(sink: SessionEventSink): () => void;
   getContextBuilder(): ContextBuilder;
@@ -296,7 +309,7 @@ export interface AgentRuntimeCoreMethods {
     messages: ModelInputMessage[],
     limit?: unknown,
   ): Array<Record<string, unknown>>;
-  buildContextUsageSnapshot(options: RunModelTextRequestOptions): Record<string, unknown>;
+  buildContextUsageSnapshot(options: RunModelTextRequestOptions): ContextUsageSnapshot;
   buildContextUsageBreakdownFromSnapshot(
     snapshot: Record<string, unknown>,
   ): ContextUsageBreakdownItem[];

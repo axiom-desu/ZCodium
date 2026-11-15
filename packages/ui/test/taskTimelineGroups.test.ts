@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import type { Locale } from "@zcode/shared";
 import { groupTaskTimelineItems } from "@/lib/taskTimelineGroups.js";
 
 // 日期段必须按本地日历判断：夏令时切换日只有 23/25 小时，用毫秒差取整会把
@@ -7,7 +8,7 @@ beforeAll(() => {
   process.env.TZ = "America/New_York";
 });
 
-function groupKeys(now: string, timestamps: string[], locale: "en-US" | "zh-CN" = "en-US") {
+function groupKeys(now: string, timestamps: string[], locale: Locale = "en-US") {
   return groupTaskTimelineItems(
     timestamps.map((timestamp, index) => ({
       taskId: `t-${index}`,
@@ -50,6 +51,11 @@ describe("timeline 日期段规则", () => {
     expect(groupKeys("2026-11-15T12:00:00", ["2026-11-08T12:00:00"], "zh-CN")).toEqual([
       "lastWeek",
     ]);
+    for (const locale of ["ja-JP", "ko-KR", "ru-RU"] as const) {
+      expect(groupKeys("2026-11-15T12:00:00", ["2026-11-09T12:00:00"], locale)).toEqual([
+        "thisWeek",
+      ]);
+    }
   });
 
   it("更早的日期落到本月/上月/更早，且同段只出现一次标题", () => {

@@ -151,4 +151,74 @@ describe("sqlite-migrations contract", () => {
     expect(result.backupSkipped).toBe(true);
     expect(db.prepare("select title from session").get()).toEqual({ title: "migrated" });
   });
+  it("backups are version 2 and restore keeps duplicate rows and blobs byte-identical", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "zcode-migration-v2-"));
+    directories.push(directory);
+    const db = new DatabaseSync(":memory:");
+    databases.push(db);
+    db.exec(`pragma foreign_keys=on;
+      create table session(id text primary key, title text not null);
+      create table message(
+        id text primary key,
+        session_id text references session(id) on delete cascade,
+        kind integer,
+        payload blob);
+      insert into session values ('s', 'original');`);
+    // 重复内容行 + BLOB + 整数：v2 摘要保留重复行（旧实现 Array.sort 后仍保留，但整表进 JS）。
+    const insert = db.prepare("insert into message values (?, 's', ?, ?)");
+    for (let index = 0; index < 2000; index++)
+      insert.run(`m${index}`, index % 7, new Uint8Array([index % 256, 1, 2]));
+    const { options } = { options: { database: "cli", backupDirectories: [directory] } };
+    const result = await sqliteMigrations.migrate(db, [migration], options);
+    const metadata = JSON.parse(
+      await readFile(join(result.backupPath!, "backup.json"), "utf8"),
+    ) as MigrationBackup;
+    expect(metadata.version).toBe(2);
+    expect(metadata.tables.find((table) => table.name === "message")?.rows).toBe(2000);
+
+    db.exec("delete from message; update session set title='migrated'");
+    await sqliteMigrations.restore(db, result.backupPath!);
+    expect(db.prepare("select count(*) as n from message").get()).toEqual({ n: 2000 });
+    expect(db.prepare("select title from session").get()).toEqual({ title: "original" });
+    expect(db.prepare("select payload from message where id='m255'").get()).toMatchObject({
+      payload: new Uint8Array([255, 1, 2]).buffer,
+    });
+  });
+
+  it("restores a version 1 backup written with the old JSON-array hash", async () => {
+    const { db, directory } = await fixture();
+    // 按 v1 旧算法手工构造备份：SQLite 临时库 + backup.json（version 1）。
+    const backupPath = join(directory, "cli-1-legacy");
+    await (await import("node:fs/promises")).mkdir(backupPath, { mode: 0o700 });
+    const backup = new DatabaseSync(join(backupPath, "tables.sqlite"));
+    backup.exec(`create table session(id text not null, title text not null);
+      create table message(id text not null, session_id text);
+      insert into session values ('s', 'restored');
+      insert into message values ('m', 's');`);
+    backup.close();
+    const encode = (row: unknown[]) =>
+      JSON.stringify(row, (_key, value: unknown) => {
+        if (typeof value === "bigint") return { integer: value.toString() };
+        if (value instanceof Uint8Array) return { blob: Buffer.from(value).toString("hex") };
+        return value;
+      });
+    const hashOf = (rows: unknown[][]) =>
+      createHash("sha256")
+        .update(JSON.stringify(rows.map(encode).sort()))
+        .digest("hex");
+    const legacy: MigrationBackup = {
+      version: 1,
+      database: "cli",
+      migrations: [],
+      tables: [
+        { name: "session", columns: ["id", "title"], rows: 1, hash: hashOf([["s", "restored"]]) },
+        { name: "message", columns: ["id", "session_id"], rows: 1, hash: hashOf([["m", "s"]]) },
+      ],
+    };
+    await writeFile(join(backupPath, "backup.json"), JSON.stringify(legacy, null, 2));
+
+    db.exec("update session set title='mutated'");
+    await sqliteMigrations.restore(db, backupPath);
+    expect(db.prepare("select title from session").get()).toEqual({ title: "restored" });
+  });
 });

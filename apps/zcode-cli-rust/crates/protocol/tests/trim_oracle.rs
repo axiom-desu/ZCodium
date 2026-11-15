@@ -7,7 +7,7 @@ const FIXTURE: &str = include_str!("fixtures/ts-command-trim-oracle.json");
 fn every_typescript_trim_leaf_matches_the_production_schema_pipeline() {
     let fixture: Value = serde_json::from_str(FIXTURE).expect("trim oracle fixture is JSON");
     let leaves = fixture["leaves"].as_array().expect("trim leaves");
-    assert_eq!(fixture["uniquePaths"].as_u64(), Some(63));
+    assert_eq!(fixture["uniquePaths"].as_u64(), Some(65));
     assert_eq!(fixture["leafBranches"].as_u64(), Some(leaves.len() as u64));
 
     let mut case_count = 0usize;

@@ -35,6 +35,11 @@ export const hostCapabilitiesSchema = z.object({
    * `state.updated`，并且先经 `clampWorkflowRunsForLegacy` 裁到旧界。
    */
   workflowRunDeltas: z.boolean().optional(),
+  /**
+   * 本 Host 开启并转发 `v4/conversation/inputPrediction`。旧 Host 缺失等价于 false，
+   * 调用方必须用 === true 判断；字段与服务方法门禁共用同一开关判定。
+   */
+  inputPrediction: z.boolean().optional(),
 });
 export type HostCapabilities = z.infer<typeof hostCapabilitiesSchema>;
 
@@ -382,6 +387,20 @@ export const V4_METHODS = {
   command: "v4/command",
   // 列表事实只读查询：snapshot 缺席不是删除，显式 ID 查询 CLI 持久 store。
   sessionsIndexReconcile: "v4/sessionsIndex/reconcile",
+  // 项目数据彻底删除：测量只读、删除幂等；事实源是 CLI 会话库与 cli/* 文件。
+  // 旧 CLI 返回 method-not-found，Host 据此隐藏「同时删除数据」（不得当成 0 字节成功）。
+  sessionDataMeasure: "v4/storage/sessionData/measure",
+  sessionDataPurge: "v4/storage/sessionData/purge",
+  // 归档永久删除的预检/执行。schema 已冻结；CLI 执行面等 CLI 会话库 0024 迁移（跨 owner）。
+  sessionDeletionPreview: "v4/storage/sessionData/deletionPreview",
+  sessionDeletionExecute: "v4/storage/sessionData/deletionExecute",
+  // context 组成查询：只读、无状态、超时重发安全；existing-only，不冷启动会话。
+  // 线格式在 ./context-composition/contract.ts（细类别 → 圆环粗类别的唯一投影）。
+  conversationContextComposition: "v4/conversation/contextComposition",
+  // 输入预测（ghost hint）：只读、无状态、existing-only；会话不在内存时不冷启动。
+  // 线格式在 ./input-prediction/contract.ts。
+  conversationInputPrediction: "v4/conversation/inputPrediction",
+  conversationInputPredictionCancel: "v4/conversation/inputPrediction/cancel",
 } as const;
 export type V4Method = (typeof V4_METHODS)[keyof typeof V4_METHODS];
 
@@ -415,6 +434,8 @@ export const V4_NOTIFICATIONS = {
   // 仅当前进程 live ToolCallResult 产生；历史与 replayable 链路不得补造。
   cuaPermissionObservation: "v4/cua/permission-observation",
   pluginUiToolResult: "v4/plugin-ui/tool-result",
+  // context 组成变化：只带修订号（live-only，不进 snapshot），消费方按需拉取。
+  conversationContextCompositionChanged: "v4/conversation/contextCompositionChanged",
 } as const;
 
 /** 3.3.6 SSH 历史任务归属证明与 sessions-index 冷种子共享同一有界窗口。 */

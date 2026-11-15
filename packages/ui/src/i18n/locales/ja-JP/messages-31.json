@@ -1,0 +1,6 @@
+{
+  "extensions.status.grant.projects.read": "プロジェクト一覧を読む",
+  "extensions.status.grant.sessions.read": "このウィンドウの会話を読む：一覧表示、メッセージの閲覧、実行の完了待ち",
+  "extensions.status.grant.sessions.write": "このウィンドウの会話を読み書きする：メッセージ送信、新規作成、フォーク、名前変更、アーカイブ、ピン留め、中断、表示。会話の読み取り権限を含みます。",
+  "extensions.status.notice": "拡張機能はユーザー権限でサードパーティの Node.js コードを実行します。有効にしても OS レベルの隔離は提供されません。"
+}

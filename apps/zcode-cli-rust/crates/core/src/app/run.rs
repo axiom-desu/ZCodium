@@ -96,6 +96,16 @@ impl Engine {
         history.prompt_snapshot = session.prompt_snapshot.clone();
         history.stored_env = session.stored_env.clone();
         history.skills = session.skills.clone();
+        // 3.18 F1/F2/F3：读取缓存、预算与 system 快照的 owner 是 Session，run 只取副本。
+        history.instructions = session.instructions.clone();
+        history.instructions_unreadable = session.instructions_unreadable.clone();
+        history.instructions_boundary = session.instructions_boundary;
+        history.total_tokens = session.total_tokens;
+        history.prompt_system = session.prompt_system.clone();
+        history.session_features = session.session_features.clone();
+        history.subagent = session.parent_id.is_some();
+        history.auto_memory =
+            crate::domain::instruction_files::reads_auto_memory(&session.task_type);
         // Node：只有目标续跑轮会验证并继续；普通输入只记目标运行时间与 token。
         // 修复：后台结果唤醒的续跑轮没有来源命令，legacy 语义记为 Prompt，原先因此不验证、
         // 目标停在 active；Node 的 task-notification 触发同样走 `runActiveTargetContinuationLoop`
@@ -113,8 +123,18 @@ impl Engine {
         history.agent_profile = session.agent_profile.clone();
         history.additional_directories = session.runtime.additional_directories.clone();
         history.tool_disallowlist = submission.tool_disallowlist;
+        // 3.18 F14：本轮身份副本；CronPauseSelf 的可见性与执行边界都只读这一份。
+        history.automation_id = submission.automation_id;
         history.tool_filter = session.runtime.tools.clone();
         history.tool_search_mode = session.runtime.tool_search_mode;
+        // 3.18 App 会话控制：唯一结论来自本次激活的 Host 能力 + 本会话的 mainRoot 事实，
+        // 模型输入与工具参数不参与（子代理 run 另有 profile 门禁）。
+        history.app_control = crate::domain::app_control::granted(
+            session.runtime.app_control,
+            &session.task_type,
+            session.parent_id.is_some(),
+            session.agent_profile.is_some(),
+        );
         history.anomaly_guard = self.anomaly_guard;
         history.compact_failures = session.runtime.compact_failures;
         // Node turnNumber：本轮输入之前已有用户消息（或已压缩）即非首轮。

@@ -209,8 +209,10 @@ it("真实 loopback 驱动 ToolSearch、目标结果、冷恢复、compact 与 r
     await runtime.executeTurn("Use the deferred tool through ToolSearch.");
     assert.equal(requests.length, 3);
     // 首次请求：Local 只发常驻 + 控制入口，目标 schema 不进 tools。
+    // F17：local 模式的控制入口名是 LocalToolSearch，不再是 Native 的 ToolSearch。
     assert.equal(toolNames(requests[0]!.body).includes("TodoWrite"), false);
-    assert.ok(toolNames(requests[0]!.body).includes("ToolSearch"));
+    assert.ok(toolNames(requests[0]!.body).includes("LocalToolSearch"));
+    assert.equal(toolNames(requests[0]!.body).includes("ToolSearch"), false);
     assert.ok(toolNames(requests[0]!.body).includes("DeferredToolCall"));
     // 搜索后：目标 schema 在真实结果位置展开，仍不进入 tools。
     assert.equal(toolNames(requests[1]!.body).includes("TodoWrite"), false);

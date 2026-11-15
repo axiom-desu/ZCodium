@@ -311,6 +311,20 @@ export interface TurnInputIntentMetadata {
     kind: "shared_context_import";
     context_id: string;
   }>;
+  /**
+   * 会话选区引用（含用户批注）：一次输入的 turn metadata，不拼进 canonical 正文。
+   * 模型边界由 core `withConversationQuotes` 转为材料；字段上限由 shared 线格式校验。
+   */
+  conversationQuotes?: Array<{
+    text: string;
+    path?: string;
+    senderName?: string;
+    senderId?: string;
+    messageId?: string;
+    sentAt?: string;
+    comment?: string;
+    agent?: string;
+  }>;
   /** edit/retry 重建的新 command 对原始 canonical input cause 的稳定追溯。 */
   provenance?: {
     sourceCommandId: string;

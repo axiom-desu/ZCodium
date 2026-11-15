@@ -31,18 +31,23 @@ import {
 } from "./pluginSyncArchive.js";
 import { normalizePluginSyncRelativePath, resolvePluginSyncPathWithin } from "./pluginSyncPath.js";
 import { checkRemoteSyncDirectoriesWriteAccess } from "../remote-sync/remoteSyncWriteAccess.js";
+import { createInlinePluginDataSyncMethods } from "../data-sync/inlinePluginDataSync.js";
 
-interface PluginManifestInfo {
+export interface PluginManifestInfo {
   name: string;
   pluginId: string;
   description?: string;
   version?: string;
   componentTypes: PluginSyncComponentType[];
+  /** manifest 的 userConfig（options schema），原样保留；数据同步据此筛选可移植 options。 */
+  userConfig: Record<string, unknown>;
 }
 
 interface UserPluginConfigState {
   dirs: string[];
   enabledOverrides: Map<string, boolean>;
+  /** plugins.options，按 pluginId 原样保留大小写。 */
+  options: Record<string, unknown>;
 }
 
 interface MarketplaceManifestInfo {
@@ -87,6 +92,8 @@ export function createPluginSyncService(options?: {
 }): IPluginSyncService {
   const maxArchiveBytes = options?.maxArchiveBytes ?? DEFAULT_MAX_ARCHIVE_BYTES;
   return {
+    // 数据同步五方法（IDataSyncCategoryService）：inline 插件，同一服务兼旧归档同步 owner。
+    ...createInlinePluginDataSyncMethods({ maxItemBytes: maxArchiveBytes }),
     async listLocalUserPluginCandidates() {
       return {
         candidates: await collectLocalUserPluginCandidates(),
@@ -214,15 +221,15 @@ export function createPluginSyncService(options?: {
   };
 }
 
-function resolveUserHomeDir(): string {
+export function resolveUserHomeDir(): string {
   return process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || homedir();
 }
 
-function getUserZcodeConfigPath(): string {
+export function getUserZcodeConfigPath(): string {
   return join(resolveUserHomeDir(), ZCODE_USER_DATA_DIR_NAME, "cli", "config.json");
 }
 
-function getUserZcodePluginRoot(): string {
+export function getUserZcodePluginRoot(): string {
   return join(resolveUserHomeDir(), ZCODE_USER_DATA_DIR_NAME, "plugins");
 }
 
@@ -401,7 +408,7 @@ async function importMarketplaceSourceArchiveInternal(
   }
 }
 
-async function readUserPluginConfigState(): Promise<UserPluginConfigState> {
+export async function readUserPluginConfigState(): Promise<UserPluginConfigState> {
   const parsed = await readJsonFileOrEmpty(getUserZcodeConfigPath());
   const plugins = isRecord(parsed.plugins) ? parsed.plugins : {};
   const enabledPlugins = isRecord(plugins.enabledPlugins) ? plugins.enabledPlugins : {};
@@ -414,6 +421,7 @@ async function readUserPluginConfigState(): Promise<UserPluginConfigState> {
   return {
     dirs: readStringArray(plugins.dirs),
     enabledOverrides,
+    options: isRecord(plugins.options) ? plugins.options : {},
   };
 }
 
@@ -942,7 +950,9 @@ async function addPluginDirToUserConfig(
   });
 }
 
-async function readPluginManifestInfo(pluginRoot: string): Promise<PluginManifestInfo | null> {
+export async function readPluginManifestInfo(
+  pluginRoot: string,
+): Promise<PluginManifestInfo | null> {
   for (const segments of PLUGIN_MANIFEST_RELATIVE_PATHS) {
     const manifestPath = join(pluginRoot, ...segments);
     let raw: string;
@@ -974,6 +984,7 @@ async function readPluginManifestInfo(pluginRoot: string): Promise<PluginManifes
         ? { version: parsed.version.trim() }
         : {}),
       componentTypes: await resolvePluginComponentTypes(pluginRoot, parsed),
+      userConfig: isRecord(parsed.userConfig) ? parsed.userConfig : {},
     };
   }
   return null;
@@ -1054,7 +1065,7 @@ function createUniqueDirectoryName(
   return dedupedName;
 }
 
-function toSafeDirectoryName(value: string): string {
+export function toSafeDirectoryName(value: string): string {
   const sanitized = value.trim().replace(/[\\/:]/gu, "-") || "plugin";
   try {
     return normalizePluginSyncRelativePath(sanitized);
@@ -1067,7 +1078,7 @@ function createCandidateId(pluginId: string, pluginRoot: string): string {
   return createShortHash(`${pluginId}:${pluginRoot}`);
 }
 
-function createShortHash(value: string): string {
+export function createShortHash(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
@@ -1083,7 +1094,7 @@ function normalizeMarketplaceId(marketplaceId: string): string {
   return normalizePluginId(marketplaceId);
 }
 
-function normalizePluginIdKey(pluginId: string): string {
+export function normalizePluginIdKey(pluginId: string): string {
   return normalizePluginId(pluginId).toLowerCase();
 }
 

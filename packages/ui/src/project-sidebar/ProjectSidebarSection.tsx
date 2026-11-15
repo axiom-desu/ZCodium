@@ -21,6 +21,7 @@ import { ProjectRow } from "./ProjectRow.js";
 import { ProjectSidebarTreeProvider } from "./ProjectSidebarContext.js";
 import { ProjectTaskRow } from "./ProjectTaskRow.js";
 import { ProjectTimelineView } from "./ProjectTimelineView.js";
+import { useProjectWorktreeDialog } from "./useProjectWorktreeDialog.js";
 import { ProjectViewTabs } from "./ProjectViewTabs.js";
 import { useProjectSidebarCommands } from "./useProjectSidebarCommands.js";
 import { useProjectSidebarData } from "./useProjectSidebarData.js";
@@ -41,7 +42,6 @@ import {
   selectUnassignedTasks,
   selectVisibleProjects,
 } from "./view.js";
-
 /**
  * 既有 projects 分区内的项目视图。行事实只来自 readTree；编辑器/信任/移动草稿归本模块，
  * legacy workspace 行由外壳通过 children 继续渲染。
@@ -99,11 +99,9 @@ export function ProjectSidebarSection({
   const taskLegacyReadOnly = (task: ProjectTask) =>
     tree ? isTaskInLegacyReadOnlyProject(tree, task) : false;
   const unreadTaskCount = useMemo(() => (tree ? countProjectTreeUnreadTasks(tree) : 0), [tree]);
-
   useEffect(() => {
     onViewModeChange?.(view);
   }, [onViewModeChange, view]);
-
   useEffect(() => {
     // 只上报权威树派生计数；刷新失败时 data.tree 保持上一份成功快照，
     // 不因临时错误把角标清零。宿主负责写平台角标，Sidebar 不持有第二份未读事实。
@@ -115,6 +113,7 @@ export function ProjectSidebarSection({
   } | null>(null);
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [moveProject, setMoveProject] = useState<VirtualProject | null>(null);
+  const wt = useProjectWorktreeDialog(onSelectTask, data.refresh);
   const [busyProjectId, setBusyProjectId] = useState<string | null>(null);
   const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -299,6 +298,8 @@ export function ProjectSidebarSection({
                     onDelete={() => setEditor({ project: row.project, deletePending: true })}
                     onMoveTasks={() => setMoveProject(row.project)}
                     onNewTask={() => void createTask(row.project)}
+                    onOpenWorktrees={wt.canManage ? () => wt.openFor(row.project) : undefined}
+                    onOpenRemoteProjects={wt.canManageRemote ? wt.openRemote : undefined}
                     onViewFiles={(rootPath) =>
                       onOpenFileTree?.({
                         workspacePath: rootPath,
@@ -372,6 +373,7 @@ export function ProjectSidebarSection({
           onClose={() => setRestoreOpen(false)}
           onRestored={() => void data.refresh()}
         />
+        {wt.element}
         {moveProject ? (
           <ProjectMoveTaskDialog
             open

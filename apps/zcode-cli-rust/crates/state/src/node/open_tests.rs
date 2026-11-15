@@ -7,6 +7,15 @@ fn open_at(path: &Path, wait: Duration) -> (Result<Connection, StartupError>, Ve
     (result, seen)
 }
 
+/// 0023 的共享 SQL：账本 checksum 必须与 Node 的整段 SQL 互认。
+fn soft_delete_sql() -> &'static str {
+    MIGRATIONS
+        .iter()
+        .find(|migration| migration.id == SOFT_DELETE_OUTCOME_MIGRATION)
+        .expect("0023 ledger migration")
+        .sql
+}
+
 fn ledger(conn: &Connection) -> Vec<(String, String, String)> {
     conn.prepare("select id, checksum, app_version from schema_migration order by id")
         .unwrap()
@@ -55,7 +64,7 @@ fn a_new_database_gets_every_node_migration_once() {
             facts.committed,
             facts.last_applied
         ),
-        ("initialize", 23, 23, Some(None))
+        ("initialize", 24, 24, Some(None))
     );
     drop(conn);
 
@@ -65,7 +74,7 @@ fn a_new_database_gets_every_node_migration_once() {
     assert_eq!((facts.kind, facts.executed), ("none", 0));
     assert_eq!(
         facts.last_applied,
-        Some(Some("0023_session_soft_delete_outcome".into()))
+        Some(Some("0025_session_permanent_deletion".into()))
     );
 }
 
@@ -114,7 +123,7 @@ fn a_ledger_gap_is_filled_without_rerunning_existing_columns() {
         .unwrap();
     assert_eq!(
         applied,
-        checksum(MIGRATIONS.last().unwrap().sql),
+        checksum(soft_delete_sql()),
         "0023 ledger row keeps the shared checksum"
     );
     let columns: i64 = conn
@@ -224,7 +233,7 @@ fn a_ledger_gap_with_one_present_column_adds_only_the_missing_one() {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(applied, checksum(MIGRATIONS.last().unwrap().sql));
+        assert_eq!(applied, checksum(soft_delete_sql()));
     }
 }
 

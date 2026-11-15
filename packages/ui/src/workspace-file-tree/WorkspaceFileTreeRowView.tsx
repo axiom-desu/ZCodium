@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/context-menu.js";
 import { toast } from "@/components/ui/toast.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+import { FileApplicationChoices, FileSaveAsMenuItem } from "@/file-menu/index.js";
 import { useFileContextActions } from "@/hooks/useFileContextActions.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { FileDisplayIcon, resolveFileDisplayDescriptor } from "@/lib/fileDisplay.js";
@@ -47,7 +48,7 @@ import type {
 } from "@/workspace-file-tree/types.js";
 import {
   createWorkspaceFileTreeHtmlBrowserUrl,
-  isWorkspaceFileTreeHtmlFile,
+  shouldOpenWorkspaceFileTreeHtmlInBrowser,
 } from "@/workspace-file-tree/helpers.js";
 import { getWorkspaceFileTreeHierarchyGuideStyle } from "@/workspace-file-tree/hierarchyGuides.js";
 import { useWorkspaceFileTreeRowDragState } from "@/workspace-file-tree/useWorkspaceFileTreeRowDragState.js";
@@ -65,6 +66,7 @@ export function WorkspaceFileTreeRowView({
   installedEditors,
   isRemoteWorkspaceFileTree,
   remoteTarget,
+  htmlClickOpensBrowser,
   workspacePath,
   workspaceIdentity,
   style,
@@ -85,6 +87,7 @@ export function WorkspaceFileTreeRowView({
   installedEditors: EditorInfo[];
   isRemoteWorkspaceFileTree: boolean;
   remoteTarget?: OpenInEditorRemoteTarget;
+  htmlClickOpensBrowser: boolean;
   workspacePath: string;
   workspaceIdentity?: string;
   style: CSSProperties;
@@ -133,6 +136,24 @@ export function WorkspaceFileTreeRowView({
     name: row.name,
   };
 
+  const htmlBrowserUrl = createWorkspaceFileTreeHtmlBrowserUrl(row);
+  // 右键「在浏览器中打开」始终对本地 HTML 可用；单击进浏览器额外要求本机偏好开启。
+  // 远程 workspace 不把远端路径交给本机浏览器，平台没有内置浏览器（Web/手机）时
+  // onOpenBrowserUrl 缺失，单击语义回落到源码预览。
+  const canOpenHtmlInBrowser =
+    !isDeletedFile &&
+    !isRemoteWorkspaceFileTree &&
+    Boolean(onOpenBrowserUrl) &&
+    htmlBrowserUrl !== null;
+  const canClickHtmlInBrowser =
+    !isDeletedFile &&
+    shouldOpenWorkspaceFileTreeHtmlInBrowser({
+      row,
+      htmlClickOpensBrowser,
+      isRemoteWorkspace: isRemoteWorkspaceFileTree,
+      hasBrowserOpener: Boolean(onOpenBrowserUrl),
+    });
+
   const handleRowClick = (event: MouseEvent<HTMLDivElement>) => {
     onSelect(row.path);
     if (event.detail > 1) {
@@ -147,8 +168,12 @@ export function WorkspaceFileTreeRowView({
       // 点击时只保留选中能力，避免继续打开预览导致文件读取失败。
       return;
     }
-    // 文件树单击文件之前只更新选中态，必须双击才打开预览。
-    // 这里让文件和目录都保持“单击执行主要动作”：目录展开，文件预览。
+    // 文件和目录都保持“单击执行主要动作”：目录展开，文件预览；
+    // 开启「单击 HTML 进浏览器」后本地 .html 文件改走内置浏览器（右键「打开」仍是预览）。
+    if (canClickHtmlInBrowser && htmlBrowserUrl) {
+      onOpenBrowserUrl?.(htmlBrowserUrl);
+      return;
+    }
     onOpenPreview(row);
   };
   const handleCopyAbsolutePath = async () => {
@@ -183,6 +208,24 @@ export function WorkspaceFileTreeRowView({
     }
     logger.warn("[WorkspaceFileTree] 打开文件树条目失败", {
       editorId: editor.id,
+      path: row.path,
+      error: result.error ?? "unknown-error",
+    });
+    toast(contextMenuLabels.openFailed);
+  };
+  const handleOpenWithDefaultApp = async () => {
+    if (isDeletedFile || isRemoteWorkspaceFileTree || !platform.canOpenLocalFiles) {
+      return;
+    }
+    if (!platform.openExternalFile) {
+      toast(contextMenuLabels.openFailed);
+      return;
+    }
+    const result = await platform.openExternalFile(row.path);
+    if (result.success) {
+      return;
+    }
+    logger.warn("[WorkspaceFileTree] 默认应用打开文件失败", {
       path: row.path,
       error: result.error ?? "unknown-error",
     });
@@ -338,11 +381,6 @@ export function WorkspaceFileTreeRowView({
       deleted: isDeletedFile,
     });
   const canOpenPrimary = !isDeletedFile;
-  const canOpenInBrowser =
-    !isDeletedFile &&
-    !isRemoteWorkspaceFileTree &&
-    Boolean(onOpenBrowserUrl) &&
-    isWorkspaceFileTreeHtmlFile(row);
 
   return (
     <div
@@ -357,19 +395,43 @@ export function WorkspaceFileTreeRowView({
                 这里改为复用行主动作：文件打开预览，目录走当前行的展开/收起逻辑。 */}
             {contextMenuLabels.open}
           </ContextMenuItem>
-          <ContextMenuSub>
-            <ContextMenuSubTrigger disabled={isDeletedFile || installedEditors.length === 0}>
-              {contextMenuLabels.openWith}
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-44">
-              {installedEditors.map((editor) => (
-                <ContextMenuItem key={editor.id} onSelect={() => void handleOpenInEditor(editor)}>
-                  {editor.name}
-                </ContextMenuItem>
-              ))}
-            </ContextMenuSubContent>
-          </ContextMenuSub>
-          {canOpenInBrowser ? (
+          {/* 打开方式与默认应用共用 file-menu 公开组件；目录沿用原编辑器菜单。 */}
+          {isDirectory ? (
+            <ContextMenuSub>
+              <ContextMenuSubTrigger disabled={isDeletedFile || installedEditors.length === 0}>
+                {contextMenuLabels.openWith}
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent className="w-44">
+                {installedEditors.map((editor) => (
+                  <ContextMenuItem key={editor.id} onSelect={() => void handleOpenInEditor(editor)}>
+                    {editor.name}
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          ) : (
+            <>
+              <FileApplicationChoices
+                variant="context"
+                applications={installedEditors}
+                disabled={isDeletedFile}
+                onSelect={(application) => void handleOpenInEditor(application)}
+                onOpenDefault={
+                  isRemoteWorkspaceFileTree || !platform.canOpenLocalFiles
+                    ? undefined
+                    : () => void handleOpenWithDefaultApp()
+                }
+              />
+              <FileSaveAsMenuItem
+                variant="context"
+                path={row.path}
+                workspacePath={workspacePath}
+                workspaceIdentity={workspaceIdentity}
+                disabled={isDeletedFile}
+              />
+            </>
+          )}
+          {canOpenHtmlInBrowser ? (
             <ContextMenuItem onSelect={handleOpenInBrowser}>
               {contextMenuLabels.openInBrowser}
             </ContextMenuItem>

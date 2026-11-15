@@ -109,6 +109,56 @@ impl crate::contract::SessionStore for NodeStore {
         })
         .await
     }
+    // v4/storage/sessionData/*：DB 在唯一连接线程，文件在阻塞线程（node_store_session_data）。
+    async fn session_data_trees(&self, ids: &[String]) -> Result<Value> {
+        self.session_data_trees_inner(ids).await
+    }
+    async fn session_data_referrers(&self, ids: &[String]) -> Result<Value> {
+        self.session_data_referrers_inner(ids).await
+    }
+    async fn session_data_measure(&self, ids: &[String]) -> Result<Value> {
+        self.session_data_measure_inner(ids).await
+    }
+    async fn session_data_memory(&self, directories: &[Value]) -> Result<Value> {
+        self.session_data_memory_inner(directories).await
+    }
+    async fn session_data_remove(&self, id: &str, retained: &[String]) -> Result<u64> {
+        self.session_data_remove_inner(id, retained).await
+    }
+    async fn session_data_memory_remove(&self, directory: &Value) -> Result<u64> {
+        self.session_data_memory_remove_inner(directory).await
+    }
+    async fn session_data_files(&self, id: &str) -> Result<Value> {
+        self.session_data_files_inner(id).await
+    }
+    async fn session_data_purge(&self, ids: &[String]) -> Result<()> {
+        self.session_data_purge_inner(ids).await
+    }
+    async fn session_data_revision(&self, parts: &Value) -> Result<String> {
+        self.session_data_revision_inner(parts).await
+    }
+    async fn session_data_inspect(&self, id: &str) -> Result<Value> {
+        self.session_data_inspect_inner(id).await
+    }
+    async fn session_data_begin(
+        &self,
+        id: &str,
+        revision: &str,
+        operation_id: &str,
+        retained: &[(String, String)],
+    ) -> Result<()> {
+        self.session_data_begin_inner(id, revision, operation_id, retained)
+            .await
+    }
+    async fn session_data_complete(&self, id: &str) -> Result<()> {
+        self.session_data_complete_inner(id).await
+    }
+    async fn session_presence_register(&self, id: &str) -> Result<()> {
+        self.session_presence_register_inner(id).await
+    }
+    async fn session_presence_unregister(&self, id: &str) -> Result<()> {
+        self.session_presence_unregister_inner(id).await
+    }
     async fn soft_delete_session(&self, workspace: &str, id: &str, at: u64) -> Result<()> {
         // 持久事实先落库；重复删除幂等（coalesce 保留首时间），正文行不受影响。
         let at = at.min(i64::MAX as u64) as i64;

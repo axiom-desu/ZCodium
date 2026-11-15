@@ -53,6 +53,8 @@ import { logger } from "@/logger.js";
 import { WORKSPACE_FILE_TREE_VIRTUAL_ROW_HEIGHT_PX } from "@/workspace-file-tree/constants.js";
 import { getFileManagerLabel } from "@/workspace-file-tree/helpers.js";
 import { useInstalledFileTreeEditors } from "@/workspace-file-tree/useInstalledFileTreeEditors.js";
+import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useSettings } from "@/hooks/useSettingService.js";
 import { useWorkspaceOpenInEditorTarget } from "@/hooks/useWorkspaceOpenInEditorTarget.js";
 import {
   resolveWorkspaceEditorSelection,
@@ -126,6 +128,10 @@ export function WorkspaceFileTree({
   });
   const { installedEditors } = useInstalledFileTreeEditors();
   const isRemoteWorkspaceFileTree = Boolean(workspaceRemoteSessionId || workspaceIdentity);
+  // 「单击 HTML 进浏览器」是本机界面偏好：文件树固定读本机 base Host 的设置，
+  // 远端 workspace 激活时也不会读到远端选择（远端路径不会交给本机浏览器）。
+  const baseWorkspaceServices = useBaseWorkspaceServices();
+  const { settings: baseHostSettings } = useSettings({ services: baseWorkspaceServices });
   const { remoteTarget } = useWorkspaceOpenInEditorTarget({
     workspacePath,
     workspaceIdentity,
@@ -601,6 +607,7 @@ export function WorkspaceFileTree({
     installedEditors: availableEditors,
     isRemoteWorkspaceFileTree,
     remoteTarget,
+    htmlClickOpensBrowser: baseHostSettings?.fileTreeHtmlClickOpensBrowser === true,
   };
 
   return (

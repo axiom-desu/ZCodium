@@ -68,7 +68,7 @@ export function normalizeMcpToolUiMeta(meta: unknown): McpToolUiDescriptor | nul
  * `ui://` HTML 资源项自己的 `_meta`（以被选中内容项的 `_meta.ui` 为准）。
  * csp 与 prefersBorder 兼容 `openai/widgetCSP` / `openai/widgetPrefersBorder` 别名；
  * 尺寸提示只有 `openai/widgetHeightHint` / `openai/widgetMinFrameHeight`；`openai/widgetShowCodexWidgetInline` → showInline；
- * 什么都没声明返回 null。
+ * 后台保留只认 `_meta.ui.backgroundRetention`（工具 metadata 不授予）；什么都没声明返回 null。
  */
 export function normalizeMcpAppResourceMeta(meta: unknown): McpAppResourceMeta | null {
   const root = asRecord(meta);
@@ -87,6 +87,9 @@ export function normalizeMcpAppResourceMeta(meta: unknown): McpAppResourceMeta |
   const showInline =
     readBoolean(ui?.showInline) ?? readBoolean(root["openai/widgetShowCodexWidgetInline"]);
   if (showInline !== undefined) result.showInline = showInline;
+  // 只有资源 `_meta.ui` 能授予后台保留；工具 metadata 不参与。
+  const backgroundRetention = readBoolean(ui?.backgroundRetention);
+  if (backgroundRetention !== undefined) result.backgroundRetention = backgroundRetention;
   const cspRelaxations = normalizeMcpAppCspRelaxations(meta);
   if (cspRelaxations) result.cspRelaxations = cspRelaxations;
   const permissions = normalizeMcpAppResourcePermissions(ui?.permissions);

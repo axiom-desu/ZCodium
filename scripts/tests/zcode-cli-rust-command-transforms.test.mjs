@@ -71,5 +71,5 @@ test("rejects explicitly false, string, and non-string trim extensions", () => {
 });
 
 test("the live maintained allowlist has no duplicates", () => {
-  assert.equal(trimPathAllowlist.size, 63);
+  assert.equal(trimPathAllowlist.size, 65);
 });

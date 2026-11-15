@@ -18,7 +18,7 @@ function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function refreshSlashCommandsAfterRemotePluginSync(params: {
+export async function refreshSlashCommandsAfterRemoteSync(params: {
   commandsService: ICommandsService;
   reason: string;
   workspacePath: string;
@@ -119,7 +119,7 @@ export async function refreshWorkspacePluginCapabilitiesAfterRemoteSync(params: 
     workspaceIdentity: workspaceIdentityParam,
     skillsService: params.skillsService,
   });
-  await refreshSlashCommandsAfterRemotePluginSync({
+  await refreshSlashCommandsAfterRemoteSync({
     commandsService: params.commandsService,
     reason: params.reason,
     workspacePath,

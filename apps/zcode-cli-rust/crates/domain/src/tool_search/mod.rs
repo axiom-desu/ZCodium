@@ -22,7 +22,13 @@ use serde_json::Value;
 use std::sync::LazyLock;
 
 pub const TOOL_SEARCH_NAME: &str = "ToolSearch";
+pub const LOCAL_TOOL_SEARCH_NAME: &str = "LocalToolSearch";
 pub const DEFERRED_TOOL_CALL_NAME: &str = "DeferredToolCall";
+
+/// Model-visible alias; execution, permissions, and history share ToolSearch identity.
+pub fn is_tool_search_name(name: &str) -> bool {
+    matches!(name, TOOL_SEARCH_NAME | LOCAL_TOOL_SEARCH_NAME)
+}
 pub const DEFAULT_RESULTS: usize = 5;
 /// 内部包装标记（Node `ModelCallWrapperSchema`）。
 pub const WRAPPER_KEY: &str = "_zcode_model_call_wrapper";

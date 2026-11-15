@@ -22,6 +22,19 @@
  * 通过独立平台 variant 使用真实 Window Controls Overlay 安全区；普通 Web 不继承该规则。 */
 @custom-variant platform-windows-desktop (&:where(.platform-windows-desktop, .platform-windows-desktop *));
 
+/* 手机等窄屏 Web（含手机远控）专用的设置页排版 variant（spec：web-profile-mobile.md）。
+ * 桌面端最小窗口 480px，只用宽度会误伤桌面窄窗口；这里要求根节点没有任何 desktop 平台标记，
+ * 保证桌面端与宽屏 Web 的布局完全不变。当前只用于设置搜索入口与 SettingsRow 窄屏换行。 */
+@custom-variant compact-web {
+  @media (width < 40rem) {
+    &:where(
+      :root:not(.platform-mac-desktop, .platform-windows-desktop, .platform-linux-desktop) *
+    ) {
+      @slot;
+    }
+  }
+}
+
 /*
  * 当前 UI 直接使用了 shadcn 的 radix-mira 风格组件源码，这些组件大量依赖
  * data-active / data-horizontal / data-vertical 这类语义 variant。

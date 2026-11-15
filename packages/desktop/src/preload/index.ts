@@ -48,6 +48,12 @@ import type {
   SaveFileRequest,
   SaveFileResult,
   PrintPageToPdfResult,
+  CaptureBrowserGuestPageRequest,
+  CaptureBrowserGuestPageResult,
+  PrintBrowserGuestPageRequest,
+  PrintBrowserGuestPageResult,
+  FileApplicationInfo,
+  FileApplicationTarget,
   SSHConfigAliasOption,
   RemoteConnectionRuntimeLog,
   WindowControlsOverlayMetrics,
@@ -55,7 +61,15 @@ import type {
   CreateTempTextAttachmentRequest,
   OpenCuaPermissionOnboardingOptions,
 } from "@zcode/shared";
-import { InternalChannels, PlatformChannels, formatZCodeRendererProcessName } from "@zcode/shared";
+import {
+  InternalChannels,
+  PlatformChannels,
+  appControlNavigationRendererIpcSchema,
+  appControlNavigationRendererMessageSchema,
+  formatZCodeRendererProcessName,
+  type AppNavigationRendererMessage,
+} from "@zcode/shared";
+import { APP_NAVIGATION_IPC } from "#src/app-control-navigation/contract.js";
 
 const updateReadyCallbacks = new Set<(version: string) => void>();
 const updateStateCallbacks = new Set<(payload: UpdateStatePayload) => void>();
@@ -575,6 +589,18 @@ contextBridge.exposeInMainWorld("zcode", {
     ipcRenderer.on(PlatformChannels.TaskNotificationClick, handler);
     return () => ipcRenderer.removeListener(PlatformChannels.TaskNotificationClick, handler);
   },
+  /** App 控制导航：只在当前窗口主框架登记/回执；消息先经共享 schema 校验。 */
+  onAppControlNavigationMessage: (callback: (message: AppNavigationRendererMessage) => void) => {
+    const listener = (_event: unknown, payload: unknown) => {
+      const parsed = appControlNavigationRendererMessageSchema.safeParse(payload);
+      if (parsed.success) callback(parsed.data);
+    };
+    ipcRenderer.on(APP_NAVIGATION_IPC, listener);
+    return () => ipcRenderer.removeListener(APP_NAVIGATION_IPC, listener);
+  },
+  sendAppControlNavigation: (payload: unknown) => {
+    ipcRenderer.send(APP_NAVIGATION_IPC, appControlNavigationRendererIpcSchema.parse(payload));
+  },
   /** 打开外部 URL（用于 OAuth 跳转浏览器） */
   openExternal: (url: string) => ipcRenderer.send(PlatformChannels.OpenExternal, url),
   /** 查询当前语言下是否存在可用的用户社群入口 */
@@ -739,8 +765,28 @@ contextBridge.exposeInMainWorld("zcode", {
     ipcRenderer.invoke(PlatformChannels.SkipUpdateVersion, version),
   /** 用户确认重启安装更新 */
   quitAndInstallUpdate: () => ipcRenderer.invoke(PlatformChannels.QuitAndInstallUpdate),
-  /** 获取已安装的编辑器/终端列表（含图标） */
-  getInstalledEditors: () => ipcRenderer.invoke(PlatformChannels.GetInstalledEditors),
+  /** 获取已安装的编辑器/终端列表（含图标）；传文件路径时追加匹配该类型的本机应用 */
+  getInstalledEditors: (filePath?: string) =>
+    ipcRenderer.invoke(PlatformChannels.GetInstalledEditors, filePath),
+  /** 本机文件的系统关联应用（仅 Desktop） */
+  getFileApplications: (target: FileApplicationTarget): Promise<FileApplicationInfo[]> =>
+    ipcRenderer.invoke(PlatformChannels.GetFileApplications, target),
+  /** 用系统关联应用打开本机文件（仅 Desktop） */
+  openFileWithApplication: (
+    applicationId: string,
+    target: FileApplicationTarget,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(PlatformChannels.OpenFileWithApplication, { applicationId, target }),
+  /** 在 main 进程截取内置浏览器 guest 可见视口（页面导出/元素截图，仅 Desktop） */
+  captureBrowserGuestPage: (
+    payload: CaptureBrowserGuestPageRequest,
+  ): Promise<CaptureBrowserGuestPageResult> =>
+    ipcRenderer.invoke(PlatformChannels.CaptureBrowserGuestPage, payload),
+  /** 在 main 进程把浏览器 guest 页面打印成 PDF（页面导出，仅 Desktop） */
+  printBrowserGuestPage: (
+    payload: PrintBrowserGuestPageRequest,
+  ): Promise<PrintBrowserGuestPageResult> =>
+    ipcRenderer.invoke(PlatformChannels.PrintBrowserGuestPage, payload),
   getApplicationIcon: (request: string | ApplicationIconRequest) =>
     ipcRenderer.invoke(PlatformChannels.GetApplicationIcon, request),
   /** 用指定编辑器打开路径 */

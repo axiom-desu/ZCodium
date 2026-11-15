@@ -18,7 +18,16 @@ import {
 } from "@zcode/contracts";
 import type { ToolEntry } from "../types.js";
 import { deferredToolCallEntry } from "./deferred-tool-call.js";
+import {
+  SESSION_CONTROL_TOOL_NAMES,
+  appSessionControlTools,
+  sessionControlToolsByKind,
+} from "../session-control/index.js";
 import { toolSearchToolEntry } from "./tool-search.js";
+import {
+  READ_TOPIC_RESOURCE_TOOL_NAME,
+  readTopicResourceToolEntry,
+} from "./read-topic-resource.js";
 import type { AgentProfile } from "../../subagent/profile.js";
 import { readToolEntry } from "./read.js";
 import { writeToolEntry } from "./write.js";
@@ -31,6 +40,11 @@ import { grepToolEntry } from "./grep.js";
 import { webFetchToolEntry } from "./webfetch.js";
 import { webSearchToolEntry } from "./websearch.js";
 import {
+  PLUGIN_DISCOVERY_TOOL_NAMES,
+  searchPluginsToolEntry,
+  suggestPluginInstallToolEntry,
+} from "./plugin-discovery.js";
+import {
   agentToolEntry,
   createAgentToolEntry,
   createTaskToolEntry,
@@ -39,6 +53,7 @@ import {
 import { isSubagentDispatchToolName } from "../compat.js";
 import { skillToolEntry } from "./skill.js";
 import { todoReadToolEntry, todoWriteToolEntry } from "./todo.js";
+import { cronPauseSelfToolEntry } from "./cron-pause-self.js";
 import {
   cronCreateToolEntry,
   cronDeleteToolEntry,
@@ -76,6 +91,9 @@ import { createToolRuleNameSet } from "../tool-visibility.js";
 // 统一隐藏 Glob/Grep，并通过 Bash find/grep 接管搜索。
 
 export const builtInTools: ToolEntry[] = [
+  // 会话控制工具名以 App 变体为代表（12 个名字的超集）；实际注册的具体实现由可信
+  // 绑定的 sessionControlKind 决定（见 registerBuiltInTools），独立 CLI 仍只出 8 个。
+  ...appSessionControlTools,
   // 搜索控制入口始终注册；是否对模型暴露由请求投影按模式、目录与能力决定。
   toolSearchToolEntry,
   deferredToolCallEntry,
@@ -88,12 +106,18 @@ export const builtInTools: ToolEntry[] = [
   grepToolEntry,
   webFetchToolEntry,
   webSearchToolEntry,
+  // 话题资源：只有注入 topicResourcePort（本任务有 bot 接纳事实）的运行时注册。
+  readTopicResourceToolEntry,
+  // 插件发现：注册面按端口在场收口（includePluginDiscovery），与执行面的 requirePort 同门。
+  searchPluginsToolEntry,
+  suggestPluginInstallToolEntry,
   todoReadToolEntry,
   todoWriteToolEntry,
   cronCreateToolEntry,
   cronListToolEntry,
   cronUpdateToolEntry,
   cronDeleteToolEntry,
+  cronPauseSelfToolEntry,
   enterPlanModeToolEntry,
   exitPlanModeToolEntry,
   askUserQuestionToolEntry,
@@ -161,6 +185,15 @@ const DYNAMIC_WORKFLOW_TOOL_NAMES: ReadonlySet<string> = new Set([
   RESOLVE_WORKFLOW_QUESTION_TOOL_NAME,
 ]);
 
+export {
+  APP_SESSION_CONTROL_TOOL_NAMES,
+  CLI_SESSION_CONTROL_TOOL_NAMES,
+  SESSION_CONTROL_TOOL_NAMES,
+  appSessionControlTools,
+  sessionControlTools,
+  sessionControlToolsByKind,
+} from "../session-control/index.js";
+
 /** 冷恢复历史扫描用的唯一工具名判定；与注册门共用同一份名单。 */
 export function isDynamicWorkflowToolName(name: string): boolean {
   return DYNAMIC_WORKFLOW_TOOL_NAMES.has(name);
@@ -180,8 +213,21 @@ interface RegisterBuiltInToolsOptions {
   submitResultSchema?: JsonSchema;
   /** actor 的升级通道；门与 includeSubmitResult 同款（注入了 WorkflowEscalatePort 才注册）。 */
   includeEscalate?: boolean;
+  /**
+   * 只由可信启动绑定指定：独立 CLI 根注入 CliSessionControl 时注册 8 个会话工具；
+   * Desktop Host 会话在 appControlEnabled 时注入 AppSessionControl 并注册 12 个。
+   * 缺席即「本执行面没有会话控制」，子代理/非主根不会拿到它们。
+   */
+  sessionControlKind?: "cli" | "app";
+  /**
+   * 插件发现的两个工具（SearchPlugins / SuggestPluginInstall）：只在装配注入了
+   * PluginDiscoveryPort 且不是子代理执行面时注册。缺席即「本 Host 没有插件目录」。
+   */
+  includePluginDiscovery?: boolean;
   includeWorkflow?: boolean;
   includeAutomation?: boolean;
+  /** 只在 Host 注入话题资源端口时注册 ReadTopicResource；缺省即本执行面无 bot 接纳事实。 */
+  includeTopicResource?: boolean;
   /**
    * 动态工作流灰度门。**只有显式 false
    * 才下架** DYNAMIC_WORKFLOW_TOOL_NAMES：缺席代表调用方不参与灰度（TUI、headless、
@@ -209,7 +255,25 @@ export function registerBuiltInTools(
   const allowedTools = options.allowedTools ? new Set(options.allowedTools) : undefined;
   const disallowedTools = createToolRuleNameSet(options.disallowedTools);
 
-  for (const entry of builtInTools) {
+  const sessionControlEntries = options.sessionControlKind
+    ? new Map(
+        sessionControlToolsByKind[options.sessionControlKind].map((entry) => [
+          entry.metadata.name,
+          entry,
+        ]),
+      )
+    : undefined;
+  for (const builtIn of builtInTools) {
+    // 会话工具同名两种实现：独立 CLI 只有共有 8 个，App 另有 4 个；缺席即不注册。
+    let entry = builtIn;
+    if (SESSION_CONTROL_TOOL_NAMES.has(builtIn.metadata.name)) {
+      const selected = sessionControlEntries?.get(builtIn.metadata.name);
+      if (!selected) continue;
+      entry = selected;
+    }
+    if (PLUGIN_DISCOVERY_TOOL_NAMES.has(entry.metadata.name) && options.includePluginDiscovery !== true) {
+      continue;
+    }
     if (
       options.embeddedSearchEnabled === true &&
       (entry.metadata.name === "Glob" || entry.metadata.name === "Grep")
@@ -250,7 +314,9 @@ export function registerBuiltInTools(
       (entry.metadata.name === "CronCreate" ||
         entry.metadata.name === "CronList" ||
         entry.metadata.name === "CronUpdate" ||
-        entry.metadata.name === "CronDelete") &&
+        entry.metadata.name === "CronDelete" ||
+        // 自暂停与 CronList 同门：存在 automation 端口的会话才注册；可见性由 turn 状态决定。
+        entry.metadata.name === "CronPauseSelf") &&
       options.includeAutomation !== true
     ) {
       continue;
@@ -262,6 +328,9 @@ export function registerBuiltInTools(
       continue;
     }
     if (entry.metadata.name === "js" && options.includeNodeRepl !== true) {
+      continue;
+    }
+    if (entry.metadata.name === READ_TOPIC_RESOURCE_TOOL_NAME && options.includeTopicResource !== true) {
       continue;
     }
     registry.register(resolveBuiltInToolEntryForBranch(entry, options), {

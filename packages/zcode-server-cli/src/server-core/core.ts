@@ -77,7 +77,11 @@ export async function runServerCore(generation: number): Promise<void> {
   const activitySubscription = taskActivityTracker.onDidChangeRunningTaskCount(
     (runningTaskCount) => {
       lastRunningTaskCount = runningTaskCount;
-      void send({ type: "task-activity", runningTaskCount });
+      void send({
+        type: "task-activity",
+        runningTasks: taskActivityTracker.readRunningTasks(),
+        runningTaskCount,
+      });
     },
   );
   let heartbeatInFlight: Promise<void> | undefined;
@@ -87,12 +91,26 @@ export async function runServerCore(generation: number): Promise<void> {
       .then((runningTaskCount) => {
         if (runningTaskCount !== lastRunningTaskCount) {
           lastRunningTaskCount = runningTaskCount;
-          void send({ type: "task-activity", runningTaskCount });
+          void send({
+            type: "task-activity",
+            runningTasks: taskActivityTracker.readRunningTasks(),
+            runningTaskCount,
+          });
         }
-        void send({ type: "heartbeat", at: Date.now(), runningTaskCount });
+        void send({
+          type: "heartbeat",
+          runningTasks: taskActivityTracker.readRunningTasks(),
+          at: Date.now(),
+          runningTaskCount,
+        });
       })
       .catch(() => {
-        void send({ type: "heartbeat", at: Date.now(), runningTaskCount: lastRunningTaskCount });
+        void send({
+          type: "heartbeat",
+          runningTasks: taskActivityTracker.readRunningTasks(),
+          at: Date.now(),
+          runningTaskCount: lastRunningTaskCount,
+        });
       })
       .finally(() => {
         heartbeatInFlight = undefined;

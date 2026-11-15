@@ -201,6 +201,7 @@ export const DiagnosticRecordSchema = z.strictObject({
       "session_title_generation",
       "workspace_generate_text",
       "project_memory_extract",
+      "project_memory_dream",
     ])
     .optional(),
   stage: z

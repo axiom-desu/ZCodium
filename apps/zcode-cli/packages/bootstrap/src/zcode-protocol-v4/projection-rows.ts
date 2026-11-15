@@ -97,6 +97,10 @@ export function buildUserInputRow(base: RowBaseInput, payload: TurnStartedPayloa
     ...(sourceCommandId ? { sourceCommandId } : {}),
     ...(rootSourceCommandId ? { rootSourceCommandId } : {}),
     ...(payload.intent?.clientId ? { clientId: payload.intent.clientId } : {}),
+    // 引用不是正文：userInput row 从 intent 取结构化引用（旧转录缺省），界面按芯片渲染正文之外的选区。
+    ...(payload.intent?.conversationQuotes
+      ? { conversationQuotes: payload.intent.conversationQuotes }
+      : {}),
     ...(payload.epilogueStart === undefined ? {} : { epilogueStart: payload.epilogueStart }),
     ...(attachments && attachments.length > 0 ? { attachments } : {}),
   };

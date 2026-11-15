@@ -126,6 +126,7 @@ impl Engine {
                     super::waiters::HostWait {
                         owner: id,
                         workspace,
+                        announce: Some("interaction/providerRuntimeHeadersCancelled"),
                         reply,
                     },
                 );

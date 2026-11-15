@@ -1,4 +1,4 @@
-import { createConfig } from "@zcode/adapters/config";
+import { createConfig, resolvePath } from "@zcode/adapters/config";
 import type { McpElicitationPort, McpNotificationPort } from "@zcode/contracts";
 import { createNodeModelSelectionFacade } from "@zcode/provider-node";
 import { createNodeLoggerFactory } from "@zcode/adapters/logging";
@@ -13,7 +13,7 @@ import {
   type ZCodeMcpResourceSample,
   type ZCodeMcpTelemetryEvent,
 } from "@zcode/shared";
-import type { SqliteSessionStore } from "@zcode/adapters/storage";
+import { createNodeSessionDataFiles, type SqliteSessionStore } from "@zcode/adapters/storage";
 import { traceContextToLogContext, createRootTraceContext } from "@zcode/contracts";
 import type { McpPort, ModelSelection } from "@zcode/contracts";
 import type { PresentationSurface } from "@zcode/core";
@@ -28,6 +28,7 @@ import {
   prepareProtocolStartupStorage,
 } from "./zcode-protocol/storage-startup.js";
 import { closeSessionStore, getSessionDbPath } from "./app/session-store.js";
+import { getCliStorageRoot, getProjectMemoryRoot } from "./app/paths.js";
 import { startProcessProviderRegistryRuntime } from "./app/process-provider-registry-runtime.js";
 import { scheduleStartupLogRetentionCleanup } from "./log-retention.js";
 import { StartupTimer, startupNow } from "./startup-logging.js";
@@ -246,6 +247,17 @@ export async function runZCodeProtocolAgent(
       mcpPort,
       mcpProcesses: mcpProcessesTracker,
       sessionStore,
+      // 项目数据彻底删除的文件端口：会话目录与模型轨迹在 cli 存储根；记忆位置由与 CLI
+      // 记忆解析同一个函数派生（不在适配器里复制 hash 规则）。
+      sessionDataFiles: createNodeSessionDataFiles({
+        cliStorageRoot: getCliStorageRoot(resolvePath(configResult.config.storage.dir)),
+        memoryRoot: ({ workspacePath, workspaceIdentity }) =>
+          getProjectMemoryRoot(
+            getCliStorageRoot(resolvePath(configResult.config.storage.dir)),
+            workspacePath,
+            workspaceIdentity,
+          ),
+      }),
       refreshProviderRegistry: async (reason) => {
         await activeProviderRegistryRuntime.runtime.registryService.refresh(reason);
       },

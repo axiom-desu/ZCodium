@@ -17,6 +17,7 @@ export * from "./interfaces/session-mailbox.port.js";
 export * from "./interfaces/session-store.port.js";
 export * from "./interfaces/input-history.port.js";
 export * from "./interfaces/tool-artifact-store.port.js";
+export * from "./interfaces/topic-resource.port.js";
 export * from "./interfaces/subagent.port.js";
 export * from "./interfaces/coordinator-response.port.js";
 export * from "./interfaces/workflow.port.js";
@@ -26,7 +27,10 @@ export * from "./interfaces/dynamic-workflow-run.port.js";
 export * from "./interfaces/dynamic-workflow-snippet.port.js";
 export * from "./interfaces/model-catalog.port.js";
 export * from "./interfaces/automation.port.js";
+export * from "./interfaces/workflow-web-search-budget.port.js";
 export * from "./interfaces/mcp.port.js";
+// 插件发现：SearchPlugins/SuggestPluginInstall 的唯一端口（目录与安装意图都归既有插件 store）。
+export * from "./interfaces/plugin-discovery.port.js";
 
 export * from "./interfaces/runtime-input-presentation.js";
 

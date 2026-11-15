@@ -24,6 +24,8 @@ import {
 import { selectPersistedCompactTail } from "../helpers/compact-preservation.js";
 import type { CompactTimelineContext } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { supersedeContextComposition } from "../context-composition/state.js";
+import { resetProjectMemoryRecall } from "../helpers/project-memory-recall.js";
 import {
   legacySyntheticRuntimeMetadata,
   type RuntimeMessageEntry,
@@ -40,6 +42,14 @@ import {
   filterOutputTokenContinuationEntries,
   preserveCanonicalContextPrefix,
 } from "./turn-output-token-continuation.js";
+import { clearPromptSnapshot } from "../helpers/prompt-snapshot.js";
+import { rollOverTotalTokensBudget } from "../helpers/total-tokens-budget.js";
+import { latestContextTokens } from "./turn-model-step-usage.js";
+import { rebuildContextPrefix } from "./context-refresh.js";
+import {
+  applyRereadInstructionSources,
+  rereadInstructionSources,
+} from "./context-instruction-reread.js";
 
 export async function commitActiveCompact(
   this: AgentRuntimeInternal,
@@ -233,9 +243,38 @@ export async function commitActiveCompact(
       : recordablePostCompactEntries,
   );
   this.readFileState.clear();
+  // compact 重建了 provider 窗口：Recall 的 manifest conversation、prefetch 与字符计数全部作废。
+  resetProjectMemoryRecall(this);
+  // compact 替换了历史：最近一次请求组成作废，查询改为预演（子 spec §2.1）。
+  supersedeContextComposition(this, "compact");
+  // 指令文件与 Memory 索引在压缩提交后重读：会话中途改过的 AGENTS.md / MEMORY.md
+  // 以"after the conversation was compacted"的增量公告交给模型（上游 3.18.2 F1）。
+  const instructionReread = await rereadInstructionSources.call(
+    this,
+    params.turnTraceContext,
+    params.abortSignal,
+  );
+  if (instructionReread) {
+    applyRereadInstructionSources.call(this, instructionReread, compactModel);
+  }
+  // total_tokens 预算按压缩前上下文结转：压缩后不回到满额（上游 3.18.2 F2）。
+  this.totalTokensBudget = rollOverTotalTokensBudget(
+    this.totalTokensBudget,
+    latestContextTokens(params.activeEntries),
+  );
+  // compaction 之后的窗口按当前代码重新组装 system：清掉 prompt 快照，并重建历史与
+  // 本轮请求的前缀，下一次主循环请求重新记录（上游 3.18.2 F3）。
+  // 不重建时旧 system 会被当成新快照记下来。
+  const clearedPromptSnapshot = await clearPromptSnapshot(this, params.turnTraceContext);
+  const entries = clearedPromptSnapshot
+    ? rebuildContextPrefix(this, {
+        model: compactModel,
+        turnRequestEntries: recordablePostCompactEntries,
+      })
+    : postCompactEntries;
   return {
     displayText: "Compacted",
-    entries: postCompactEntries,
+    entries,
     outcome: "compacted",
     tokenCount: providerPostCompactTokenCount,
   };

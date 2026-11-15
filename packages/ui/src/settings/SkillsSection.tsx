@@ -23,7 +23,7 @@ import type {
   SkillsCapability,
   RemoteTarget,
 } from "@zcode/shared";
-import { ZCODE_AGENT_PROVIDER } from "@zcode/shared";
+import { ZCODE_AGENT_PROVIDER, parseRemoteWorkspaceIdentity } from "@zcode/shared";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { toast } from "@/components/ui/toast.js";
@@ -53,7 +53,8 @@ import {
 import { groupSkillsByPlugin } from "@/settings/pluginManagedResourceGroups.js";
 import { SkillsImportDialog } from "@/settings/ExternalAgentImportDialog.js";
 import { formatRemoteSkillSyncTarget } from "@/settings/RemoteSkillSyncDialog.js";
-import { RemoteSyncDialogs, shouldShowRemoteSyncActions } from "@/settings/RemoteSyncActions.js";
+import { shouldShowRemoteSyncActions } from "@/settings/RemoteSyncActions.js";
+import { openDataSyncDialog } from "@/data-sync/index.js";
 import { refreshSharedSkillStoreForWorkspace } from "@/lib/skillStoreRefresh.js";
 import { usePluginManagementStore } from "@/store/pluginManagementStore.js";
 import {
@@ -195,8 +196,7 @@ export function SkillsSection({
   );
   // PluginsSection 已把 Scope target 传入，但 Skills 仍从当前 ServiceProvider
   // 取服务，导致跨远程 host 误路由。技能读写和远端同步都改用同一 target 解析结果。
-  const { pluginManagementService, skillSyncService, skillsService } =
-    targetServiceResolution.services;
+  const { pluginManagementService, skillsService } = targetServiceResolution.services;
   const { zcodeSessionService } = targetServiceResolution.services;
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [capability, setCapability] = useState<SkillsCapability | null>(null);
@@ -211,7 +211,6 @@ export function SkillsSection({
   const [diagnostics, setDiagnostics] = useState<SkillDiagnostic[]>([]);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [remoteSkillSyncOpen, setRemoteSkillSyncOpen] = useState(false);
   const latestRequestIdRef = useRef(0);
   const activeSkillTargetKey = activeWorkspaceIdentity?.trim() || activeWorkspacePath || "";
   const projectionMatchesTarget =
@@ -239,8 +238,12 @@ export function SkillsSection({
   ]);
 
   const workspaceLabel = getWorkspaceBasename(activeWorkspacePath);
+  const syncSourceServerId = activeWorkspaceIdentity
+    ? parseRemoteWorkspaceIdentity(activeWorkspaceIdentity)?.sourceServerId
+    : undefined;
   const connectedRemoteSyncTarget =
     targetServiceResolution.rpcReady &&
+    syncSourceServerId &&
     shouldShowRemoteSyncActions({
       remoteSessionId,
       remoteTarget,
@@ -339,7 +342,6 @@ export function SkillsSection({
       setLoading(false);
       setError(null);
       setImportDialogOpen(false);
-      setRemoteSkillSyncOpen(false);
       return;
     }
     // 首屏或切换 Scope target 时必须显示阻塞 loading；手动刷新仍走后台刷新，
@@ -671,7 +673,10 @@ export function SkillsSection({
         aria-label={intl.formatMessage({
           id: "settings.skills.remoteSync.open",
         })}
-        onClick={() => setRemoteSkillSyncOpen(true)}
+        onClick={() => {
+          if (syncSourceServerId)
+            openDataSyncDialog({ sourceServerId: syncSourceServerId, category: "skills" });
+        }}
       >
         <UploadCloud className="size-3.5" aria-hidden="true" />
       </Button>
@@ -975,32 +980,6 @@ export function SkillsSection({
           });
           await refresh();
         }}
-      />
-      <RemoteSyncDialogs
-        canSyncSkills={Boolean(
-          targetServiceResolution.rpcReady && connectedRemoteSyncTarget && activeWorkspacePath,
-        )}
-        canSyncMcp={false}
-        skillOpen={remoteSkillSyncOpen && targetServiceResolution.rpcReady}
-        mcpOpen={false}
-        onSkillOpenChange={setRemoteSkillSyncOpen}
-        onMcpOpenChange={() => {}}
-        localSkillSyncService={baseServices.skillSyncService}
-        remoteSkillSyncService={skillSyncService}
-        remoteTarget={connectedRemoteSyncTarget}
-        skillWorkspacePath={activeWorkspacePath ?? ""}
-        mcpWorkspacePath=""
-        workspaceIdentity={activeWorkspaceIdentity}
-        onSkillsSynced={async () => {
-          await invalidateDeferredDraftSessionForSkillChange({
-            zcodeSessionService,
-            workspacePath: activeWorkspacePath,
-            workspaceIdentity: activeWorkspaceIdentity,
-            reason: "settings-remote-skill-sync",
-          });
-          await Promise.all([refresh(), refreshSharedSkillStoreForCurrentWorkspace()]);
-        }}
-        onMcpSynced={() => {}}
       />
     </div>
   );

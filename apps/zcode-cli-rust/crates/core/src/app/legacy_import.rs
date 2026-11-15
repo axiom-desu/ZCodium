@@ -77,6 +77,7 @@ impl Engine {
             workspace: Some(workspace),
             fresh: false,
             tool_search_mode: self.session_tool_search_mode(p),
+            app_control: self.session_app_control(p),
             ..Default::default()
         };
         if let Some(servers) = p.get("mcpServers") {
@@ -88,6 +89,7 @@ impl Engine {
             .context(StorageCommitFailure)?;
         let summary = session.summary();
         self.sessions.insert(id.clone(), session);
+        self.store.session_presence_register(&id).await?;
         self.touch_session(&id);
         self.closed.remove(&id);
         self.publish(&id, vec![])?;

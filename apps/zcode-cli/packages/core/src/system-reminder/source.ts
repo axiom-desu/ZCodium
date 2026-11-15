@@ -38,11 +38,16 @@ export const SYSTEM_REMINDER_PERSISTED_SOURCES = [
   "selection_side_chat",
   "queued_system_notification",
   "shell_environment_change",
+  // 环境公告（上游 3.18.2）：可持久化的增量公告，冷恢复按原文重建。
+  "environment_announcement",
 ] as const;
 
 export const SYSTEM_REMINDER_PER_REQUEST_SOURCES = [
   "incoming_message",
   "hook_context",
+  // Semantic Recall / Dream 的当前回合注入（上游 3.18.2 §5.3/§7.3）；不落 session。
+  "memory_update",
+  "relevant_memory",
   "runtime_mode",
   "plan_mode_exit",
   "output_style",
@@ -51,6 +56,8 @@ export const SYSTEM_REMINDER_PER_REQUEST_SOURCES = [
   "model_anomaly",
   "prompt_attachment",
   "diagnostics",
+  // 每请求的 token 预算倒数（上游 3.18.2）；只进当前请求，不落 session。
+  "total_tokens_reminder",
 ] as const;
 
 export type SystemReminderPrefixSource = (typeof SYSTEM_REMINDER_PREFIX_SOURCES)[number];
@@ -169,7 +176,22 @@ const SYSTEM_REMINDER_DESCRIPTORS: Record<SystemReminderSource, DescriptorShape>
     true,
     "sr.shell_environment_change",
   ),
+  // 请求前公告：cwd/附加目录/Desktop 呈现面变化时追加，冷恢复按落库原文重建。
+  environment_announcement: descriptor(
+    "current_turn",
+    "resume_history",
+    true,
+    "sr.environment_announcement",
+  ),
   diagnostics: descriptor("mid_turn_event", "mid_turn_event", true, "sr.diagnostics"),
+  total_tokens_reminder: descriptor(
+    "current_turn",
+    "per_current_turn",
+    true,
+    "sr.total_tokens_reminder",
+  ),
+  memory_update: descriptor("current_turn", "per_current_turn", true, "sr.memory_update"),
+  relevant_memory: descriptor("current_turn", "per_current_turn", true, "sr.relevant_memory"),
   // 第四批 4a-0（2026-09-12）：原 plugin_ui_state 源已删除，插件给模型的信息改走 ui/update-model-context。
 };
 

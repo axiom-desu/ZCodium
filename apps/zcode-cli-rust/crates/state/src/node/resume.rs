@@ -1,6 +1,8 @@
 //! The persisted facts a cold resume reads (Node `resumeFromStore` and the
 //! bootstrap model selection restore). Spec rust-m11-node-storage §6.1.
-use super::codecs::{MODEL_SELECTION_ENTRY, parse_model_selection};
+use super::codecs::{
+    MODEL_SELECTION_ENTRY, PROMPT_SNAPSHOT_ENTRY, SESSION_FEATURES_ENTRY, parse_model_selection,
+};
 use super::cold::{self, History};
 use super::entries;
 use super::sessions::{self, SessionRow};
@@ -38,6 +40,10 @@ pub struct Resume {
     /// Node `extractPersistedEnvInfo`: the first user message's
     /// `contextSnapshot.envInfo`.
     pub env_info: Option<Value>,
+    /// 3.18 F3：主会话 system 字节快照（`runtime/prompt_snapshot` 的最后一行）。
+    pub prompt_system: Option<Value>,
+    /// 3.18 F12：会话能力标签（`runtime/session_features` 的最后一行）。
+    pub session_features: Option<Value>,
     pub history: History,
     pub conversation: Cold,
     /// Node `contextUsageFromPersistedMessages` (`used`) of the active branch.
@@ -262,6 +268,8 @@ pub fn resume(
     let assistant = assistant.as_ref();
     Ok(Some(Resume {
         model_selection: model_selection(last_entry(conn, id, MODEL_SELECTION_ENTRY)?),
+        prompt_system: last_entry(conn, id, PROMPT_SNAPSHOT_ENTRY)?,
+        session_features: last_entry(conn, id, SESSION_FEATURES_ENTRY)?,
         execution,
         permission_grant: permission_grant(last_entry(conn, id, PERMISSION_FULL_ACCESS_ENTRY)?, id),
         todos: todos::read(conn, id)?,

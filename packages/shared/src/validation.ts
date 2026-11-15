@@ -11,7 +11,10 @@ import { zcodeProviderSchema } from "./providers.js";
 import { zcodeAgentProviderSchema } from "./zcode-agent-policy.js";
 import { modelSelectionSchema } from "./model-selection.js";
 import { zcodeProcessDiagnosticSchema } from "./process-diagnostic.js";
-import { providerProvisioningTriggerSchema } from "./provider-provisioning.js";
+import {
+  providerProvisioningLaneStatusSchema,
+  providerProvisioningTriggerSchema,
+} from "./provider-provisioning.js";
 import {
   taskOwnerCommandDeliverySchema,
   taskOwnerCommandRequestSchema,
@@ -157,6 +160,9 @@ export const hostInitLocalMessageSchema = z.object({
   remoteAssets: remoteAssetDirsSchema.optional(),
   databaseStartupId: z.string().min(1).max(128).optional(),
   hostId: nonEmptyStringSchema.optional(),
+  ownerWebContentsId: z.number().int().nonnegative().optional(),
+  /** Main 为该窗口 Host 绑定的可信导航目标（`window:<BrowserWindow.id>`）；模型不能提供。 */
+  uiTarget: nonEmptyStringSchema.optional(),
   deliveryKind: taskRealtimeHostDeliveryKindSchema.optional(),
   workspacePath: nonEmptyStringSchema.optional(),
   workspaceIdentity: nonEmptyStringSchema.optional(),
@@ -236,6 +242,14 @@ export const hostBindRemoteWorkspaceContextMessageSchema = z
     workspacePurpose: z.enum(["project", "conversation"]).optional(),
     // Renderer 传入的 route identity 只能作兼容提示，权威 identity 由 Host 返回。
     legacyRouteHint: nonEmptyStringSchema.optional(),
+  })
+  .strict();
+
+export const hostCancelRemoteWorkspaceBindMessageSchema = z
+  .object({
+    type: z.literal("cancel-remote-workspace-bind"),
+    requestId: nonEmptyStringSchema,
+    remoteSessionId: nonEmptyStringSchema,
   })
   .strict();
 
@@ -401,6 +415,28 @@ export const hostLocalMediaPreviewPathAuthorizeResultMessageSchema = z
   })
   .strict();
 
+/** main → host：扩展进程启动结果。 */
+export const hostExtensionHostStartResultMessageSchema = z
+  .object({
+    type: z.literal("extension-host-start-result"),
+    requestId: nonEmptyStringSchema,
+    ok: z.boolean(),
+    pid: z.number().int().positive().optional(),
+    error: z.string().optional(),
+  })
+  .strict();
+
+/** main → host：扩展进程停止结果。 */
+export const hostExtensionHostStopResultMessageSchema = z
+  .object({
+    type: z.literal("extension-host-stop-result"),
+    requestId: nonEmptyStringSchema,
+    ok: z.boolean(),
+    stopped: z.boolean().optional(),
+    error: z.string().optional(),
+  })
+  .strict();
+
 /** main → host：插件 UI 沙箱登记结果（PluginSandboxRegisterResultPayload）。 */
 export const hostPluginSandboxRegisterResultMessageSchema = z
   .object({
@@ -421,6 +457,7 @@ export const hostPluginSandboxRegisterResultMessageSchema = z
         heightHint: z.number().int().positive().optional(),
         minFrameHeight: z.number().int().positive().optional(),
         showInline: z.boolean().optional(),
+        backgroundRetention: z.boolean().optional(),
         // 资源声明的浏览器权限随句柄回 renderer（进 hostContext.permissions）；与登记请求的 permissions 同一枚举。
         permissions: z
           .array(z.enum(["camera", "microphone", "geolocation", "clipboardWrite"]))
@@ -456,6 +493,15 @@ export const hostProviderProvisioningExecuteMessageSchema = z
   })
   .strict();
 
+/** main → host：数据同步页读取 / 重试 Provisioning lane 的结果（按 requestId 关联）。 */
+export const hostProviderProvisioningLaneResultMessageSchema = z
+  .object({
+    type: z.literal("provider-provisioning-lane-result"),
+    requestId: nonEmptyStringSchema,
+    status: providerProvisioningLaneStatusSchema,
+  })
+  .strict();
+
 export const hostResourceUsageSnapshotRequestMessageSchema = z
   .object({
     type: z.literal("resource-usage-snapshot-request"),
@@ -464,6 +510,66 @@ export const hostResourceUsageSnapshotRequestMessageSchema = z
   .strict();
 export type HostResourceUsageSnapshotRequestMessage = z.infer<
   typeof hostResourceUsageSnapshotRequestMessageSchema
+>;
+
+/** 桌面 App 导航桥的消息体与 desktop/app-control-navigation 的 contract schema 同源。 */
+const appNavigationIdentifierSchema = z.string().min(1).max(4096);
+const appNavigationTargetSchema = z.strictObject({
+  workspacePath: appNavigationIdentifierSchema,
+  workspaceIdentity: appNavigationIdentifierSchema.optional(),
+  taskId: appNavigationIdentifierSchema,
+});
+const appNavigationResultSchema = z.strictObject({
+  status: z.enum(["opened", "unavailable"]),
+  uiTarget: appNavigationIdentifierSchema.optional(),
+  reason: z.string().optional(),
+});
+
+export const hostAppNavigationOpenResponseSchema = z.strictObject({
+  type: z.literal("app-navigation-open"),
+  requestId: appNavigationIdentifierSchema,
+  uiTarget: appNavigationIdentifierSchema.optional(),
+  target: appNavigationTargetSchema,
+});
+export const hostAppNavigationCancelResponseSchema = z.strictObject({
+  type: z.literal("app-navigation-cancel"),
+  requestId: appNavigationIdentifierSchema,
+});
+export const hostAppNavigationResultMessageSchema = z.strictObject({
+  type: z.literal("app-navigation-result"),
+  requestId: appNavigationIdentifierSchema,
+  result: appNavigationResultSchema,
+});
+
+/** renderer → main：能力登记/注销与真实导航回执（generation 由渲染进程生命周期产生）。 */
+export const appControlNavigationRendererIpcSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("register"), generation: appNavigationIdentifierSchema }),
+  z.strictObject({ type: z.literal("unregister"), generation: appNavigationIdentifierSchema }),
+  z.strictObject({
+    type: z.literal("result"),
+    generation: appNavigationIdentifierSchema,
+    requestId: appNavigationIdentifierSchema,
+    result: appNavigationResultSchema,
+  }),
+]);
+
+/** main → renderer：打开/取消。旧 generation 的消息在 renderer 侧直接丢弃。 */
+export const appControlNavigationRendererMessageSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("open"),
+    requestId: appNavigationIdentifierSchema,
+    generation: appNavigationIdentifierSchema,
+    target: appNavigationTargetSchema,
+  }),
+  z.strictObject({
+    type: z.literal("cancel"),
+    requestId: appNavigationIdentifierSchema,
+    generation: appNavigationIdentifierSchema,
+  }),
+]);
+export type AppControlNavigationRendererIpc = z.infer<typeof appControlNavigationRendererIpcSchema>;
+export type AppNavigationRendererMessage = z.infer<
+  typeof appControlNavigationRendererMessageSchema
 >;
 
 export const hostIncomingMessageSchema = z.discriminatedUnion("type", [
@@ -478,6 +584,7 @@ export const hostIncomingMessageSchema = z.discriminatedUnion("type", [
   hostConnectRemoteWorkspaceMessageSchema,
   hostCancelRemoteWorkspaceConnectMessageSchema,
   hostBindRemoteWorkspaceContextMessageSchema,
+  hostCancelRemoteWorkspaceBindMessageSchema,
   hostDisposeRemoteWorkspaceSessionMessageSchema,
   hostAttachServicePortMessageSchema,
   hostDetachServicePortMessageSchema,
@@ -497,8 +604,12 @@ export const hostIncomingMessageSchema = z.discriminatedUnion("type", [
   hostBrowserExecuteResultMessageSchema,
   hostLocalMediaPreviewPathAuthorizeResultMessageSchema,
   hostPluginSandboxRegisterResultMessageSchema,
+  hostExtensionHostStartResultMessageSchema,
+  hostExtensionHostStopResultMessageSchema,
   hostCuaPipFocusChangedMessageSchema,
   hostProviderProvisioningExecuteMessageSchema,
+  hostProviderProvisioningLaneResultMessageSchema,
+  hostAppNavigationResultMessageSchema,
 ]);
 
 export const hostRemoteWorkspaceConnectedResponseSchema = z
@@ -506,6 +617,25 @@ export const hostRemoteWorkspaceConnectedResponseSchema = z
     type: z.literal("remote-workspace-connected"),
     requestId: nonEmptyStringSchema,
     descriptor: windowHostRemoteWorkspaceDescriptorSchema,
+  })
+  .strict();
+
+export const hostRemoteWorkspaceContextBoundResponseSchema = z
+  .object({
+    type: z.literal("remote-workspace-context-bound"),
+    requestId: nonEmptyStringSchema,
+    // Desktop tab rekey only；手机 replayable attachment 不消费该提示。
+    previousWorkspaceIdentity: nonEmptyStringSchema.optional(),
+  })
+  .strict();
+
+export const hostRemoteWorkspaceContextBindFailedResponseSchema = z
+  .object({
+    type: z.literal("remote-workspace-context-bind-failed"),
+    requestId: nonEmptyStringSchema,
+    error: nonEmptyStringSchema,
+    reasonCode: nonEmptyStringSchema.optional(),
+    retryable: z.boolean().optional(),
   })
   .strict();
 
@@ -876,6 +1006,32 @@ export const hostLocalMediaPreviewPathAuthorizeRequestResponseSchema = z
   })
   .strict();
 
+/** host → main：拉起窗口扩展进程；token 只用于 loopback 鉴权，不落日志。 */
+export const hostExtensionHostStartRequestResponseSchema = z
+  .object({
+    type: z.literal("extension-host-start-request"),
+    requestId: nonEmptyStringSchema,
+    ownerWebContentsId: z.number().int().nonnegative(),
+    generation: z.number().int().positive(),
+    workspaceIdentity: nonEmptyStringSchema,
+    endpoint: z.string().url(),
+    token: z.string().min(16).max(256),
+    pluginDir: nonEmptyStringSchema,
+    pluginId: nonEmptyStringSchema,
+  })
+  .strict();
+
+/** host → main：按窗口与代际停止扩展进程；带 pluginId 时只停止该插件。 */
+export const hostExtensionHostStopRequestResponseSchema = z
+  .object({
+    type: z.literal("extension-host-stop-request"),
+    requestId: nonEmptyStringSchema,
+    ownerWebContentsId: z.number().int().nonnegative(),
+    generation: z.number().int().nonnegative(),
+    pluginId: nonEmptyStringSchema.optional(),
+  })
+  .strict();
+
 /** host → main：登记已校验的插件 UI HTML。 */
 export const hostPluginSandboxRegisterRequestResponseSchema = z
   .object({
@@ -917,6 +1073,7 @@ export const hostPluginSandboxRegisterRequestResponseSchema = z
     heightHint: z.number().int().positive().optional(),
     minFrameHeight: z.number().int().positive().optional(),
     showInline: z.boolean().optional(),
+    backgroundRetention: z.boolean().optional(),
   })
   .strict()
   .refine(
@@ -950,7 +1107,7 @@ export const hostNetworkTelemetryBatchResponseSchema = z.object({
 export const hostProviderProvisioningSourceChangedResponseSchema = z
   .object({
     type: z.literal("provider-provisioning-source-changed"),
-    trigger: providerProvisioningTriggerSchema.exclude(["environment-online"]),
+    trigger: providerProvisioningTriggerSchema.exclude(["environment-online", "user-retry"]),
   })
   .strict();
 
@@ -961,6 +1118,19 @@ export const hostProviderProvisioningExecutionResultResponseSchema = z
     environmentKey: nonEmptyStringSchema,
     status: z.enum(["applied", "already-applied", "unsupported", "failed", "rollback_failed"]),
     error: z.string().optional(),
+  })
+  .strict();
+
+/**
+ * host → main：数据同步页按设备读取（read）、等当前执行结束后读取（wait）或重试（retry）
+ * Provisioning lane。Main 总是回 provider-provisioning-lane-result。
+ */
+export const hostProviderProvisioningLaneRequestResponseSchema = z
+  .object({
+    type: z.literal("provider-provisioning-lane-request"),
+    requestId: nonEmptyStringSchema,
+    sourceServerId: nonEmptyStringSchema,
+    action: z.enum(["read", "wait", "retry"]),
   })
   .strict();
 
@@ -996,6 +1166,8 @@ export const hostResponseMessageSchema = z.discriminatedUnion("type", [
   hostResourceUsageSnapshotResultResponseSchema,
   hostRemoteWorkspaceConnectionLogResponseSchema,
   hostRemoteWorkspaceConnectedResponseSchema,
+  hostRemoteWorkspaceContextBoundResponseSchema,
+  hostRemoteWorkspaceContextBindFailedResponseSchema,
   hostRemoteWorkspaceConnectFailedResponseSchema,
   hostRemoteWorkspaceClosedResponseSchema,
   hostLogResponseSchema,
@@ -1031,11 +1203,16 @@ export const hostResponseMessageSchema = z.discriminatedUnion("type", [
   hostBrowserExecuteRequestResponseSchema,
   hostLocalMediaPreviewPathAuthorizeRequestResponseSchema,
   hostPluginSandboxRegisterRequestResponseSchema,
+  hostExtensionHostStartRequestResponseSchema,
+  hostExtensionHostStopRequestResponseSchema,
   hostNetworkTelemetryBatchResponseSchema,
   hostProviderProvisioningSourceChangedResponseSchema,
   hostProviderProvisioningExecutionResultResponseSchema,
+  hostProviderProvisioningLaneRequestResponseSchema,
   hostCronRunResultResponseSchema,
   hostCronSchedulerWakeRequestResponseSchema,
+  hostAppNavigationOpenResponseSchema,
+  hostAppNavigationCancelResponseSchema,
 ]);
 
 export const zcodeTaskPersistStatusSchema = z.enum(["running", "completed", "error"]);

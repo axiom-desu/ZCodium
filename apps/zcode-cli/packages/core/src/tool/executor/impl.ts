@@ -56,6 +56,7 @@ export class ToolExecutorImpl implements ToolExecutor {
       workflowSubmitPort: options.workflowSubmitPort,
       workflowEscalatePort: options.workflowEscalatePort,
       artifactStore: options.artifactStore,
+      topicResourcePort: options.topicResourcePort,
       automationPort: options.automationPort,
       sessionStore: options.sessionStore,
       sessionModePort: options.sessionModePort,
@@ -64,6 +65,10 @@ export class ToolExecutorImpl implements ToolExecutor {
       dynamicWorkflowSnippetPort: options.dynamicWorkflowSnippetPort,
       modelCatalogPort: options.modelCatalogPort,
       runtimeTaskRegistry: options.runtimeTaskRegistry,
+      // 会话控制与插件发现都只由启动装配注入；漏掉这两行会让注册面有工具、执行面却没有端口
+      // （工具永远 ConfigurationError），C5 曾留下这个缺口。
+      sessionControl: options.sessionControl,
+      pluginDiscoveryPort: options.pluginDiscoveryPort,
       readFileState: options.readFileState ?? new Map(),
       hasLoadedSkill: options.hasLoadedSkill,
       subagentBackgroundBashMaxMs: options.subagentBackgroundBashMaxMs,

@@ -224,10 +224,11 @@ mod tests {
         let names: Vec<&str> = exposure.tools.iter().map(super::definition_name).collect();
         assert_eq!(
             names,
-            vec!["Read", "ToolSearch", "DeferredToolCall", "TodoWrite"]
+            vec!["Read", "LocalToolSearch", "DeferredToolCall", "TodoWrite"]
         );
         // 提升后的工具按普通工具发送（无 deferLoading），Local 描述覆盖。
         assert_eq!(exposure.tools[3].get("deferLoading"), None);
+        assert_eq!(exposure.tools[1]["function"]["name"], "LocalToolSearch");
         assert_eq!(
             exposure.tools[1]["function"]["description"],
             local_description()

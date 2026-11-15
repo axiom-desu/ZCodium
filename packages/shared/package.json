@@ -24,11 +24,14 @@
     "./workspace-hook-mutation": "./src/workspace-hook-mutation.ts",
     "./workspace-hook-review-monotonicity": "./src/workspace-hook-review-monotonicity.ts",
     "./workspace-hook-trust-store-file": "./src/workspace-hook-trust-store-file.ts",
+    "./managed-worktree": "./src/managed-worktree/index.ts",
     "./builtin-plugin-assets": "./src/builtinPluginAssets.ts",
     "./office-viewer-assets": "./src/officeViewerAssetsNode.ts",
     "./office-viewer-assets-contract": "./src/officeViewerAssets.ts",
     "./bundled-remote-assets": "./src/bundledRemoteAssets.ts",
-    "./gen-ui": "./src/gen-ui/index.ts"
+    "./gen-ui": "./src/gen-ui/index.ts",
+    "./extension-host": "./src/extension-host/index.ts",
+    "./extension-host/sdk": "./src/extension-host/adapters/sdk.ts"
   },
   "scripts": {
     "lint": "oxlint",
@@ -36,6 +39,7 @@
   },
   "dependencies": {
     "@zcode/model-option-map": "workspace:*",
+    "@zcode/session-control": "workspace:*",
     "zod": "4.6.5"
   },
   "devDependencies": {

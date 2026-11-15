@@ -14,6 +14,7 @@ import type {
   BotTransientInteractionCardHandle,
 } from "./types.js";
 import { formatBotMessage } from "../messages.js";
+import { PROTOCOL_V4_LIMITS } from "@zcode/shared/zcode-protocol-v4";
 import { fetchBotProviderJson } from "#src/bots/providers/providerRequest.js";
 
 interface FeishuProviderDeps {
@@ -1887,6 +1888,56 @@ export function createFeishuBotProvider(deps: FeishuProviderDeps): BotProviderAd
       }
     },
 
+    // 话题资源读取专用：不经本地缓存/路径，字节只在内存里交付给 Host 反向 RPC。
+    // 与 downloadAttachment 分开，避免历史资源读取改变现有入站附件行为。
+    async downloadTopicResource(bot, attachment, target, signal) {
+      if (!attachment.providerFileId || !target.providerMessageId) return null;
+      const token = await readTenantAccessToken(bot, deps, signal);
+      if (!token) return null;
+      const expectedHost = new URL(getFeishuBaseUrl(bot)).host;
+      const controller = new AbortController();
+      const abort = () => controller.abort(signal?.reason);
+      signal?.addEventListener("abort", abort, { once: true });
+      const timeout = setTimeout(
+        () => controller.abort(new Error("Feishu topic resource download timed out.")),
+        FEISHU_ATTACHMENT_DOWNLOAD_TIMEOUT_MS,
+      );
+      try {
+        const resourceType =
+          attachment.kind === "image" ? "image" : attachment.kind === "video" ? "media" : attachment.kind;
+        const response = await fetch(
+          `${getFeishuBaseUrl(bot)}/open-apis/im/v1/messages/${encodeURIComponent(target.providerMessageId)}/resources/${encodeURIComponent(attachment.providerFileId)}?type=${resourceType}`,
+          { headers: { authorization: `Bearer ${token}` }, redirect: "manual", signal: controller.signal },
+        );
+        if (response.status >= 300 && response.status < 400) {
+          // 原因：资源接口可能 302 到 CDN。只跟随到同一飞书域的地址，
+          // 避免被改成任意第三方主机后把凭据或内容带出去。
+          const location = response.headers.get("location");
+          if (!location) throw new Error("Feishu topic resource redirect is unavailable");
+          const next = new URL(location, `${getFeishuBaseUrl(bot)}/`);
+          if (next.host !== expectedHost && !next.host.endsWith(".feishu.cn") && !next.host.endsWith(".larksuite.com")) {
+            throw new Error("Feishu topic resource redirect host is not allowed");
+          }
+          const redirected = await fetch(next, { signal: controller.signal });
+          if (!redirected.ok) {
+            throw new Error(`Feishu topic resource download failed: HTTP ${redirected.status}`);
+          }
+          return { attachment, data: await readCappedResourceBytes(redirected, controller.signal) };
+        }
+        if (!response.ok) {
+          throw new Error(`Feishu topic resource download failed: HTTP ${response.status}`);
+        }
+        return { attachment, data: await readCappedResourceBytes(response, controller.signal) };
+      } catch (error) {
+        if ((error as { name?: unknown })?.name === "AbortError") {
+          throw new Error("Feishu topic resource download was cancelled");
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener("abort", abort);
+      }
+    },
     parseCallback(payload): BotInboundMessage[] {
       if (!isRecord(payload)) {
         return [];
@@ -1899,4 +1950,48 @@ export function createFeishuBotProvider(deps: FeishuProviderDeps): BotProviderAd
       return message ? [message] : [];
     },
   };
+}
+
+/** 话题资源下载只接受有界字节：先看 Content-Length，再边读边计数，超限立即取消。 */
+async function readCappedResourceBytes(
+  response: Response,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
+  const declared = Number(response.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declared) && declared > PROTOCOL_V4_LIMITS.attachmentMaxBytes) {
+    throw new Error("Topic resource exceeds attachment size limit");
+  }
+  const body = response.body;
+  if (!body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > PROTOCOL_V4_LIMITS.attachmentMaxBytes) {
+      throw new Error("Topic resource exceeds attachment size limit");
+    }
+    return bytes;
+  }
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      signal.throwIfAborted();
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > PROTOCOL_V4_LIMITS.attachmentMaxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error("Topic resource exceeds attachment size limit");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }

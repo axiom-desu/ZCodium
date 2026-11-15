@@ -12,6 +12,8 @@ import {
   stringArraySchema,
   type DesktopCommandId,
   type ApplicationIconRequest,
+  type AppSettings,
+  type FileApplicationTarget,
   type Locale,
   type LoadCliMcpFromUserDirectoryRequest,
   type MigrateLegacyCommonMcpRequest,
@@ -21,7 +23,11 @@ import {
   type UpdateStatePayload,
   type WindowControlsOverlayReadyPayload,
 } from "@zcode/shared";
-import { getInstalledEditors } from "./editors.js";
+import { getAppIconDataUrl, getInstalledEditors } from "./editors.js";
+import { createFileApplicationService } from "./file-open-apps/index.js";
+import { registerDesktopCaptureBrowserGuestPageIpcHandler } from "./desktopCaptureBrowserGuestPage.js";
+import { registerDesktopPrintBrowserGuestPageIpcHandler } from "./desktopPrintBrowserGuestPage.js";
+import type { CaptureGuestBinding } from "./desktopCaptureBrowserGuestPagePolicy.js";
 import { getApplicationIcon } from "./applicationIcons.js";
 import { exportLogs } from "./exportLogs.js";
 import { resolveCommunityUrl } from "./desktopCommandHandlers.js";
@@ -55,6 +61,22 @@ import { createTempTextAttachment } from "./tempTextAttachment.js";
 import { registerDesktopSaveFileIpcHandler } from "./desktopSaveFile.js";
 import { registerDesktopPrintToPdfIpcHandler } from "./desktopPrintToPdf.js";
 
+/**
+ * renderer patch schema 允许 "" 删除哨兵（落盘前由 services 归一）；main 的即时同步只消费
+ * 已解析值，先把不兼容的 domain 哨兵投影成 undefined，不复制落盘归一逻辑。
+ */
+function toImmediateSettingsPatch(
+  patch: ReturnType<typeof appSettingsPatchSchema.parse>,
+): Partial<AppSettings> {
+  // 只剔除两个 "" 删除哨兵（落盘前由 services normalizeSettingsPatch 归一）；其余字段原样传递。
+  const { providerFamilyDomain, dynamicWorkflowMode, ...rest } = patch;
+  return {
+    ...rest,
+    ...(providerFamilyDomain ? { providerFamilyDomain } : {}),
+    ...(dynamicWorkflowMode ? { dynamicWorkflowMode } : {}),
+  };
+}
+
 export function registerPlatformIpcHandlers(options: {
   logger: {
     info: (...args: unknown[]) => void;
@@ -84,7 +106,7 @@ export function registerPlatformIpcHandlers(options: {
     autoDownloadAndInstallUpdates: boolean;
   }>;
   setAutoDownloadAndInstallUpdates: (enabled: boolean) => Promise<void>;
-  syncAppSettings: (patch: unknown) => void;
+  syncAppSettings: (patch: Partial<AppSettings>) => void;
   /** 快捷键设置页录制态开关：true 时 main 重建菜单摘除可配置 accelerator */
   setShortcutRecordingActive?: (active: boolean, ownerWebContentsId?: number | null) => void;
   /** 桌面端设备标识符（基于 userData 路径的 SHA-256） */
@@ -96,6 +118,11 @@ export function registerPlatformIpcHandlers(options: {
   reportBrowserScreenshotSurfaceReady?: ReportBrowserScreenshotSurfaceReady;
   /** Browser tab 关闭、挂起、恢复与跨重启 shell IPC。 */
   browserViewResidencyHandlers?: BrowserViewResidencyIpcHandlers;
+  /**
+   * guest 截图准入：由既有 BrowserGuestManager 反查当前 tab owner。
+   * 缺省时 main 一律拒绝（`guest_not_owned`），不回退成只比 hostWebContents。
+   */
+  resolveBrowserGuestBinding?: (webContentsId: number) => CaptureGuestBinding | null;
 }) {
   ipcMain.handle(PlatformChannels.SelectDirectory, async () => {
     const result = await dialog.showOpenDialog({
@@ -129,6 +156,15 @@ export function registerPlatformIpcHandlers(options: {
 
   registerDesktopSaveFileIpcHandler(options.logger);
   registerDesktopPrintToPdfIpcHandler(options.logger);
+  registerDesktopCaptureBrowserGuestPageIpcHandler({
+    logger: options.logger,
+    resolveGuestBinding: options.resolveBrowserGuestBinding,
+  });
+  // 页面 PDF 与截图共用同一 owner/generation 校验与 manager 反查，renderer 不直接调用 webview 打印。
+  registerDesktopPrintBrowserGuestPageIpcHandler({
+    logger: options.logger,
+    resolveGuestBinding: options.resolveBrowserGuestBinding,
+  });
 
   ipcMain.handle(
     PlatformChannels.CreateTempTextAttachment,
@@ -280,7 +316,7 @@ export function registerPlatformIpcHandlers(options: {
       return;
     }
 
-    options.syncAppSettings(result.data);
+    options.syncAppSettings(toImmediateSettingsPatch(result.data));
   });
 
   // 快捷键录制态：renderer 设置页进入/退出录制时通知。macOS 系统菜单会先于 renderer
@@ -367,7 +403,22 @@ export function registerPlatformIpcHandlers(options: {
     const senderWindow = BrowserWindow.fromWebContents(event.sender);
     return resolveDesktopWindowChromeState(senderWindow?.isMaximized() ?? false);
   });
-  ipcMain.handle(PlatformChannels.GetInstalledEditors, () => getInstalledEditors());
+  ipcMain.handle(PlatformChannels.GetInstalledEditors, (_event, filePath?: string) =>
+    getInstalledEditors(typeof filePath === "string" ? filePath : undefined),
+  );
+  // 系统关联应用是桌面独有的本机能力：Web/手机端没有这两个方法，天然拒绝。
+  const fileApplications = createFileApplicationService({
+    getIcon: (id, path) => getAppIconDataUrl(id, path),
+    logger: options.logger,
+  });
+  ipcMain.handle(PlatformChannels.GetFileApplications, (_event, target: FileApplicationTarget) =>
+    fileApplications.getFileApplications(target),
+  );
+  ipcMain.handle(
+    PlatformChannels.OpenFileWithApplication,
+    (_event, payload: { applicationId: string; target: FileApplicationTarget }) =>
+      fileApplications.openFileWithApplication(payload?.applicationId, payload?.target),
+  );
   ipcMain.handle(
     PlatformChannels.GetApplicationIcon,
     (_event, request: string | ApplicationIconRequest) => getApplicationIcon(request),

@@ -1,7 +1,10 @@
 import { LOCAL_TOOL_SEARCH_DESCRIPTION } from "./description.js";
 import {
+  LOCAL_TOOL_SEARCH_NAME,
   TOOL_SEARCH_NAME,
   DEFERRED_TOOL_CALL_NAME,
+  isToolSearchName,
+  toolSearchNameForMode,
   type ToolSearchMode,
   type ResolvedToolSearchMode,
   type Model,
@@ -15,7 +18,7 @@ import type { RuntimeMessageEntry } from "../../agent/message-history.js";
 import { collectToolSearchHistory, projectToolReferences } from "./history.js";
 
 const ADDED_TOOLS_NOTICE = `The following deferred tools are now available via ${TOOL_SEARCH_NAME}. Their schemas are NOT loaded — calling them directly will fail with InputValidationError. Use ${TOOL_SEARCH_NAME} with query "select:<name>[,<name>...]" to load tool schemas before calling them:`;
-const LOCAL_ADDED_TOOLS_NOTICE = `The following deferred tools are available via ${TOOL_SEARCH_NAME}. Use query "select:<name>[,<name>...]" to load their complete schemas, then call them through ${DEFERRED_TOOL_CALL_NAME} with {name, input}. Call resident tools directly:`;
+const LOCAL_ADDED_TOOLS_NOTICE = `The following deferred tools are available via ${LOCAL_TOOL_SEARCH_NAME}. Use query "select:<name>[,<name>...]" to load their complete schemas, then call them through ${DEFERRED_TOOL_CALL_NAME} with {name, input}. Call resident tools directly:`;
 const MAX_REMOVED_NAME_LINES = 30;
 const AMBIENT_CONTEXT_NOTICE =
   "This is ambient context — do not narrate it to the user unless they ask or it is directly relevant to their request.";
@@ -41,7 +44,7 @@ export function resolveToolSearchMode(
 
 export function isDeferredTool(tool: ModelToolContract, metadata?: ToolMetadata): boolean {
   return (
-    tool.name !== TOOL_SEARCH_NAME &&
+    !isToolSearchName(tool.name) &&
     tool.name !== DEFERRED_TOOL_CALL_NAME &&
     !tool.providerNative &&
     metadata?.alwaysLoad !== true &&
@@ -111,7 +114,7 @@ export function buildToolExposure(input: ToolExposureInput) {
   );
   const tools = input.tools
     .filter((tool) => {
-      if (tool.name === TOOL_SEARCH_NAME) return enabled;
+      if (isToolSearchName(tool.name)) return enabled;
       if (tool.name === DEFERRED_TOOL_CALL_NAME) return mode === "local";
       return (
         mode === "off" ||
@@ -121,9 +124,11 @@ export function buildToolExposure(input: ToolExposureInput) {
     })
     .map((tool) => {
       const { deferLoading: _previous, ...contract } = tool;
-      if (mode === "local" && tool.name === TOOL_SEARCH_NAME)
+      if (mode === "local" && isToolSearchName(tool.name))
+        // local 模式用独立工具名：Native 的 ToolSearch 名字留给协议侧，模型看到的入口是 LocalToolSearch。
         return {
           ...contract,
+          name: LOCAL_TOOL_SEARCH_NAME,
           description: LOCAL_TOOL_SEARCH_DESCRIPTION,
         };
       return mode === "native" && deferred.has(tool.name)
@@ -175,6 +180,7 @@ export function buildToolSearchAnnouncement(
   const available = new Set(input.tools.map((tool) => tool.name));
   const removedNames = [...announced].filter((name) => !available.has(name)).sort();
   if (addedNames.length === 0 && removedNames.length === 0) return undefined;
+  const searchName = toolSearchNameForMode(mode);
   const readded = new Set(readdedNames);
   const listedNames = addedNames.filter((name) => !readded.has(name));
   const paragraphs: string[] = [];
@@ -185,15 +191,15 @@ export function buildToolSearchAnnouncement(
   // 目录变化只证明当前可用性，不能据此推断 MCP 连接状态或其他变化原因。
   if (readdedNames.length) {
     paragraphs.push(
-      `${readdedNames.length} deferred tool${readdedNames.length === 1 ? " is" : "s are"} available again (names announced earlier in this conversation): ${summarizeToolNames(readdedNames)}. Load via ${TOOL_SEARCH_NAME} as before.`,
+      `${readdedNames.length} deferred tool${readdedNames.length === 1 ? " is" : "s are"} available again (names announced earlier in this conversation): ${summarizeToolNames(readdedNames)}. Load via ${searchName} as before.`,
     );
   }
   if (removedNames.length) {
     // 名称事实仍完整保留在 metadata；只有模型可见文案按 server 分组，避免大批删除刷屏。
     paragraphs.push(
       removedNames.length > MAX_REMOVED_NAME_LINES
-        ? `${removedNames.length} deferred tools are no longer available: ${summarizeToolNames(removedNames)}. Do not search for them — ${TOOL_SEARCH_NAME} will return no match.`
-        : `The following deferred tools are no longer available. Do not search for them — ${TOOL_SEARCH_NAME} will return no match:\n${removedNames.join("\n")}`,
+        ? `${removedNames.length} deferred tools are no longer available: ${summarizeToolNames(removedNames)}. Do not search for them — ${searchName} will return no match.`
+        : `The following deferred tools are no longer available. Do not search for them — ${searchName} will return no match:\n${removedNames.join("\n")}`,
       AMBIENT_CONTEXT_NOTICE,
     );
   }

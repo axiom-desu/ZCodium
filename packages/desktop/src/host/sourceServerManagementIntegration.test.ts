@@ -18,6 +18,12 @@ function createStore() {
     async ensureDefaultProject() {
       return { path: "/home", created: false };
     },
+    async getUserInstructions() {
+      return { content: "", filePath: "/home/AGENTS.md" };
+    },
+    async saveUserInstructions() {
+      return { filePath: "/home/AGENTS.md" };
+    },
   };
   const credentialService: ICredentialService = {
     async load(key) {
@@ -55,6 +61,16 @@ describe("Source 管理服务 + 临时 settings/credential", () => {
         },
         async update() {
           return {};
+        },
+        cancelUpdate() {
+          return false;
+        },
+        async stopSource() {},
+        async restartSource() {
+          return {};
+        },
+        async getSourceRunningTasks() {
+          return { available: false as const };
         },
         async disconnect() {},
         isOnline: () => false,

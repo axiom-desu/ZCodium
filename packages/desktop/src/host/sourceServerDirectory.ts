@@ -325,6 +325,24 @@ export class SourceServerDirectory {
     });
   }
 
+  /**
+   * 设备级生命周期操作（停止/重启/任务清单）的连接路由：优先 preferred/最近连接的 profile，
+   * 并复用同一凭据解析；取不到静默凭据时抛出 `credentials-required`，由调用方要求交互。
+   */
+  public async resolveSourceLifecycleRoute(sourceServerId: string): Promise<{
+    profile: ConnectionProfile;
+    target: Exclude<RemoteTarget, { kind: "server" }>;
+  }> {
+    const profile = await this.preferredProfile(sourceServerId);
+    if (!profile) {
+      throw Object.assign(
+        new Error(`Source Server has no active Connection Profile: ${sourceServerId}`),
+        { code: "connection-profile-missing" },
+      );
+    }
+    return { profile, target: await this.resolveProfileTarget(profile) };
+  }
+
   public async resolveProfileTarget(
     profile: ConnectionProfile,
   ): Promise<Exclude<RemoteTarget, { kind: "server" }>> {

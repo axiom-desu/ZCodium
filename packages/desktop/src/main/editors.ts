@@ -19,6 +19,12 @@ import { createRequire } from "node:module";
 import { join, win32 as pathWin32 } from "node:path";
 import { app, nativeImage } from "electron";
 import type { EditorInfo } from "@zcode/shared";
+import {
+  getFileApplicationDefs,
+  matchesFileApplication,
+  resolveFileApplicationPath,
+  type FileApplicationDef,
+} from "./fileApplications.js";
 import { getZCodeDataRootDir } from "@zcode/services/node";
 import { logger } from "./logger.js";
 
@@ -634,7 +640,7 @@ export function getAppIconDataUrl(editorId: string, appPath: string): Promise<st
  * 检测系统中已安装的编辑器/终端，返回带图标的列表。
  * 结果会被缓存（应用生命周期内不变）。
  */
-export async function getInstalledEditors(): Promise<EditorInfo[]> {
+async function getBaseInstalledEditors(): Promise<EditorInfo[]> {
   if (cachedEditors) {
     return cachedEditors;
   }
@@ -658,4 +664,37 @@ export async function getInstalledEditors(): Promise<EditorInfo[]> {
 
   cachedEditors = results.filter((r): r is EditorInfo => r !== null);
   return cachedEditors;
+}
+
+const cachedFileApps = new Map<string, Promise<EditorInfo | null>>();
+
+/** 文件类型应用探测：未安装或图标不可用不进列表，并发查询共享同一次探测。 */
+function resolveFileApplicationEditor(def: FileApplicationDef): Promise<EditorInfo | null> {
+  const cached = cachedFileApps.get(def.id);
+  if (cached) return cached;
+  const pending = (async () => {
+    const appPath = await resolveFileApplicationPath(def);
+    if (!appPath) return null;
+    const iconDataUrl = await getAppIconDataUrl(def.id, appPath);
+    return iconDataUrl ? { id: def.id, name: def.name, iconDataUrl } : null;
+  })();
+  cachedFileApps.set(def.id, pending);
+  const evict = () => {
+    if (cachedFileApps.get(def.id) === pending) cachedFileApps.delete(def.id);
+  };
+  void pending.then((editor) => {
+    if (!editor) evict();
+  }, evict);
+  return pending;
+}
+
+/**
+ * 可选文件路径只扩展文件菜单的「打开方式」：工作区编辑器列表保持原有语义，
+ * Linux 也因此不再是恒空占位（按扩展名给出真实的 PDF/Office/媒体应用）。
+ */
+export async function getInstalledEditors(filePath?: string): Promise<EditorInfo[]> {
+  const base = await getBaseInstalledEditors();
+  const matching = getFileApplicationDefs().filter((def) => matchesFileApplication(def, filePath));
+  const applications = await Promise.all(matching.map(resolveFileApplicationEditor));
+  return [...base, ...applications.filter((entry): entry is EditorInfo => entry !== null)];
 }

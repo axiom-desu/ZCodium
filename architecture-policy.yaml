@@ -46,6 +46,26 @@ modules:
     requires: [shared]
     publicEntrypoints: [packages/services/src/session/contract.ts]
     owner: conversation
+  # bot-topic-resource：话题资源接纳归档（唯一 owner）+ 授权/下载。只读当前任务已接纳快照，
+  # 字节只经 Host 反向 RPC 回 CLI，不落用户路径、不新建 bot 登录。
+  - id: bot-topic-resource
+    roots:
+      [
+        packages/services/src/bots/topic-resource,
+        packages/services/src/bots/topicArchive.ts,
+        packages/services/src/bots/topicResource.ts,
+      ]
+    managed: true
+    requires: [shared, services]
+    publicEntrypoints:
+      [
+        packages/services/src/bots/topicResource.ts,
+        packages/services/src/bots/topicArchive.ts,
+        packages/services/src/bots/topic-resource/contract.ts,
+      ]
+    layers:
+      adapters: "."
+    owner: bots
   - id: storage
     roots: [packages/services/src/storage]
     managed: true
@@ -92,6 +112,44 @@ modules:
     layers: { domain: domain, app: app, adapters: adapters }
     layerOrder: [domain, app, adapters]
     owner: conversation
+  # app-control：App 控制十二意图在 Host 侧的服务 owner（项目/会话授权、观察、取消），
+  # 只绑定可信连接与根会话；导航提交仍由桌面 app-control-navigation 适配器完成。
+  - id: app-control
+    roots: [packages/services/src/app-control]
+    managed: true
+    requires: [session-control, services, shared, project]
+    publicEntrypoints:
+      - packages/services/src/app-control/index.ts
+      - packages/services/src/app-control/contract.ts
+    layers:
+      contract: contract.ts
+      app: "."
+    layerOrder: [contract, app]
+    owner: conversation
+  # managed-worktree-tasks：受管 worktree 的唯一服务 owner；只操作有所有权元数据的
+  # 受管目录，删除前复用项目仓储/任务/共享引用/终端与删除租约。
+  - id: managed-worktree-tasks
+    roots: [packages/services/src/managed-worktree-tasks]
+    managed: true
+    requires: [shared, services, project-storage]
+    publicEntrypoints:
+      - packages/services/src/managed-worktree-tasks/index.ts
+      - packages/services/src/managed-worktree-tasks/contract.ts
+    layers:
+      app: "."
+    owner: conversation
+  # remote-projects：本机远端项目入口 intent 的唯一 owner；连接/在线事实仍归
+  # windowRemoteConnectionRegistry，catalog 只做只读组合，删除仅清本机 membership/cache。
+  - id: remote-projects
+    roots: [packages/services/src/remote-projects]
+    managed: true
+    requires: [shared, services, project, project-storage]
+    publicEntrypoints:
+      - packages/services/src/remote-projects/index.ts
+      - packages/services/src/remote-projects/contract.ts
+    layers:
+      app: "."
+    owner: conversation
   - id: client
     roots: [packages/client/src]
     managed: false
@@ -110,6 +168,36 @@ modules:
   - id: desktop
     roots: [packages/desktop/src]
     managed: false
+  # file-open-apps：本机文件系统关联枚举/启动（Desktop main adapters）。
+  # 唯一事实源是系统关联；模块只接受本机真实文件，目录/远端身份/错误路径失败关闭。
+  - id: file-open-apps
+    roots:
+      - packages/desktop/src/main/file-open-apps
+    managed: true
+    requires: [shared]
+    publicEntrypoints:
+      - packages/desktop/src/main/file-open-apps/index.ts
+      - packages/desktop/src/main/file-open-apps/contract.ts
+    layers:
+      adapters: "."
+    owner: desktop
+  # app-control-navigation：App 控制十二意图的桌面导航传输适配器（Host bridge → Main
+  # 窗口 surface → preload IPC → renderer Root 动作）。项目/任务授权仍归 services 的
+  # AppControlService；本模块只关联请求、可信窗口、generation、取消与回执。
+  - id: app-control-navigation
+    roots:
+      - packages/desktop/src/app-control-navigation
+    managed: true
+    requires: [shared, services, desktop]
+    publicEntrypoints:
+      - packages/desktop/src/app-control-navigation/contract.ts
+      - packages/desktop/src/app-control-navigation/index.ts
+      - packages/desktop/src/app-control-navigation/host.ts
+      - packages/desktop/src/app-control-navigation/main.ts
+      - packages/desktop/src/app-control-navigation/renderer.ts
+    layers:
+      adapters: "."
+    owner: desktop
   - id: formal-proof
     roots: [packages/formal-proof/src]
     managed: false
@@ -122,6 +210,25 @@ modules:
   - id: zcode-cli
     roots: [apps/zcode-cli]
     managed: false
+
+  # topic-resource-tool：ReadTopicResource 的 schema/reader/handler；只在 Host 注入
+  # topicResourcePort（本任务有 bot 接纳事实）时注册，不伪造本地下载。
+  - id: topic-resource-tool
+    roots:
+      [
+        apps/zcode-cli/packages/core/src/tool/topic-resource,
+        apps/zcode-cli/packages/core/src/tool/handlers/read-topic-resource.ts,
+      ]
+    managed: true
+    requires: [zcode-cli]
+    publicEntrypoints:
+      [
+        apps/zcode-cli/packages/core/src/tool/handlers/read-topic-resource.ts,
+        apps/zcode-cli/packages/core/src/tool/topic-resource/contract.ts,
+      ]
+    layers:
+      app: "."
+    owner: cli
 
   # office-runtime：四个文档插件共用的 MCP/面板运行时。domain=锚点/文本/模型，
   # app=DocumentOwner（唯一视图状态所有者），adapters=文件/解析/导入/MCP server，
@@ -252,6 +359,155 @@ modules:
       ui: components
     layerOrder: [domain, app, adapters, ui]
     owner: plugin
+
+  # extension-host-protocol：扩展清单/能力/授权/槽位/线协议纯 domain 契约。
+  - id: extension-host-protocol
+    roots: [packages/shared/src/extension-host]
+    managed: true
+    # sessions 能力表直接复用 session-control 的 canonical App 端口 schema（E8）。
+    requires: [shared, session-control]
+    publicEntrypoints:
+      [
+        packages/shared/src/extension-host/index.ts,
+        packages/shared/src/extension-host/contract.ts,
+        packages/shared/src/extension-host/adapters/sdk.ts,
+      ]
+    layers: { domain: ".", adapters: adapters }
+    layerOrder: [domain, adapters]
+    owner: plugin
+
+  # extension-host-service：窗口本地 Host 的授权记录/能力网关/槽位投影/loopback 唯一 owner；
+  # 扩展进程生命周期由 Desktop Main supervisor 持有。
+  - id: extension-host-service
+    roots: [packages/services/src/extensions]
+    managed: true
+    # 会话能力以客户端类调用方调 AppControlService.bindClient（E8）；不新增第二 session owner。
+    requires: [services, shared, rpc, extension-host-protocol, app-control, session-control]
+    publicEntrypoints:
+      [
+        packages/services/src/extensions/index.ts,
+        packages/services/src/extensions/contract.ts,
+        packages/services/src/extensions/node.ts,
+      ]
+    layers: { app: app, adapters: adapters }
+    layerOrder: [app, adapters]
+    owner: plugin
+
+  # extension-slots：扩展槽位投影，只消费 services/extensions 的快照；手机/Web 不渲染。
+  - id: extension-slots
+    roots: [packages/ui/src/extensions]
+    managed: true
+    requires: [ui, services, shared, extension-host-protocol, extension-host-service]
+    publicEntrypoints: [packages/ui/src/extensions/index.ts, packages/ui/src/extensions/contract.ts]
+    layers:
+      domain: domain
+      adapters: adapters
+      ui: components
+    layerOrder: [domain, adapters, ui]
+    owner: plugin
+
+  # remote-input-prediction：手机远控输入预测（ghost hint）的 v4 线格式与只读查询契约。
+  # 草稿仍归 composer；预测不写 transcript/accepted，不启动第二 runtime。
+  - id: remote-input-prediction
+    roots: [packages/shared/src/zcode-protocol-v4/input-prediction]
+    managed: true
+    requires: [shared, zcode-cli]
+    publicEntrypoints:
+      [
+        packages/shared/src/zcode-protocol-v4/input-prediction/contract.ts,
+        packages/services/src/zcode-agent/inputPredictionSwitch.ts,
+        apps/zcode-cli/packages/bootstrap/src/zcode-protocol/input-prediction-handler.ts,
+        apps/zcode-cli/packages/core/src/runtime/methods/input-prediction-sidecar.ts,
+      ]
+    layers: { domain: "." }
+    owner: conversation
+
+  # settings-search：设置页搜索与定位（纯索引/匹配 + 一个结果面板），只依赖 ui 层。
+  - id: settings-search
+    roots: [packages/ui/src/settings-search]
+    managed: true
+    requires: [ui]
+    publicEntrypoints:
+      [packages/ui/src/settings-search/index.ts, packages/ui/src/settings-search/contract.ts]
+    layers:
+      ui: "."
+    owner: settings
+
+  # ui-file-menu：文件另存为/打开方式菜单的共享 UI 原子；不持有文件读取 owner。
+  - id: ui-file-menu
+    roots: [packages/ui/src/file-menu]
+    managed: true
+    requires: [shared, ui]
+    publicEntrypoints: [packages/ui/src/file-menu/index.ts, packages/ui/src/file-menu/contract.ts]
+    layers:
+      ui: "."
+    owner: files
+
+  # session-control：CLI 会话控制命令的共享契约与测试夹具（C5 新建 workspace 包）。
+  # publicEntrypoints 与 package.json exports（contracts/cli/app/testing）保持一致。
+  - id: session-control
+    roots: [packages/session-control/src]
+    managed: true
+    requires: []
+    publicEntrypoints:
+      - packages/session-control/src/contract.ts
+      - packages/session-control/src/application/cli/index.ts
+      - packages/session-control/src/application/app/index.ts
+      - packages/session-control/src/testing/index.ts
+    layers:
+      contract: contract
+      domain: domain
+      app: application
+    layerOrder: [contract, domain, app]
+    owner: cli
+
+  # plugin-api：面向插件作者的类型入口（private workspace 包，不发布 npm）。
+  # 运行时不加载，只重导出 extension-host 的公开契约与 SDK。
+  - id: plugin-api
+    roots: [packages/plugin-api/src]
+    managed: true
+    requires: [shared, extension-host-protocol]
+    publicEntrypoints:
+      - packages/plugin-api/src/index.ts
+      - packages/plugin-api/src/manifest.ts
+      - packages/plugin-api/src/contract.ts
+    layers:
+      contract: contract.ts
+      adapters: "."
+    layerOrder: [contract, adapters]
+    owner: plugin
+
+  # data-sync：设置页数据同步页与同步弹窗；状态 owner 是弹窗 hook，只在桌面本机设置页开放。
+  - id: data-sync
+    roots: [packages/ui/src/data-sync]
+    managed: true
+    requires: [services, shared, ui]
+    publicEntrypoints: [packages/ui/src/data-sync/index.ts, packages/ui/src/data-sync/contract.ts]
+    layers:
+      contract: contract
+      domain: domain
+      app: app
+      ui: ui
+    layerOrder: [contract, domain, app, ui]
+    owner: settings
+
+  # settings-scope：设置页 Scope 菜单按设备分组的唯一状态 owner（插件/MCP/技能/命令/子智能体/钩子共用）。
+  # 本机「用户」用 base services，远端「用户」只经该设备 source-settings attachment；
+  # 离线设备与跨设备目标 fail-closed，Web/手机不提供远端「用户」。
+  - id: settings-scope
+    roots: [packages/ui/src/settings-scope]
+    managed: true
+    requires: [services, shared, ui]
+    publicEntrypoints:
+      - packages/ui/src/settings-scope/index.ts
+      - packages/ui/src/settings-scope/contract.ts
+    layers:
+      contract: contract
+      domain: domain
+      app: app
+      ui: ui
+    layerOrder: [contract, domain, app, ui]
+    owner: settings
 
   # project-sidebar：Host readTree 的项目行/任务行投影与本地项目编辑器；
   # 外壳仍持 footer/automations/plugin store/文件树/分屏与 legacy workspace 行。

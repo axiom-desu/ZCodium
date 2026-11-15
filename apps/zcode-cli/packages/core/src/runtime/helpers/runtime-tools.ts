@@ -20,6 +20,7 @@ import {
   resolveRuntimeDynamicWorkflowToolsIncluded,
 } from "./tool-allowlist.js";
 import { isStaleBranchRuntimeTaskEvent } from "../methods/runtime-command-generation.js";
+import { sessionControlForRuntime } from "../../tool/session-control/contract.js";
 import { resolveEnabledProjectMemoryRoot } from "./project-memory.js";
 import { sessionHasLoadedSkill } from "../../agent/loaded-skills.js";
 
@@ -47,7 +48,15 @@ export function initializeRuntimeTooling(
 function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentRuntimeDeps): void {
   const nodeReplEnabled = runtime.config.runtimeFeatures?.nodeRepl === true;
   const browserUseEnabled = resolveRuntimeBrowserUseEnabled(runtime, deps);
+  // 注册面与执行面共用同一份绑定推导：能力缺席时 register与 handler 都不会假装可用。
+  const sessionControl = resolveSessionControl(runtime, deps);
+  // 注册面与执行面共用同一份绑定/变体：App 绑定只出 12 个 App 工具，CLI 绑定只出 8 个。
+  runtime.sessionControlKind = sessionControl?.kind;
+  // 插件发现与 8 个会话工具同一套口径：端口在场、且不是子代理执行面才注册。
+  const pluginDiscoveryPort = resolvePluginDiscovery(runtime, deps);
   registerBuiltInTools(runtime.registry, {
+    ...(sessionControl ? { sessionControlKind: sessionControl.kind } : {}),
+    includePluginDiscovery: pluginDiscoveryPort !== undefined,
     bashTimeoutPolicy: runtime.config.bashTimeoutPolicy,
     includeSkill: Boolean(runtime.skillPort),
     includeAgent: Boolean(runtime.subagentPort),
@@ -65,6 +74,9 @@ function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentR
     includeEscalate: Boolean(deps.workflowEscalatePort),
     includeWorkflow: Boolean(deps.workflowPort),
     includeAutomation: Boolean(deps.automationPort) && runtime.config.taskType !== "subagent_child",
+    // 话题资源只在 Host 注入端口时注册；子代理执行面没有 bot 接纳事实，不提供。
+    includeTopicResource:
+      Boolean(deps.topicResourcePort) && runtime.config.taskType !== "subagent_child",
     // 动态工作流工具策略由 Host 决定。
     // 这里不能用端口在场做判据——十个工具的端口在任何 CLI 里都装配齐全，灰度是 Host 的决定。
     // 取值收在 tool-allowlist.ts，与分支刷新那个入口共用同一个推导。
@@ -182,11 +194,15 @@ function createRuntimeToolExecutor(
     coordinatorResponsePort: deps.coordinatorResponsePort,
     workflowSubmitPort: deps.workflowSubmitPort,
     workflowEscalatePort: deps.workflowEscalatePort,
+    webSearchBudget: deps.webSearchBudget,
     artifactStore: deps.artifactStore,
+    topicResourcePort: deps.topicResourcePort,
     automationPort: deps.automationPort,
     sessionStore: deps.sessionStore,
     sessionModePort: createRuntimeSessionModePort(runtime),
     workflowPort: deps.workflowPort,
+    sessionControl: resolveSessionControl(runtime, deps),
+    pluginDiscoveryPort: resolvePluginDiscovery(runtime, deps),
     dynamicWorkflowRunPort: deps.dynamicWorkflowRunPort,
     dynamicWorkflowSnippetPort: deps.dynamicWorkflowSnippetPort,
     modelCatalogPort: deps.modelCatalogPort,
@@ -223,6 +239,23 @@ function createRuntimeToolExecutor(
     getMode: () => runtime.config.mode ?? "build",
     maxConcurrency: runtime.config.toolConcurrency?.maxConcurrency,
   });
+}
+
+/**
+ * 插件发现的注册面与执行面共用这一份推导：端口缺席或子代理执行面都没有业务价值——
+ * 子代理没有审批窗，SuggestPluginInstall 在那里只能 fail closed。
+ */
+function resolvePluginDiscovery(runtime: AgentRuntimeInternal, deps: AgentRuntimeDeps) {
+  if (runtime.config.taskType === "subagent_child") return undefined;
+  return deps.pluginDiscoveryPort;
+}
+
+function resolveSessionControl(runtime: AgentRuntimeInternal, deps: AgentRuntimeDeps) {
+  return sessionControlForRuntime(
+    deps.sessionControl,
+    runtime.config.taskType,
+    runtime.sessionId,
+  );
 }
 
 function resolveRuntimeBrowserUseEnabled(

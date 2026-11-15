@@ -1,4 +1,14 @@
 export { createProjectService, bindRemoteProjectIdentities } from "#src/project/app/index.js";
+export { createProjectDataCommands } from "#src/project/app/project-data.js";
+export { createProjectDataPort } from "#src/project/adapters/project-data-port.js";
+export type { ProjectSessionDataAgent } from "#src/project/adapters/project-data-port.js";
+export type {
+  ProjectDataDeleteResult,
+  ProjectDataMeasure,
+  ProjectDataMeasureResult,
+  ProjectDataPort,
+  ProjectDataSession,
+} from "#src/project/domain/data-contract.js";
 export { createProjectSessionCreationPort } from "#src/project/app/sessionCreation.js";
 export type { ProjectSessionCreationPort } from "#src/project/app/sessionCreation.js";
 export {

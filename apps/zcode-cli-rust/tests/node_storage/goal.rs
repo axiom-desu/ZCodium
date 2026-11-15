@@ -112,9 +112,11 @@ async fn a_goal_loop_is_stored_as_nodes_target_verifications_and_notices() {
         .into_iter()
         .filter(|m| m["role"] != "system")
         .filter(|m| {
-            !m["content"]
-                .as_str()
-                .is_some_and(|c| c.starts_with("<system-reminder>\nCurrent session goal state"))
+            // 3.18：请求末尾的余额提醒不落库，比对冷却历史时先滤掉。
+            m["_zcode_source"] != "total_tokens_reminder"
+                && !m["content"]
+                    .as_str()
+                    .is_some_and(|c| c.starts_with("<system-reminder>\nCurrent session goal state"))
                 && !m["content"].as_str().is_some_and(|c| {
                     c.starts_with("<system-reminder>") && m.get("_zcode_source").is_none()
                 })

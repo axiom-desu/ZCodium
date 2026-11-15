@@ -6,6 +6,8 @@ type MappedMcpServerStatus = {
   failureKind?: ZCodeMcpServerStatusSnapshot["failureKind"];
   serverRequestId?: string;
   status: McpServerStatus;
+  /** 工作区 MCP 审核只读投影；普通用户/插件 server 不携带。 */
+  workspaceTrust?: ZCodeMcpServerStatusSnapshot["workspaceTrust"];
 };
 
 function mapRuntimeStatusToUi(snapshot: ZCodeMcpServerStatusSnapshot): MappedMcpServerStatus {
@@ -15,6 +17,7 @@ function mapRuntimeStatusToUi(snapshot: ZCodeMcpServerStatusSnapshot): MappedMcp
       return {
         authorization: snapshot.authorization,
         status: snapshot.status,
+        workspaceTrust: snapshot.workspaceTrust,
       };
     case "disconnected":
       return {
@@ -23,6 +26,7 @@ function mapRuntimeStatusToUi(snapshot: ZCodeMcpServerStatusSnapshot): MappedMcp
         error: snapshot.error,
         failureKind: snapshot.failureKind,
         serverRequestId: snapshot.serverRequestId,
+        workspaceTrust: snapshot.workspaceTrust,
       };
     case "failed":
       return {
@@ -30,6 +34,7 @@ function mapRuntimeStatusToUi(snapshot: ZCodeMcpServerStatusSnapshot): MappedMcp
         error: snapshot.error,
         failureKind: snapshot.failureKind ?? "connection_failed",
         serverRequestId: snapshot.serverRequestId,
+        workspaceTrust: snapshot.workspaceTrust,
       };
     case "disabled":
       return { status: "unknown", error: snapshot.error };
@@ -39,6 +44,7 @@ function mapRuntimeStatusToUi(snapshot: ZCodeMcpServerStatusSnapshot): MappedMcp
         error: snapshot.error ?? "Project MCP server requires explicit connection before use.",
         failureKind: snapshot.failureKind ?? "status_unavailable",
         serverRequestId: snapshot.serverRequestId,
+        workspaceTrust: snapshot.workspaceTrust,
       };
   }
 }
@@ -74,6 +80,7 @@ export function mergeMcpServerStatusSnapshots(
       error: mapped.error,
       failureKind: mapped.failureKind,
       serverRequestId: mapped.serverRequestId,
+      workspaceTrust: mapped.workspaceTrust,
       toolCount: snapshot.toolCount,
       changed: false,
       lastConnected:

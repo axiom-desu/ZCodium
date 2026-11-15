@@ -15,7 +15,7 @@ import type {
   TurnInputIntentMetadata,
   TurnExecutionKind,
 } from "../deps.js";
-import { emptyTokenUsageInfo, toTokenUsageInfo } from "../helpers/index.js";
+import { emptyTokenUsageInfo, toTokenUsageInfo, withConversationQuotes } from "../helpers/index.js";
 import type { ResolvedTurnAttachment } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import {
@@ -118,7 +118,8 @@ export async function persistUserPrompt(
       sessionID: this.sessionId,
       messageID,
       type: "text",
-      text: input,
+      // 选区引用随用户消息一起落库（与模型看到的一致），恢复时不依赖 UI 重解析。
+      text: withConversationQuotes(input, options?.intent?.conversationQuotes),
       time: {
         start: created,
         end: created,

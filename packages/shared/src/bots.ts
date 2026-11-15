@@ -557,3 +557,68 @@ export const BOT_ZCODE_PROVIDER_OPTIONS: Array<{
   id: ZCodeProvider;
   label: string;
 }> = [{ id: ZCODE_AGENT_PROVIDER, label: ZCODE_AGENT_PROVIDER_LABEL }];
+
+// ---- 话题资源归档（ReadTopicResource 的唯一接纳事实） ----
+// 单一 owner：services 的 BotsTopicArchive。CLI 只读任务已接纳快照的资源索引，
+// 模型能提供的只有 inputId / messageId / index，不能提供 URL、路径或会话身份。
+export const BOT_TOPIC_ARCHIVE_FILE = "bots-topic-archive.json";
+export const BOT_TOPIC_ARCHIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const BOT_TOPIC_ARCHIVE_MAX_INPUTS = 200;
+export const BOT_TOPIC_RESOURCE_MAX_PER_MESSAGE = 32;
+/** 只列索引不展开正文：附件正文由 provider 按 providerFileId 重新下载。 */
+export const BOT_TOPIC_RESOURCE_INDEX_FILENAME = "topicResources.txt";
+
+export const botTopicResourceAttachmentSchema = z
+  .object({
+    /** 消息内资源序号（0 基），与工具 index 一致。 */
+    index: z.number().int().nonnegative(),
+    /** provider 侧附件 id（仅用于回查，不进入模型可见输入）。 */
+    attachmentId: z.string().min(1).max(256),
+    kind: z.enum(["image", "audio", "video", "file"]),
+    filename: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(128),
+    sizeBytes: z.number().int().nonnegative().optional(),
+    /** provider 资源键（飞书 file_key / message resource id）。 */
+    providerFileId: z.string().min(1).max(512).optional(),
+  })
+  .strict();
+export type BotTopicResourceAttachment = z.infer<typeof botTopicResourceAttachmentSchema>;
+
+export const botTopicSnapshotMessageSchema = z
+  .object({
+    messageId: z.string().min(1).max(256),
+    /** provider 消息 id：下载资源时必须由它证明消息归属。 */
+    providerMessageId: z.string().min(1).max(256),
+    createdAt: z.number().int().nonnegative(),
+    attachments: z.array(botTopicResourceAttachmentSchema).max(BOT_TOPIC_RESOURCE_MAX_PER_MESSAGE),
+  })
+  .strict();
+export type BotTopicSnapshotMessage = z.infer<typeof botTopicSnapshotMessageSchema>;
+
+export const botTopicInputSnapshotSchema = z
+  .object({
+    version: z.literal(1),
+    workspacePath: z.string().min(1).max(4096),
+    workspaceIdentity: z.string().min(1).max(4096).optional(),
+    /** CLI 会话 id（任务归属），与工具 context.sessionId 同一取值。 */
+    taskId: z.string().min(1).max(256),
+    inputId: z.string().min(1).max(256),
+    admission: z.literal("accepted"),
+    admittedAt: z.number().int().nonnegative(),
+    generation: z.number().int().positive(),
+    botId: z.string().min(1).max(256),
+    provider: z.enum(["feishu", "lark"]),
+    chatId: z.string().min(1).max(256),
+    authorizationId: z.string().min(1).max(256),
+    messages: z.array(botTopicSnapshotMessageSchema).max(64),
+  })
+  .strict();
+export type BotTopicInputSnapshot = z.infer<typeof botTopicInputSnapshotSchema>;
+
+export const botsTopicArchiveFileSchema = z
+  .object({
+    version: z.literal(1),
+    inputs: z.array(botTopicInputSnapshotSchema).max(BOT_TOPIC_ARCHIVE_MAX_INPUTS),
+  })
+  .strict();
+export type BotsTopicArchiveFile = z.infer<typeof botsTopicArchiveFileSchema>;
